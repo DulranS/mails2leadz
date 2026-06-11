@@ -3,6 +3,7 @@ import './globals.css';
 import ExtensionCleaner from './components/ExtensionCleaner';
 import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
+import ReduxProvider from '../components/ReduxProvider';
 
 export default function RootLayout({ children }) {
   return (
@@ -14,12 +15,14 @@ export default function RootLayout({ children }) {
         }} />
       </head>
       <body suppressHydrationWarning>
-        <ThemeProvider>
-          <NotificationProvider>
-            <ExtensionCleaner />
-            {children}
-          </NotificationProvider>
-        </ThemeProvider>
+        <ReduxProvider>
+          <ThemeProvider>
+            <NotificationProvider>
+              <ExtensionCleaner />
+              {children}
+            </NotificationProvider>
+          </ThemeProvider>
+        </ReduxProvider>
       </body>
     </html>
   );
