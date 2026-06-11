@@ -7159,17 +7159,16 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-    </div>
 
-    {/* Replies Panel */}
-    {user?.uid && user.accessToken && (
-      <RepliesPanel
-        userId={user.uid}
-        accessToken={user.accessToken}
-        senderEmail={user.email || process.env.GMAIL_SENDER_EMAIL}
-      />
-    )}
-  </div>
+      {/* Replies Panel */}
+      {user?.uid && user.accessToken && (
+        <RepliesPanel
+          userId={user.uid}
+          accessToken={user.accessToken}
+          senderEmail={user.email || process.env.GMAIL_SENDER_EMAIL}
+        />
+      )}
+    </div>
   );
 }
 
