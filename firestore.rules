@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Sent emails - users can only access their own sent emails
+    match /sent_emails/{emailId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Contacted companies - users can only access their own company records
+    match /contacted_companies/{companyId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Campaigns - users can only access their own campaigns
+    match /campaigns/{campaignId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.createdBy;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.createdBy;
+    }
+    
+    // Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

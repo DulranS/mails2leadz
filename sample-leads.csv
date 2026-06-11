@@ -1,0 +1,6 @@
+company_name,first_name,last_name,email,phone,industry,employees,funding_stage,funding_amount,country,tech_stack,recent_hiring,product_launch
+TechCorp Solutions,John,Smith,john.smith@techcorp.com,+1-555-0101,Software,75,Series A,5000000,United States,React,Node.js,AWS,Yes,Yes
+DataFlow Analytics,Sarah,Johnson,sarah.johnson@dataflow.io,+1-555-0102,SaaS,120,Series B,15000000,Canada,Python,Azure,No,Yes
+CloudBase Systems,Michael,Chen,michael.chen@cloudbase.com,+1-555-0103,Technology,45,Series A,8000000,United States,Angular,Google Cloud,Yes,No
+SaaSPro Platforms,Emily,Davis,emily.davis@saaspro.com,+1-555-0104,SaaS,200,Series C,25000000,UK,React,AWS,Yes,Yes
+InnovateLabs AI,David,Wilson,david.wilson@innovatelabs.ai,+1-555-0105,Artificial Intelligence,60,Series B,12000000,Germany,Python,Azure,Yes,No
