@@ -114,12 +114,15 @@ export async function POST(request) {
 
     let replyCount = 0;
     let errorCount = 0;
+    const newReplies = [];
 
     // Check each sent email for replies with retry logic
     for (const doc of emailsToCheck) {
       const sentEmail = doc.data();
       const toEmail = sentEmail.to;
       const subject = sentEmail.subject;
+      const threadId = sentEmail.threadId;
+      const messageId = sentEmail.messageId;
 
       // Validate recipient email
       if (!isValidEmail(toEmail)) {
@@ -139,15 +142,48 @@ export async function POST(request) {
           });
 
           if (response.data.messages && response.data.messages.length > 0) {
+            const replyMessage = response.data.messages[0];
+
+            // Get message details
+            const messageDetails = await gmail.users.messages.get({
+              userId: 'me',
+              id: replyMessage.id,
+              format: 'metadata',
+              metadataHeaders: ['from', 'to', 'subject', 'date']
+            });
+
+            // Extract reply details
+            const headers = {};
+            messageDetails.data.payload?.headers?.forEach(header => {
+              headers[header.name.toLowerCase()] = header.value;
+            });
+
             // Found a reply - update Firebase
             await updateDoc(doc.ref, {
               replied: true,
               repliedAt: new Date().toISOString(),
-              followUpAt: null // Cancel scheduled follow-ups
+              followUpAt: null, // Cancel scheduled follow-ups
+              replyMessageId: replyMessage.id,
+              replyThreadId: messageDetails.data.threadId,
+              replyFrom: headers.from,
+              replyDate: headers.date,
+              replySubject: headers.subject
             });
 
             replyCount++;
             console.log(`✅ Reply detected from ${toEmail}`);
+
+            // Add to new replies list
+            newReplies.push({
+              email: toEmail,
+              threadId: messageDetails.data.threadId,
+              messageId: replyMessage.id,
+              replyCount: 1,
+              lastReplyAt: new Date().toISOString(),
+              replyFrom: headers.from,
+              replySubject: headers.subject,
+              originalSubject: subject
+            });
 
             // Track company reply (non-blocking)
             fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/mark-replied`, {
@@ -189,7 +225,8 @@ export async function POST(request) {
     return NextResponse.json({
       replyCount,
       checked: emailsToCheck.length,
-      errors: errorCount
+      errors: errorCount,
+      replies: newReplies
     }, { headers });
 
   } catch (error) {
