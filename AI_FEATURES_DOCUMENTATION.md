@@ -2,7 +2,7 @@
 
 ## Overview
 
-This application includes advanced AI capabilities designed for production use with robust error handling, cost optimization, and monitoring. All features are implemented in a solid, scalable manner suitable for portfolio demonstration.
+This application includes advanced AI capabilities designed for production use with robust error handling, cost optimization, and monitoring. All features are implemented in a solid, scalable manner suitable for portfolio demonstration
 
 ## Features Implemented
 
