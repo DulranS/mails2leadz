@@ -2,7 +2,7 @@
 
 ## Overview
 
-A comprehensive reply tracking and viewing system has been implemented to automatically detect new replies to sent emails and provide a dedicated panel to view all responses.
+A comprehensive reply tracking and viewing system has been implemented to automatically detect new replies to sent emails and provide a dedicated panel to view all responses
 
 ## What Was Implemented
 
