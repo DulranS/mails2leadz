@@ -125,40 +125,50 @@ const replaceTemplateVariables = (text, firstName, lastName, businessName) => {
 
 const createMimeMessage = (to, subject, body, senderEmail, senderName, replyTo = null, attachments = []) => {
   const boundary = 'boundary_' + Math.random().toString(36).substring(7);
-  
+
   let message = `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}\r\n`;
   message += `To: ${to}\r\n`;
   if (replyTo) message += `Reply-To: ${replyTo}\r\n`;
   message += `Subject: ${subject}\r\n`;
   message += `MIME-Version: 1.0\r\n`;
-  
+
   if (attachments.length > 0) {
     message += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
-    
+
     // Add text body
     message += `--${boundary}\r\n`;
     message += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
     message += `${body}\r\n`;
-    
+
     // Add attachments
     attachments.forEach(attachment => {
       const filename = attachment.filename || 'attachment';
-      const content = attachment.content || attachment.data;
-      
+      const mimeType = attachment.mimeType || 'application/octet-stream';
+      const content = attachment.base64 || attachment.content || attachment.data;
+
+      console.log('[Send Email] Adding attachment:', {
+        filename,
+        mimeType,
+        hasBase64: !!attachment.base64,
+        hasContent: !!attachment.content,
+        hasData: !!attachment.data,
+        contentLength: content?.length || 0
+      });
+
       message += `--${boundary}\r\n`;
-      message += `Content-Type: application/octet-stream\r\n`;
+      message += `Content-Type: ${mimeType}\r\n`;
       message += `Content-Disposition: attachment; filename="${filename}"\r\n`;
       message += `Content-Transfer-Encoding: base64\r\n\r\n`;
       message += `${content}\r\n`;
     });
-    
+
     message += `--${boundary}--\r\n`;
   } else {
     // Simple text message without attachments
     message += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
     message += `${body}\r\n`;
   }
-  
+
   return message;
 };
 
