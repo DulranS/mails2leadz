@@ -33,14 +33,30 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
   const [checkError, setCheckError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
 
+  // Log props on mount
+  useEffect(() => {
+    console.log('[RepliesPanel] Props received:', {
+      userId: !!userId,
+      accessToken: !!accessToken,
+      senderEmail: senderEmail || 'MISSING'
+    });
+  }, [userId, accessToken, senderEmail]);
+
   // Auto-check for new replies every 5 minutes
   useEffect(() => {
-    if (!autoCheck || !userId || !accessToken || !senderEmail) return;
+    if (!autoCheck || !userId || !accessToken) {
+      console.log('[RepliesPanel] Skipping auto-check - missing required params', {
+        hasUserId: !!userId,
+        hasAccessToken: !!accessToken,
+        hasSenderEmail: !!senderEmail
+      });
+      return;
+    }
 
     const checkForReplies = async () => {
       try {
-        console.log('[RepliesPanel] Checking for replies...');
-        await dispatch(fetchNewReplies({ userId, accessToken }));
+        console.log('[RepliesPanel] Checking for replies with senderEmail:', senderEmail);
+        await dispatch(fetchNewReplies({ userId, accessToken, senderEmail }));
         console.log('[RepliesPanel] Reply check complete');
       } catch (error) {
         console.error('[RepliesPanel] Failed to check for replies:', error);
@@ -57,12 +73,19 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
   }, [userId, accessToken, senderEmail, autoCheck, dispatch]);
 
   const handleCheckNow = async () => {
+    if (!senderEmail) {
+      setCheckError('Sender email is required. Please configure your Gmail sender email.');
+      console.error('[RepliesPanel] Missing senderEmail');
+      return;
+    }
+
     try {
       setCheckError(null);
       setSuccessMessage(null);
       const previousCount = Object.keys(replies).length;
-      const result = await dispatch(fetchNewReplies({ userId, accessToken }));
-      
+      console.log('[RepliesPanel] Manual check with senderEmail:', senderEmail);
+      const result = await dispatch(fetchNewReplies({ userId, accessToken, senderEmail }));
+
       if (fetchNewReplies.fulfilled.match(result)) {
         const newCount = Object.keys(replies).length;
         if (newCount > previousCount) {
@@ -73,7 +96,7 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
           setTimeout(() => setSuccessMessage(null), 2000);
         }
       }
-      
+
       if (fetchNewReplies.rejected.match(result)) {
         setCheckError(result.payload || 'Failed to check for replies');
       }
