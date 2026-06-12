@@ -36,6 +36,8 @@ import {
 import Head from 'next/head';
 import { useRouter } from 'next/navigation';
 import RepliesPanel from '../../components/RepliesPanel';
+import { useAppSelector } from '../../lib/redux/hooks';
+import { selectUnreadCount } from '../../lib/redux/slices/repliesSlice';
 
 // Import from new modules
 import { CONFIG, generateId } from '../../lib/dashboard-config.js';
@@ -579,6 +581,8 @@ export default function Dashboard() {
   // SETTINGS & PREFERENCES STATES
   // ============================================================================
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showRepliesPanel, setShowRepliesPanel] = useState(false);
+  const unreadRepliesCount = useAppSelector(selectUnreadCount);
   const [userPreferences, setUserPreferences] = useState({
     theme: 'dark',
     notificationsEnabled: true,
@@ -4737,12 +4741,20 @@ export default function Dashboard() {
               </button>
 
               <button
-                onClick={() => checkForReplies()}
-                className="text-xs sm:text-sm bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2"
-                title="Check for new email replies"
+                onClick={() => {
+                  console.log('[Dashboard] Opening replies panel, current state:', showRepliesPanel);
+                  setShowRepliesPanel(true);
+                }}
+                className="text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 relative shadow-lg"
+                title="View email replies"
               >
-                <span>📬</span>
-                <span className="hidden sm:inline">Check Replies</span>
+                <span className="text-lg">📬</span>
+                <span className="hidden sm:inline font-medium">View Replies</span>
+                {unreadRepliesCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                    {unreadRepliesCount}
+                  </span>
+                )}
               </button>
 
               <button
@@ -7166,6 +7178,8 @@ export default function Dashboard() {
           userId={user.uid}
           accessToken={user.accessToken}
           senderEmail={user.email || process.env.GMAIL_SENDER_EMAIL}
+          isOpen={showRepliesPanel}
+          onToggle={() => setShowRepliesPanel(!showRepliesPanel)}
         />
       )}
     </div>
