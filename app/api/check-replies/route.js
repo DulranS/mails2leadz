@@ -57,6 +57,8 @@ export async function POST(request) {
   };
 
   try {
+    console.log('[Check Replies] Starting reply check...');
+
     // Check Firebase initialization
     if (!app || !db) {
       console.warn('[Check Replies] Firebase not initialized, skipping');
@@ -72,7 +74,10 @@ export async function POST(request) {
 
     const { userId, accessToken, senderEmail } = await request.json();
 
+    console.log('[Check Replies] Request params:', { userId: !!userId, accessToken: !!accessToken, senderEmail });
+
     if (!userId || !accessToken || !senderEmail) {
+      console.error('[Check Replies] Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields: userId, accessToken, or senderEmail', replyCount: 0 },
         { status: 400, headers }
@@ -95,12 +100,16 @@ export async function POST(request) {
     );
     const snapshot = await getDocs(q);
 
+    console.log(`[Check Replies] Found ${snapshot.docs.length} sent emails to check`);
+
     if (snapshot.empty) {
+      console.log('[Check Replies] No sent emails found to check');
       return NextResponse.json({ replyCount: 0 }, { headers });
     }
 
     // Limit the number of emails to check to avoid rate limiting
     const emailsToCheck = snapshot.docs.slice(0, CONFIG.MAX_EMAILS_TO_CHECK);
+    console.log(`[Check Replies] Checking ${emailsToCheck.length} emails (limited from ${snapshot.docs.length})`);
 
     // Set up Gmail API
     const oauth2Client = new google.auth.OAuth2(
@@ -124,6 +133,8 @@ export async function POST(request) {
       const threadId = sentEmail.threadId;
       const messageId = sentEmail.messageId;
 
+      console.log(`[Check Replies] Checking email: ${toEmail}`);
+
       // Validate recipient email
       if (!isValidEmail(toEmail)) {
         console.warn(`[Check Replies] Invalid recipient email: ${toEmail}`);
@@ -135,11 +146,15 @@ export async function POST(request) {
         try {
           // Search for replies in Gmail
           const searchQuery = `to:${senderEmail} from:${toEmail} in:inbox "${subject || ''}"`;
+          console.log(`[Check Replies] Search query: ${searchQuery}`);
+          
           const response = await gmail.users.messages.list({
             userId: 'me',
             q: searchQuery,
             maxResults: 1
           });
+
+          console.log(`[Check Replies] Gmail response for ${toEmail}:`, response.data.messages?.length || 0, 'messages');
 
           if (response.data.messages && response.data.messages.length > 0) {
             const replyMessage = response.data.messages[0];
@@ -157,6 +172,8 @@ export async function POST(request) {
             messageDetails.data.payload?.headers?.forEach(header => {
               headers[header.name.toLowerCase()] = header.value;
             });
+
+            console.log(`[Check Replies] Found reply from ${toEmail}:`, headers.from);
 
             // Found a reply - update Firebase
             await updateDoc(doc.ref, {
@@ -196,6 +213,8 @@ export async function POST(request) {
             }).catch(trackError => {
               console.warn(`[Check Replies] Failed to track reply for ${toEmail}:`, trackError);
             });
+          } else {
+            console.log(`[Check Replies] No reply found for ${toEmail}`);
           }
 
           success = true;

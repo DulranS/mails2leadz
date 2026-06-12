@@ -138,27 +138,18 @@ const formatMessage = (message) => {
 
 export async function POST(request) {
   try {
-    const { userId, email, messageId, threadId } = await request.json();
-    
+    const { userId, email, messageId, threadId, accessToken } = await request.json();
+
     if (!userId || !email) {
       return NextResponse.json({ error: 'userId and email required' }, { status: 400 });
     }
-    
+
+    if (!accessToken) {
+      return NextResponse.json({ error: 'accessToken required' }, { status: 400 });
+    }
+
     if (!db) {
       return NextResponse.json({ error: 'Firebase not initialized' }, { status: 500 });
-    }
-    
-    // Get user's Gmail credentials from Firebase
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    if (!userDoc.exists()) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-    
-    const userData = userDoc.data();
-    const accessToken = userData.accessToken;
-    
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Gmail not connected' }, { status: 401 });
     }
     
     // Set up OAuth2 client

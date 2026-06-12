@@ -24,11 +24,14 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
   const selectedConversation = useAppSelector(selectSelectedConversation);
   const loading = useAppSelector(selectRepliesLoading);
   const lastCheck = useAppSelector(selectLastCheck);
+  const error = useAppSelector((state) => state.replies.error);
 
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsOpen = onToggle || setInternalIsOpen;
   const [autoCheck, setAutoCheck] = useState(true);
+  const [checkError, setCheckError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   // Auto-check for new replies every 5 minutes
   useEffect(() => {
@@ -55,9 +58,28 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
 
   const handleCheckNow = async () => {
     try {
-      await dispatch(fetchNewReplies({ userId, accessToken }));
+      setCheckError(null);
+      setSuccessMessage(null);
+      const previousCount = Object.keys(replies).length;
+      const result = await dispatch(fetchNewReplies({ userId, accessToken }));
+      
+      if (fetchNewReplies.fulfilled.match(result)) {
+        const newCount = Object.keys(replies).length;
+        if (newCount > previousCount) {
+          setSuccessMessage(`Found ${newCount - previousCount} new reply/replies!`);
+          setTimeout(() => setSuccessMessage(null), 3000);
+        } else {
+          setSuccessMessage('Check complete - no new replies');
+          setTimeout(() => setSuccessMessage(null), 2000);
+        }
+      }
+      
+      if (fetchNewReplies.rejected.match(result)) {
+        setCheckError(result.payload || 'Failed to check for replies');
+      }
     } catch (error) {
       console.error('Failed to check for replies:', error);
+      setCheckError(error.message || 'Failed to check for replies');
     }
   };
 
@@ -154,6 +176,34 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
 
             {/* Content */}
             <div className="flex-1 overflow-auto p-4 bg-gray-900">
+              {checkError && (
+                <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">⚠️</span>
+                    <span className="text-red-200 text-sm">{checkError}</span>
+                    <button
+                      onClick={() => setCheckError(null)}
+                      className="ml-auto text-red-400 hover:text-red-200"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+              {successMessage && (
+                <div className="mb-4 p-3 bg-green-900/50 border border-green-700 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400">✓</span>
+                    <span className="text-green-200 text-sm">{successMessage}</span>
+                    <button
+                      onClick={() => setSuccessMessage(null)}
+                      className="ml-auto text-green-400 hover:text-green-200"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
               {repliesList.length === 0 ? (
                 <div className="text-center text-gray-400 py-16">
                   <div className="text-6xl mb-4">📭</div>
@@ -214,9 +264,9 @@ export default function RepliesPanel({ userId, accessToken, senderEmail, isOpen:
                     ✕ Close
                   </button>
                 </div>
-                {selectedConversation.reply?.conversation ? (
+                {replies[selectedConversation.email]?.conversation ? (
                   <div className="max-h-80 overflow-auto space-y-3 bg-gray-900 rounded-lg p-4">
-                    {selectedConversation.reply.conversation.messages?.map((message) => (
+                    {replies[selectedConversation.email].conversation.messages?.map((message) => (
                       <div
                         key={message.id}
                         className={`p-4 rounded-lg ${
