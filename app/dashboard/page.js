@@ -932,6 +932,7 @@ export default function Dashboard() {
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
+    console.log(`[getSafeFollowUpCandidates] Final count: ${candidates.length} safe candidates out of ${sentLeads.length} total leads`);
     return candidates;
   }, [sentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt, currentTime]);
 
