@@ -2558,20 +2558,28 @@ export default function Dashboard() {
   // MASS EMAIL FOLLOW-UP TO ALL SAFE LEADS
   // ============================================================================
   const handleMassEmailFollowUps = useCallback(async () => {
+    console.log('[Mass Follow-Up] Starting...');
+    
     if (!user?.uid) {
+      console.error('[Mass Follow-Up] User not signed in');
       addNotification('Please sign in first', 'error');
       return;
     }
 
+    console.log('[Mass Follow-Up] Safe candidates count:', safeFollowUpCandidates.length);
+
     if (safeFollowUpCandidates.length === 0) {
+      console.error('[Mass Follow-Up] No safe candidates available');
       addNotification('No safe leads available for follow-up', 'warning');
       return;
     }
 
     // Check email quota
     const quotaCheck = canUse('email', safeFollowUpCandidates.length);
+    console.log('[Mass Follow-Up] Quota check:', quotaCheck);
 
     if (!quotaCheck.available) {
+      console.error('[Mass Follow-Up] Quota not available:', quotaCheck.reason);
       addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
       return;
     }
@@ -2583,9 +2591,11 @@ export default function Dashboard() {
     );
 
     if (!confirmed) {
+      console.log('[Mass Follow-Up] User cancelled');
       return;
     }
 
+    console.log('[Mass Follow-Up] User confirmed, starting send...');
     setIsSending(true);
     setStatus('Sending follow-ups...');
     setSendProgress({ current: 0, total: safeFollowUpCandidates.length });
@@ -2597,20 +2607,34 @@ export default function Dashboard() {
 
     try {
       // Get Gmail token once for all sends
+      console.log('[Mass Follow-Up] Requesting Gmail token...');
       const accessToken = await requestGmailToken();
+      console.log('[Mass Follow-Up] Gmail token obtained:', !!accessToken);
+
+      if (!accessToken) {
+        console.error('[Mass Follow-Up] Failed to get Gmail token');
+        addNotification('Failed to get Gmail access token', 'error');
+        setIsSending(false);
+        return;
+      }
 
       setStatus(`Sending follow-ups to ${safeFollowUpCandidates.length} leads...`);
 
       // Process leads in batches
       const batchSize = Math.min(10, safeFollowUpCandidates.length);
+      console.log('[Mass Follow-Up] Batch size:', batchSize, 'Total leads:', safeFollowUpCandidates.length);
 
       for (let i = 0; i < safeFollowUpCandidates.length; i += batchSize) {
         const batch = safeFollowUpCandidates.slice(i, i + batchSize);
+        console.log('[Mass Follow-Up] Processing batch', i / batchSize + 1, 'of', Math.ceil(safeFollowUpCandidates.length / batchSize));
 
         for (const contact of batch) {
           try {
+            console.log('[Mass Follow-Up] Processing contact:', contact.email);
+
             // Double-check safety before sending
             if (repliedLeads[contact.email]) {
+              console.log('[Mass Follow-Up] Skipping - already replied:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'Already replied' });
               continue;
@@ -2618,20 +2642,22 @@ export default function Dashboard() {
 
             const followUpCount = contact.followUpCount || 0;
             if (followUpCount >= 3) {
+              console.log('[Mass Follow-Up] Skipping - max follow-ups reached:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'Max follow-ups reached' });
               continue;
             }
 
-            // Get Gmail token
-            const accessToken = await requestGmailToken();
+            // Use the Gmail token requested once at the beginning
             if (!accessToken) {
+              console.error('[Mass Follow-Up] No access token for:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'No access token' });
               continue;
             }
 
             // Send follow-up using the dedicated follow-up API
+            console.log('[Mass Follow-Up] Sending follow-up to:', contact.email);
             const res = await fetch('/api/send-followup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -2644,6 +2670,7 @@ export default function Dashboard() {
             });
 
             const data = await res.json();
+            console.log('[Mass Follow-Up] Response for', contact.email, ':', res.status, data);
 
             if (res.ok) {
               // Check if email was skipped due to duplicate
@@ -2665,11 +2692,13 @@ export default function Dashboard() {
               incrementQuota('email', 1);
 
             } else {
+              console.error('[Mass Follow-Up] API error for', contact.email, ':', data.error);
               failCount++;
               results.push({ email: contact.email, status: 'failed', reason: data.error || 'API error' });
             }
 
           } catch (error) {
+            console.error('[Mass Follow-Up] Exception for', contact.email, ':', error);
             failCount++;
             results.push({ email: contact.email, status: 'failed', reason: error.message });
           }
@@ -2688,6 +2717,8 @@ export default function Dashboard() {
         }
       }
 
+      console.log('[Mass Follow-Up] All sends complete. Success:', successCount, 'Failed:', failCount, 'Skipped:', skipCount);
+
       // Refresh data after all sends complete
       // Invalidate cache to ensure fresh data
       invalidateCache('sent_emails');
@@ -2705,6 +2736,8 @@ export default function Dashboard() {
         `📈 Total: ${safeFollowUpCandidates.length}\n\n` +
         `Email quota used: ${successCount}/${quotaCheck.limit}`;
 
+      console.log('[Mass Follow-Up] Final message:', message);
+
       if (failCount > 0) {
         const failedEmails = results.filter(r => r.status === 'failed').slice(0, 3);
         const failedList = failedEmails.map(f => `• ${f.email}: ${f.reason}`).join('\n');
@@ -2715,8 +2748,10 @@ export default function Dashboard() {
       }
 
     } catch (error) {
+      console.error('[Mass Follow-Up] Fatal error:', error);
       addNotification(`Mass follow-up failed: ${error.message}`, 'error');
     } finally {
+      console.log('[Mass Follow-Up] Cleaning up...');
       setIsSending(false);
       setSendProgress(null);
       setStatus('');
