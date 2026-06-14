@@ -890,12 +890,20 @@ export default function Dashboard() {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
 
-        const followUpAt = getLeadNextFollowUpAt(lead);
-        if (!followUpAt) return false;
-        if (followUpAt > now) return false;
-
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         if (followUpCount >= 3) return false;
+
+        // Use same logic as API: check if enough time has passed since last contact
+        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+        if (!lastFollowUpAt) return false;
+
+        const lastDate = safeParseDate(lastFollowUpAt);
+        if (!lastDate) return false;
+
+        const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
+        const MIN_DAYS_BETWEEN_FOLLOWUP = 2; // Match API config
+
+        if (daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP) return false;
 
         return true;
       })
@@ -937,35 +945,41 @@ export default function Dashboard() {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
 
-        const followUpAt = getLeadNextFollowUpAt(lead);
-        if (!followUpAt) return false;
+        const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
+        if (followUpCount >= 3) return false;
 
-        // Include if follow-up is in the future (not ready yet)
-        return followUpAt > now;
+        // Use same logic as API: check if enough time has passed since last contact
+        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+        if (!lastFollowUpAt) return false;
+
+        const lastDate = safeParseDate(lastFollowUpAt);
+        if (!lastDate) return false;
+
+        const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
+        const MIN_DAYS_BETWEEN_FOLLOWUP = 2; // Match API config
+
+        // Include if not enough time has passed (pending)
+        return daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP;
       })
       .map(lead => {
-        const followUpAt = getLeadNextFollowUpAt(lead);
-        const sentAtDate = safeParseDate(lead.sentAt);
-        const daysSinceSent = sentAtDate ?
-          (now - sentAtDate) / (1000 * 60 * 60 * 24) : 999;
-        const timeUntilFollowUp = followUpAt ? (followUpAt - now) : 0;
-        const hoursUntilFollowUp = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
-        const minutesUntilFollowUp = Math.floor((timeUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
-        const secondsUntilFollowUp = Math.floor((timeUntilFollowUp % (1000 * 60)) / 1000);
+        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+        const lastDate = safeParseDate(lastFollowUpAt);
+        const daysSinceLastContact = lastDate ? (now - lastDate) / (1000 * 60 * 60 * 24) : 0;
+        const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
+        const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_FOLLOWUP - daysSinceLastContact);
+        const hoursRemaining = Math.floor(daysRemaining * 24);
+        const minutesRemaining = Math.floor((daysRemaining * 24 - hoursRemaining) * 60);
         return {
           ...lead,
-          followUpAt: followUpAt?.toISOString() || lead.followUpAt,
-          daysSinceSent,
-          hoursUntilFollowUp,
-          minutesUntilFollowUp,
-          secondsUntilFollowUp,
-          timeUntilFollowUp
+          daysRemaining,
+          hoursRemaining,
+          minutesRemaining
         };
       })
-      .sort((a, b) => a.timeUntilFollowUp - b.timeUntilFollowUp);
+      .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [sentLeads, normalizeSentLead, getLeadNextFollowUpAt, safeParseDate, currentTime]);
+  }, [sentLeads, normalizeSentLead, safeParseDate, currentTime]);
 
   const pendingLeads = useMemo(() => getPendingLeads(), [getPendingLeads, currentTime]);
 
