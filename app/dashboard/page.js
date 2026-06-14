@@ -883,6 +883,7 @@ export default function Dashboard() {
     }
 
     const now = currentTime;
+    console.log('[getSafeFollowUpCandidates] Current time:', now.toISOString());
 
     const candidates = sentLeads
       .map(normalizeSentLead)
@@ -903,7 +904,12 @@ export default function Dashboard() {
         const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
         const MIN_DAYS_BETWEEN_FOLLOWUP = 2; // Match API config
 
-        if (daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP) return false;
+        console.log(`[getSafeFollowUpCandidates] ${lead.email}: daysSinceLastContact=${daysSinceLastContact.toFixed(2)}, lastFollowUpAt=${lastFollowUpAt}`);
+
+        if (daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP) {
+          console.log(`[getSafeFollowUpCandidates] ${lead.email}: TOO SOON - filtering out`);
+          return false;
+        }
 
         return true;
       })
