@@ -12,8 +12,8 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
   'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
   'NEXT_PUBLIC_FIREBASE_APP_ID',
-  'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-  'NEXT_PUBLIC_GOOGLE_CLIENT_SECRET',
+  'GMAIL_CLIENT_ID',
+  'GMAIL_CLIENT_SECRET',
   'GMAIL_SENDER_EMAIL'
 ];
 
@@ -129,7 +129,7 @@ export async function POST(request) {
       );
     }
     
-    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET || !process.env.GMAIL_SENDER_EMAIL) {
+    if (!process.env.GMAIL_CLIENT_ID || !process.env.GMAIL_CLIENT_SECRET || !process.env.GMAIL_SENDER_EMAIL) {
       return NextResponse.json(
         { 
           error: 'Google/Gmail configuration missing',
@@ -217,8 +217,8 @@ export async function POST(request) {
       .replace('{{sender_name}}', senderName || 'Team');
     
     const oauth2Client = new google.auth.OAuth2(
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET,
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
       process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'http://localhost:3000'
     );
     
