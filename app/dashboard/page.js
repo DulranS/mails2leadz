@@ -1,5 +1,20 @@
 // app/dashboard/page.js
 'use client';
+
+// Global error handler to catch the actual error
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    console.error('[GLOBAL ERROR]', event.error);
+    console.error('[GLOBAL ERROR] Message:', event.message);
+    console.error('[GLOBAL ERROR] Filename:', event.filename);
+    console.error('[GLOBAL ERROR] Line:', event.lineno);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[UNHANDLED REJECTION]', event.reason);
+  });
+}
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
@@ -265,6 +280,8 @@ Best,
 // MAIN DASHBOARD COMPONENT
 // ============================================================================
 export default function Dashboard() {
+  console.log('[Dashboard] Component initialization started');
+
   // ============================================================================
   // AUTH & LOADING STATES
   // ============================================================================
@@ -273,6 +290,8 @@ export default function Dashboard() {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [authError, setAuthError] = useState(null);
   const router = useRouter();
+
+  console.log('[Dashboard] Auth states initialized');
 
   // ============================================================================
   // CSV & LEAD DATA STATES
