@@ -904,12 +904,15 @@ export default function Dashboard() {
         const sentAtDate = safeParseDate(lead.sentAt);
         const daysSinceSent = sentAtDate ?
           (now - sentAtDate) / (1000 * 60 * 60 * 24) : 999;
+        // Urgency score: higher for leads that haven't been followed up recently
+        // Clamp to 0-100 range to prevent negative values
+        const urgencyScore = Math.max(0, Math.min(100, 100 - (daysSinceSent * 1.5)));
         return {
           ...lead,
           followUpAt: getLeadNextFollowUpAt(lead)?.toISOString() || lead.followUpAt,
           followUpCount,
           daysSinceSent,
-          urgencyScore: 100 - (daysSinceSent * 2),
+          urgencyScore,
           safetyScore: Math.max(0, (3 - followUpCount) * 33.33)
         };
       })
@@ -2617,6 +2620,7 @@ export default function Dashboard() {
     let successCount = 0;
     let failCount = 0;
     let skipCount = 0;
+    let pendingCount = 0;
     const results = [];
 
     try {
@@ -2709,8 +2713,15 @@ export default function Dashboard() {
 
             } else {
               console.error('[Mass Follow-Up] API error for', contact.email, ':', data.error);
-              failCount++;
-              results.push({ email: contact.email, status: 'failed', reason: data.error || 'API error' });
+
+              // Check if error is "too soon to follow up" - count as pending instead of failed
+              if (data.error && data.error.includes('Too soon to follow up')) {
+                pendingCount++;
+                results.push({ email: contact.email, status: 'pending', reason: data.error || 'Too soon to follow up' });
+              } else {
+                failCount++;
+                results.push({ email: contact.email, status: 'failed', reason: data.error || 'API error' });
+              }
             }
 
           } catch (error) {
@@ -2733,7 +2744,7 @@ export default function Dashboard() {
         }
       }
 
-      console.log('[Mass Follow-Up] All sends complete. Success:', successCount, 'Failed:', failCount, 'Skipped:', skipCount);
+      console.log('[Mass Follow-Up] All sends complete. Success:', successCount, 'Failed:', failCount, 'Skipped:', skipCount, 'Pending:', pendingCount);
 
       // Refresh data after all sends complete
       // Invalidate cache to ensure fresh data
@@ -2747,6 +2758,7 @@ export default function Dashboard() {
       // Show comprehensive results
       const message = `Mass Follow-Up Complete!\n\n` +
         `✅ Success: ${successCount}\n` +
+        `⏳ Pending: ${pendingCount}\n` +
         `❌ Failed: ${failCount}\n` +
         `⏭️ Skipped: ${skipCount}\n` +
         `📈 Total: ${safeFollowUpCandidates.length}\n\n` +
@@ -2754,11 +2766,19 @@ export default function Dashboard() {
 
       console.log('[Mass Follow-Up] Final message:', message);
 
-      if (failCount > 0) {
-        const failedEmails = results.filter(r => r.status === 'failed').slice(0, 3);
-        const failedList = failedEmails.map(f => `• ${f.email}: ${f.reason}`).join('\n');
-        addNotification(message + `\n\n❌ Failed sends:\n${failedList}${failCount > 3 ? `\n... and ${failCount - 3} more` : ''}`,
-          failCount > 0 ? 'warning' : 'success');
+      if (failCount > 0 || pendingCount > 0) {
+        let details = '';
+        if (pendingCount > 0) {
+          const pendingEmails = results.filter(r => r.status === 'pending').slice(0, 3);
+          const pendingList = pendingEmails.map(p => `• ${p.email}: ${p.reason}`).join('\n');
+          details += `\n⏳ Pending (too soon to follow up):\n${pendingList}${pendingCount > 3 ? `\n... and ${pendingCount - 3} more` : ''}`;
+        }
+        if (failCount > 0) {
+          const failedEmails = results.filter(r => r.status === 'failed').slice(0, 3);
+          const failedList = failedEmails.map(f => `• ${f.email}: ${f.reason}`).join('\n');
+          details += `\n❌ Failed sends:\n${failedList}${failCount > 3 ? `\n... and ${failCount - 3} more` : ''}`;
+        }
+        addNotification(message + details, 'warning');
       } else {
         addNotification(message, 'success');
       }
