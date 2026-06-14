@@ -2667,7 +2667,8 @@ export default function Dashboard() {
                 accessToken,
                 userId: user.uid,
                 senderName,
-                attachments: followUpAttachments
+                attachments: followUpAttachments,
+                customTemplates: followUpTemplates
               })
             });
 

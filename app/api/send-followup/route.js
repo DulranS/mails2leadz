@@ -140,7 +140,7 @@ export async function POST(request) {
       );
     }
     
-    const { email, accessToken, userId, senderName, attachments = [] } = await request.json();
+    const { email, accessToken, userId, senderName, attachments = [], customTemplates = null } = await request.json();
     
     if (!email || !accessToken || !userId) {
       return NextResponse.json(
@@ -209,7 +209,8 @@ export async function POST(request) {
     }
     
     const followUpIndex = followUpCount;
-    const template = FOLLOW_UP_TEMPLATES[followUpIndex] || FOLLOW_UP_TEMPLATES[FOLLOW_UP_TEMPLATES.length - 1];
+    const templatesToUse = customTemplates && customTemplates.length > 0 ? customTemplates : FOLLOW_UP_TEMPLATES;
+    const template = templatesToUse[followUpIndex] || templatesToUse[templatesToUse.length - 1];
     
     let subject = template.subject.replace('{{business_name}}', existingData.businessName || 'Contact');
     let body = template.body
