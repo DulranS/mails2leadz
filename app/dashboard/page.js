@@ -429,6 +429,7 @@ export default function Dashboard() {
   const [status, setStatus] = useState('');
   const [statusType, setStatusType] = useState('info');
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0 });
+  const [followUpAttachments, setFollowUpAttachments] = useState([]);
 
   // ============================================================================
   // FOLLOW-UP STATES
@@ -2665,7 +2666,8 @@ export default function Dashboard() {
                 email: contact.email,
                 accessToken,
                 userId: user.uid,
-                senderName
+                senderName,
+                attachments: followUpAttachments
               })
             });
 
@@ -6213,11 +6215,58 @@ export default function Dashboard() {
                     <span>{safeFollowUpCandidates.length} leads ready for intelligent follow-up</span>
                   </div>
 
+                  {/* FILE ATTACHMENT UPLOAD */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      📎 Attach Files (optional)
+                    </label>
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files);
+                        const fileReaders = files.map(file => {
+                          return new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const base64 = reader.result.split(',')[1];
+                              resolve({
+                                filename: file.name,
+                                mimeType: file.type || 'application/octet-stream',
+                                data: base64
+                              });
+                            };
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                          });
+                        });
+
+                        Promise.all(fileReaders).then(attachments => {
+                          console.log('[Mass Follow-Up] Files loaded:', attachments.length);
+                          setFollowUpAttachments(attachments);
+                        }).catch(error => {
+                          console.error('[Mass Follow-Up] Error loading files:', error);
+                          addNotification('Failed to load files', 'error');
+                        });
+                      }}
+                      disabled={isSending}
+                      className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 disabled:opacity-50"
+                    />
+                    {followUpAttachments.length > 0 && (
+                      <div className="mt-2 text-sm text-indigo-300">
+                        {followUpAttachments.length} file(s) selected
+                      </div>
+                    )}
+                  </div>
+
                   {/* MASS EMAIL BUTTON */}
                   {safeFollowUpCandidates.length > 0 && (
                     <div className="mb-6">
                       <button
-                        onClick={handleMassEmailFollowUps}
+                        onClick={() => {
+                          console.log('[BUTTON] Mass follow-up button clicked');
+                          handleMassEmailFollowUps();
+                        }}
                         disabled={isSending}
                         className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 ${isSending
                             ? 'bg-gray-600 cursor-not-allowed opacity-60'

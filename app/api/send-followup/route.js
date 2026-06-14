@@ -78,8 +78,29 @@ const extractDomainFromEmail = (email) => {
   return parts.length === 2 ? parts[1] : null;
 };
 
-const createMimeMessage = ({ from, to, subject, body }) => {
-  const message = `From: ${from}\r\nTo: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}`;
+const createMimeMessage = ({ from, to, subject, body, attachments = [] }) => {
+  let message = `From: ${from}\r\nTo: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\n`;
+
+  if (attachments.length > 0) {
+    const boundary = 'boundary_' + Math.random().toString(36).substr(2, 16);
+    message += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+    message += `--${boundary}\r\n`;
+    message += `Content-Type: text/plain; charset=utf-8\r\n\r\n`;
+    message += `${body}\r\n`;
+
+    attachments.forEach((attachment, index) => {
+      message += `--${boundary}\r\n`;
+      message += `Content-Type: ${attachment.mimeType || 'application/octet-stream'}\r\n`;
+      message += `Content-Transfer-Encoding: base64\r\n`;
+      message += `Content-Disposition: attachment; filename="${attachment.filename}"\r\n\r\n`;
+      message += `${attachment.data}\r\n`;
+    });
+
+    message += `--${boundary}--\r\n`;
+  } else {
+    message += `Content-Type: text/plain; charset=utf-8\r\n\r\n${body}`;
+  }
+
   return Buffer.from(message)
     .toString('base64')
     .replace(/\+/g, '-')
@@ -119,7 +140,7 @@ export async function POST(request) {
       );
     }
     
-    const { email, accessToken, userId, senderName } = await request.json();
+    const { email, accessToken, userId, senderName, attachments = [] } = await request.json();
     
     if (!email || !accessToken || !userId) {
       return NextResponse.json(
@@ -208,7 +229,8 @@ export async function POST(request) {
       from: `${senderName || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>`,
       to: email,
       subject,
-      body
+      body,
+      attachments
     });
     
     const response = await gmail.users.messages.send({
