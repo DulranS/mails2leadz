@@ -4581,7 +4581,7 @@ export default function Dashboard() {
   const abSummary = abTestMode ? (
     <div className="bg-blue-900/30 p-4 rounded-xl mt-4 border border-blue-700/50">
       <h3 className="text-sm font-bold text-blue-300 mb-3">📊 A/B Test Results</h3>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-blue-800/30 p-3 rounded-lg">
           <div className="text-xs text-blue-300">Template A</div>
           <div className="text-xl font-bold text-white">{abResults.a.sent || 0} sent</div>
@@ -5357,7 +5357,7 @@ export default function Dashboard() {
 
                   {/* Status Indicators */}
                   <div className="mt-3 p-3 bg-gray-800 rounded-lg text-xs">
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <span className="text-gray-400">CSV Loaded:</span>
                         <span className={`ml-2 ${csvContent ? 'text-green-400' : 'text-red-400'}`}>
@@ -5455,7 +5455,7 @@ export default function Dashboard() {
                       <span className="text-xs text-gray-300">Enable</span>
                     </label>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                     <div>
                       <label className="text-xs block text-gray-300">Channel</label>
                       <select
@@ -5562,7 +5562,7 @@ export default function Dashboard() {
                 {/* Campaign Performance */}
                 <div className="bg-gradient-to-br from-purple-900 to-purple-800 p-4 sm:p-6 rounded-xl shadow border border-purple-700">
                   <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">📊 Campaign Performance</h2>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-purple-800/50 p-3 rounded">
                       <div className="text-xs text-purple-300">Total Outreach</div>
                       <div className="text-xl sm:text-2xl font-bold text-white">{whatsappLinks.length}</div>
@@ -5600,7 +5600,7 @@ export default function Dashboard() {
                 {/* Company Tracking */}
                 <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-4 rounded-xl border border-indigo-700/50">
                   <h3 className="text-sm font-bold text-indigo-300 mb-3">🏢 Company Tracking</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="text-xs text-indigo-400">Companies Contacted</div>
                       <div className="text-lg font-bold text-indigo-300">
@@ -5635,7 +5635,7 @@ export default function Dashboard() {
                 {/* Revenue Potential */}
                 <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 p-4 rounded-xl border border-green-700/50">
                   <h3 className="text-sm font-bold text-green-300 mb-3">💰 Revenue Potential</h3>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="text-xs text-green-400">Pipeline Value</div>
                       <div className="text-lg font-bold text-green-300">
@@ -6698,7 +6698,7 @@ export default function Dashboard() {
                                 {call.status === 'completed' ? 'Completed' : call.status === 'failed' ? 'Failed' : 'In Progress'}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm text-gray-400 mt-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-400 mt-2">
                               <div><span className="font-medium">📞 Phone:</span> {call.toPhone}</div>
                               <div><span className="font-medium">⏱️ Duration:</span> {call.duration || 0}s</div>
                               <div><span className="font-medium">🎤 Answered by:</span>{' '}
@@ -7007,7 +7007,7 @@ export default function Dashboard() {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             onClick={() => handleCall(link.phone)}
                             className="text-[10px] sm:text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded"
