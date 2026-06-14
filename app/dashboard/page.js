@@ -2601,6 +2601,19 @@ export default function Dashboard() {
     setStatus('Sending follow-ups...');
     setSendProgress({ current: 0, total: safeFollowUpCandidates.length });
 
+    // Final quota check before starting sends
+    const finalQuotaCheck = canUse('email', safeFollowUpCandidates.length);
+    console.log('[Mass Follow-Up] Final quota check:', finalQuotaCheck);
+
+    if (!finalQuotaCheck.available) {
+      console.error('[Mass Follow-Up] Quota not available on final check:', finalQuotaCheck.reason);
+      addNotification(`⚠️ ${finalQuotaCheck.reason}`, 'error');
+      setIsSending(false);
+      setSendProgress(null);
+      setStatus('');
+      return;
+    }
+
     let successCount = 0;
     let failCount = 0;
     let skipCount = 0;
@@ -3900,8 +3913,8 @@ export default function Dashboard() {
       size: file.size
     }));
 
-    setEmailAttachments(newAttachments);
-    addNotification(`✅ ${newAttachments.length} attachment(s) ready`, 'success');
+    setEmailAttachments([...emailAttachments, ...newAttachments]);
+    addNotification(`✅ ${newAttachments.length} attachment(s) added`, 'success');
   };
 
   const handleRemoveAttachment = (index) => {
@@ -6216,6 +6229,25 @@ export default function Dashboard() {
                     <span>{safeFollowUpCandidates.length} leads ready for intelligent follow-up</span>
                   </div>
 
+                  {/* QUOTA DISPLAY */}
+                  <div className="mb-4 bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-300">📧 Daily Email Quota:</span>
+                      <span className="font-bold text-indigo-300">
+                        {quotas.emails.used} / {quotas.emails.limit}
+                      </span>
+                    </div>
+                    <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-indigo-600 rounded-full h-2 transition-all duration-300"
+                        style={{ width: `${(quotas.emails.used / quotas.emails.limit) * 100}%` }}
+                      ></div>
+                    </div>
+                    <div className="mt-1 text-xs text-gray-400 text-right">
+                      {quotas.emails.limit - quotas.emails.used} remaining
+                    </div>
+                  </div>
+
                   {/* FILE ATTACHMENT UPLOAD */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -6234,7 +6266,8 @@ export default function Dashboard() {
                               resolve({
                                 filename: file.name,
                                 mimeType: file.type || 'application/octet-stream',
-                                data: base64
+                                data: base64,
+                                size: file.size
                               });
                             };
                             reader.onerror = reject;
@@ -6244,7 +6277,7 @@ export default function Dashboard() {
 
                         Promise.all(fileReaders).then(attachments => {
                           console.log('[Mass Follow-Up] Files loaded:', attachments.length);
-                          setFollowUpAttachments(attachments);
+                          setFollowUpAttachments([...followUpAttachments, ...attachments]);
                         }).catch(error => {
                           console.error('[Mass Follow-Up] Error loading files:', error);
                           addNotification('Failed to load files', 'error');
@@ -6254,8 +6287,26 @@ export default function Dashboard() {
                       className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 disabled:opacity-50"
                     />
                     {followUpAttachments.length > 0 && (
-                      <div className="mt-2 text-sm text-indigo-300">
-                        {followUpAttachments.length} file(s) selected
+                      <div className="mt-2 space-y-2 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-200">
+                        {followUpAttachments.map((attachment, index) => (
+                          <div key={attachment.filename + index} className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="font-semibold">{attachment.filename}</div>
+                              <div className="text-xs text-gray-400">{Math.round(attachment.size / 1024)} KB</div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...followUpAttachments];
+                                updated.splice(index, 1);
+                                setFollowUpAttachments(updated);
+                              }}
+                              className="text-xs text-red-400 hover:text-red-200"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
