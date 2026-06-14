@@ -6039,94 +6039,94 @@ export default function Dashboard() {
 
       {/* FOLLOW-UP MODAL */}
       {showFollowUpModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col border-2 border-indigo-500/30">
-            <div className="relative p-6 border-b border-gray-700/50 bg-gradient-to-r from-indigo-900/40 via-purple-900/40 to-pink-900/40">
+            <div className="relative p-4 sm:p-6 border-b border-gray-700/50 bg-gradient-to-r from-indigo-900/40 via-purple-900/40 to-pink-900/40">
               <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/10 to-purple-600/10 backdrop-blur-xl"></div>
-              <div className="relative flex justify-between items-center">
+              <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                  <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
                     📬 Reply & Follow-Up Center
                   </h2>
-                  <p className="text-sm text-indigo-200 mt-2">Intelligent campaign management with AI-powered insights</p>
+                  <p className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2">Intelligent campaign management with AI-powered insights</p>
                 </div>
                 <button
                   onClick={() => setShowFollowUpModal(false)}
-                  className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-3xl w-12 h-12 rounded-full flex items-center justify-center"
+                  className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-2xl sm:text-3xl w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center"
                 >
                   ✕
                 </button>
               </div>
             </div>
-            <div className="p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-700/50">
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-700/50">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
-                  <div className="relative bg-gradient-to-br from-blue-900/40 to-blue-800/40 p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
-                    <div className="text-4xl font-bold text-blue-400">{followUpStats.totalSent}</div>
-                    <div className="text-sm text-blue-200 mt-2 font-medium">Total Sent</div>
-                    <div className="absolute top-3 right-3 text-2xl opacity-20">📤</div>
+                  <div className="relative bg-gradient-to-br from-blue-900/40 to-blue-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">{followUpStats.totalSent}</div>
+                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Total Sent</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📤</div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
-                  <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                    <div className="text-4xl font-bold text-green-400">{repliedLeadsList.length}</div>
-                    <div className="text-sm text-green-200 mt-2 font-medium">
+                  <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{repliedLeadsList.length}</div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
                       Replied ({Math.round((repliedLeadsList.length / Math.max(followUpStats.totalSent, 1)) * 100)}%)
                     </div>
-                    <div className="absolute top-3 right-3 text-2xl opacity-20">✅</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
-                  <div className="relative bg-gradient-to-br from-indigo-900/40 to-purple-800/40 p-5 rounded-xl border border-indigo-500/30 hover:border-indigo-400/50 transition-all">
-                    <div className="text-4xl font-bold text-indigo-400">{followUpStats.alreadyFollowedUp}</div>
-                    <div className="text-sm text-indigo-200 mt-2 font-medium">Already Followed Up</div>
-                    <div className="absolute top-3 right-3 text-2xl opacity-20">📬</div>
+                  <div className="relative bg-gradient-to-br from-indigo-900/40 to-purple-800/40 p-3 sm:p-5 rounded-xl border border-indigo-500/30 hover:border-indigo-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-indigo-400">{followUpStats.alreadyFollowedUp}</div>
+                    <div className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2 font-medium">Already Followed Up</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📬</div>
                   </div>
                 </div>
-                <div className="relative group">
+                <div className="relative group hidden sm:block">
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
-                  <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
-                    <div className="text-4xl font-bold text-yellow-400">{safeFollowUpCandidates.length}</div>
-                    <div className="text-sm text-yellow-200 mt-2 font-medium">Ready for Follow-Up</div>
-                    <div className="absolute top-3 right-3 text-2xl opacity-20">⏰</div>
+                  <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-3 sm:p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{safeFollowUpCandidates.length}</div>
+                    <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">Ready for Follow-Up</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏰</div>
                   </div>
                 </div>
-                <div className="relative group">
+                <div className="relative group hidden sm:block">
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
-                  <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
-                    <div className="text-4xl font-bold text-purple-400">
+                  <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
                       ${Math.round((repliedLeadsList.length * 0.25 * 5000) / 1000)}k
                     </div>
-                    <div className="text-sm text-purple-200 mt-2 font-medium">Potential Revenue</div>
-                    <div className="absolute top-3 right-3 text-2xl opacity-20">💰</div>
+                    <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">Potential Revenue</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💰</div>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
               {/* NEW REPLIES SECTION - PRIORITY */}
               {repliedLeadsList.length > 0 && (
                 <div className="mb-6">
-                  <div className="text-lg font-bold text-green-300 mb-4 flex items-center gap-3">
-                    <span className="text-2xl">🎉</span>
+                  <div className="text-base sm:text-lg font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+                    <span className="text-xl sm:text-2xl">🎉</span>
                     <span>{repliedLeadsList.length} New Replies - Take Action!</span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {repliedLeadsList.slice(0, showAllRepliedLeads ? repliedLeadsList.length : 5).map((lead, idx) => (
                       <div key={idx} className="group relative">
                         <div className={`absolute inset-0 bg-gradient-to-r ${lead.isHotLead ? 'from-green-500/20 to-emerald-500/20' : 'from-blue-500/10 to-purple-500/10'} rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all`}></div>
-                        <div className={`relative p-4 rounded-xl ${lead.isHotLead ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/40' : 'bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-gray-700'} border hover:border-indigo-500/50 transition-all`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                        <div className={`relative p-3 sm:p-4 rounded-xl ${lead.isHotLead ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/40' : 'bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-gray-700'} border hover:border-indigo-500/50 transition-all`}>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="flex-1 w-full">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
                                 {lead.isHotLead && <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">🔥 HOT</span>}
-                                <div className="font-bold text-white">{lead.email}</div>
+                                <div className="font-bold text-white text-sm sm:text-base break-all">{lead.email}</div>
                               </div>
                               <div className="text-xs text-gray-400 mb-2">{lead.businessName || 'No company'}</div>
-                              <div className="flex gap-4 text-sm">
+                              <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
                                 <span className="text-indigo-400">
                                   📅 Replied {Math.ceil(lead.daysSinceReply)} days ago
                                 </span>
@@ -6135,14 +6135,14 @@ export default function Dashboard() {
                                 </span>
                               </div>
                             </div>
-                            <div className="flex gap-2 ml-4">
+                            <div className="flex flex-wrap gap-2 sm:ml-4 w-full sm:w-auto">
                               <button
                                 onClick={() => handleViewConversation(lead)}
-                                className="relative group/btn overflow-hidden"
+                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
                                 title="View Conversation"
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 group-hover/btn:from-purple-500 group-hover/btn:to-pink-500 transition-all"></div>
-                                <div className="relative px-4 py-2 text-white font-bold text-sm rounded-lg">
+                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
                                   💬 Thread
                                 </div>
                               </button>
@@ -6171,21 +6171,21 @@ export default function Dashboard() {
                                     addNotification('Error creating deal', 'error');
                                   }
                                 }}
-                                className="relative group/btn overflow-hidden"
+                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
                                 title="Create Deal"
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 group-hover/btn:from-green-500 group-hover/btn:to-emerald-500 transition-all"></div>
-                                <div className="relative px-4 py-2 text-white font-bold text-sm rounded-lg">
+                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
                                   💼 Deal
                                 </div>
                               </button>
                               <button
                                 onClick={() => window.open(`mailto:${lead.email}`, '_blank')}
-                                className="relative group/btn overflow-hidden"
+                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
                                 title="Send Email"
                               >
                                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover/btn:from-blue-500 group-hover/btn:to-indigo-500 transition-all"></div>
-                                <div className="relative px-4 py-2 text-white font-bold text-sm rounded-lg">
+                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
                                   📧 Email
                                 </div>
                               </button>
@@ -6207,14 +6207,14 @@ export default function Dashboard() {
               )}
 
               {safeFollowUpCandidates.length === 0 ? (
-                <div className="text-center py-16">
+                <div className="text-center py-8 sm:py-16">
                   {pendingLeads.length > 0 ? (
                     <>
-                      <div className="text-6xl mb-4">⏳</div>
-                      <div className="text-2xl text-gray-200 font-bold mb-2">Pending Follow-Ups</div>
-                      <div className="text-gray-400 mb-4">{pendingLeads.length} leads waiting for follow-up window</div>
-                      <div className="max-w-2xl mx-auto bg-gray-800/50 rounded-lg p-4 text-left">
-                        <div className="text-sm text-gray-300 mb-2">Next available follow-ups:</div>
+                      <div className="text-4xl sm:text-6xl mb-4">⏳</div>
+                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">Pending Follow-Ups</div>
+                      <div className="text-sm sm:text-base text-gray-400 mb-4">{pendingLeads.length} leads waiting for follow-up window</div>
+                      <div className="max-w-2xl mx-auto bg-gray-800/50 rounded-lg p-3 sm:p-4 text-left">
+                        <div className="text-xs sm:text-sm text-gray-300 mb-2">Next available follow-ups:</div>
                         {pendingLeads.slice(0, showAllPendingLeads ? pendingLeads.length : 3).map((lead, idx) => {
                           const timeUntilFollowUp = new Date(lead.followUpAt) - currentTime;
                           const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
@@ -6223,12 +6223,12 @@ export default function Dashboard() {
                           const isReady = timeUntilFollowUp <= 0;
                           
                           return (
-                          <div key={idx} className="text-sm text-gray-400 py-2 border-b border-gray-700 last:border-0 flex justify-between items-center">
+                          <div key={idx} className="text-xs sm:text-sm text-gray-400 py-2 border-b border-gray-700 last:border-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                             <div>
-                              <div className="font-medium text-gray-300">{lead.email}</div>
+                              <div className="font-medium text-gray-300 text-sm sm:text-base break-all">{lead.email}</div>
                               <div className="text-xs text-gray-500">{lead.businessName || 'No company'}</div>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right sm:text-left w-full sm:w-auto">
                               <div className={`font-bold ${isReady ? 'text-green-400 animate-pulse' : hoursUntil <= 1 ? 'text-yellow-400' : 'text-gray-400'}`}>
                                 {isReady ? '🔓 Ready Now!' : hoursUntil > 0 ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s` : `${minutesUntil}m ${secondsUntil}s`}
                               </div>
@@ -6254,10 +6254,10 @@ export default function Dashboard() {
                     </>
                   ) : (
                     <>
-                      <div className="text-6xl mb-4">✅</div>
-                      <div className="text-2xl text-gray-200 font-bold mb-2">All Caught Up!</div>
-                      <div className="text-gray-400">All leads have been replied to or maxed out follow-ups</div>
-                      <div className="text-sm text-gray-500 mt-3 bg-gray-800/50 inline-block px-4 py-2 rounded-lg">
+                      <div className="text-4xl sm:text-6xl mb-4">✅</div>
+                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">All Caught Up!</div>
+                      <div className="text-sm sm:text-base text-gray-400">All leads have been replied to or maxed out follow-ups</div>
+                      <div className="text-xs sm:text-sm text-gray-500 mt-3 bg-gray-800/50 inline-block px-3 sm:px-4 py-2 rounded-lg">
                         Follow-ups become available 1+ day after initial send
                       </div>
                     </>
@@ -6265,14 +6265,14 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="text-lg font-bold text-indigo-300 mb-5 flex items-center gap-3">
-                    <span className="text-2xl">🎯</span>
+                  <div className="text-base sm:text-lg font-bold text-indigo-300 mb-4 sm:mb-5 flex items-center gap-2 sm:gap-3">
+                    <span className="text-xl sm:text-2xl">🎯</span>
                     <span>{safeFollowUpCandidates.length} leads ready for intelligent follow-up</span>
                   </div>
 
                   {/* QUOTA DISPLAY */}
                   <div className="mb-4 bg-gray-900/50 border border-gray-700 rounded-lg p-3">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
                       <span className="text-gray-300">📧 Daily Email Quota:</span>
                       <span className="font-bold text-indigo-300">
                         {quotas.emails.used} / {quotas.emails.limit}
