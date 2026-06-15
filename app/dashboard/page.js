@@ -987,6 +987,689 @@ export default function Dashboard() {
 
   const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [getWhatsAppFollowUpCandidates]);
 
+  // ============================================================================
+  // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
+  // ============================================================================
+  const calculatePredictiveScore = useCallback((lead) => {
+    if (!lead) return { score: 0, probability: 0, tier: 'cold' };
+
+    let score = 0;
+    let factors = [];
+
+    // Engagement factors (weighted heavily)
+    if (lead.replied) {
+      score += 40;
+      factors.push({ name: 'Replied to email', weight: 40 });
+    }
+    if (lead.opened) {
+      score += 15;
+      factors.push({ name: 'Opened email', weight: 15 });
+    }
+    if (lead.clicked) {
+      score += 25;
+      factors.push({ name: 'Clicked link', weight: 25 });
+    }
+
+    // Engagement frequency
+    const openCount = lead.openedCount || 0;
+    if (openCount > 1) {
+      score += Math.min(20, openCount * 5);
+      factors.push({ name: `Opened ${openCount} times`, weight: Math.min(20, openCount * 5) });
+    }
+
+    const clickCount = lead.clickCount || 0;
+    if (clickCount > 1) {
+      score += Math.min(30, clickCount * 10);
+      factors.push({ name: `Clicked ${clickCount} times`, weight: Math.min(30, clickCount * 10) });
+    }
+
+    // Time-based factors (recency bias)
+    const sentAt = safeParseDate(lead.sentAt);
+    const daysSinceSent = sentAt ? (new Date() - sentAt) / (1000 * 60 * 60 * 24) : 999;
+    
+    if (daysSinceSent < 7) {
+      score += 10; // Recent outreach
+      factors.push({ name: 'Recent outreach', weight: 10 });
+    } else if (daysSinceSent < 14) {
+      score += 5;
+      factors.push({ name: 'Moderate recency', weight: 5 });
+    }
+
+    // Follow-up stage (leads in follow-up are more engaged)
+    const followUpCount = lead.followUpCount || 0;
+    if (followUpCount > 0 && !lead.replied) {
+      score += 15; // Still in follow-up sequence
+      factors.push({ name: 'Active follow-up', weight: 15 });
+    }
+
+    // Business signals (if available)
+    if (lead.businessName && lead.businessName.length > 10) {
+      score += 5; // Has detailed business info
+      factors.push({ name: 'Detailed business info', weight: 5 });
+    }
+
+    // Normalize to 0-100
+    const normalizedScore = Math.min(100, Math.max(0, score));
+
+    // Calculate conversion probability based on historical patterns
+    let probability = 0;
+    if (lead.replied) {
+      probability = 0.6; // 60% conversion if replied
+    } else if (lead.clicked) {
+      probability = 0.35; // 35% if clicked
+    } else if (lead.opened && openCount > 1) {
+      probability = 0.2; // 20% if opened multiple times
+    } else if (lead.opened) {
+      probability = 0.1; // 10% if opened once
+    } else {
+      probability = 0.05; // 5% baseline
+    }
+
+    // Boost probability based on score
+    probability = Math.min(0.95, probability + (normalizedScore / 100) * 0.3);
+
+    // Determine tier
+    let tier = 'cold';
+    if (normalizedScore >= 70) {
+      tier = 'hot';
+    } else if (normalizedScore >= 40) {
+      tier = 'warm';
+    } else if (normalizedScore >= 20) {
+      tier = 'tepid';
+    }
+
+    return {
+      score: normalizedScore,
+      probability: Math.round(probability * 100),
+      tier,
+      factors
+    };
+  }, []);
+
+  // Apply predictive scoring to all leads
+  const scoredLeads = useMemo(() => {
+    if (!sentLeads || sentLeads.length === 0) return [];
+    
+    return sentLeads
+      .map(lead => ({
+        ...lead,
+        predictive: calculatePredictiveScore(lead)
+      }))
+      .sort((a, b) => b.predictive.score - a.predictive.score);
+  }, [sentLeads, calculatePredictiveScore]);
+
+  // Get high-value leads (hot tier)
+  const hotLeads = useMemo(() => 
+    scoredLeads.filter(lead => lead.predictive.tier === 'hot' && !lead.replied),
+    [scoredLeads]
+  );
+
+  // ============================================================================
+  // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING
+  // ============================================================================
+  const calculateOptimalSendTime = useCallback((lead, historicalData = {}) => {
+    // Default optimal times based on industry research
+    const defaultOptimalHours = [10, 11, 14, 15]; // 10am, 11am, 2pm, 3pm
+    const defaultOptimalDays = [2, 3, 4]; // Tuesday, Wednesday, Thursday
+
+    // Use historical data if available
+    if (historicalData.bestHours && historicalData.bestHours.length > 0) {
+      const bestHour = historicalData.bestHours[0];
+      const now = new Date();
+      const targetDate = new Date(now);
+      
+      // Set to the best hour
+      targetDate.setHours(bestHour, 0, 0, 0);
+      
+      // If today is past the best hour, move to tomorrow
+      if (targetDate <= now) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      
+      // Skip weekends
+      const dayOfWeek = targetDate.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        targetDate.setDate(targetDate.getDate() + (dayOfWeek === 0 ? 1 : 2));
+      }
+      
+      return targetDate;
+    }
+
+    // Fallback to default optimal times
+    const now = new Date();
+    const targetDate = new Date(now);
+    
+    // Find the next optimal hour
+    let targetHour = defaultOptimalHours.find(hour => hour > now.getHours());
+    if (!targetHour) {
+      // No optimal hour today, move to tomorrow
+      targetDate.setDate(targetDate.getDate() + 1);
+      targetHour = defaultOptimalHours[0];
+    }
+    
+    targetDate.setHours(targetHour, 0, 0, 0);
+    
+    // Skip weekends
+    const dayOfWeek = targetDate.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      targetDate.setDate(targetDate.getDate() + (dayOfWeek === 0 ? 1 : 2));
+    }
+    
+    return targetDate;
+  }, []);
+
+  const scheduleAutomatedFollowUp = useCallback(async (lead, template, scheduledTime) => {
+    if (!user?.uid) {
+      addNotification('User not authenticated', 'error');
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    try {
+      // Store scheduled follow-up in Firestore
+      const scheduledFollowUpRef = doc(db, 'scheduled_followups', generateId());
+      await setDoc(scheduledFollowUpRef, {
+        userId: user.uid,
+        leadId: lead.id,
+        leadEmail: lead.email,
+        leadBusinessName: lead.businessName,
+        template: template,
+        scheduledTime: scheduledTime.toISOString(),
+        status: 'scheduled',
+        createdAt: serverTimestamp(),
+        priority: lead.predictive?.tier === 'hot' ? 'high' : 'normal'
+      });
+
+      return { success: true, scheduledId: scheduledFollowUpRef.id };
+    } catch (error) {
+      console.error('Error scheduling follow-up:', error);
+      return { success: false, error: error.message };
+    }
+  }, [user?.uid, db, addNotification]);
+
+  const batchScheduleFollowUps = useCallback(async (leads, template) => {
+    if (!leads || leads.length === 0) {
+      addNotification('No leads to schedule', 'warning');
+      return { success: false, scheduled: 0, errors: [] };
+    }
+
+    const results = {
+      success: true,
+      scheduled: 0,
+      errors: []
+    };
+
+    // Schedule leads in batches to avoid overwhelming
+    const batchSize = 10;
+    for (let i = 0; i < leads.length; i += batchSize) {
+      const batch = leads.slice(i, i + batchSize);
+      
+      for (const lead of batch) {
+        const optimalTime = calculateOptimalSendTime(lead);
+        const result = await scheduleAutomatedFollowUp(lead, template, optimalTime);
+        
+        if (result.success) {
+          results.scheduled++;
+        } else {
+          results.errors.push({ lead: lead.email, error: result.error });
+        }
+      }
+      
+      // Small delay between batches
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    if (results.errors.length > 0) {
+      results.success = false;
+    }
+
+    return results;
+  }, [calculateOptimalSendTime, scheduleAutomatedFollowUp, addNotification]);
+
+  // ============================================================================
+  // ✅ LEAD ENGAGEMENT TRACKING AND BEHAVIORAL ANALYSIS
+  // ============================================================================
+  const analyzeLeadBehavior = useCallback((lead) => {
+    if (!lead) return null;
+
+    const behavior = {
+      engagementPattern: 'unknown',
+      preferredChannel: 'email',
+      bestContactTime: null,
+      responseSpeed: null,
+      engagementTrend: 'stable',
+      riskOfChurn: 'low',
+      nextBestAction: 'follow_up_email'
+    };
+
+    // Analyze engagement pattern
+    const hasEmailEngagement = lead.opened || lead.clicked || lead.replied;
+    const hasWhatsAppEngagement = lastWhatsAppSent[lead.email || lead.phone];
+    const hasSMSEngagement = lastSMSSent[lead.email || lead.phone];
+
+    if (hasEmailEngagement && hasWhatsAppEngagement) {
+      behavior.engagementPattern = 'multi_channel';
+    } else if (hasWhatsAppEngagement) {
+      behavior.engagementPattern = 'mobile_first';
+    } else if (hasEmailEngagement) {
+      behavior.engagementPattern = 'email_focused';
+    } else {
+      behavior.engagementPattern = 'passive';
+    }
+
+    // Determine preferred channel
+    if (lead.replied) {
+      behavior.preferredChannel = 'email';
+    } else if (hasWhatsAppEngagement) {
+      behavior.preferredChannel = 'whatsapp';
+    } else if (hasSMSEngagement) {
+      behavior.preferredChannel = 'sms';
+    }
+
+    // Analyze response speed
+    if (lead.replied && lead.sentAt) {
+      const sentAt = safeParseDate(lead.sentAt);
+      const lastFollowUpAt = safeParseDate(lead.lastFollowUpAt || lead.lastFollowUpSentAt);
+      if (sentAt && lastFollowUpAt) {
+        const responseTime = (lastFollowUpAt - sentAt) / (1000 * 60 * 60 * 24);
+        behavior.responseSpeed = responseTime;
+        
+        if (responseTime < 1) {
+          behavior.bestContactTime = 'immediate';
+        } else if (responseTime < 3) {
+          behavior.bestContactTime = 'within_24h';
+        } else if (responseTime < 7) {
+          behavior.bestContactTime = 'within_week';
+        } else {
+          behavior.bestContactTime = 'flexible';
+        }
+      }
+    }
+
+    // Analyze engagement trend
+    const openCount = lead.openedCount || 0;
+    const clickCount = lead.clickCount || 0;
+    
+    if (openCount > 2 || clickCount > 1) {
+      behavior.engagementTrend = 'increasing';
+    } else if (openCount === 1 && clickCount === 0) {
+      behavior.engagementTrend = 'declining';
+    } else if (openCount === 0 && clickCount === 0) {
+      behavior.engagementTrend = 'dormant';
+    }
+
+    // Assess churn risk
+    const sentAt = safeParseDate(lead.sentAt);
+    const daysSinceSent = sentAt ? (new Date() - sentAt) / (1000 * 60 * 60 * 24) : 999;
+    const followUpCount = lead.followUpCount || 0;
+
+    if (daysSinceSent > 30 && followUpCount >= 3 && !lead.replied) {
+      behavior.riskOfChurn = 'high';
+      behavior.nextBestAction = 'switch_channel';
+    } else if (daysSinceSent > 14 && !lead.replied) {
+      behavior.riskOfChurn = 'medium';
+      behavior.nextBestAction = 'aggressive_followup';
+    } else if (lead.replied) {
+      behavior.riskOfChurn = 'low';
+      behavior.nextBestAction = 'nurture';
+    } else {
+      behavior.riskOfChurn = 'low';
+      behavior.nextBestAction = 'standard_followup';
+    }
+
+    return behavior;
+  }, [lastWhatsAppSent, lastSMSSent]);
+
+  // Apply behavioral analysis to all leads
+  const leadsWithBehavior = useMemo(() => {
+    if (!scoredLeads || scoredLeads.length === 0) return [];
+    
+    return scoredLeads.map(lead => ({
+      ...lead,
+      behavior: analyzeLeadBehavior(lead)
+    }));
+  }, [scoredLeads, analyzeLeadBehavior]);
+
+  // Get leads by engagement pattern
+  const leadsByEngagementPattern = useMemo(() => {
+    const patterns = {};
+    leadsWithBehavior.forEach(lead => {
+      const pattern = lead.behavior?.engagementPattern || 'unknown';
+      if (!patterns[pattern]) {
+        patterns[pattern] = [];
+      }
+      patterns[pattern].push(lead);
+    });
+    return patterns;
+  }, [leadsWithBehavior]);
+
+  // Get high-risk leads (high churn risk)
+  const highRiskLeads = useMemo(() => 
+    leadsWithBehavior.filter(lead => lead.behavior?.riskOfChurn === 'high'),
+    [leadsWithBehavior]
+  );
+
+  // ============================================================================
+  // ✅ CAMPAIGN PERFORMANCE INSIGHTS AND RECOMMENDATIONS
+  // ============================================================================
+  const generateCampaignInsights = useCallback(() => {
+    if (!sentLeads || sentLeads.length === 0) {
+      return {
+        overallHealth: 'unknown',
+        metrics: {},
+        insights: [],
+        recommendations: [],
+        topPerformers: [],
+        underperformers: []
+      };
+    }
+
+    const totalLeads = sentLeads.length;
+    const repliedLeads = sentLeads.filter(lead => lead.replied).length;
+    const openedLeads = sentLeads.filter(lead => lead.opened).length;
+    const clickedLeads = sentLeads.filter(lead => lead.clicked).length;
+
+    const replyRate = (repliedLeads / totalLeads) * 100;
+    const openRate = (openedLeads / totalLeads) * 100;
+    const clickRate = (clickedLeads / totalLeads) * 100;
+
+    // Calculate average response time
+    const responseTimes = sentLeads
+      .filter(lead => lead.replied && lead.sentAt && (lead.lastFollowUpAt || lead.lastFollowUpSentAt))
+      .map(lead => {
+        const sentAt = safeParseDate(lead.sentAt);
+        const lastFollowUp = safeParseDate(lead.lastFollowUpAt || lead.lastFollowUpSentAt);
+        return (lastFollowUp - sentAt) / (1000 * 60 * 60 * 24);
+      });
+    
+    const avgResponseTime = responseTimes.length > 0 
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
+      : 0;
+
+    // Analyze template performance
+    const templatePerformance = {};
+    sentLeads.forEach(lead => {
+      const template = lead.template || 'A';
+      if (!templatePerformance[template]) {
+        templatePerformance[template] = {
+          total: 0,
+          replied: 0,
+          opened: 0,
+          clicked: 0
+        };
+      }
+      templatePerformance[template].total++;
+      if (lead.replied) templatePerformance[template].replied++;
+      if (lead.opened) templatePerformance[template].opened++;
+      if (lead.clicked) templatePerformance[template].clicked++;
+    });
+
+    // Find best and worst performing templates
+    const templateStats = Object.entries(templatePerformance).map(([template, stats]) => ({
+      template,
+      replyRate: (stats.replied / stats.total) * 100,
+      openRate: (stats.opened / stats.total) * 100,
+      clickRate: (stats.clicked / stats.total) * 100,
+      total: stats.total
+    })).sort((a, b) => b.replyRate - a.replyRate);
+
+    const topTemplate = templateStats[0];
+    const worstTemplate = templateStats[templateStats.length - 1];
+
+    // Determine overall health
+    let overallHealth = 'good';
+    if (replyRate < 5) overallHealth = 'poor';
+    else if (replyRate < 10) overallHealth = 'fair';
+    else if (replyRate > 20) overallHealth = 'excellent';
+
+    // Generate insights
+    const insights = [
+      {
+        type: 'metric',
+        title: 'Reply Rate',
+        value: `${replyRate.toFixed(1)}%`,
+        status: replyRate > 15 ? 'positive' : replyRate > 8 ? 'neutral' : 'negative',
+        description: replyRate > 15 ? 'Above industry average' : replyRate > 8 ? 'Average performance' : 'Below industry average'
+      },
+      {
+        type: 'metric',
+        title: 'Open Rate',
+        value: `${openRate.toFixed(1)}%`,
+        status: openRate > 40 ? 'positive' : openRate > 25 ? 'neutral' : 'negative',
+        description: openRate > 40 ? 'Excellent subject lines' : openRate > 25 ? 'Good open rate' : 'Improve subject lines'
+      },
+      {
+        type: 'metric',
+        title: 'Click Rate',
+        value: `${clickRate.toFixed(1)}%`,
+        status: clickRate > 10 ? 'positive' : clickRate > 5 ? 'neutral' : 'negative',
+        description: clickRate > 10 ? 'Compelling CTAs' : clickRate > 5 ? 'Decent engagement' : 'Strengthen call-to-action'
+      },
+      {
+        type: 'metric',
+        title: 'Avg Response Time',
+        value: `${avgResponseTime.toFixed(1)} days`,
+        status: avgResponseTime < 3 ? 'positive' : avgResponseTime < 7 ? 'neutral' : 'negative',
+        description: avgResponseTime < 3 ? 'Quick responders' : avgResponseTime < 7 ? 'Moderate response time' : 'Slow responders'
+      }
+    ];
+
+    // Generate recommendations
+    const recommendations = [];
+
+    if (replyRate < 8) {
+      recommendations.push({
+        priority: 'high',
+        action: 'Improve email personalization',
+        reason: 'Low reply rate suggests emails are not resonating',
+        impact: 'Could increase reply rate by 2-3x'
+      });
+    }
+
+    if (openRate < 30) {
+      recommendations.push({
+        priority: 'high',
+        action: 'A/B test subject lines',
+        reason: 'Low open rate indicates subject lines need improvement',
+        impact: 'Could increase open rate by 15-20%'
+      });
+    }
+
+    if (clickRate < 5) {
+      recommendations.push({
+        priority: 'medium',
+        action: 'Optimize call-to-action',
+        reason: 'Low click rate suggests CTAs are not compelling',
+        impact: 'Could increase click rate by 10-15%'
+      });
+    }
+
+    if (avgResponseTime > 7) {
+      recommendations.push({
+        priority: 'medium',
+        action: 'Send follow-ups sooner',
+        reason: 'Slow response time indicates leads are losing interest',
+        impact: 'Could improve response rate by 20%'
+      });
+    }
+
+    if (topTemplate && worstTemplate && topTemplate.replyRate > worstTemplate.replyRate * 1.5) {
+      recommendations.push({
+        priority: 'high',
+        action: `Use Template ${topTemplate.template} more frequently`,
+        reason: `Template ${topTemplate.template} outperforms Template ${worstTemplate.template} by ${((topTemplate.replyRate / worstTemplate.replyRate) * 100).toFixed(0)}%`,
+        impact: 'Could increase overall reply rate by 15-25%'
+      });
+    }
+
+    // Find top and underperforming leads
+    const topPerformers = leadsWithBehavior
+      .filter(lead => lead.predictive?.tier === 'hot')
+      .slice(0, 5)
+      .map(lead => ({
+        email: lead.email,
+        businessName: lead.businessName,
+        score: lead.predictive?.score,
+        probability: lead.predictive?.probability
+      }));
+
+    const underperformers = leadsWithBehavior
+      .filter(lead => lead.predictive?.tier === 'cold' && !lead.replied)
+      .slice(0, 5)
+      .map(lead => ({
+        email: lead.email,
+        businessName: lead.businessName,
+        score: lead.predictive?.score,
+        daysSinceSent: lead.sentAt ? Math.round((new Date() - safeParseDate(lead.sentAt)) / (1000 * 60 * 60 * 24)) : 0
+      }));
+
+    return {
+      overallHealth,
+      metrics: {
+        totalLeads,
+        replyRate,
+        openRate,
+        clickRate,
+        avgResponseTime
+      },
+      insights,
+      recommendations,
+      topPerformers,
+      underperformers,
+      templatePerformance: templateStats
+    };
+  }, [sentLeads, leadsWithBehavior]);
+
+  // ============================================================================
+  // ✅ LEAD LIFECYCLE MANAGEMENT WITH FUNNEL STAGES
+  // ============================================================================
+  const determineLeadStage = useCallback((lead) => {
+    if (!lead) return 'unknown';
+
+    // Stage definitions
+    if (lead.replied) {
+      return 'qualified'; // Lead has replied - qualified
+    } else if (lead.clicked) {
+      return 'engaged'; // Lead clicked - engaged
+    } else if (lead.opened) {
+      return 'aware'; // Lead opened - aware
+    } else if (lead.followUpCount > 0) {
+      return 'nurturing'; // In follow-up sequence - nurturing
+    } else {
+      return 'new'; // Just sent - new
+    }
+  }, []);
+
+  const calculateFunnelMetrics = useCallback(() => {
+    if (!sentLeads || sentLeads.length === 0) {
+      return {
+        total: 0,
+        stages: {},
+        conversionRates: {},
+        dropOffPoints: []
+      };
+    }
+
+    const stages = {
+      new: 0,
+      nurturing: 0,
+      aware: 0,
+      engaged: 0,
+      qualified: 0
+    };
+
+    sentLeads.forEach(lead => {
+      const stage = determineLeadStage(lead);
+      stages[stage]++;
+    });
+
+    const total = sentLeads.length;
+    const conversionRates = {
+      new_to_nurturing: stages.nurturing > 0 ? (stages.nurturing / stages.new) * 100 : 0,
+      nurturing_to_aware: stages.aware > 0 ? (stages.aware / stages.nurturing) * 100 : 0,
+      aware_to_engaged: stages.engaged > 0 ? (stages.engaged / stages.aware) * 100 : 0,
+      engaged_to_qualified: stages.qualified > 0 ? (stages.qualified / stages.engaged) * 100 : 0,
+      overall: stages.qualified > 0 ? (stages.qualified / stages.new) * 100 : 0
+    };
+
+    // Identify drop-off points
+    const dropOffPoints = [];
+    if (conversionRates.new_to_nurturing < 50) {
+      dropOffPoints.push({
+        stage: 'New → Nurturing',
+        rate: conversionRates.new_to_nurturing,
+        recommendation: 'Improve initial email quality and personalization'
+      });
+    }
+    if (conversionRates.nurturing_to_aware < 30) {
+      dropOffPoints.push({
+        stage: 'Nurturing → Aware',
+        rate: conversionRates.nurturing_to_aware,
+        recommendation: 'Optimize subject lines and send timing'
+      });
+    }
+    if (conversionRates.aware_to_engaged < 20) {
+      dropOffPoints.push({
+        stage: 'Aware → Engaged',
+        rate: conversionRates.aware_to_engaged,
+        recommendation: 'Strengthen email content and CTAs'
+      });
+    }
+    if (conversionRates.engaged_to_qualified < 15) {
+      dropOffPoints.push({
+        stage: 'Engaged → Qualified',
+        rate: conversionRates.engaged_to_qualified,
+        recommendation: 'Improve follow-up strategy and response handling'
+      });
+    }
+
+    return {
+      total,
+      stages,
+      conversionRates,
+      dropOffPoints
+    };
+  }, [sentLeads, determineLeadStage]);
+
+  const funnelMetrics = useMemo(() => calculateFunnelMetrics(), [calculateFunnelMetrics]);
+
+  // Get leads by stage
+  const leadsByStage = useMemo(() => {
+    const stages = {
+      new: [],
+      nurturing: [],
+      aware: [],
+      engaged: [],
+      qualified: []
+    };
+
+    leadsWithBehavior.forEach(lead => {
+      const stage = determineLeadStage(lead);
+      stages[stage].push(lead);
+    });
+
+    return stages;
+  }, [leadsWithBehavior, determineLeadStage]);
+
+  // Calculate pipeline value (estimated revenue potential)
+  const calculatePipelineValue = useCallback(() => {
+    let totalValue = 0;
+    const stageValues = {
+      new: 50,
+      nurturing: 100,
+      aware: 250,
+      engaged: 500,
+      qualified: 2000
+    };
+
+    Object.entries(leadsByStage).forEach(([stage, leads]) => {
+      totalValue += leads.length * (stageValues[stage] || 0);
+    });
+
+    return totalValue;
+  }, [leadsByStage]);
+
+  const estimatedPipelineValue = useMemo(() => calculatePipelineValue(), [calculatePipelineValue]);
+
   // Get pending leads (un-replied but not yet ready for follow-up)
   const getPendingLeads = useCallback(() => {
     if (!sentLeads || sentLeads.length === 0) {
