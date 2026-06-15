@@ -45,7 +45,7 @@ try {
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
-const AUTO_CLEANUP_DAYS = 30; // Delete records older than this
+const AUTO_CLEANUP_DAYS = 12; // Delete records older than this (reduced from 30 to reduce Firestore costs)
 const MAX_FOLLOW_UPS = 3;
 const CAMPAIGN_WINDOW_DAYS = 30;
 
@@ -103,14 +103,9 @@ export async function POST(request) {
       try {
         const sentAt = safeToDate(data.sentAt);
         const daysSinceSent = (now - sentAt) / (1000 * 60 * 60 * 24);
-        
-        // Check if loop is closed (30 days or 3 follow-ups or replied)
-        const loopClosed = daysSinceSent > CAMPAIGN_WINDOW_DAYS || 
-                          (data.followUpCount || 0) >= MAX_FOLLOW_UPS ||
-                          data.replied === true;
 
-        // Only delete if old AND loop is closed
-        if (sentAt < cutoffDate && loopClosed) {
+        // Delete all records older than cutoff date (no loop closed restriction)
+        if (sentAt < cutoffDate) {
           await deleteDoc(doc(db, 'sent_emails', docSnapshot.id));
           console.log(`🗑️ Deleted: ${data.to || data.email} (${daysSinceSent.toFixed(0)} days old)`);
           deletedCount++;
