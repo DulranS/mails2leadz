@@ -145,6 +145,8 @@ export async function POST(request) {
     // DUPLICATE DETECTION AND LEAD PROCESSING (Cost-Optimized)
     // ============================================================================
     // Group leads by email to detect duplicates while processing
+    // Logic: Keep only the most recent record per email address
+    // Records with different email addresses are NOT considered duplicates
     const emailMap = new Map();
     const duplicatesToDelete = [];
 
@@ -152,24 +154,34 @@ export async function POST(request) {
       const data = docSnapshot.data();
       const email = getEmailAddress(data);
       
-      if (!email) return;
+      if (!email) {
+        console.warn(`Skipping record ${docSnapshot.id}: no email address found`);
+        return;
+      }
 
-      // Check for duplicates
+      // Check for duplicates (same email address)
       if (emailMap.has(email)) {
         const existing = emailMap.get(email);
         const existingSentAt = safeToDate(existing.data.sentAt);
         const currentSentAt = safeToDate(data.sentAt);
 
+        console.log(`🔍 Duplicate found for ${email}:`);
+        console.log(`  - Existing: ${existing.docId} (sent: ${existingSentAt.toISOString()})`);
+        console.log(`  - Current: ${docSnapshot.id} (sent: ${currentSentAt.toISOString()})`);
+
         if (currentSentAt > existingSentAt) {
           // Current is more recent, mark existing for deletion
+          console.log(`  → Keeping current (more recent), marking existing for deletion`);
           duplicatesToDelete.push(existing.docId);
           emailMap.set(email, { docId: docSnapshot.id, data, sentAt: currentSentAt });
         } else {
           // Existing is more recent, mark current for deletion
+          console.log(`  → Keeping existing (more recent), marking current for deletion`);
           duplicatesToDelete.push(docSnapshot.id);
         }
         return; // Skip processing this duplicate
       } else {
+        // First time seeing this email, add to map
         emailMap.set(email, { docId: docSnapshot.id, data, sentAt: safeToDate(data.sentAt) });
       }
       
@@ -226,6 +238,7 @@ export async function POST(request) {
     // ============================================================================
     if (duplicatesToDelete.length > 0) {
       console.log(`🗑️ Found ${duplicatesToDelete.length} duplicate records to delete`);
+      console.log(`📊 Summary: Keeping ${emailMap.size} unique email addresses`);
       
       // Delete in batches of 50 to avoid timeout and stay within cost limits
       const batchSize = 50;
@@ -247,7 +260,9 @@ export async function POST(request) {
         }
       }
       
-      console.log(`✅ Deleted ${duplicateDeletedCount} duplicate records`);
+      console.log(`✅ Successfully deleted ${duplicateDeletedCount} duplicate records`);
+    } else {
+      console.log(`✅ No duplicates found - all ${emailMap.size} records are unique`);
     }
     
     // ============================================================================
