@@ -4743,11 +4743,11 @@ export default function Dashboard() {
                     'bg-blue-900/80 border-blue-700 text-blue-200'
               }`}
           >
-            <div className="flex justify-between items-start">
-              <div className="text-sm whitespace-pre-line">{notification.message}</div>
+            <div className="flex justify-between items-start sm:items-center">
+              <div className="text-sm whitespace-pre-line flex-1 pr-2">{notification.message}</div>
               <button
                 onClick={() => markNotificationRead(notification.id)}
-                className="ml-2 text-gray-400 hover:text-white"
+                className="ml-2 text-gray-400 hover:text-white flex-shrink-0"
               >
                 ✕
               </button>
@@ -4942,12 +4942,12 @@ export default function Dashboard() {
             {showAdvancedAnalytics && (
               <div className="mt-4 bg-gradient-to-br from-purple-900/20 via-indigo-900/20 to-blue-900/20 p-4 sm:p-6 rounded-xl border-2 border-purple-500/30">
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400">
+                  <h2 className="text-base sm:text-lg sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400">
                     🤖 AI-Powered Analytics
                   </h2>
                   <button
                     onClick={() => setShowAdvancedAnalytics(false)}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-400 hover:text-white flex-shrink-0"
                   >
                     ✕
                   </button>
