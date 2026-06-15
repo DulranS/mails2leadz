@@ -878,7 +878,7 @@ export default function Dashboard() {
       return [];
     }
 
-    const now = currentTime;
+    const now = new Date(); // Use current time to match API logic exactly
 
     const candidates = sentLeads
       .map(normalizeSentLead)
@@ -925,10 +925,10 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [sentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt, currentTime]);
+  }, [sentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt]);
 
   // Memoize the result to prevent recalculation on every render
-  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates, currentTime]);
+  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
 
   // Get pending leads (un-replied but not yet ready for follow-up)
   const getPendingLeads = useCallback(() => {
@@ -936,7 +936,7 @@ export default function Dashboard() {
       return [];
     }
 
-    const now = currentTime;
+    const now = new Date(); // Use current time to match API logic exactly
     const pending = sentLeads
       .map(normalizeSentLead)
       .filter(lead => {
@@ -977,9 +977,9 @@ export default function Dashboard() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [sentLeads, normalizeSentLead, safeParseDate, currentTime]);
+  }, [sentLeads, normalizeSentLead, safeParseDate]);
 
-  const pendingLeads = useMemo(() => getPendingLeads(), [getPendingLeads, currentTime]);
+  const pendingLeads = useMemo(() => getPendingLeads(), [getPendingLeads]);
 
   // Get replied leads with details
   const getRepliedLeads = useCallback(() => {
