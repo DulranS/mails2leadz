@@ -2906,7 +2906,7 @@ export default function Dashboard() {
     } finally {
       setLoadingSentLeads(false);
     }
-  }, [user?.uid, addNotification, normalizeSentLead, getLeadNextFollowUpAt]);
+  }, [user?.uid, addNotification, normalizeSentLead]);
 
   // ============================================================================
   // LOAD CONTACTED COMPANIES FROM API
