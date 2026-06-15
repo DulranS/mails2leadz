@@ -874,13 +874,13 @@ export default function Dashboard() {
   // ✅ GET SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
   // ============================================================================
   const getSafeFollowUpCandidates = useCallback(() => {
-    if (!sentLeads || sentLeads.length === 0) {
+    if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
 
     const now = new Date(); // Use current time to match API logic exactly
 
-    const candidates = sentLeads
+    const candidates = filteredSentLeads
       .map(normalizeSentLead)
       .filter(lead => {
         if (!lead || !lead.email) return false;
@@ -925,7 +925,7 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [sentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt]);
+  }, [filteredSentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt]);
 
   // Memoize the result to prevent recalculation on every render
   const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
@@ -1751,12 +1751,12 @@ export default function Dashboard() {
 
   // Get replied leads with details
   const getRepliedLeads = useCallback(() => {
-    if (!sentLeads || sentLeads.length === 0) {
+    if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
 
     const now = new Date();
-    const replied = sentLeads
+    const replied = filteredSentLeads
       .map(normalizeSentLead)
       .filter(lead => {
         if (!lead || !lead.email) return false;
@@ -1785,7 +1785,7 @@ export default function Dashboard() {
       });
 
     return replied;
-  }, [sentLeads, normalizeSentLead, safeParseDate]);
+  }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
   const repliedLeadsList = useMemo(() => getRepliedLeads(), [getRepliedLeads]);
 
