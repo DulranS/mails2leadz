@@ -75,22 +75,28 @@ export async function POST(request) {
       );
     }
 
-    const { userId } = await request.json();
-    
+    const { userId, limit = 100 } = await request.json();
+
     if (!userId) {
       return NextResponse.json(
         { error: 'userId is required', leads: [] },
         { status: 400, headers }
       );
     }
-    
-    console.log(`📧 Querying sent_emails for userId: ${userId}`);
 
-    // Get all sent emails for user
-    const q = query(
+    // Validate limit to prevent excessive reads
+    const maxLimit = Math.min(limit, 500); // Cap at 500 records per request
+    console.log(`📧 Querying sent_emails for userId: ${userId} (limit: ${maxLimit})`);
+
+    // Build query with pagination support
+    let q = query(
       collection(db, 'sent_emails'),
-      where('userId', '==', userId)
+      where('userId', '==', userId),
+      orderBy('sentAt', 'desc')
     );
+
+    // Add limit to reduce read load
+    q = query(q, limit(maxLimit));
 
     const snapshot = await getDocs(q);
     const leads = [];
@@ -223,12 +229,21 @@ export async function POST(request) {
     // Sort by sentAt (newest first)
     activeLeads.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
 
-    console.log(`✅ Successfully loaded ${activeLeads.length} sent leads for user ${userId} (${deletedCount} old records deleted)`);
+    // Pagination metadata
+    const hasMore = snapshot.docs.length >= maxLimit;
+    const lastDocId = hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+    console.log(`✅ Successfully loaded ${activeLeads.length} sent leads for user ${userId} (${deletedCount} old records deleted, hasMore: ${hasMore})`);
 
     return NextResponse.json({
       leads: activeLeads,
       total: activeLeads.length,
-      deletedCount
+      deletedCount,
+      pagination: {
+        hasMore,
+        lastDocId,
+        limit: maxLimit
+      }
     }, { headers });
     
   } catch (error) {
