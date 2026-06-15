@@ -1,7 +1,7 @@
 // app/api/list-sent-leads/route.js
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, orderBy, deleteDoc, doc, limit } from 'firebase/firestore';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
