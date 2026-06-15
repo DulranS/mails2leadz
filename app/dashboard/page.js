@@ -957,9 +957,6 @@ export default function Dashboard() {
     return candidates;
   }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
 
-  // Memoize the result to prevent recalculation on every render
-  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
-
   // ============================================================================
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
@@ -1014,8 +1011,6 @@ export default function Dashboard() {
 
     return candidates;
   }, [whatsappLinks, lastWhatsAppSent]);
-
-  const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [getWhatsAppFollowUpCandidates]);
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -1749,8 +1744,6 @@ export default function Dashboard() {
     return pending;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
-  const pendingLeads = useMemo(() => getPendingLeads(), [getPendingLeads]);
-
   // Get replied leads with details
   const getRepliedLeads = useCallback(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
@@ -1788,8 +1781,6 @@ export default function Dashboard() {
 
     return replied;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
-
-  const repliedLeadsList = useMemo(() => getRepliedLeads(), [getRepliedLeads]);
 
   // ============================================================================
   // ✅ HANDLE SEND BULK SMS (DEFINED BEFORE JSX - FIXES REFERENCE ERROR)
@@ -2218,11 +2209,6 @@ export default function Dashboard() {
     if (isSending) return 'Email sending in progress.';
     return '';
   }, [csvContent, validEmails, dailyEmailCount, isSending]);
-
-  const newLeads = useMemo(() => getNewLeads(), [getNewLeads]);
-  const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [getNewLeadsDisabledReason]);
-  const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [getSendEmailsDisabledReason]);
-  const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [getSafeFollowUpDisabledReason]);
 
   // ============================================================================
   // GOOGLE OAUTH SCRIPT LOADER
