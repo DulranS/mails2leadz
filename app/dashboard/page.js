@@ -280,8 +280,6 @@ Best,
 // MAIN DASHBOARD COMPONENT
 // ============================================================================
 export default function Dashboard() {
-  console.log('[Dashboard] Component initialization started');
-
   // ============================================================================
   // AUTH & LOADING STATES
   // ============================================================================
@@ -290,8 +288,6 @@ export default function Dashboard() {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [authError, setAuthError] = useState(null);
   const router = useRouter();
-
-  console.log('[Dashboard] Auth states initialized');
 
   // ============================================================================
   // CSV & LEAD DATA STATES
@@ -883,7 +879,6 @@ export default function Dashboard() {
     }
 
     const now = currentTime;
-    console.log('[getSafeFollowUpCandidates] Current time:', now.toISOString());
 
     const candidates = sentLeads
       .map(normalizeSentLead)
@@ -904,10 +899,7 @@ export default function Dashboard() {
         const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
         const MIN_DAYS_BETWEEN_FOLLOWUP = 2; // Match API config
 
-        console.log(`[getSafeFollowUpCandidates] ${lead.email}: daysSinceLastContact=${daysSinceLastContact.toFixed(2)}, lastFollowUpAt=${lastFollowUpAt}`);
-
         if (daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP) {
-          console.log(`[getSafeFollowUpCandidates] ${lead.email}: TOO SOON - filtering out`);
           return false;
         }
 
@@ -932,7 +924,6 @@ export default function Dashboard() {
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
-    console.log(`[getSafeFollowUpCandidates] Final count: ${candidates.length} safe candidates out of ${sentLeads.length} total leads`);
     return candidates;
   }, [sentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt, currentTime]);
 
@@ -2583,28 +2574,20 @@ export default function Dashboard() {
   // MASS EMAIL FOLLOW-UP TO ALL SAFE LEADS
   // ============================================================================
   const handleMassEmailFollowUps = useCallback(async () => {
-    console.log('[Mass Follow-Up] Starting...');
-    
     if (!user?.uid) {
-      console.error('[Mass Follow-Up] User not signed in');
       addNotification('Please sign in first', 'error');
       return;
     }
 
-    console.log('[Mass Follow-Up] Safe candidates count:', safeFollowUpCandidates.length);
-
     if (safeFollowUpCandidates.length === 0) {
-      console.error('[Mass Follow-Up] No safe candidates available');
       addNotification('No safe leads available for follow-up', 'warning');
       return;
     }
 
     // Check email quota
     const quotaCheck = canUse('email', safeFollowUpCandidates.length);
-    console.log('[Mass Follow-Up] Quota check:', quotaCheck);
 
     if (!quotaCheck.available) {
-      console.error('[Mass Follow-Up] Quota not available:', quotaCheck.reason);
       addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
       return;
     }
@@ -2616,21 +2599,17 @@ export default function Dashboard() {
     );
 
     if (!confirmed) {
-      console.log('[Mass Follow-Up] User cancelled');
       return;
     }
 
-    console.log('[Mass Follow-Up] User confirmed, starting send...');
     setIsSending(true);
     setStatus('Sending follow-ups...');
     setSendProgress({ current: 0, total: safeFollowUpCandidates.length });
 
     // Final quota check before starting sends
     const finalQuotaCheck = canUse('email', safeFollowUpCandidates.length);
-    console.log('[Mass Follow-Up] Final quota check:', finalQuotaCheck);
 
     if (!finalQuotaCheck.available) {
-      console.error('[Mass Follow-Up] Quota not available on final check:', finalQuotaCheck.reason);
       addNotification(`⚠️ ${finalQuotaCheck.reason}`, 'error');
       setIsSending(false);
       setSendProgress(null);
@@ -2646,12 +2625,9 @@ export default function Dashboard() {
 
     try {
       // Get Gmail token once for all sends
-      console.log('[Mass Follow-Up] Requesting Gmail token...');
       const accessToken = await requestGmailToken();
-      console.log('[Mass Follow-Up] Gmail token obtained:', !!accessToken);
 
       if (!accessToken) {
-        console.error('[Mass Follow-Up] Failed to get Gmail token');
         addNotification('Failed to get Gmail access token', 'error');
         setIsSending(false);
         return;
@@ -2661,19 +2637,14 @@ export default function Dashboard() {
 
       // Process leads in batches
       const batchSize = Math.min(10, safeFollowUpCandidates.length);
-      console.log('[Mass Follow-Up] Batch size:', batchSize, 'Total leads:', safeFollowUpCandidates.length);
 
       for (let i = 0; i < safeFollowUpCandidates.length; i += batchSize) {
         const batch = safeFollowUpCandidates.slice(i, i + batchSize);
-        console.log('[Mass Follow-Up] Processing batch', i / batchSize + 1, 'of', Math.ceil(safeFollowUpCandidates.length / batchSize));
 
         for (const contact of batch) {
           try {
-            console.log('[Mass Follow-Up] Processing contact:', contact.email);
-
             // Double-check safety before sending
             if (repliedLeads[contact.email]) {
-              console.log('[Mass Follow-Up] Skipping - already replied:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'Already replied' });
               continue;
@@ -2681,7 +2652,6 @@ export default function Dashboard() {
 
             const followUpCount = contact.followUpCount || 0;
             if (followUpCount >= 3) {
-              console.log('[Mass Follow-Up] Skipping - max follow-ups reached:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'Max follow-ups reached' });
               continue;
@@ -2689,14 +2659,12 @@ export default function Dashboard() {
 
             // Use the Gmail token requested once at the beginning
             if (!accessToken) {
-              console.error('[Mass Follow-Up] No access token for:', contact.email);
               skipCount++;
               results.push({ email: contact.email, status: 'skipped', reason: 'No access token' });
               continue;
             }
 
             // Send follow-up using the dedicated follow-up API
-            console.log('[Mass Follow-Up] Sending follow-up to:', contact.email);
             const res = await fetch('/api/send-followup', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -2711,7 +2679,6 @@ export default function Dashboard() {
             });
 
             const data = await res.json();
-            console.log('[Mass Follow-Up] Response for', contact.email, ':', res.status, data);
 
             if (res.ok) {
               // Check if email was skipped due to duplicate
@@ -2733,8 +2700,6 @@ export default function Dashboard() {
               incrementQuota('email', 1);
 
             } else {
-              console.error('[Mass Follow-Up] API error for', contact.email, ':', data.error);
-
               // Check if error is "too soon to follow up" - count as pending instead of failed
               if (data.error && data.error.includes('Too soon to follow up')) {
                 pendingCount++;
@@ -2746,7 +2711,6 @@ export default function Dashboard() {
             }
 
           } catch (error) {
-            console.error('[Mass Follow-Up] Exception for', contact.email, ':', error);
             failCount++;
             results.push({ email: contact.email, status: 'failed', reason: error.message });
           }
@@ -2765,8 +2729,6 @@ export default function Dashboard() {
         }
       }
 
-      console.log('[Mass Follow-Up] All sends complete. Success:', successCount, 'Failed:', failCount, 'Skipped:', skipCount, 'Pending:', pendingCount);
-
       // Refresh data after all sends complete
       // Invalidate cache to ensure fresh data
       invalidateCache('sent_emails');
@@ -2784,8 +2746,6 @@ export default function Dashboard() {
         `⏭️ Skipped: ${skipCount}\n` +
         `📈 Total: ${safeFollowUpCandidates.length}\n\n` +
         `Email quota used: ${successCount}/${quotaCheck.limit}`;
-
-      console.log('[Mass Follow-Up] Final message:', message);
 
       if (failCount > 0 || pendingCount > 0) {
         let details = '';
@@ -6317,10 +6277,8 @@ export default function Dashboard() {
                         });
 
                         Promise.all(fileReaders).then(attachments => {
-                          console.log('[Mass Follow-Up] Files loaded:', attachments.length);
                           setFollowUpAttachments([...followUpAttachments, ...attachments]);
                         }).catch(error => {
-                          console.error('[Mass Follow-Up] Error loading files:', error);
                           addNotification('Failed to load files', 'error');
                         });
                       }}
@@ -6357,7 +6315,6 @@ export default function Dashboard() {
                     <div className="mb-6">
                       <button
                         onClick={() => {
-                          console.log('[BUTTON] Mass follow-up button clicked');
                           handleMassEmailFollowUps();
                         }}
                         disabled={isSending}
