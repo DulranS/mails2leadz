@@ -957,6 +957,8 @@ export default function Dashboard() {
     return candidates;
   }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
 
+  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [filteredSentLeads, followUpHistory, normalizeSentLead]);
+
   // ============================================================================
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
@@ -1011,6 +1013,8 @@ export default function Dashboard() {
 
     return candidates;
   }, [whatsappLinks, lastWhatsAppSent]);
+
+  const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [whatsappLinks, lastWhatsAppSent]);
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -1744,6 +1748,8 @@ export default function Dashboard() {
     return pending;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
+  const pendingLeads = useMemo(() => getPendingLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
+
   // Get replied leads with details
   const getRepliedLeads = useCallback(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
@@ -1781,6 +1787,8 @@ export default function Dashboard() {
 
     return replied;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
+
+  const repliedLeadsList = useMemo(() => getRepliedLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
   // ============================================================================
   // ✅ HANDLE SEND BULK SMS (DEFINED BEFORE JSX - FIXES REFERENCE ERROR)
@@ -2209,6 +2217,11 @@ export default function Dashboard() {
     if (isSending) return 'Email sending in progress.';
     return '';
   }, [csvContent, validEmails, dailyEmailCount, isSending]);
+
+  const newLeads = useMemo(() => getNewLeads(), [whatsappLinks, sentLeads, leadScores]);
+  const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [csvContent, dailyEmailCount, isSending]);
+  const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [csvContent, validEmails, dailyEmailCount, isSending]);
+  const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [safeFollowUpCandidates, isSending]);
 
   // ============================================================================
   // GOOGLE OAUTH SCRIPT LOADER
