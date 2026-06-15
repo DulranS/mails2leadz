@@ -75,7 +75,7 @@ export async function POST(request) {
       );
     }
 
-    const { userId, limit = 100 } = await request.json();
+    const { userId, limit: limitParam = 100 } = await request.json();
 
     if (!userId) {
       return NextResponse.json(
@@ -85,7 +85,7 @@ export async function POST(request) {
     }
 
     // Validate limit to prevent excessive reads
-    const maxLimit = Math.min(limit, 500); // Cap at 500 records per request
+    const maxLimit = Math.min(limitParam, 500); // Cap at 500 records per request
     console.log(`📧 Querying sent_emails for userId: ${userId} (limit: ${maxLimit})`);
 
     // Build query with pagination support
