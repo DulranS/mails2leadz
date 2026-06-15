@@ -101,6 +101,7 @@ export async function POST(request) {
     const snapshot = await getDocs(q);
     const leads = [];
     let deletedCount = 0;
+    let duplicateDeletedCount = 0;
 
     console.log(`📧 Found ${snapshot.docs.length} documents in sent_emails`);
     
@@ -140,8 +141,39 @@ export async function POST(request) {
     
     const now = new Date();
     
+    // ============================================================================
+    // DUPLICATE DETECTION AND LEAD PROCESSING (Cost-Optimized)
+    // ============================================================================
+    // Group leads by email to detect duplicates while processing
+    const emailMap = new Map();
+    const duplicatesToDelete = [];
+
     snapshot.forEach(docSnapshot => {
       const data = docSnapshot.data();
+      const email = getEmailAddress(data);
+      
+      if (!email) return;
+
+      // Check for duplicates
+      if (emailMap.has(email)) {
+        const existing = emailMap.get(email);
+        const existingSentAt = safeToDate(existing.data.sentAt);
+        const currentSentAt = safeToDate(data.sentAt);
+
+        if (currentSentAt > existingSentAt) {
+          // Current is more recent, mark existing for deletion
+          duplicatesToDelete.push(existing.docId);
+          emailMap.set(email, { docId: docSnapshot.id, data, sentAt: currentSentAt });
+        } else {
+          // Existing is more recent, mark current for deletion
+          duplicatesToDelete.push(docSnapshot.id);
+        }
+        return; // Skip processing this duplicate
+      } else {
+        emailMap.set(email, { docId: docSnapshot.id, data, sentAt: safeToDate(data.sentAt) });
+      }
+      
+      // Process lead (only for non-duplicates)
       try {
         const email = getEmailAddress(data);
         if (!email) {
@@ -190,6 +222,35 @@ export async function POST(request) {
     });
     
     // ============================================================================
+    // DELETE DUPLICATES (Cost-Optimized)
+    // ============================================================================
+    if (duplicatesToDelete.length > 0) {
+      console.log(`🗑️ Found ${duplicatesToDelete.length} duplicate records to delete`);
+      
+      // Delete in batches of 50 to avoid timeout and stay within cost limits
+      const batchSize = 50;
+      for (let i = 0; i < duplicatesToDelete.length; i += batchSize) {
+        const batch = duplicatesToDelete.slice(i, i + batchSize);
+        
+        for (const docId of batch) {
+          try {
+            await deleteDoc(doc(db, 'sent_emails', docId));
+            duplicateDeletedCount++;
+          } catch (deleteError) {
+            console.error(`❌ Error deleting duplicate ${docId}:`, deleteError);
+          }
+        }
+        
+        // Small delay between batches to avoid rate limiting
+        if (i + batchSize < duplicatesToDelete.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      console.log(`✅ Deleted ${duplicateDeletedCount} duplicate records`);
+    }
+    
+    // ============================================================================
     // AUTOMATIC CLEANUP OF OLD RECORDS
     // ============================================================================
     const cutoffDate = new Date(now);
@@ -233,12 +294,13 @@ export async function POST(request) {
     const hasMore = snapshot.docs.length >= maxLimit;
     const lastDocId = hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-    console.log(`✅ Successfully loaded ${activeLeads.length} sent leads for user ${userId} (${deletedCount} old records deleted, hasMore: ${hasMore})`);
+    console.log(`✅ Successfully loaded ${activeLeads.length} sent leads for user ${userId} (${deletedCount} old records deleted, ${duplicateDeletedCount} duplicates deleted, hasMore: ${hasMore})`);
 
     return NextResponse.json({
       leads: activeLeads,
       total: activeLeads.length,
       deletedCount,
+      duplicateDeletedCount,
       pagination: {
         hasMore,
         lastDocId,
