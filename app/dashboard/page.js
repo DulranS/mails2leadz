@@ -1700,12 +1700,12 @@ export default function Dashboard() {
 
   // Get pending leads (un-replied but not yet ready for follow-up)
   const getPendingLeads = useCallback(() => {
-    if (!sentLeads || sentLeads.length === 0) {
+    if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
 
     const now = new Date(); // Use current time to match API logic exactly
-    const pending = sentLeads
+    const pending = filteredSentLeads
       .map(normalizeSentLead)
       .filter(lead => {
         if (!lead || !lead.email) return false;
@@ -1745,7 +1745,7 @@ export default function Dashboard() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [sentLeads, normalizeSentLead, safeParseDate]);
+  }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
   const pendingLeads = useMemo(() => getPendingLeads(), [getPendingLeads]);
 
@@ -3161,7 +3161,7 @@ export default function Dashboard() {
       console.error('💥 Test failed:', error);
       addNotification(`❌ Test error: ${error.message}`, 'error');
     }
-  }, [user, senderName, quotas, safeFollowUpCandidates, requestGmailToken, addNotification, loadSentLeads, loadRepliedAndFollowUp]);
+  }, [user, senderName, quotas, safeFollowUpCandidates, requestGmailToken, addNotification, loadSentLeads, loadRepliedAndFollowUp, repliedLeads, followUpHistory]);
 
   // ============================================================================
   // BYPASS QUOTA TEST (For debugging only)
@@ -3211,6 +3211,13 @@ export default function Dashboard() {
   const sendFollowUpWithToken = useCallback(async (email, accessToken) => {
     if (!user?.uid || !email || !accessToken) {
       addNotification('Missing required data to send follow-up.', 'error');
+      return;
+    }
+
+    // Client-side check: verify lead is safe to follow up before calling API
+    const lead = safeFollowUpCandidates.find(c => c.email === email);
+    if (!lead) {
+      addNotification('Lead is not ready for follow-up yet. Please wait.', 'warning');
       return;
     }
 
@@ -3264,7 +3271,7 @@ export default function Dashboard() {
       console.error('Follow-up send error:', err);
       addNotification(`❌ Error: ${err.message}`, 'error');
     }
-  }, [user, repliedLeads, sentLeads, addNotification, loadSentLeads, loadRepliedAndFollowUp, loadDeals]);
+  }, [user, repliedLeads, sentLeads, safeFollowUpCandidates, addNotification, loadSentLeads, loadRepliedAndFollowUp, loadDeals]);
 
   // ============================================================================
   // AI AUTO-REPLY PROCESSOR
