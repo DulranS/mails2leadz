@@ -871,6 +871,36 @@ export default function Dashboard() {
   }, [user?.uid, db, updateContact, addNotification]);
 
   // ============================================================================
+  // FILTER SENT LEADS (Exclude leads too soon to follow up)
+  // ============================================================================
+  const filteredSentLeads = useMemo(() => {
+    if (!sentLeads || sentLeads.length === 0) return [];
+    
+    const now = new Date();
+    const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
+    
+    return sentLeads.filter(lead => {
+      if (!lead || !lead.email) return true; // Keep if no email (shouldn't happen but safety check)
+      if (lead.replied) return true; // Keep replied leads
+      
+      const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
+      if (followUpCount >= 3) return true; // Keep leads at max follow-ups
+      
+      const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+      if (!lastFollowUpAt) return true;
+      
+      const lastDate = safeParseDate(lastFollowUpAt);
+      if (!lastDate) return true;
+      
+      const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
+      
+      // Filter out leads that are too soon to follow up from general display
+      // Only show them in the safeFollowUpCandidates list
+      return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
+    });
+  }, [sentLeads]);
+
+  // ============================================================================
   // ✅ GET SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
   // ============================================================================
   const getSafeFollowUpCandidates = useCallback(() => {
@@ -929,34 +959,6 @@ export default function Dashboard() {
 
   // Memoize the result to prevent recalculation on every render
   const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
-
-  // Filter sentLeads to exclude leads that are too soon to follow up from UI display
-  const filteredSentLeads = useMemo(() => {
-    if (!sentLeads || sentLeads.length === 0) return [];
-    
-    const now = new Date();
-    const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
-    
-    return sentLeads.filter(lead => {
-      if (!lead || !lead.email) return true; // Keep if no email (shouldn't happen but safety check)
-      if (lead.replied) return true; // Keep replied leads
-      
-      const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
-      if (followUpCount >= 3) return true; // Keep leads at max follow-ups
-      
-      const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
-      if (!lastFollowUpAt) return true;
-      
-      const lastDate = safeParseDate(lastFollowUpAt);
-      if (!lastDate) return true;
-      
-      const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
-      
-      // Filter out leads that are too soon to follow up from general display
-      // Only show them in the safeFollowUpCandidates list
-      return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
-    });
-  }, [sentLeads]);
 
   // ============================================================================
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
