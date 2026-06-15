@@ -2125,7 +2125,7 @@ export default function Dashboard() {
     });
 
     return segments;
-  }, [whatsappLinks, leadScores, repliedLeads, isContactedOnAnyChannel, getContactHistory]);
+  }, [whatsappLinks, leadScores, repliedLeads]);
 
   // ============================================================================
   // GET NEW LEADS (NOT YET EMAILED)
