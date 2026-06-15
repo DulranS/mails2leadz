@@ -2201,7 +2201,7 @@ export default function Dashboard() {
     }
     if (isSending) return 'Email send in progress. Wait for completion.';
     return '';
-  }, [csvContent, dailyEmailCount, getNewLeads, isSending]);
+  }, [csvContent, dailyEmailCount, isSending]);
 
   const getSafeFollowUpDisabledReason = useCallback(() => {
     if (isSending) return 'Send in progress. Please wait.';
