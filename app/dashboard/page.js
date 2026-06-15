@@ -930,6 +930,63 @@ export default function Dashboard() {
   // Memoize the result to prevent recalculation on every render
   const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
 
+  // ============================================================================
+  // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
+  // ============================================================================
+  const getWhatsAppFollowUpCandidates = useCallback(() => {
+    if (!whatsappLinks || whatsappLinks.length === 0) {
+      return [];
+    }
+
+    const now = new Date();
+    const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3; // WhatsApp follow-ups should be less frequent
+
+    const candidates = whatsappLinks
+      .filter(contact => {
+        if (!contact || !contact.phone) return false;
+
+        const key = contact.email || contact.phone;
+        const lastWhatsAppSent = lastWhatsAppSent[key];
+
+        if (!lastWhatsAppSent) {
+          // Never sent WhatsApp - good candidate
+          return true;
+        }
+
+        const lastDate = new Date(lastWhatsAppSent);
+        const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
+
+        // Check if enough time has passed since last WhatsApp
+        if (daysSinceLastContact < MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP) {
+          return false;
+        }
+
+        return true;
+      })
+      .map(contact => {
+        const key = contact.email || contact.phone;
+        const lastWhatsAppSent = lastWhatsAppSent[key];
+        const lastDate = lastWhatsAppSent ? new Date(lastWhatsAppSent) : null;
+        const daysSinceLastContact = lastDate ? (now - lastDate) / (1000 * 60 * 60 * 24) : 999;
+        const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3;
+        const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP - daysSinceLastContact);
+
+        return {
+          ...contact,
+          lastWhatsAppSent: lastDate?.toISOString() || null,
+          daysSinceLastContact,
+          daysRemaining,
+          readyForFollowUp: daysSinceLastContact >= MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP,
+          urgencyScore: Math.max(0, Math.min(100, daysSinceLastContact * 10))
+        };
+      })
+      .sort((a, b) => b.urgencyScore - a.urgencyScore);
+
+    return candidates;
+  }, [whatsappLinks, lastWhatsAppSent]);
+
+  const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [getWhatsAppFollowUpCandidates]);
+
   // Get pending leads (un-replied but not yet ready for follow-up)
   const getPendingLeads = useCallback(() => {
     if (!sentLeads || sentLeads.length === 0) {
@@ -6381,6 +6438,45 @@ export default function Dashboard() {
                           )}
                         </div>
                       </button>
+
+                      {/* WHATSAPP FOLLOW-UP REMINDERS SECTION */}
+                      {whatsappFollowUpCandidates.length > 0 && (
+                        <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
+                          <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
+                            <span className="text-xl sm:text-2xl">💬</span>
+                            <span>WhatsApp Follow-Up Reminders ({whatsappFollowUpCandidates.length})</span>
+                          </div>
+                          <div className="space-y-3">
+                            {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => (
+                              <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-white">{contact.businessName || 'Unknown'}</div>
+                                    <div className="text-xs text-gray-400">{contact.phone}</div>
+                                    <div className="text-xs text-gray-400">{contact.email}</div>
+                                  </div>
+                                  <div className="text-right ml-4">
+                                    {contact.readyForFollowUp ? (
+                                      <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                        Ready to follow up
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
+                                        Wait {Math.ceil(contact.daysRemaining)} days
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {whatsappFollowUpCandidates.length > 5 && (
+                              <div className="text-center text-xs text-gray-400">
+                                +{whatsappFollowUpCandidates.length - 5} more contacts
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Debug Info Button */}
                       {!isSending && (
