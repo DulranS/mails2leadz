@@ -898,7 +898,7 @@ export default function Dashboard() {
       // Only show them in the safeFollowUpCandidates list
       return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
     });
-  }, [sentLeads]);
+  }, [sentLeads, safeParseDate]);
 
   // ============================================================================
   // ✅ GET SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
@@ -955,7 +955,7 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [filteredSentLeads, followUpHistory, normalizeSentLead, getLeadNextFollowUpAt]);
+  }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
 
   // Memoize the result to prevent recalculation on every render
   const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [getSafeFollowUpCandidates]);
