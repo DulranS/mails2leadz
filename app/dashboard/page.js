@@ -957,8 +957,6 @@ export default function Dashboard() {
     return candidates;
   }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
 
-  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [filteredSentLeads, followUpHistory, normalizeSentLead]);
-
   // ============================================================================
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
@@ -1013,8 +1011,6 @@ export default function Dashboard() {
 
     return candidates;
   }, [whatsappLinks, lastWhatsAppSent]);
-
-  const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [whatsappLinks, lastWhatsAppSent]);
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -1748,8 +1744,6 @@ export default function Dashboard() {
     return pending;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
-  const pendingLeads = useMemo(() => getPendingLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
-
   // Get replied leads with details
   const getRepliedLeads = useCallback(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
@@ -1787,8 +1781,6 @@ export default function Dashboard() {
 
     return replied;
   }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
-
-  const repliedLeadsList = useMemo(() => getRepliedLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
 
   // ============================================================================
   // ✅ HANDLE SEND BULK SMS (DEFINED BEFORE JSX - FIXES REFERENCE ERROR)
@@ -2155,10 +2147,11 @@ export default function Dashboard() {
     const groupedLeads = [];
     const processedGroups = new Set();
 
-    newLeads.forEach(lead => {
+    const leads = getNewLeads();
+    leads.forEach(lead => {
       if (lead.rowGroupId && !processedGroups.has(lead.rowGroupId)) {
         // Get all leads from this group
-        const groupLeads = newLeads.filter(l => l.rowGroupId === lead.rowGroupId);
+        const groupLeads = leads.filter(l => l.rowGroupId === lead.rowGroupId);
         if (groupLeads.length > 1) {
           // Multiple emails from same row - add all as individual emails with delay metadata
           groupLeads.forEach((groupLead, index) => {
@@ -2204,11 +2197,12 @@ export default function Dashboard() {
 
   const getSafeFollowUpDisabledReason = useCallback(() => {
     if (isSending) return 'Send in progress. Please wait.';
-    if (!safeFollowUpCandidates || safeFollowUpCandidates.length === 0) {
+    const candidates = getSafeFollowUpCandidates();
+    if (!candidates || candidates.length === 0) {
       return 'No safe follow-up candidates available (replied or maximum follow-ups reached).';
     }
     return '';
-  }, [safeFollowUpCandidates, isSending]);
+  }, [isSending, getSafeFollowUpCandidates]);
 
   const getSendEmailsDisabledReason = useCallback(() => {
     if (!csvContent) return 'Upload a CSV before sending emails.';
@@ -2217,11 +2211,6 @@ export default function Dashboard() {
     if (isSending) return 'Email sending in progress.';
     return '';
   }, [csvContent, validEmails, dailyEmailCount, isSending]);
-
-  const newLeads = useMemo(() => getNewLeads(), [whatsappLinks, sentLeads, leadScores]);
-  const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [csvContent, dailyEmailCount, isSending]);
-  const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [csvContent, validEmails, dailyEmailCount, isSending]);
-  const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [safeFollowUpCandidates, isSending]);
 
   // ============================================================================
   // GOOGLE OAUTH SCRIPT LOADER
@@ -3109,15 +3098,16 @@ export default function Dashboard() {
     console.log('📧 Email quota:', quotas.emails);
 
     // Test 3: Check safe candidates
-    console.log('📊 Safe candidates:', safeFollowUpCandidates.length);
+    const candidates = getSafeFollowUpCandidates();
+    console.log('📊 Safe candidates:', candidates.length);
 
-    if (safeFollowUpCandidates.length === 0) {
+    if (candidates.length === 0) {
       console.log('❌ No safe candidates found');
       addNotification('No safe candidates available for testing', 'warning');
       return;
     }
 
-    const testCandidate = safeFollowUpCandidates[0];
+    const testCandidate = candidates[0];
     console.log('🎯 Test candidate:', testCandidate.email);
 
     try {
@@ -3162,7 +3152,7 @@ export default function Dashboard() {
       console.error('💥 Test failed:', error);
       addNotification(`❌ Test error: ${error.message}`, 'error');
     }
-  }, [user, senderName, quotas, safeFollowUpCandidates, requestGmailToken, addNotification, loadSentLeads, loadRepliedAndFollowUp, repliedLeads, followUpHistory]);
+  }, [user, senderName, quotas, getSafeFollowUpCandidates, requestGmailToken, addNotification, loadSentLeads, loadRepliedAndFollowUp, repliedLeads, followUpHistory]);
 
   // ============================================================================
   // BYPASS QUOTA TEST (For debugging only)
@@ -3170,12 +3160,13 @@ export default function Dashboard() {
   const testFollowUpBypassQuota = useCallback(async () => {
     console.log('🚀 Starting bypass quota test...');
 
-    if (safeFollowUpCandidates.length === 0) {
+    const candidates = getSafeFollowUpCandidates();
+    if (candidates.length === 0) {
       addNotification('No safe candidates available', 'warning');
       return;
     }
 
-    const testCandidate = safeFollowUpCandidates[0];
+    const testCandidate = candidates[0];
 
     try {
       // Skip quota check
@@ -3216,7 +3207,8 @@ export default function Dashboard() {
     }
 
     // Client-side check: verify lead is safe to follow up before calling API
-    const lead = safeFollowUpCandidates.find(c => c.email === email);
+    const candidates = getSafeFollowUpCandidates();
+    const lead = candidates.find(c => c.email === email);
     if (!lead) {
       addNotification('Lead is not ready for follow-up yet. Please wait.', 'warning');
       return;
@@ -3272,7 +3264,7 @@ export default function Dashboard() {
       console.error('Follow-up send error:', err);
       addNotification(`❌ Error: ${err.message}`, 'error');
     }
-  }, [user, repliedLeads, sentLeads, safeFollowUpCandidates, addNotification, loadSentLeads, loadRepliedAndFollowUp, loadDeals]);
+  }, [user, repliedLeads, sentLeads, getSafeFollowUpCandidates, addNotification, loadSentLeads, loadRepliedAndFollowUp, loadDeals]);
 
   // ============================================================================
   // AI AUTO-REPLY PROCESSOR
@@ -3355,13 +3347,14 @@ export default function Dashboard() {
       return;
     }
 
-    if (safeFollowUpCandidates.length === 0) {
+    const candidates = getSafeFollowUpCandidates();
+    if (candidates.length === 0) {
       addNotification('No safe leads available for follow-up', 'warning');
       return;
     }
 
     // Check email quota
-    const quotaCheck = canUse('email', safeFollowUpCandidates.length);
+    const quotaCheck = canUse('email', candidates.length);
 
     if (!quotaCheck.available) {
       addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
@@ -3369,8 +3362,8 @@ export default function Dashboard() {
     }
 
     const confirmed = window.confirm(
-      `Send follow-up emails to ${safeFollowUpCandidates.length} leads?\n\n` +
-      `This will use ${safeFollowUpCandidates.length} of your daily email quota.\n\n` +
+      `Send follow-up emails to ${candidates.length} leads?\n\n` +
+      `This will use ${candidates.length} of your daily email quota.\n\n` +
       `Continue?`
     );
 
@@ -3380,10 +3373,10 @@ export default function Dashboard() {
 
     setIsSending(true);
     setStatus('Sending follow-ups...');
-    setSendProgress({ current: 0, total: safeFollowUpCandidates.length });
+    setSendProgress({ current: 0, total: candidates.length });
 
     // Final quota check before starting sends
-    const finalQuotaCheck = canUse('email', safeFollowUpCandidates.length);
+    const finalQuotaCheck = canUse('email', candidates.length);
 
     if (!finalQuotaCheck.available) {
       addNotification(`⚠️ ${finalQuotaCheck.reason}`, 'error');
@@ -3409,13 +3402,13 @@ export default function Dashboard() {
         return;
       }
 
-      setStatus(`Sending follow-ups to ${safeFollowUpCandidates.length} leads...`);
+      setStatus(`Sending follow-ups to ${candidates.length} leads...`);
 
       // Process leads in batches
-      const batchSize = Math.min(10, safeFollowUpCandidates.length);
+      const batchSize = Math.min(10, candidates.length);
 
-      for (let i = 0; i < safeFollowUpCandidates.length; i += batchSize) {
-        const batch = safeFollowUpCandidates.slice(i, i + batchSize);
+      for (let i = 0; i < candidates.length; i += batchSize) {
+        const batch = candidates.slice(i, i + batchSize);
 
         for (const contact of batch) {
           try {
@@ -3493,14 +3486,14 @@ export default function Dashboard() {
 
           // Update progress
           const currentProgress = i + batch.indexOf(contact) + 1;
-          setSendProgress({ current: currentProgress, total: safeFollowUpCandidates.length });
+          setSendProgress({ current: currentProgress, total: candidates.length });
 
           // Small delay between sends to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS));
         }
 
         // Brief pause between batches
-        if (i + batchSize < safeFollowUpCandidates.length) {
+        if (i + batchSize < candidates.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
@@ -3520,7 +3513,7 @@ export default function Dashboard() {
         `⏳ Pending: ${pendingCount}\n` +
         `❌ Failed: ${failCount}\n` +
         `⏭️ Skipped: ${skipCount}\n` +
-        `📈 Total: ${safeFollowUpCandidates.length}\n\n` +
+        `📈 Total: ${candidates.length}\n\n` +
         `Email quota used: ${successCount}/${quotaCheck.limit}`;
 
       if (failCount > 0 || pendingCount > 0) {
@@ -3552,7 +3545,7 @@ export default function Dashboard() {
   }, [
     user,
     addNotification,
-    safeFollowUpCandidates,
+    getSafeFollowUpCandidates,
     canUse,
     requestGmailToken,
     loadSentLeads,
@@ -6041,45 +6034,45 @@ export default function Dashboard() {
                 <div className="space-y-2 mt-4">
                   <button
                     onClick={() => handleSendEmails('A')}
-                    disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(sendEmailsDisabledReason)
+                    disabled={Boolean(getSendEmailsDisabledReason())}
+                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(getSendEmailsDisabledReason())
                         ? 'bg-gray-600 cursor-not-allowed'
                         : 'bg-green-700 hover:bg-green-600 text-white'
                       }`}
-                    title={sendEmailsDisabledReason || `Send template A to ${Math.ceil(validEmails / 2)} leads`}
+                    title={getSendEmailsDisabledReason() || `Send template A to ${Math.ceil(validEmails / 2)} leads`}
                   >
                     📧 Send Template A (First {Math.ceil(validEmails / 2)} leads)
                   </button>
                   <button
                     onClick={() => handleSendEmails('B')}
-                    disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(sendEmailsDisabledReason)
+                    disabled={Boolean(getSendEmailsDisabledReason())}
+                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(getSendEmailsDisabledReason())
                         ? 'bg-gray-600 cursor-not-allowed'
                         : 'bg-blue-700 hover:bg-blue-600 text-white'
                       }`}
-                    title={sendEmailsDisabledReason || `Send template B to ${Math.floor(validEmails / 2)} leads`}
+                    title={getSendEmailsDisabledReason() || `Send template B to ${Math.floor(validEmails / 2)} leads`}
                   >
                     📧 Send Template B (Last {Math.floor(validEmails / 2)} leads)
                   </button>
-                  {sendEmailsDisabledReason && (
-                    <div className="mt-2 text-xs text-yellow-300">⚠️ {sendEmailsDisabledReason}</div>
+                  {getSendEmailsDisabledReason() && (
+                    <div className="mt-2 text-xs text-yellow-300">⚠️ {getSendEmailsDisabledReason()}</div>
                   )}
                 </div>
               ) : (
                 <>
                   <button
                     onClick={() => handleSendEmails()}
-                    disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold mt-4 transition ${Boolean(sendEmailsDisabledReason)
+                    disabled={Boolean(getSendEmailsDisabledReason())}
+                    className={`w-full py-3 rounded-lg font-bold mt-4 transition ${Boolean(getSendEmailsDisabledReason())
                         ? 'bg-gray-600 cursor-not-allowed'
                         : 'bg-green-700 hover:bg-green-600 text-white'
                       }`}
-                    title={sendEmailsDisabledReason || `Send emails to ${validEmails} leads`}
+                    title={getSendEmailsDisabledReason() || `Send emails to ${validEmails} leads`}
                   >
                     📧 Send Emails ({validEmails})
                   </button>
-                  {sendEmailsDisabledReason && (
-                    <div className="mt-2 text-xs text-yellow-300">⚠️ {sendEmailsDisabledReason}</div>
+                  {getSendEmailsDisabledReason() && (
+                    <div className="mt-2 text-xs text-yellow-300">⚠️ {getSendEmailsDisabledReason()}</div>
                   )}
 
 
@@ -6123,23 +6116,23 @@ export default function Dashboard() {
 
                   <button
                     onClick={handleSendToNewLeads}
-                    disabled={Boolean(newLeadsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold mt-3 transition ${Boolean(newLeadsDisabledReason)
+                    disabled={Boolean(getNewLeadsDisabledReason())}
+                    className={`w-full py-3 rounded-lg font-bold mt-3 transition ${Boolean(getNewLeadsDisabledReason())
                         ? 'bg-gray-600 cursor-not-allowed text-gray-400'
                         : 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg'
                       }`}
-                    title={newLeadsDisabledReason || `Send to ${newLeads.length} new leads`}
+                    title={getNewLeadsDisabledReason() || `Send to ${getNewLeads().length} new leads`}
                   >
-                    🚀 Smart New Lead Outreach ({newLeads.length} new leads)
+                    🚀 Smart New Lead Outreach ({getNewLeads().length} new leads)
                     <div className="text-xs font-normal mt-1 opacity-90">
-                      {newLeadsDisabledReason
-                        ? `⚠️ ${newLeadsDisabledReason}`
+                      {getNewLeadsDisabledReason()
+                        ? `⚠️ ${getNewLeadsDisabledReason()}`
                         : `${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS} sent today • Prevents duplicates`}
                     </div>
                   </button>
-                  {newLeadsDisabledReason && (
+                  {getNewLeadsDisabledReason() && (
                     <div className="mt-2 text-xs text-yellow-300 font-semibold">
-                      ⚠️ {newLeadsDisabledReason}
+                      ⚠️ {getNewLeadsDisabledReason()}
                     </div>
                   )}
                 </>
@@ -6807,9 +6800,9 @@ export default function Dashboard() {
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{repliedLeadsList.length}</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{getRepliedLeads().length}</div>
                     <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
-                      Replied ({Math.round((repliedLeadsList.length / Math.max(followUpStats.totalSent, 1)) * 100)}%)
+                      Replied ({Math.round((getRepliedLeads().length / Math.max(followUpStats.totalSent, 1)) * 100)}%)
                     </div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
                   </div>
@@ -6825,7 +6818,7 @@ export default function Dashboard() {
                 <div className="relative group hidden sm:block">
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-3 sm:p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{safeFollowUpCandidates.length}</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{getSafeFollowUpCandidates().length}</div>
                     <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">Ready for Follow-Up</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏰</div>
                   </div>
@@ -6834,7 +6827,7 @@ export default function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
-                      ${Math.round((repliedLeadsList.length * 0.25 * 5000) / 1000)}k
+                      ${Math.round((getRepliedLeads().length * 0.25 * 5000) / 1000)}k
                     </div>
                     <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">Potential Revenue</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💰</div>
@@ -6844,14 +6837,14 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
               {/* NEW REPLIES SECTION - PRIORITY */}
-              {repliedLeadsList.length > 0 && (
+              {getRepliedLeads().length > 0 && (
                 <div className="mb-6">
                   <div className="text-base sm:text-lg font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🎉</span>
-                    <span>{repliedLeadsList.length} New Replies - Take Action!</span>
+                    <span>{getRepliedLeads().length} New Replies - Take Action!</span>
                   </div>
                   <div className="space-y-2 sm:space-y-3">
-                    {repliedLeadsList.slice(0, showAllRepliedLeads ? repliedLeadsList.length : 5).map((lead, idx) => (
+                    {getRepliedLeads().slice(0, showAllRepliedLeads ? getRepliedLeads().length : 5).map((lead, idx) => (
                       <div key={idx} className="group relative">
                         <div className={`absolute inset-0 bg-gradient-to-r ${lead.isHotLead ? 'from-green-500/20 to-emerald-500/20' : 'from-blue-500/10 to-purple-500/10'} rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all`}></div>
                         <div className={`relative p-3 sm:p-4 rounded-xl ${lead.isHotLead ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/40' : 'bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-gray-700'} border hover:border-indigo-500/50 transition-all`}>
@@ -6930,28 +6923,28 @@ export default function Dashboard() {
                         </div>
                       </div>
                     ))}
-                    {repliedLeadsList.length > 5 && (
+                    {getRepliedLeads().length > 5 && (
                       <button
                         onClick={() => setShowAllRepliedLeads(!showAllRepliedLeads)}
                         className="w-full mt-3 py-2 px-4 bg-green-600/30 hover:bg-green-600/50 text-green-300 rounded-lg text-sm font-medium transition-all"
                       >
-                        {showAllRepliedLeads ? `Show Less (5)` : `View All ${repliedLeadsList.length} Replies`}
+                        {showAllRepliedLeads ? `Show Less (5)` : `View All ${getRepliedLeads().length} Replies`}
                       </button>
                     )}
                   </div>
                 </div>
               )}
 
-              {safeFollowUpCandidates.length === 0 ? (
+              {getSafeFollowUpCandidates().length === 0 ? (
                 <div className="text-center py-8 sm:py-16">
-                  {pendingLeads.length > 0 ? (
+                  {getPendingLeads().length > 0 ? (
                     <>
                       <div className="text-4xl sm:text-6xl mb-4">⏳</div>
                       <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">Pending Follow-Ups</div>
-                      <div className="text-sm sm:text-base text-gray-400 mb-4">{pendingLeads.length} leads waiting for follow-up window</div>
+                      <div className="text-sm sm:text-base text-gray-400 mb-4">{getPendingLeads().length} leads waiting for follow-up window</div>
                       <div className="max-w-2xl mx-auto bg-gray-800/50 rounded-lg p-3 sm:p-4 text-left">
                         <div className="text-xs sm:text-sm text-gray-300 mb-2">Next available follow-ups:</div>
-                        {pendingLeads.slice(0, showAllPendingLeads ? pendingLeads.length : 3).map((lead, idx) => {
+                        {getPendingLeads().slice(0, showAllPendingLeads ? getPendingLeads().length : 3).map((lead, idx) => {
                           const timeUntilFollowUp = new Date(lead.followUpAt) - currentTime;
                           const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
                           const minutesUntil = Math.floor((timeUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
@@ -6975,12 +6968,12 @@ export default function Dashboard() {
                           </div>
                         );
                         })}
-                        {pendingLeads.length > 3 && (
+                        {getPendingLeads().length > 3 && (
                           <button
                             onClick={() => setShowAllPendingLeads(!showAllPendingLeads)}
                             className="w-full mt-3 py-2 px-4 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm font-medium transition-all"
                           >
-                            {showAllPendingLeads ? `Show Less` : `View All ${pendingLeads.length} Pending Leads`}
+                            {showAllPendingLeads ? `Show Less` : `View All ${getPendingLeads().length} Pending Leads`}
                           </button>
                         )}
                       </div>
@@ -7003,7 +6996,7 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <div className="text-base sm:text-lg font-bold text-indigo-300 mb-4 sm:mb-5 flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🎯</span>
-                    <span>{safeFollowUpCandidates.length} leads ready for intelligent follow-up</span>
+                    <span>{getSafeFollowUpCandidates().length} leads ready for intelligent follow-up</span>
                   </div>
 
                   {/* QUOTA DISPLAY */}
@@ -7087,7 +7080,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* MASS EMAIL BUTTON */}
-                  {safeFollowUpCandidates.length > 0 && (
+                  {getSafeFollowUpCandidates().length > 0 && (
                     <div className="mb-6">
                       <button
                         onClick={() => {
@@ -7103,7 +7096,7 @@ export default function Dashboard() {
                         <div className="relative px-8 py-4 text-white font-bold text-lg">
                           <div className="flex items-center justify-center gap-3">
                             <span className="text-2xl">📧</span>
-                            <span>{isSending ? 'Sending...' : `Mass Email All Safe Leads (${safeFollowUpCandidates.length})`}</span>
+                            <span>{isSending ? 'Sending...' : `Mass Email All Safe Leads (${getSafeFollowUpCandidates().length})`}</span>
                             {!isSending && <span className="text-lg">→</span>}
                           </div>
                           {!isSending && (
@@ -7147,7 +7140,7 @@ export default function Dashboard() {
                         <div className="relative px-8 py-4 text-white font-bold text-lg">
                           <div className="flex items-center justify-center gap-3">
                             <span className="text-2xl">📱</span>
-                            <span>{isSending ? 'Sending...' : `SMS Qualify All Leads (${safeFollowUpCandidates.length})`}</span>
+                            <span>{isSending ? 'Sending...' : `SMS Qualify All Leads (${getSafeFollowUpCandidates().length})`}</span>
                             {!isSending && <span className="text-lg">→</span>}
                           </div>
                           {!isSending && (
@@ -7159,14 +7152,14 @@ export default function Dashboard() {
                       </button>
 
                       {/* WHATSAPP FOLLOW-UP REMINDERS SECTION */}
-                      {whatsappFollowUpCandidates.length > 0 && (
+                      {getWhatsAppFollowUpCandidates().length > 0 && (
                         <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
                           <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
                             <span className="text-xl sm:text-2xl">💬</span>
-                            <span>WhatsApp Follow-Up Reminders ({whatsappFollowUpCandidates.length})</span>
+                            <span>WhatsApp Follow-Up Reminders ({getWhatsAppFollowUpCandidates().length})</span>
                           </div>
                           <div className="space-y-3">
-                            {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => (
+                            {getWhatsAppFollowUpCandidates().slice(0, 5).map((contact, idx) => (
                               <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
                                 <div className="flex justify-between items-start">
                                   <div className="flex-1">
@@ -7188,9 +7181,9 @@ export default function Dashboard() {
                                 </div>
                               </div>
                             ))}
-                            {whatsappFollowUpCandidates.length > 5 && (
+                            {getWhatsAppFollowUpCandidates().length > 5 && (
                               <div className="text-center text-xs text-gray-400">
-                                +{whatsappFollowUpCandidates.length - 5} more contacts
+                                +{getWhatsAppFollowUpCandidates().length - 5} more contacts
                               </div>
                             )}
                           </div>
@@ -7203,14 +7196,14 @@ export default function Dashboard() {
                           <button
                             onClick={() => {
                               console.log('🔍 DEBUG - Mass Email Diagnostic Info:');
-                              console.log('📊 Safe Candidates:', safeFollowUpCandidates);
+                              console.log('📊 Safe Candidates:', getSafeFollowUpCandidates());
                               console.log('👤 User:', user);
-                              console.log('📧 Quota Check:', canUse('email', safeFollowUpCandidates.length));
+                              console.log('📧 Quota Check:', canUse('email', getSafeFollowUpCandidates().length));
                               console.log('📈 Sent Leads:', sentLeads);
                               console.log('🔄 Follow-up History:', followUpHistory);
                               console.log('❌ Replied Leads:', repliedLeads);
 
-                              alert(`Debug Info:\n\nSafe Candidates: ${safeFollowUpCandidates.length}\nUser ID: ${user?.uid ? '✅' : '❌'}\nSent Leads: ${sentLeads?.length || 0}\n\nCheck console for detailed info.`);
+                              alert(`Debug Info:\n\nSafe Candidates: ${getSafeFollowUpCandidates().length}\nUser ID: ${user?.uid ? '✅' : '❌'}\nSent Leads: ${sentLeads?.length || 0}\n\nCheck console for detailed info.`);
                             }}
                             className="text-xs text-gray-400 hover:text-indigo-300 underline"
                           >
@@ -7277,7 +7270,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
-                  {safeFollowUpCandidates.slice(0, showAllReadyLeads ? safeFollowUpCandidates.length : 10).map((contact) => {
+                  {getSafeFollowUpCandidates().slice(0, showAllReadyLeads ? getSafeFollowUpCandidates().length : 10).map((contact) => {
                     const followUpCount = contact.followUpCount;
                     const followUpAt = new Date(contact.followUpAt);
                     const hoursOverdue = Math.floor((new Date() - followUpAt) / (1000 * 60 * 60));
@@ -7359,12 +7352,12 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
-                  {safeFollowUpCandidates.length > 10 && (
+                  {getSafeFollowUpCandidates().length > 10 && (
                     <button
                       onClick={() => setShowAllReadyLeads(!showAllReadyLeads)}
                       className="w-full mt-4 py-3 px-4 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm font-medium transition-all"
                     >
-                      {showAllReadyLeads ? `Show Less (10)` : `View All ${safeFollowUpCandidates.length} Ready Leads`}
+                      {showAllReadyLeads ? `Show Less (10)` : `View All ${getSafeFollowUpCandidates().length} Ready Leads`}
                     </button>
                   )}
                 </div>
