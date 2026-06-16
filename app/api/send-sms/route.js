@@ -1,7 +1,7 @@
 // app/api/send-sms/route.js
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import twilio from 'twilio';
 
 // ============================================================================
@@ -65,6 +65,30 @@ export async function POST(request) {
       return NextResponse.json(
         { error: 'Invalid phone number' },
         { status: 400 }
+      );
+    }
+    
+    // Check for duplicate SMS sent within 24 hours
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const duplicateQuery = query(
+      collection(db, 'sms_sent'),
+      where('userId', '==', userId),
+      where('to', '==', formattedPhone),
+      where('sentAt', '>=', twentyFourHoursAgo.toISOString())
+    );
+    
+    let isDuplicate = false;
+    try {
+      const duplicateSnapshot = await getDocs(duplicateQuery);
+      isDuplicate = !duplicateSnapshot.empty;
+    } catch (error) {
+      console.warn('Duplicate check failed:', error);
+    }
+    
+    if (isDuplicate) {
+      return NextResponse.json(
+        { error: 'SMS already sent to this number within the last 24 hours', code: 'DUPLICATE_SMS' },
+        { status: 429 }
       );
     }
     

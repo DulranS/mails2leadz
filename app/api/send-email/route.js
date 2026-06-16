@@ -123,13 +123,25 @@ const replaceTemplateVariables = (text, firstName, lastName, businessName) => {
   return result;
 };
 
+// Helper function to encode subject line using RFC 2047 encoded-word syntax
+const encodeSubject = (subject) => {
+  if (!subject) return '';
+  // Check if subject contains non-ASCII characters
+  if (/[\x80-\xFF]/.test(subject)) {
+    // Encode using UTF-8 base64
+    const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+    return `=?utf-8?B?${encoded}?=`;
+  }
+  return subject;
+};
+
 const createMimeMessage = (to, subject, body, senderEmail, senderName, replyTo = null, attachments = []) => {
   const boundary = 'boundary_' + Math.random().toString(36).substring(7);
 
   let message = `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}\r\n`;
   message += `To: ${to}\r\n`;
   if (replyTo) message += `Reply-To: ${replyTo}\r\n`;
-  message += `Subject: ${subject}\r\n`;
+  message += `Subject: ${encodeSubject(subject)}\r\n`;
   message += `MIME-Version: 1.0\r\n`;
 
   if (attachments.length > 0) {

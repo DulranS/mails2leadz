@@ -65,6 +65,33 @@ export async function POST(request) {
           continue;
         }
 
+        // Check for duplicate SMS qualification sent within 24 hours
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const duplicateQuery = query(
+          collection(db, 'sms_qualifications'),
+          where('userId', '==', userId),
+          where('email', '==', lead.email),
+          where('sentAt', '>=', twentyFourHoursAgo.toISOString())
+        );
+        
+        let isDuplicate = false;
+        try {
+          const duplicateSnapshot = await getDocs(duplicateQuery);
+          isDuplicate = !duplicateSnapshot.empty;
+        } catch (error) {
+          console.warn('Duplicate check failed:', error);
+        }
+        
+        if (isDuplicate) {
+          failCount++;
+          results.push({ 
+            email: lead.email, 
+            status: 'skipped', 
+            reason: 'SMS qualification already sent within the last 24 hours' 
+          });
+          continue;
+        }
+
         // Generate qualification SMS
         const smsMessage = generateQualificationSMS(lead);
 

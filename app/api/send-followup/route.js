@@ -78,8 +78,20 @@ const extractDomainFromEmail = (email) => {
   return parts.length === 2 ? parts[1] : null;
 };
 
+// Helper function to encode subject line using RFC 2047 encoded-word syntax
+const encodeSubject = (subject) => {
+  if (!subject) return '';
+  // Check if subject contains non-ASCII characters
+  if (/[\x80-\xFF]/.test(subject)) {
+    // Encode using UTF-8 base64
+    const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+    return `=?utf-8?B?${encoded}?=`;
+  }
+  return subject;
+};
+
 const createMimeMessage = ({ from, to, subject, body, attachments = [] }) => {
-  let message = `From: ${from}\r\nTo: ${to}\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\n`;
+  let message = `From: ${from}\r\nTo: ${to}\r\nSubject: ${encodeSubject(subject)}\r\nMIME-Version: 1.0\r\n`;
 
   if (attachments.length > 0) {
     const boundary = 'boundary_' + Math.random().toString(36).substr(2, 16);

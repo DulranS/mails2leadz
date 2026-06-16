@@ -445,6 +445,14 @@ export default function Dashboard() {
     awaitingReply: 0,
     interestedLeads: 0
   });
+  const [whatsappFollowUpHistory, setWhatsappFollowUpHistory] = useState({});
+  const [whatsappFollowUpStats, setWhatsappFollowUpStats] = useState({
+    totalSent: 0,
+    totalReplied: 0,
+    readyForFollowUp: 0,
+    alreadyFollowedUp: 0,
+    awaitingReply: 0
+  });
   const [followUpTemplates, setFollowUpTemplates] = useState(DEFAULT_FOLLOW_UP_TEMPLATES);
   const [followUpTemplate, setFollowUpTemplate] = useState('auto');
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
@@ -1016,6 +1024,43 @@ export default function Dashboard() {
   }, [whatsappLinks, lastWhatsAppSent]);
 
   const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [whatsappLinks, lastWhatsAppSent]);
+
+  // ============================================================================
+  // CALCULATE WHATSAPP FOLLOW-UP STATS
+  // ============================================================================
+  const calculateWhatsAppFollowUpStats = useCallback(() => {
+    if (!whatsappLinks || whatsappLinks.length === 0) {
+      return {
+        totalSent: 0,
+        totalReplied: 0,
+        readyForFollowUp: 0,
+        alreadyFollowedUp: 0,
+        awaitingReply: 0
+      };
+    }
+
+    const totalSent = whatsappLinks.length;
+    const readyForFollowUp = whatsappFollowUpCandidates.filter(c => c.readyForFollowUp).length;
+    const alreadyFollowedUp = whatsappLinks.filter(c => c.followUpCount > 0).length;
+    const awaitingReply = totalSent - readyForFollowUp - alreadyFollowedUp;
+    
+    // For WhatsApp, we don't have a reliable way to track replies yet
+    // This would need to be implemented with WhatsApp Business API
+    const totalReplied = 0;
+
+    return {
+      totalSent,
+      totalReplied,
+      readyForFollowUp,
+      alreadyFollowedUp,
+      awaitingReply
+    };
+  }, [whatsappLinks, whatsappFollowUpCandidates]);
+
+  // Update WhatsApp follow-up stats when dependencies change
+  useEffect(() => {
+    setWhatsappFollowUpStats(calculateWhatsAppFollowUpStats());
+  }, [calculateWhatsAppFollowUpStats]);
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -7163,6 +7208,94 @@ export default function Dashboard() {
                           )}
                         </div>
                       </button>
+
+                      {/* WHATSAPP FOLLOW-UP TRACKING PANEL */}
+                      {whatsappLinks.length > 0 && (
+                        <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
+                          <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
+                            <span className="text-xl sm:text-2xl">💬</span>
+                            <span>WhatsApp Follow-Up Tracking</span>
+                          </div>
+                          
+                          {/* WhatsApp Stats */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4">
+                            <div className="relative group">
+                              <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                              <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{whatsappFollowUpStats.totalSent}</div>
+                                <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">Total Sent</div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📤</div>
+                              </div>
+                            </div>
+                            <div className="relative group">
+                              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                              <div className="relative bg-gradient-to-br from-blue-900/40 to-indigo-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">{whatsappFollowUpStats.readyForFollowUp}</div>
+                                <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Ready for Follow-Up</div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏰</div>
+                              </div>
+                            </div>
+                            <div className="relative group">
+                              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                              <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">{whatsappFollowUpStats.alreadyFollowedUp}</div>
+                                <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">Already Followed Up</div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📬</div>
+                              </div>
+                            </div>
+                            <div className="relative group hidden sm:block">
+                              <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                              <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-3 sm:p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{whatsappFollowUpStats.awaitingReply}</div>
+                                <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">Awaiting Reply</div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏳</div>
+                              </div>
+                            </div>
+                            <div className="relative group hidden sm:block">
+                              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 to-cyan-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                              <div className="relative bg-gradient-to-br from-teal-900/40 to-cyan-800/40 p-3 sm:p-5 rounded-xl border border-teal-500/30 hover:border-teal-400/50 transition-all">
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-teal-400">{whatsappFollowUpCandidates.length}</div>
+                                <div className="text-xs sm:text-sm text-teal-200 mt-1 sm:mt-2 font-medium">Candidates</div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">🎯</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* WhatsApp Follow-Up Candidates */}
+                          {whatsappFollowUpCandidates.length > 0 && (
+                            <div className="space-y-3">
+                              <div className="text-sm font-semibold text-green-200">Ready for Follow-Up:</div>
+                              {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => (
+                                <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:border-green-500/50 transition-all">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-white">{contact.businessName || 'Unknown'}</div>
+                                      <div className="text-xs text-gray-400">{contact.phone}</div>
+                                      <div className="text-xs text-gray-400">{contact.email}</div>
+                                    </div>
+                                    <div className="text-right ml-4">
+                                      {contact.readyForFollowUp ? (
+                                        <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                          Ready
+                                        </span>
+                                      ) : (
+                                        <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
+                                          {Math.ceil(contact.daysRemaining)}d
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {whatsappFollowUpCandidates.length > 5 && (
+                                <div className="text-center text-xs text-gray-400">
+                                  +{whatsappFollowUpCandidates.length - 5} more contacts
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* WHATSAPP FOLLOW-UP REMINDERS SECTION */}
                       {whatsappFollowUpCandidates.length > 0 && (

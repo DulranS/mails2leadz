@@ -47,6 +47,20 @@ const isValidEmail = (email) => {
 };
 
 // ============================================================================
+// ENCODE SUBJECT LINE (RFC 2047)
+// ============================================================================
+const encodeSubject = (subject) => {
+  if (!subject) return '';
+  // Check if subject contains non-ASCII characters
+  if (/[\x80-\xFF]/.test(subject)) {
+    // Encode using UTF-8 base64
+    const encoded = Buffer.from(subject, 'utf-8').toString('base64');
+    return `=?utf-8?B?${encoded}?=`;
+  }
+  return subject;
+};
+
+// ============================================================================
 // CREATE MIME MESSAGE
 // ============================================================================
 const createMimeMessage = ({ from, to, subject, body, images = [], attachments = [] }) => {
@@ -55,7 +69,7 @@ const createMimeMessage = ({ from, to, subject, body, images = [], attachments =
   
   let mimeMessage = `From: ${from}\r\n`;
   mimeMessage += `To: ${to}\r\n`;
-  mimeMessage += `Subject: ${subject}\r\n`;
+  mimeMessage += `Subject: ${encodeSubject(subject)}\r\n`;
   mimeMessage += `MIME-Version: 1.0\r\n`;
   mimeMessage += `Content-Type: multipart/mixed; boundary="${mixedBoundary}"\r\n\r\n`;
   
