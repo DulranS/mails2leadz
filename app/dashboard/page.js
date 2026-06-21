@@ -67,7 +67,6 @@ import {
   renderPreviewText,
   generateSocialHandle,
   daysBetween,
-  safeParseDate,
   throttle,
   localStorageHelper,
   sessionStorageHelper,
@@ -1060,7 +1059,7 @@ export default function Dashboard() {
   // Update WhatsApp follow-up stats when dependencies change
   useEffect(() => {
     setWhatsappFollowUpStats(calculateWhatsAppFollowUpStats());
-  }, [calculateWhatsAppFollowUpStats]);
+  }, [whatsappLinks, whatsappFollowUpCandidates]);
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -1705,7 +1704,7 @@ export default function Dashboard() {
     };
   }, [sentLeads, determineLeadStage]);
 
-  const funnelMetrics = useMemo(() => calculateFunnelMetrics(), [calculateFunnelMetrics]);
+  const funnelMetrics = useMemo(() => calculateFunnelMetrics(), [sentLeads, determineLeadStage]);
 
   // Get leads by stage
   const leadsByStage = useMemo(() => {
@@ -1743,7 +1742,7 @@ export default function Dashboard() {
     return totalValue;
   }, [leadsByStage]);
 
-  const estimatedPipelineValue = useMemo(() => calculatePipelineValue(), [calculatePipelineValue]);
+  const estimatedPipelineValue = useMemo(() => calculatePipelineValue(), [leadsByStage]);
 
   // Get pending leads (un-replied but not yet ready for follow-up)
   const getPendingLeads = useCallback(() => {
@@ -2186,7 +2185,7 @@ export default function Dashboard() {
     });
 
     // Filter new leads
-    const newLeads = whatsappLinks
+    const filteredLeads = whatsappLinks
       .filter(contact => {
         if (!contact.email) return false;
         const email = contact.email.toLowerCase().trim();
@@ -2201,7 +2200,7 @@ export default function Dashboard() {
     const groupedLeads = [];
     const processedGroups = new Set();
 
-    const leads = newLeads;
+    const leads = filteredLeads;
     leads.forEach(lead => {
       if (lead.rowGroupId && !processedGroups.has(lead.rowGroupId)) {
         // Get all leads from this group
@@ -2241,10 +2240,7 @@ export default function Dashboard() {
     if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS) {
       return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
     }
-    const newLeadsLocal = newLeads;
-    if (newLeadsLocal.length === 0) {
-      return 'No new leads to email. All contacts were already emailed or are excluded by filters.';
-    }
+    // Note: newLeads is checked in the useMemo, not here to avoid circular dependency
     if (isSending) return 'Email send in progress. Wait for completion.';
     return '';
   }, [csvContent, dailyEmailCount, isSending]);
@@ -2447,6 +2443,7 @@ export default function Dashboard() {
     }
   }, [
     user?.uid,
+    db,
     senderName,
     senderEmail,
     templateA,

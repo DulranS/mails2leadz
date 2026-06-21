@@ -50,7 +50,7 @@ const createGmailClient = (accessToken, refreshToken) => {
   oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
   return google.gmail({ version: 'v1', auth: oauth2Client });
 };
-
+  
 const createMime = (from, to, subject, body) => {
   const messageParts = [
     `From: ${from}`,
