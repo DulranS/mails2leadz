@@ -5928,9 +5928,9 @@ export default function Dashboard() {
               >
                 <span className="text-lg">📬</span>
                 <span className="hidden sm:inline font-medium">View Replies</span>
-                {unreadCount > 0 && (
+                {unreadRepliesCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                    {unreadCount}
+                    {unreadRepliesCount}
                   </span>
                 )}
               </button>
