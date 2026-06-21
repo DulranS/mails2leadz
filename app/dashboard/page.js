@@ -1438,11 +1438,11 @@ export default function Dashboard() {
     }
 
     const totalLeads = sentLeads.length;
-    const repliedLeads = sentLeads.filter(lead => lead.replied).length;
+    const repliedLeadsCount = sentLeads.filter(lead => lead.replied).length;
     const openedLeads = sentLeads.filter(lead => lead.opened).length;
     const clickedLeads = sentLeads.filter(lead => lead.clicked).length;
 
-    const replyRate = (repliedLeads / totalLeads) * 100;
+    const replyRate = (repliedLeadsCount / totalLeads) * 100;
     const openRate = (openedLeads / totalLeads) * 100;
     const clickRate = (clickedLeads / totalLeads) * 100;
 
@@ -2177,8 +2177,9 @@ export default function Dashboard() {
   const getNewLeads = useCallback(() => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
+    const sentLeadsData = sentLeads;
     const sentEmailsSet = new Set();
-    sentLeads.forEach(lead => {
+    sentLeadsData.forEach(lead => {
       if (lead.email) {
         sentEmailsSet.add(lead.email.toLowerCase().trim());
       }
