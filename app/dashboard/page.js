@@ -515,6 +515,9 @@ export default function Dashboard() {
   const [currentLeadNote, setCurrentLeadNote] = useState('');
   const [phoneCallStatus, setPhoneCallStatus] = useState({});
   const [migrationRan, setMigrationRan] = useState(false);
+  const [pendingTasksPage, setPendingTasksPage] = useState(1);
+  const [completedTasksPage, setCompletedTasksPage] = useState(1);
+  const TASKS_PER_PAGE = 20;
 
   const safeParseDate = useCallback((value) => {
     if (!value) return null;
@@ -2400,10 +2403,11 @@ export default function Dashboard() {
   }, [auth, addNotification]);
 
   // ============================================================================
-  // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED
+  // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED: LAZY LOAD
   // ============================================================================
   useEffect(() => {
-    if (user?.uid) {
+    // Only load tasks when queue modal is opened (lazy loading for performance)
+    if (user?.uid && showFollowUpQueue && followUpTasks.pending.length === 0 && followUpTasks.completed.length === 0) {
       const loadTasks = async () => {
         setLoadingFollowUpTasks(true);
         try {
@@ -2423,7 +2427,7 @@ export default function Dashboard() {
       };
       loadTasks();
     }
-  }, [user?.uid]); // Only run on user change, not sentLeads change
+  }, [user?.uid, showFollowUpQueue]); // Load on user change AND when queue opens
 
   // ============================================================================
   // MIGRATE EXISTING SENT LEADS TO FOLLOW-UP TASKS (PHASE 2) - OPTIMIZED
@@ -2660,20 +2664,38 @@ export default function Dashboard() {
   const handleCompleteTask = async (taskId) => {
     if (!user?.uid) return;
 
+    // Optimistic UI update (MAXIMIZE BUSINESS VALUE: Better perceived performance)
+    const task = followUpTasks.pending.find(t => t.id === taskId);
+    if (task) {
+      setFollowUpTasks(prev => ({
+        pending: prev.pending.filter(t => t.id !== taskId),
+        completed: [
+          {
+            ...task,
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            completedBy: user.email,
+            method: 'manual'
+          },
+          ...prev.completed
+        ]
+      }));
+    }
+
     try {
       await completeFollowUpTask(user.uid, taskId, {
         completedBy: user.email,
         method: 'manual'
       });
       
-      // Reload tasks
-      const tasks = await loadFollowUpTasks(user.uid);
-      setFollowUpTasks(tasks);
-      
       addNotification('Task completed successfully', 'success');
     } catch (error) {
       console.error('Complete task error:', error);
       addNotification('Failed to complete task', 'error');
+      
+      // Revert optimistic update on error
+      const tasks = await loadFollowUpTasks(user.uid);
+      setFollowUpTasks(tasks);
     }
   };
 
@@ -2718,6 +2740,15 @@ export default function Dashboard() {
       console.error('Save lead notes error:', error);
       addNotification('Failed to save lead notes', 'error');
     }
+  };
+
+  // Pagination handlers (MAXIMIZE BUSINESS VALUE: Performance optimization)
+  const handlePreviousPendingPage = () => {
+    setPendingTasksPage(p => Math.max(1, p - 1));
+  };
+
+  const handleNextPendingPage = () => {
+    setPendingTasksPage(p => Math.min(Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE), p + 1));
   };
 
   // ============================================================================
@@ -8998,6 +9029,7 @@ export default function Dashboard() {
                   <div className="space-y-3">
                     {followUpTasks.pending
                       .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
+                      .slice((pendingTasksPage - 1) * TASKS_PER_PAGE, pendingTasksPage * TASKS_PER_PAGE)
                       .map((task) => {
                         const scheduledDate = new Date(task.scheduledFor);
                         const isOverdue = scheduledDate < new Date();
@@ -9072,6 +9104,28 @@ export default function Dashboard() {
                         );
                       })}
                   </div>
+                  {/* Pagination Controls for Pending Tasks */}
+                  {followUpTasks.pending.length > TASKS_PER_PAGE && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+                      <button
+                        onClick={handlePreviousPendingPage}
+                        disabled={pendingTasksPage === 1}
+                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                      >
+                        ← Previous
+                      </button>
+                      <span className="text-xs text-gray-400">
+                        Page {pendingTasksPage} of {Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE)}
+                      </span>
+                      <button
+                        onClick={handleNextPendingPage}
+                        disabled={pendingTasksPage >= Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE)}
+                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
                 )}
               </div>
 
