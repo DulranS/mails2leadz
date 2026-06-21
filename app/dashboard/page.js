@@ -2407,6 +2407,11 @@ export default function Dashboard() {
         try {
           const tasks = await loadFollowUpTasks(user.uid);
           setFollowUpTasks(tasks);
+
+          // If no tasks exist, try to create from existing sent leads (migration)
+          if (tasks.pending.length === 0 && sentLeads.length > 0) {
+            await migrateExistingLeadsToTasks();
+          }
         } catch (error) {
           console.error('Load follow-up tasks error:', error);
         } finally {
@@ -2415,7 +2420,63 @@ export default function Dashboard() {
       };
       loadTasks();
     }
-  }, [user?.uid]);
+  }, [user?.uid, sentLeads.length]);
+
+  // ============================================================================
+  // MIGRATE EXISTING SENT LEADS TO FOLLOW-UP TASKS (PHASE 2)
+  // ============================================================================
+  const migrateExistingLeadsToTasks = async () => {
+    if (!user?.uid || sentLeads.length === 0) return;
+
+    try {
+      const followUpSchedule = followUpTemplates
+        .filter(t => t.enabled)
+        .sort((a, b) => a.delayDays - b.delayDays);
+
+      let tasksCreated = 0;
+
+      for (const lead of sentLeads) {
+        if (lead.replied) continue; // Skip leads that already replied
+
+        const leadEmail = lead.email;
+        const leadName = lead.business_name || lead.name || leadEmail;
+        const companyName = lead.company_name || lead.business_name || '';
+
+        // Calculate scheduled dates based on sent date
+        const sentDate = new Date(lead.sentAt);
+
+        for (const template of followUpSchedule) {
+          const scheduledDate = new Date(sentDate);
+          scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+
+          // Only create if scheduled date is in the future
+          if (scheduledDate > new Date()) {
+            const exists = await checkFollowUpTaskExists(user.uid, leadEmail, 'email', template.name);
+            if (!exists) {
+              await createFollowUpTask(user.uid, {
+                leadEmail,
+                leadName,
+                companyName,
+                channel: 'email',
+                followUpStage: template.name,
+                templateId: template.id,
+                scheduledFor: scheduledDate.toISOString()
+              });
+              tasksCreated++;
+            }
+          }
+        }
+      }
+
+      if (tasksCreated > 0) {
+        const tasks = await loadFollowUpTasks(user.uid);
+        setFollowUpTasks(tasks);
+        addNotification(`Created ${tasksCreated} follow-up tasks from existing leads`, 'success');
+      }
+    } catch (error) {
+      console.error('Migrate existing leads error:', error);
+    }
+  };
 
   // ============================================================================
   // LOAD LEAD NOTES AND STATES FROM FIREBASE (PHASE 7)
@@ -5414,6 +5475,48 @@ export default function Dashboard() {
         const sentCount = data.sent || 0;
         setStatus(`✅ ${sentCount}/${recipientsToSend.length} emails sent!`);
         setStatusType('success');
+
+        // Create follow-up tasks for sent emails (PHASE 2)
+        if (user?.uid && sentCount > 0) {
+          try {
+            // Calculate follow-up schedule based on templates
+            const followUpSchedule = followUpTemplates
+              .filter(t => t.enabled)
+              .sort((a, b) => a.delayDays - b.delayDays);
+
+            for (const recipient of recipientsToSend) {
+              const leadEmail = recipient.email;
+              const leadName = recipient[fieldMappings.business_name] || recipient[fieldMappings.name] || leadEmail;
+              const companyName = recipient[fieldMappings.company_name] || recipient[fieldMappings.business_name] || '';
+
+              // Create follow-up tasks for each enabled template
+              for (const template of followUpSchedule) {
+                const scheduledDate = new Date();
+                scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+
+                // Check if task already exists (PHASE 6: Idempotency)
+                const exists = await checkFollowUpTaskExists(user.uid, leadEmail, 'email', template.name);
+                if (!exists) {
+                  await createFollowUpTask(user.uid, {
+                    leadEmail,
+                    leadName,
+                    companyName,
+                    channel: 'email',
+                    followUpStage: template.name,
+                    templateId: template.id,
+                    scheduledFor: scheduledDate.toISOString()
+                  });
+                }
+              }
+            }
+
+            // Reload tasks to show in queue
+            const tasks = await loadFollowUpTasks(user.uid);
+            setFollowUpTasks(tasks);
+          } catch (error) {
+            console.error('Error creating follow-up tasks:', error);
+          }
+        }
 
         // Update A/B test results
         if (abTestMode) {
