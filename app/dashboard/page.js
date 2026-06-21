@@ -4067,6 +4067,42 @@ export default function Dashboard() {
         updateDealStage(contactKey, 'contacted');
       }
 
+      // Create follow-up tasks for WhatsApp (PHASE 3)
+      if (user?.uid) {
+        try {
+          const followUpSchedule = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES
+            .filter(t => t.enabled)
+            .sort((a, b) => a.delayDays - b.delayDays);
+
+          for (const template of followUpSchedule) {
+            const scheduledDate = new Date();
+            scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+
+            const exists = await checkFollowUpTaskExists(user.uid, contact.email || contact.phone, 'whatsapp', template.name);
+            if (!exists) {
+              await createFollowUpTask(user.uid, {
+                leadEmail: contact.email || contact.phone,
+                leadName: contact.business || 'Contact',
+                companyName: contact.business || '',
+                channel: 'whatsapp',
+                leadPhone: contact.phone,
+                followUpStage: template.name,
+                templateId: template.id,
+                scheduledFor: scheduledDate.toISOString()
+              });
+            }
+          }
+
+          // Reload tasks to show in queue (only if queue is open)
+          if (showFollowUpQueue) {
+            const tasks = await loadFollowUpTasks(user.uid);
+            setFollowUpTasks(tasks);
+          }
+        } catch (error) {
+          console.error('Error creating WhatsApp follow-up tasks:', error);
+        }
+      }
+
       addNotification(`✅ WhatsApp opened for ${business}!`, 'success');
     } catch (error) {
       console.error('WhatsApp send error:', error);
