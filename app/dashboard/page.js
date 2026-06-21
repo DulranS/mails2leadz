@@ -94,7 +94,8 @@ import {
   saveLeadNotes,
   loadLeadNotes,
   updateLeadState,
-  loadLeadStates
+  loadLeadStates,
+  autoCleanupOldRecords
 } from '../../lib/firebase-operations.js';
 import { invalidateCache } from '../../lib/firebase-cache.js';
 
@@ -513,6 +514,7 @@ export default function Dashboard() {
   const [selectedLeadForNotes, setSelectedLeadForNotes] = useState(null);
   const [currentLeadNote, setCurrentLeadNote] = useState('');
   const [phoneCallStatus, setPhoneCallStatus] = useState({});
+  const [migrationRan, setMigrationRan] = useState(false);
 
   const safeParseDate = useCallback((value) => {
     if (!value) return null;
@@ -2398,7 +2400,7 @@ export default function Dashboard() {
   }, [auth, addNotification]);
 
   // ============================================================================
-  // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2)
+  // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED
   // ============================================================================
   useEffect(() => {
     if (user?.uid) {
@@ -2408,9 +2410,10 @@ export default function Dashboard() {
           const tasks = await loadFollowUpTasks(user.uid);
           setFollowUpTasks(tasks);
 
-          // If no tasks exist, try to create from existing sent leads (migration)
-          if (tasks.pending.length === 0 && sentLeads.length > 0) {
+          // Only run migration once and only if no tasks exist and sent leads exist
+          if (!migrationRan && tasks.pending.length === 0 && sentLeads.length > 0) {
             await migrateExistingLeadsToTasks();
+            setMigrationRan(true);
           }
         } catch (error) {
           console.error('Load follow-up tasks error:', error);
@@ -2420,10 +2423,10 @@ export default function Dashboard() {
       };
       loadTasks();
     }
-  }, [user?.uid, sentLeads.length]);
+  }, [user?.uid]); // Only run on user change, not sentLeads change
 
   // ============================================================================
-  // MIGRATE EXISTING SENT LEADS TO FOLLOW-UP TASKS (PHASE 2)
+  // MIGRATE EXISTING SENT LEADS TO FOLLOW-UP TASKS (PHASE 2) - OPTIMIZED
   // ============================================================================
   const migrateExistingLeadsToTasks = async () => {
     if (!user?.uid || sentLeads.length === 0) return;
@@ -2433,7 +2436,11 @@ export default function Dashboard() {
         .filter(t => t.enabled)
         .sort((a, b) => a.delayDays - b.delayDays);
 
-      let tasksCreated = 0;
+      if (followUpSchedule.length === 0) return;
+
+      // Batch check for existing tasks to reduce Firebase calls
+      const tasksToCreate = [];
+      const now = new Date();
 
       for (const lead of sentLeads) {
         if (lead.replied) continue; // Skip leads that already replied
@@ -2450,20 +2457,34 @@ export default function Dashboard() {
           scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
 
           // Only create if scheduled date is in the future
-          if (scheduledDate > new Date()) {
-            const exists = await checkFollowUpTaskExists(user.uid, leadEmail, 'email', template.name);
-            if (!exists) {
-              await createFollowUpTask(user.uid, {
-                leadEmail,
-                leadName,
-                companyName,
-                channel: 'email',
-                followUpStage: template.name,
-                templateId: template.id,
-                scheduledFor: scheduledDate.toISOString()
-              });
-              tasksCreated++;
-            }
+          if (scheduledDate > now) {
+            tasksToCreate.push({
+              leadEmail,
+              leadName,
+              companyName,
+              channel: 'email',
+              followUpStage: template.name,
+              templateId: template.id,
+              scheduledFor: scheduledDate.toISOString()
+            });
+          }
+        }
+      }
+
+      if (tasksToCreate.length === 0) return;
+
+      // Batch create tasks to reduce Firebase calls
+      let tasksCreated = 0;
+      const batchSize = 10; // Process in batches to avoid overwhelming Firebase
+
+      for (let i = 0; i < tasksToCreate.length; i += batchSize) {
+        const batch = tasksToCreate.slice(i, i + batchSize);
+        
+        for (const task of batch) {
+          const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, task.channel, task.followUpStage);
+          if (!exists) {
+            await createFollowUpTask(user.uid, task);
+            tasksCreated++;
           }
         }
       }
@@ -2479,7 +2500,7 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // LOAD LEAD NOTES AND STATES FROM FIREBASE (PHASE 7)
+  // LOAD LEAD NOTES AND STATES FROM FIREBASE (PHASE 7) - OPTIMIZED
   // ============================================================================
   useEffect(() => {
     if (user?.uid) {
@@ -2497,6 +2518,31 @@ export default function Dashboard() {
       };
       loadNotesAndStates();
     }
+  }, [user?.uid]); // Only run on user change
+
+  // ============================================================================
+  // PERIODIC AUTO-CLEANUP OF OLD RECORDS (PERFORMANCE OPTIMIZATION)
+  // ============================================================================
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    // Run cleanup once on mount
+    const runCleanup = async () => {
+      try {
+        await autoCleanupOldRecords(user.uid);
+      } catch (error) {
+        console.error('Auto cleanup error:', error);
+      }
+    };
+
+    runCleanup();
+
+    // Run cleanup every 24 hours
+    const interval = setInterval(() => {
+      runCleanup();
+    }, 24 * 60 * 60 * 1000);
+
+    return () => clearInterval(interval);
   }, [user?.uid]);
 
   // ============================================================================
@@ -5476,7 +5522,7 @@ export default function Dashboard() {
         setStatus(`✅ ${sentCount}/${recipientsToSend.length} emails sent!`);
         setStatusType('success');
 
-        // Create follow-up tasks for sent emails (PHASE 2)
+        // Create follow-up tasks for sent emails (PHASE 2) - OPTIMIZED
         if (user?.uid && sentCount > 0) {
           try {
             // Calculate follow-up schedule based on templates
@@ -5484,20 +5530,21 @@ export default function Dashboard() {
               .filter(t => t.enabled)
               .sort((a, b) => a.delayDays - b.delayDays);
 
-            for (const recipient of recipientsToSend) {
-              const leadEmail = recipient.email;
-              const leadName = recipient[fieldMappings.business_name] || recipient[fieldMappings.name] || leadEmail;
-              const companyName = recipient[fieldMappings.company_name] || recipient[fieldMappings.business_name] || '';
+            if (followUpSchedule.length > 0) {
+              // Batch create tasks to reduce Firebase calls
+              const batchSize = 10;
+              const tasksToCreate = [];
 
-              // Create follow-up tasks for each enabled template
-              for (const template of followUpSchedule) {
-                const scheduledDate = new Date();
-                scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+              for (const recipient of recipientsToSend) {
+                const leadEmail = recipient.email;
+                const leadName = recipient[fieldMappings.business_name] || recipient[fieldMappings.name] || leadEmail;
+                const companyName = recipient[fieldMappings.company_name] || recipient[fieldMappings.business_name] || '';
 
-                // Check if task already exists (PHASE 6: Idempotency)
-                const exists = await checkFollowUpTaskExists(user.uid, leadEmail, 'email', template.name);
-                if (!exists) {
-                  await createFollowUpTask(user.uid, {
+                for (const template of followUpSchedule) {
+                  const scheduledDate = new Date();
+                  scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+
+                  tasksToCreate.push({
                     leadEmail,
                     leadName,
                     companyName,
@@ -5508,11 +5555,25 @@ export default function Dashboard() {
                   });
                 }
               }
-            }
 
-            // Reload tasks to show in queue
-            const tasks = await loadFollowUpTasks(user.uid);
-            setFollowUpTasks(tasks);
+              // Process in batches
+              for (let i = 0; i < tasksToCreate.length; i += batchSize) {
+                const batch = tasksToCreate.slice(i, i + batchSize);
+                
+                for (const task of batch) {
+                  const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, task.channel, task.followUpStage);
+                  if (!exists) {
+                    await createFollowUpTask(user.uid, task);
+                  }
+                }
+              }
+
+              // Reload tasks to show in queue (only if queue is open)
+              if (showFollowUpQueue) {
+                const tasks = await loadFollowUpTasks(user.uid);
+                setFollowUpTasks(tasks);
+              }
+            }
           } catch (error) {
             console.error('Error creating follow-up tasks:', error);
           }
