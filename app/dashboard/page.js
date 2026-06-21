@@ -704,7 +704,7 @@ export default function Dashboard() {
 
     const key = normalizeContactKey(contact);
     const summary = getContactSummary(key);
-    const manual = manualContactStatus[key];
+    const manualStatus = manualContactStatus[key];
 
     return {
       email: lastSent[key] ? new Date(lastSent[key]) : null,
@@ -713,8 +713,8 @@ export default function Dashboard() {
       call: lastCallMade[key] ? new Date(lastCallMade[key]) : null,
       channels: contactedChannels[key] || summary.channels || [],
       totalContacts: summary.totalContacts || 0,
-      lastContacted: summary.lastContacted || manual?.lastContacted || null,
-      manuallyMarked: manual?.contacted || false
+      lastContacted: summary.lastContacted || manualStatus?.lastContacted || null,
+      manuallyMarked: manualStatus?.contacted || false
     };
   }, [lastSent, lastWhatsAppSent, lastSMSSent, lastCallMade, contactedChannels, getContactSummary, manualContactStatus]);
 
@@ -886,7 +886,7 @@ export default function Dashboard() {
     const now = new Date();
     const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
     
-    return sentLeads.filter(lead => {
+    const sentLeadsFiltered = sentLeads.filter(lead => {
       if (!lead || !lead.email) return true; // Keep if no email (shouldn't happen but safety check)
       if (lead.replied) return true; // Keep replied leads
       
@@ -905,6 +905,7 @@ export default function Dashboard() {
       // Only show them in the safeFollowUpCandidates list
       return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
     });
+    return sentLeadsFiltered;
   }, [sentLeads, safeParseDate]);
 
   // ============================================================================
@@ -983,14 +984,14 @@ export default function Dashboard() {
         if (!contact || !contact.phone) return false;
 
         const key = contact.email || contact.phone;
-        const lastWhatsAppSent = lastWhatsAppSent[key];
+        const lastWhatsAppSentDate = lastWhatsAppSent[key];
 
-        if (!lastWhatsAppSent) {
+        if (!lastWhatsAppSentDate) {
           // Never sent WhatsApp - good candidate
           return true;
         }
 
-        const lastDate = new Date(lastWhatsAppSent);
+        const lastDate = new Date(lastWhatsAppSentDate);
         const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
 
         // Check if enough time has passed since last WhatsApp
@@ -1002,8 +1003,8 @@ export default function Dashboard() {
       })
       .map(contact => {
         const key = contact.email || contact.phone;
-        const lastWhatsAppSent = lastWhatsAppSent[key];
-        const lastDate = lastWhatsAppSent ? new Date(lastWhatsAppSent) : null;
+        const lastWhatsAppSentDate = lastWhatsAppSent[key];
+        const lastDate = lastWhatsAppSentDate ? new Date(lastWhatsAppSentDate) : null;
         const daysSinceLastContact = lastDate ? (now - lastDate) / (1000 * 60 * 60 * 24) : 999;
         const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3;
         const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP - daysSinceLastContact);
@@ -1022,7 +1023,10 @@ export default function Dashboard() {
     return candidates;
   }, [whatsappLinks, lastWhatsAppSent]);
 
-  const whatsappFollowUpCandidates = useMemo(() => getWhatsAppFollowUpCandidates(), [whatsappLinks, lastWhatsAppSent]);
+  const whatsappFollowUpCandidates = useMemo(() => {
+    const candidates = getWhatsAppFollowUpCandidates();
+    return candidates;
+  }, [whatsappLinks, lastWhatsAppSent]);
 
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
@@ -1317,12 +1321,12 @@ export default function Dashboard() {
 
     // Analyze engagement pattern
     const hasEmailEngagement = lead.opened || lead.clicked || lead.replied;
-    const hasWhatsAppEngagement = lastWhatsAppSent[lead.email || lead.phone];
-    const hasSMSEngagement = lastSMSSent[lead.email || lead.phone];
+    const lastWhatsAppSentValue = lastWhatsAppSent[lead.email || lead.phone];
+    const lastSMSSentValue = lastSMSSent[lead.email || lead.phone];
 
-    if (hasEmailEngagement && hasWhatsAppEngagement) {
+    if (hasEmailEngagement && lastWhatsAppSentValue) {
       behavior.engagementPattern = 'multi_channel';
-    } else if (hasWhatsAppEngagement) {
+    } else if (lastWhatsAppSentValue) {
       behavior.engagementPattern = 'mobile_first';
     } else if (hasEmailEngagement) {
       behavior.engagementPattern = 'email_focused';
@@ -1333,9 +1337,9 @@ export default function Dashboard() {
     // Determine preferred channel
     if (lead.replied) {
       behavior.preferredChannel = 'email';
-    } else if (hasWhatsAppEngagement) {
+    } else if (lastWhatsAppSentValue) {
       behavior.preferredChannel = 'whatsapp';
-    } else if (hasSMSEngagement) {
+    } else if (lastSMSSentValue) {
       behavior.preferredChannel = 'sms';
     }
 
@@ -1405,15 +1409,15 @@ export default function Dashboard() {
 
   // Get leads by engagement pattern
   const leadsByEngagementPattern = useMemo(() => {
-    const patterns = {};
+    const engagementPatterns = {};
     leadsWithBehavior.forEach(lead => {
       const pattern = lead.behavior?.engagementPattern || 'unknown';
-      if (!patterns[pattern]) {
-        patterns[pattern] = [];
+      if (!engagementPatterns[pattern]) {
+        engagementPatterns[pattern] = [];
       }
-      patterns[pattern].push(lead);
+      engagementPatterns[pattern].push(lead);
     });
-    return patterns;
+    return engagementPatterns;
   }, [leadsWithBehavior]);
 
   // Get high-risk leads (high churn risk)
@@ -1708,7 +1712,7 @@ export default function Dashboard() {
 
   // Get leads by stage
   const leadsByStage = useMemo(() => {
-    const stages = {
+    const leadStages = {
       new: [],
       nurturing: [],
       aware: [],
@@ -1718,16 +1722,16 @@ export default function Dashboard() {
 
     leadsWithBehavior.forEach(lead => {
       const stage = determineLeadStage(lead);
-      stages[stage].push(lead);
+      leadStages[stage].push(lead);
     });
 
-    return stages;
+    return leadStages;
   }, [leadsWithBehavior, determineLeadStage]);
 
   // Calculate pipeline value (estimated revenue potential)
   const calculatePipelineValue = useCallback(() => {
     let totalValue = 0;
-    const stageValues = {
+    const stageValueMap = {
       new: 50,
       nurturing: 100,
       aware: 250,
@@ -1736,7 +1740,7 @@ export default function Dashboard() {
     };
 
     Object.entries(leadsByStage).forEach(([stage, leads]) => {
-      totalValue += leads.length * (stageValues[stage] || 0);
+      totalValue += leads.length * (stageValueMap[stage] || 0);
     });
 
     return totalValue;
@@ -1952,12 +1956,12 @@ export default function Dashboard() {
   // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY
   // ============================================================================
   const getFilteredAndSortedContacts = useCallback(() => {
-    let filtered = [...whatsappLinks];
+    let filteredContacts = [...whatsappLinks];
 
     // Apply search
     if (debouncedSearchQuery.trim()) {
       const query = debouncedSearchQuery.toLowerCase();
-      filtered = filtered.filter(c =>
+      filteredContacts = filteredContacts.filter(c =>
         (c.business && c.business.toLowerCase().includes(query)) ||
         (c.email && c.email.toLowerCase().includes(query)) ||
         (c.phone && c.phone.includes(query.replace(/\D/g, '')))
@@ -1966,26 +1970,26 @@ export default function Dashboard() {
 
     // Apply status filter
     if (contactFilter === 'replied') {
-      filtered = filtered.filter(c => repliedLeads[c.email]);
+      filteredContacts = filteredContacts.filter(c => repliedLeads[c.email]);
     } else if (contactFilter === 'pending') {
-      filtered = filtered.filter(c => !repliedLeads[c.email]);
+      filteredContacts = filteredContacts.filter(c => !repliedLeads[c.email]);
     } else if (contactFilter === 'high-quality') {
-      filtered = filtered.filter(c => (leadScores[c.email] || 0) >= 70);
+      filteredContacts = filteredContacts.filter(c => (leadScores[c.email] || 0) >= 70);
     } else if (contactFilter === 'contacted') {
-      filtered = filtered.filter(c => isContactedOnAnyChannel(c));
+      filteredContacts = filteredContacts.filter(c => isContactedOnAnyChannel(c));
     } else if (contactFilter === 'not-contacted') {
-      filtered = filtered.filter(c => !isContactedOnAnyChannel(c));
+      filteredContacts = filteredContacts.filter(c => !isContactedOnAnyChannel(c));
     } else if (contactFilter === 'hot-leads') {
-      filtered = filtered.filter(c => (leadScores[c.email] || 0) >= CONFIG.LEAD_SCORE_HOT);
+      filteredContacts = filteredContacts.filter(c => (leadScores[c.email] || 0) >= CONFIG.LEAD_SCORE_HOT);
     } else if (contactFilter === 'warm-leads') {
-      filtered = filtered.filter(c => {
+      filteredContacts = filteredContacts.filter(c => {
         const score = leadScores[c.email] || 0;
         return score >= CONFIG.LEAD_SCORE_WARM && score < CONFIG.LEAD_SCORE_HOT;
       });
     }
 
     // Apply sorting
-    filtered.sort((a, b) => {
+    filteredContacts.sort((a, b) => {
       const aKey = a.email || a.phone;
       const bKey = b.email || b.phone;
 
@@ -2024,7 +2028,7 @@ export default function Dashboard() {
       return 0;
     });
 
-    return filtered;
+    return filteredContacts;
   }, [
     whatsappLinks,
     debouncedSearchQuery,
@@ -2043,13 +2047,13 @@ export default function Dashboard() {
   // PAGINATED CONTACTS
   // ============================================================================
   const paginatedContacts = useMemo(() => {
-    const filtered = getFilteredAndSortedContacts();
+    const filteredContacts = getFilteredAndSortedContacts();
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return {
-      contacts: filtered.slice(startIndex, endIndex),
-      total: filtered.length,
-      totalPages: Math.ceil(filtered.length / itemsPerPage),
+      contacts: filteredContacts.slice(startIndex, endIndex),
+      total: filteredContacts.length,
+      totalPages: Math.ceil(filteredContacts.length / itemsPerPage),
       currentPage,
       itemsPerPage
     };
@@ -2061,7 +2065,7 @@ export default function Dashboard() {
   const sortedWhatsappLinks = useMemo(() => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
-    return [...whatsappLinks].sort((a, b) => {
+    const sortedContacts = [...whatsappLinks].sort((a, b) => {
       const aKey = a.email || a.phone;
       const bKey = b.email || b.phone;
 
@@ -2083,6 +2087,7 @@ export default function Dashboard() {
       // 3. Fallback to score ranking
       return bScore - aScore;
     });
+    return sortedContacts;
   }, [whatsappLinks, leadScores, isContactedOnAnyChannel, isPriorityPhone]);
 
   // ============================================================================
@@ -2139,7 +2144,7 @@ export default function Dashboard() {
   // SEGMENT LEADS
   // ============================================================================
   const segmentLeads = useCallback(() => {
-    const segments = {
+    const leadSegments = {
       veryHot: [],
       hot: [],
       warm: [],
@@ -2156,19 +2161,19 @@ export default function Dashboard() {
         daysBetween(getContactHistory(contact).lastContacted, new Date()) : 999;
 
       if (replied) {
-        segments.veryHot.push(contact);
+        leadSegments.veryHot.push(contact);
       } else if (score >= CONFIG.LEAD_SCORE_HOT) {
-        segments.hot.push(contact);
+        leadSegments.hot.push(contact);
       } else if (score >= CONFIG.LEAD_SCORE_WARM && daysSinceContact <= 3) {
-        segments.warm.push(contact);
+        leadSegments.warm.push(contact);
       } else if (score >= 40 && daysSinceContact <= 7) {
-        segments.cold.push(contact);
+        leadSegments.cold.push(contact);
       } else {
-        segments.inactive.push(contact);
+        leadSegments.inactive.push(contact);
       }
     });
 
-    return segments;
+    return leadSegments;
   }, [whatsappLinks, leadScores, repliedLeads]);
 
   // ============================================================================
@@ -2186,7 +2191,7 @@ export default function Dashboard() {
     });
 
     // Filter new leads
-    const filteredLeads = whatsappLinks
+    const newLeadsFiltered = whatsappLinks
       .filter(contact => {
         if (!contact.email) return false;
         const email = contact.email.toLowerCase().trim();
@@ -2201,7 +2206,7 @@ export default function Dashboard() {
     const groupedLeads = [];
     const processedGroups = new Set();
 
-    const leads = filteredLeads;
+    const leads = newLeadsFiltered;
     leads.forEach(lead => {
       if (lead.rowGroupId && !processedGroups.has(lead.rowGroupId)) {
         // Get all leads from this group
@@ -2229,11 +2234,12 @@ export default function Dashboard() {
       }
     });
 
-    return groupedLeads.sort((a, b) => {
+    const sortedGroupedLeads = groupedLeads.sort((a, b) => {
       const scoreA = leadScores[a.email] || 50;
       const scoreB = leadScores[b.email] || 50;
       return scoreB - scoreA;
     });
+    return sortedGroupedLeads;
   }, [whatsappLinks, sentLeads, leadScores]);
 
   const getNewLeadsDisabledReason = useCallback(() => {
@@ -2262,7 +2268,10 @@ export default function Dashboard() {
     return '';
   }, [csvContent, validEmails, dailyEmailCount, isSending]);
 
-  const newLeads = useMemo(() => getNewLeads(), [whatsappLinks, sentLeads, leadScores]);
+  const newLeads = useMemo(() => {
+    const leads = getNewLeads();
+    return leads;
+  }, [whatsappLinks, sentLeads, leadScores]);
   const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [csvContent, dailyEmailCount, isSending]);
   const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [csvContent, validEmails, dailyEmailCount, isSending]);
   const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [safeFollowUpCandidates, isSending]);
@@ -6635,11 +6644,11 @@ export default function Dashboard() {
                   {/* ✅ UPDATED: Use sortedWhatsappLinks to show 077 numbers first, contacted at bottom */}
                   {sortedWhatsappLinks.slice(0, 10).map((link) => {
                     const contactKey = link.email || link.phone;
-                    const last = lastSent[contactKey];
-                    const lastWA = lastWhatsAppSent[contactKey];
+                    const lastEmailSent = lastSent[contactKey];
+                    const lastWhatsApp = lastWhatsAppSent[contactKey];
                     const lastSMS = lastSMSSent[contactKey];
                     const lastCall = lastCallMade[contactKey];
-                    const channels = contactedChannels[contactKey] || [];
+                    const contactChannels = contactedChannels[contactKey] || [];
                     const score = leadScores[link.email] || 0;
                     const isReplied = repliedLeads[link.email];
                     const isFollowUp = followUpLeads[link.email];
@@ -6664,14 +6673,14 @@ export default function Dashboard() {
                             )}
                             {/* ✅ Channel tracking badges */}
                             <div className="flex gap-1 mt-1 flex-wrap">
-                              {last && (
+                              {lastEmailSent && (
                                 <span className="text-xs bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded">
-                                  📧 {new Date(last).toLocaleDateString()}
+                                  📧 {new Date(lastEmailSent).toLocaleDateString()}
                                 </span>
                               )}
-                              {lastWA && (
+                              {lastWhatsApp && (
                                 <span className="text-xs bg-green-900/30 text-green-300 px-1.5 py-0.5 rounded">
-                                  💬 {new Date(lastWA).toLocaleDateString()}
+                                  💬 {new Date(lastWhatsApp).toLocaleDateString()}
                                 </span>
                               )}
                               {lastSMS && (
@@ -7797,31 +7806,51 @@ export default function Dashboard() {
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-green-400">
-                  {Object.keys(repliedLeads).filter(k => repliedLeads[k]).length}
+                  {(() => {
+                    const repliedKeysFiltered = Object.keys(repliedLeads).filter(k => repliedLeads[k]);
+                    const repliedCount = repliedKeysFiltered.length;
+                    return repliedCount;
+                  })()}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-400">Replied</div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-yellow-400">
-                  {Object.keys(followUpLeads).filter(k => followUpLeads[k]).length}
+                  {(() => {
+                    const followUpKeysFiltered = Object.keys(followUpLeads).filter(k => followUpLeads[k]);
+                    const followUpCount = followUpKeysFiltered.length;
+                    return followUpCount;
+                  })()}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-400">Follow-Up</div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-purple-400">
-                  {whatsappLinks.filter(l => lastSent[l.email || l.phone]).length}
+                  {(() => {
+                    const contactedLinksFiltered = whatsappLinks.filter(l => lastSent[l.email || l.phone]);
+                    const contactedCount = contactedLinksFiltered.length;
+                    return contactedCount;
+                  })()}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-400">Contacted</div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-orange-400">
-                  {whatsappLinks.filter(l => !l.email).length}
+                  {(() => {
+                    const phoneOnlyLinksFiltered = whatsappLinks.filter(l => !l.email);
+                    const phoneOnlyCount = phoneOnlyLinksFiltered.length;
+                    return phoneOnlyCount;
+                  })()}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-400">Phone Only</div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-cyan-400">
-                  {whatsappLinks.filter(l => l.email && (leadScores[l.email] || 0) >= 70).length}
+                  {(() => {
+                    const highQualityLinksFiltered = whatsappLinks.filter(l => l.email && (leadScores[l.email] || 0) >= 70);
+                    const highQualityCount = highQualityLinksFiltered.length;
+                    return highQualityCount;
+                  })()}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-400">High Quality</div>
               </div>
@@ -7830,20 +7859,22 @@ export default function Dashboard() {
             {/* Contact List - Mobile Responsive Grid */}
             <div className="flex-1 overflow-y-auto p-2 sm:p-4">
               {(() => {
-                const notContactedLinks = sortedWhatsappLinks.filter(link => !isContactedOnAnyChannel(link));
-                const contactedLinks = sortedWhatsappLinks.filter(link => isContactedOnAnyChannel(link));
+                const notContactedLinksFiltered = sortedWhatsappLinks.filter(link => !isContactedOnAnyChannel(link));
+                const contactedLinksFiltered = sortedWhatsappLinks.filter(link => isContactedOnAnyChannel(link));
+                const notContactedLinks = notContactedLinksFiltered;
+                const contactedLinks = contactedLinksFiltered;
                 const formatTimestamp = (value) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : null;
 
                 const renderContactCard = (link, isContacted) => {
                   const contactKey = normalizeContactKey(link);
                   const isReplied = repliedLeads[link.email];
                   const score = leadScores[link.email] || 0;
-                  const history = getContactHistory(link);
-                  const lastEmail = history.email ? formatTimestamp(history.email) : null;
-                  const lastWA = history.whatsapp ? formatTimestamp(history.whatsapp) : null;
-                  const lastSMS = history.sms ? formatTimestamp(history.sms) : null;
-                  const lastCall = history.call ? formatTimestamp(history.call) : null;
-                  const lastContacted = history.lastContacted ? formatTimestamp(history.lastContacted) : 'Never contacted';
+                  const contactHistory = getContactHistory(link);
+                  const lastEmail = contactHistory.email ? formatTimestamp(contactHistory.email) : null;
+                  const lastWA = contactHistory.whatsapp ? formatTimestamp(contactHistory.whatsapp) : null;
+                  const lastSMS = contactHistory.sms ? formatTimestamp(contactHistory.sms) : null;
+                  const lastCall = contactHistory.call ? formatTimestamp(contactHistory.call) : null;
+                  const lastContacted = contactHistory.lastContacted ? formatTimestamp(contactHistory.lastContacted) : 'Never contacted';
 
                   return (
                     <div
