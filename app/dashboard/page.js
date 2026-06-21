@@ -85,7 +85,16 @@ import {
   loadSentLeads,
   loadRepliedAndFollowUp,
   normalizeSentLead,
-  getLeadNextFollowUpAt
+  getLeadNextFollowUpAt,
+  createFollowUpTask,
+  loadFollowUpTasks,
+  completeFollowUpTask,
+  deleteFollowUpTask,
+  checkFollowUpTaskExists,
+  saveLeadNotes,
+  loadLeadNotes,
+  updateLeadState,
+  loadLeadStates
 } from '../../lib/firebase-operations.js';
 import { invalidateCache } from '../../lib/firebase-cache.js';
 
@@ -239,6 +248,41 @@ Either way, keep crushing it!
 — {{sender_name}}
 WhatsApp: 0741143323
 `,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+// ============================================================================
+// WHATSAPP FOLLOW-UP TEMPLATES (PHASE 3)
+// ============================================================================
+const DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES = [
+  {
+    id: 'whatsapp_followup_1',
+    name: 'WhatsApp Follow-Up 1 (Day 3)',
+    channel: 'whatsapp',
+    enabled: true,
+    delayDays: 3,
+    body: `Hi {{business_name}} 👋
+Just following up on my previous message. Did you get a chance to think about it?
+No pressure at all—just wanted to check if you're still interested in discussing how we can help with your digital needs.
+Best,
+{{sender_name}}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'whatsapp_followup_2',
+    name: 'WhatsApp Follow-Up 2 (Day 7)',
+    channel: 'whatsapp',
+    enabled: true,
+    delayDays: 7,
+    body: `Hi {{business_name}} 👋
+Hope you're doing well!
+I wanted to share a quick idea that might help with your business—no strings attached.
+Would you be open to a quick chat about it?
+Cheers,
+{{sender_name}}`,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
@@ -456,6 +500,19 @@ export default function Dashboard() {
   const [followUpTemplate, setFollowUpTemplate] = useState('auto');
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
   const [scheduledTime, setScheduledTime] = useState('');
+
+  // ============================================================================
+  // FOLLOW-UP QUEUE STATES (PHASE 2-7)
+  // ============================================================================
+  const [followUpTasks, setFollowUpTasks] = useState({ pending: [], completed: [] });
+  const [loadingFollowUpTasks, setLoadingFollowUpTasks] = useState(false);
+  const [showFollowUpQueue, setShowFollowUpQueue] = useState(true);
+  const [leadNotes, setLeadNotes] = useState({});
+  const [leadStates, setLeadStates] = useState({});
+  const [showLeadNotesModal, setShowLeadNotesModal] = useState(false);
+  const [selectedLeadForNotes, setSelectedLeadForNotes] = useState(null);
+  const [currentLeadNote, setCurrentLeadNote] = useState('');
+  const [phoneCallStatus, setPhoneCallStatus] = useState({});
 
   const safeParseDate = useCallback((value) => {
     if (!value) return null;
@@ -2339,6 +2396,222 @@ export default function Dashboard() {
 
     return () => unsubscribe();
   }, [auth, addNotification]);
+
+  // ============================================================================
+  // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2)
+  // ============================================================================
+  useEffect(() => {
+    if (user?.uid) {
+      const loadTasks = async () => {
+        setLoadingFollowUpTasks(true);
+        try {
+          const tasks = await loadFollowUpTasks(user.uid);
+          setFollowUpTasks(tasks);
+        } catch (error) {
+          console.error('Load follow-up tasks error:', error);
+        } finally {
+          setLoadingFollowUpTasks(false);
+        }
+      };
+      loadTasks();
+    }
+  }, [user?.uid]);
+
+  // ============================================================================
+  // LOAD LEAD NOTES AND STATES FROM FIREBASE (PHASE 7)
+  // ============================================================================
+  useEffect(() => {
+    if (user?.uid) {
+      const loadNotesAndStates = async () => {
+        try {
+          const [notes, states] = await Promise.all([
+            loadLeadNotes(user.uid),
+            loadLeadStates(user.uid)
+          ]);
+          setLeadNotes(notes);
+          setLeadStates(states);
+        } catch (error) {
+          console.error('Load lead notes and states error:', error);
+        }
+      };
+      loadNotesAndStates();
+    }
+  }, [user?.uid]);
+
+  // ============================================================================
+  // FOLLOW-UP QUEUE HANDLERS (PHASE 2-6)
+  // ============================================================================
+  const handleSendEmailFollowUp = async (task) => {
+    if (!user?.uid) return;
+    
+    // PHASE 6: Check idempotency - verify task still exists and is pending
+    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'email', task.followUpStage);
+    if (!exists) {
+      addNotification('Follow-up task no longer exists', 'warning');
+      return;
+    }
+
+    try {
+      // Find the lead from sentLeads
+      const lead = sentLeads.find(l => l.email === task.leadEmail);
+      if (!lead) {
+        addNotification('Lead not found', 'error');
+        return;
+      }
+
+      // Send the follow-up email using existing logic
+      await handleSendFollowUp(lead, task.followUpStage);
+      
+      // Mark task as completed
+      await completeFollowUpTask(user.uid, task.id, {
+        completedBy: user.email,
+        method: 'email'
+      });
+      
+      addNotification('Follow-up email sent successfully', 'success');
+    } catch (error) {
+      console.error('Send email follow-up error:', error);
+      addNotification('Failed to send follow-up email', 'error');
+    }
+  };
+
+  const handleSendWhatsAppFollowUp = async (task) => {
+    if (!user?.uid) return;
+    
+    // PHASE 6: Check idempotency
+    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'whatsapp', task.followUpStage);
+    if (!exists) {
+      addNotification('Follow-up task no longer exists', 'warning');
+      return;
+    }
+
+    try {
+      // Find the contact from whatsappLinks
+      const contact = whatsappLinks.find(l => l.email === task.leadEmail || l.phone === task.leadPhone);
+      if (!contact) {
+        addNotification('Contact not found', 'error');
+        return;
+      }
+
+      // Open WhatsApp with pre-filled message
+      const template = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES.find(t => t.id === task.templateId);
+      const message = template ? template.body : 'Hi, following up on our previous conversation.';
+      
+      const whatsappUrl = `https://wa.me/${contact.phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+      
+      // Mark task as completed
+      await completeFollowUpTask(user.uid, task.id, {
+        completedBy: user.email,
+        method: 'whatsapp_manual'
+      });
+      
+      addNotification('WhatsApp opened successfully', 'success');
+    } catch (error) {
+      console.error('Send WhatsApp follow-up error:', error);
+      addNotification('Failed to open WhatsApp', 'error');
+    }
+  };
+
+  const handlePhoneCall = async (task) => {
+    if (!user?.uid) return;
+    
+    // PHASE 6: Check idempotency
+    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'phone', task.followUpStage);
+    if (!exists) {
+      addNotification('Follow-up task no longer exists', 'warning');
+      return;
+    }
+
+    try {
+      // Find the contact from whatsappLinks
+      const contact = whatsappLinks.find(l => l.email === task.leadEmail || l.phone === task.leadPhone);
+      if (!contact) {
+        addNotification('Contact not found', 'error');
+        return;
+      }
+
+      // Initiate phone call
+      handleCall(contact.phone);
+      
+      // Update phone call status
+      setPhoneCallStatus(prev => ({
+        ...prev,
+        [task.leadEmail]: {
+          status: 'in_progress',
+          startedAt: new Date().toISOString()
+        }
+      }));
+      
+      addNotification('Phone call initiated', 'success');
+    } catch (error) {
+      console.error('Phone call error:', error);
+      addNotification('Failed to initiate phone call', 'error');
+    }
+  };
+
+  const handleCompleteTask = async (taskId) => {
+    if (!user?.uid) return;
+
+    try {
+      await completeFollowUpTask(user.uid, taskId, {
+        completedBy: user.email,
+        method: 'manual'
+      });
+      
+      // Reload tasks
+      const tasks = await loadFollowUpTasks(user.uid);
+      setFollowUpTasks(tasks);
+      
+      addNotification('Task completed successfully', 'success');
+    } catch (error) {
+      console.error('Complete task error:', error);
+      addNotification('Failed to complete task', 'error');
+    }
+  };
+
+  const handleUpdatePhoneCallStatus = async (leadEmail, status, notes = '') => {
+    if (!user?.uid) return;
+
+    try {
+      setPhoneCallStatus(prev => ({
+        ...prev,
+        [leadEmail]: {
+          ...prev[leadEmail],
+          status,
+          notes,
+          updatedAt: new Date().toISOString()
+        }
+      }));
+      
+      // Update lead state
+      await updateLeadState(user.uid, leadEmail, {
+        phoneCallStatus: status,
+        phoneCallNotes: notes
+      });
+      
+      addNotification('Phone call status updated', 'success');
+    } catch (error) {
+      console.error('Update phone call status error:', error);
+      addNotification('Failed to update phone call status', 'error');
+    }
+  };
+
+  const handleSaveLeadNotes = async (leadEmail, notes) => {
+    if (!user?.uid) return;
+
+    try {
+      await saveLeadNotes(user.uid, leadEmail, notes);
+      setLeadNotes(prev => ({
+        ...prev,
+        [leadEmail]: notes
+      }));
+      addNotification('Lead notes saved successfully', 'success');
+    } catch (error) {
+      console.error('Save lead notes error:', error);
+      addNotification('Failed to save lead notes', 'error');
+    }
+  };
 
   // ============================================================================
   // REAL-TIME COUNTDOWN TIMER FOR FOLLOW-UP UNLOCK TIMES
@@ -5655,9 +5928,23 @@ export default function Dashboard() {
               >
                 <span className="text-lg">📬</span>
                 <span className="hidden sm:inline font-medium">View Replies</span>
-                {unreadRepliesCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
-                    {unreadRepliesCount}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowFollowUpQueue(!showFollowUpQueue)}
+                className="text-xs sm:text-sm bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white px-3 py-2 rounded-lg transition flex items-center gap-2"
+                title="View upcoming follow-ups"
+              >
+                <span>📅</span>
+                <span className="hidden sm:inline font-medium">Follow-Up Queue</span>
+                {followUpTasks.pending.length > 0 && (
+                  <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {followUpTasks.pending.length}
                   </span>
                 )}
               </button>
@@ -8317,6 +8604,320 @@ export default function Dashboard() {
           isOpen={showRepliesPanel}
           onToggle={() => setShowRepliesPanel(!showRepliesPanel)}
         />
+      )}
+
+      {/* LEAD NOTES MODAL (PHASE 7) */}
+      {showLeadNotesModal && selectedLeadForNotes && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col border-2 border-purple-500/30">
+            <div className="relative p-4 sm:p-6 border-b border-gray-700/50 bg-gradient-to-r from-purple-900/40 via-indigo-900/40 to-blue-900/40">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-indigo-600/10 backdrop-blur-xl"></div>
+              <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400">
+                    📝 Lead Notes & State
+                  </h2>
+                  <p className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2">{selectedLeadForNotes.email}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowLeadNotesModal(false);
+                    setSelectedLeadForNotes(null);
+                    setCurrentLeadNote('');
+                  }}
+                  className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-2xl sm:text-3xl w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
+              {/* Lead State */}
+              <div className="mb-6">
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Lead Status</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                    <div className="text-xs text-gray-400 mb-1">Current Status</div>
+                    <select
+                      value={leadStates[selectedLeadForNotes.email]?.status || 'new'}
+                      onChange={(e) => updateLeadState(user?.uid, selectedLeadForNotes.email, { status: e.target.value })}
+                      className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="new">New</option>
+                      <option value="contacted">Contacted</option>
+                      <option value="interested">Interested</option>
+                      <option value="negotiating">Negotiating</option>
+                      <option value="closed">Closed</option>
+                      <option value="lost">Lost</option>
+                    </select>
+                  </div>
+                  <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                    <div className="text-xs text-gray-400 mb-1">Last Contact</div>
+                    <div className="text-sm text-white">
+                      {leadStates[selectedLeadForNotes.email]?.lastContactDate
+                        ? new Date(leadStates[selectedLeadForNotes.email].lastContactDate).toLocaleDateString()
+                        : 'Never'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lead Notes */}
+              <div className="mb-6">
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Internal Notes</h3>
+                <textarea
+                  value={currentLeadNote}
+                  onChange={(e) => setCurrentLeadNote(e.target.value)}
+                  placeholder="Add notes about this lead..."
+                  className="w-full h-32 bg-gray-800/50 text-white px-4 py-3 rounded-xl border border-gray-700 focus:border-purple-500 focus:outline-none resize-none"
+                />
+              </div>
+
+              {/* Contact History Summary */}
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Contact Summary</h3>
+                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Emails Sent:</span>
+                    <span className="text-white">{lastSent[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">WhatsApp Sent:</span>
+                    <span className="text-white">{lastWhatsAppSent[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Replied:</span>
+                    <span className="text-white">{repliedLeads[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Follow-Ups:</span>
+                    <span className="text-white">{followUpLeads[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 sm:p-6 border-t border-gray-700/50 bg-gradient-to-br from-gray-800/50 to-gray-900/50">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleSaveLeadNotes(selectedLeadForNotes.email, currentLeadNote)}
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-4 py-3 rounded-xl font-medium transition"
+                >
+                  Save Notes
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLeadNotesModal(false);
+                    setSelectedLeadForNotes(null);
+                    setCurrentLeadNote('');
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-xl font-medium transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FOLLOW-UP QUEUE MODAL (PHASE 2) */}
+      {showFollowUpQueue && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col border-2 border-orange-500/30">
+            <div className="relative p-4 sm:p-6 border-b border-gray-700/50 bg-gradient-to-r from-orange-900/40 via-red-900/40 to-pink-900/40">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-600/10 to-red-600/10 backdrop-blur-xl"></div>
+              <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-red-400 to-pink-400">
+                    📅 Upcoming Follow-Up Queue
+                  </h2>
+                  <p className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2">Daily follow-up dashboard for Email, WhatsApp, and Phone tasks</p>
+                </div>
+                <button
+                  onClick={() => setShowFollowUpQueue(false)}
+                  className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-2xl sm:text-3xl w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-700/50">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                  <div className="relative bg-gradient-to-br from-orange-900/40 to-red-800/40 p-3 sm:p-5 rounded-xl border border-orange-500/30 hover:border-orange-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-400">{followUpTasks.pending.length}</div>
+                    <div className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2 font-medium">Pending Tasks</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📅</div>
+                  </div>
+                </div>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                  <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{followUpTasks.completed.length}</div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">Completed</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
+                  </div>
+                </div>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                  <div className="relative bg-gradient-to-br from-blue-900/40 to-indigo-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">
+                      {followUpTasks.pending.filter(t => t.channel === 'email').length}
+                    </div>
+                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Email</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📧</div>
+                  </div>
+                </div>
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
+                  <div className="relative bg-gradient-to-br from-green-900/40 to-teal-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
+                      {followUpTasks.pending.filter(t => t.channel === 'whatsapp').length}
+                    </div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">WhatsApp</div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💬</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
+              {/* PENDING TASKS */}
+              <div className="mb-6">
+                <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span>📋</span>
+                  <span>Pending Follow-Ups ({followUpTasks.pending.length})</span>
+                </h3>
+                {followUpTasks.pending.length === 0 ? (
+                  <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
+                    <div className="text-4xl mb-3">🎉</div>
+                    <div className="text-gray-300">No pending follow-ups</div>
+                    <div className="text-sm text-gray-500 mt-1">You're all caught up!</div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {followUpTasks.pending
+                      .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
+                      .map((task) => {
+                        const scheduledDate = new Date(task.scheduledFor);
+                        const isOverdue = scheduledDate < new Date();
+                        const isToday = scheduledDate.toDateString() === new Date().toDateString();
+                        const isTomorrow = scheduledDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
+                        
+                        let timeDisplay = '';
+                        if (isToday) {
+                          timeDisplay = `Today at ${scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        } else if (isTomorrow) {
+                          timeDisplay = `Tomorrow at ${scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        } else {
+                          timeDisplay = scheduledDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        }
+
+                        const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
+                        const channelColor = task.channel === 'email' ? 'blue' : task.channel === 'whatsapp' ? 'green' : task.channel === 'phone' ? 'orange' : 'gray';
+
+                        return (
+                          <div key={task.id} className={`group relative p-4 rounded-xl border-2 ${isOverdue ? 'bg-red-900/20 border-red-500/50' : 'bg-gray-800/80 border-gray-700 hover:border-orange-500/50'} transition-all`}>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  <span className="text-2xl">{channelIcon}</span>
+                                  <span className={`text-xs sm:text-sm font-bold text-${channelColor}-400 uppercase`}>{task.channel}</span>
+                                  {isOverdue && <span className="text-xs bg-red-500/30 text-red-300 px-2 py-1 rounded-full font-bold">OVERDUE</span>}
+                                </div>
+                                <div className="font-bold text-white text-sm sm:text-base">{task.leadName || task.leadEmail}</div>
+                                {task.companyName && <div className="text-xs text-gray-400">{task.companyName}</div>}
+                                <div className="text-xs text-gray-500 mt-1">{task.leadEmail}</div>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <div className={`text-sm font-bold ${isOverdue ? 'text-red-400' : 'text-orange-400'}`}>
+                                  {timeDisplay}
+                                </div>
+                                <div className="text-xs text-gray-400">{task.followUpStage}</div>
+                                <div className="flex gap-2 mt-2">
+                                  {task.channel === 'email' && (
+                                    <button
+                                      onClick={() => handleSendEmailFollowUp(task)}
+                                      className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition"
+                                    >
+                                      Send Email
+                                    </button>
+                                  )}
+                                  {task.channel === 'whatsapp' && (
+                                    <button
+                                      onClick={() => handleSendWhatsAppFollowUp(task)}
+                                      className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded transition"
+                                    >
+                                      Send WhatsApp
+                                    </button>
+                                  )}
+                                  {task.channel === 'phone' && (
+                                    <button
+                                      onClick={() => handlePhoneCall(task)}
+                                      className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded transition"
+                                    >
+                                      Call
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleCompleteTask(task.id)}
+                                    className="text-xs bg-gray-600 hover:bg-gray-500 text-white px-3 py-1.5 rounded transition"
+                                  >
+                                    Complete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
+              {/* COMPLETED TASKS */}
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span>✅</span>
+                  <span>Completed History ({followUpTasks.completed.length})</span>
+                </h3>
+                {followUpTasks.completed.length === 0 ? (
+                  <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
+                    <div className="text-4xl mb-3">📝</div>
+                    <div className="text-gray-300">No completed follow-ups yet</div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {followUpTasks.completed
+                      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+                      .slice(0, 10)
+                      .map((task) => {
+                        const completedDate = new Date(task.completedAt);
+                        const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
+                        
+                        return (
+                          <div key={task.id} className="p-3 rounded-xl bg-gray-800/50 border border-gray-700">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span>{channelIcon}</span>
+                                <div>
+                                  <div className="font-medium text-white text-sm">{task.leadName || task.leadEmail}</div>
+                                  <div className="text-xs text-gray-400">{task.followUpStage}</div>
+                                </div>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {completedDate.toLocaleDateString()} {completedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
