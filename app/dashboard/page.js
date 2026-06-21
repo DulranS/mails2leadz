@@ -2407,7 +2407,7 @@ export default function Dashboard() {
   // ============================================================================
   useEffect(() => {
     // Only load tasks when queue modal is opened (lazy loading for performance)
-    if (user?.uid && showFollowUpQueue && followUpTasks.pending.length === 0 && followUpTasks.completed.length === 0) {
+    if (user?.uid && showFollowUpQueue && (followUpTasks.pending?.length || 0) === 0 && (followUpTasks.completed?.length || 0) === 0) {
       const loadTasks = async () => {
         setLoadingFollowUpTasks(true);
         try {
@@ -2665,7 +2665,7 @@ export default function Dashboard() {
     if (!user?.uid) return;
 
     // Optimistic UI update (MAXIMIZE BUSINESS VALUE: Better perceived performance)
-    const task = followUpTasks.pending.find(t => t.id === taskId);
+    const task = (followUpTasks.pending || []).find(t => t.id === taskId);
     if (task) {
       setFollowUpTasks(prev => ({
         pending: prev.pending.filter(t => t.id !== taskId),
@@ -2748,7 +2748,17 @@ export default function Dashboard() {
   };
 
   const handleNextPendingPage = () => {
-    setPendingTasksPage(p => Math.min(Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE), p + 1));
+    const maxPage = followUpTasks?.pending ? Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE) : 1;
+    setPendingTasksPage(p => Math.min(maxPage, p + 1));
+  };
+
+  const handlePreviousCompletedPage = () => {
+    setCompletedTasksPage(p => Math.max(1, p - 1));
+  };
+
+  const handleNextCompletedPage = () => {
+    const maxPage = followUpTasks?.completed ? Math.ceil(followUpTasks.completed.length / TASKS_PER_PAGE) : 1;
+    setCompletedTasksPage(p => Math.min(maxPage, p + 1));
   };
 
   // ============================================================================
@@ -6173,9 +6183,9 @@ export default function Dashboard() {
               >
                 <span>📅</span>
                 <span className="hidden sm:inline font-medium">Follow-Up Queue</span>
-                {followUpTasks.pending.length > 0 && (
+                {(followUpTasks.pending?.length || 0) > 0 && (
                   <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                    {followUpTasks.pending.length}
+                    {followUpTasks.pending?.length || 0}
                   </span>
                 )}
               </button>
@@ -8977,7 +8987,7 @@ export default function Dashboard() {
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-orange-900/40 to-red-800/40 p-3 sm:p-5 rounded-xl border border-orange-500/30 hover:border-orange-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-400">{followUpTasks.pending.length}</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-400">{followUpTasks.pending?.length || 0}</div>
                     <div className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2 font-medium">Pending Tasks</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📅</div>
                   </div>
@@ -8985,7 +8995,7 @@ export default function Dashboard() {
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{followUpTasks.completed.length}</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{followUpTasks.completed?.length || 0}</div>
                     <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">Completed</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
                   </div>
@@ -8994,7 +9004,7 @@ export default function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-blue-900/40 to-indigo-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">
-                      {followUpTasks.pending.filter(t => t.channel === 'email').length}
+                      {(followUpTasks.pending || []).filter(t => t.channel === 'email').length}
                     </div>
                     <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Email</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📧</div>
@@ -9004,7 +9014,7 @@ export default function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-teal-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
-                      {followUpTasks.pending.filter(t => t.channel === 'whatsapp').length}
+                      {(followUpTasks.pending || []).filter(t => t.channel === 'whatsapp').length}
                     </div>
                     <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">WhatsApp</div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💬</div>
@@ -9017,9 +9027,9 @@ export default function Dashboard() {
               <div className="mb-6">
                 <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
                   <span>📋</span>
-                  <span>Pending Follow-Ups ({followUpTasks.pending.length})</span>
+                  <span>Pending Follow-Ups ({followUpTasks.pending?.length || 0})</span>
                 </h3>
-                {followUpTasks.pending.length === 0 ? (
+                {(followUpTasks.pending?.length || 0) === 0 ? (
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">🎉</div>
                     <div className="text-gray-300">No pending follow-ups</div>
@@ -9027,15 +9037,15 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {followUpTasks.pending
-                      .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
+                    {(followUpTasks.pending || [])
+                      .sort((a, b) => new Date(a.scheduledFor || 0) - new Date(b.scheduledFor || 0))
                       .slice((pendingTasksPage - 1) * TASKS_PER_PAGE, pendingTasksPage * TASKS_PER_PAGE)
                       .map((task) => {
-                        const scheduledDate = new Date(task.scheduledFor);
+                        const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
                         const isOverdue = scheduledDate < new Date();
                         const isToday = scheduledDate.toDateString() === new Date().toDateString();
                         const isTomorrow = scheduledDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
-                        
+
                         let timeDisplay = '';
                         if (isToday) {
                           timeDisplay = `Today at ${scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -9104,7 +9114,7 @@ export default function Dashboard() {
                         );
                       })}
                   {/* Pagination Controls for Pending Tasks */}
-                  {followUpTasks.pending.length > TASKS_PER_PAGE && (
+                  {(followUpTasks.pending?.length || 0) > TASKS_PER_PAGE && (
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
                       <button
                         onClick={handlePreviousPendingPage}
@@ -9114,11 +9124,11 @@ export default function Dashboard() {
                         ← Previous
                       </button>
                       <span className="text-xs text-gray-400">
-                        Page {pendingTasksPage} of {Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE)}
+                        Page {pendingTasksPage} of {Math.ceil((followUpTasks.pending?.length || 0) / TASKS_PER_PAGE)}
                       </span>
                       <button
                         onClick={handleNextPendingPage}
-                        disabled={pendingTasksPage >= Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE)}
+                        disabled={pendingTasksPage >= Math.ceil((followUpTasks.pending?.length || 0) / TASKS_PER_PAGE)}
                         className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
                       >
                         Next →
@@ -9133,20 +9143,20 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-lg sm:text-xl font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2">
                   <span>✅</span>
-                  <span>Completed History ({followUpTasks.completed.length})</span>
+                  <span>Completed History ({followUpTasks.completed?.length || 0})</span>
                 </h3>
-                {followUpTasks.completed.length === 0 ? (
+                {(followUpTasks.completed?.length || 0) === 0 ? (
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">📝</div>
                     <div className="text-gray-300">No completed follow-ups yet</div>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {followUpTasks.completed
-                      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
-                      .slice(0, 10)
+                    {(followUpTasks.completed || [])
+                      .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
+                      .slice((completedTasksPage - 1) * TASKS_PER_PAGE, completedTasksPage * TASKS_PER_PAGE)
                       .map((task) => {
-                        const completedDate = new Date(task.completedAt);
+                        const completedDate = task.completedAt ? new Date(task.completedAt) : new Date();
                         const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
                         
                         return (
@@ -9166,6 +9176,28 @@ export default function Dashboard() {
                           </div>
                         );
                       })}
+                  {/* Pagination Controls for Completed Tasks */}
+                  {(followUpTasks.completed?.length || 0) > TASKS_PER_PAGE && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+                      <button
+                        onClick={handlePreviousCompletedPage}
+                        disabled={completedTasksPage === 1}
+                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                      >
+                        ← Previous
+                      </button>
+                      <span className="text-xs text-gray-400">
+                        Page {completedTasksPage} of {Math.ceil((followUpTasks.completed?.length || 0) / TASKS_PER_PAGE)}
+                      </span>
+                      <button
+                        onClick={handleNextCompletedPage}
+                        disabled={completedTasksPage >= Math.ceil((followUpTasks.completed?.length || 0) / TASKS_PER_PAGE)}
+                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  )}
                   </div>
                 )}
               </div>
