@@ -9103,7 +9103,6 @@ export default function Dashboard() {
                           </div>
                         );
                       })}
-                  </div>
                   {/* Pagination Controls for Pending Tasks */}
                   {followUpTasks.pending.length > TASKS_PER_PAGE && (
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
@@ -9126,6 +9125,7 @@ export default function Dashboard() {
                       </button>
                     </div>
                   )}
+                  </div>
                 )}
               </div>
 
