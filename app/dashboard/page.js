@@ -2602,6 +2602,39 @@ export default function Dashboard() {
     return now;
   };
 
+  const adjustToWorkingHours = (date) => {
+    const adjusted = new Date(date);
+    const hour = adjusted.getHours();
+    const day = adjusted.getDay();
+
+    // If it's weekend, move to Monday 9 AM
+    if (day === 0) { // Sunday
+      adjusted.setDate(adjusted.getDate() + 1);
+      adjusted.setHours(9, 0, 0, 0);
+      return adjusted;
+    }
+    if (day === 6) { // Saturday
+      adjusted.setDate(adjusted.getDate() + 2);
+      adjusted.setHours(9, 0, 0, 0);
+      return adjusted;
+    }
+
+    // If it's weekday but outside business hours, adjust to same day working hour
+    if (hour < 9) {
+      // Before 9 AM, set to 9 AM same day
+      adjusted.setHours(9, 0, 0, 0);
+      return adjusted;
+    }
+    if (hour >= 18) {
+      // After 6 PM, set to 9 AM same day (user wants same day)
+      adjusted.setHours(9, 0, 0, 0);
+      return adjusted;
+    }
+
+    // Already in business hours
+    return adjusted;
+  };
+
   // ============================================================================
   // FOLLOW-UP QUEUE HANDLERS (PHASE 2-6)
   // ============================================================================
@@ -7910,11 +7943,11 @@ export default function Dashboard() {
                                     <div className="text-right ml-4">
                                       {contact.readyForFollowUp ? (
                                         <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                          Ready
+                                          Ready @ 9 AM
                                         </span>
                                       ) : (
                                         <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
-                                          {Math.ceil(contact.daysRemaining)}d
+                                          {Math.ceil(contact.daysRemaining)}d @ 9 AM
                                         </span>
                                       )}
                                     </div>
@@ -7950,11 +7983,11 @@ export default function Dashboard() {
                                   <div className="text-right ml-4">
                                     {contact.readyForFollowUp ? (
                                       <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                        Ready to follow up
+                                        Ready @ 9 AM
                                       </span>
                                     ) : (
                                       <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
-                                        Wait {Math.ceil(contact.daysRemaining)} days
+                                        Wait {Math.ceil(contact.daysRemaining)}d @ 9 AM
                                       </span>
                                     )}
                                   </div>
