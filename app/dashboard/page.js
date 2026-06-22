@@ -568,6 +568,35 @@ export default function Dashboard() {
   const [showConversationModal, setShowConversationModal] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
+
+  // Update current time every second for real-time countdown
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check for upcoming follow-ups and show alert
+  useEffect(() => {
+    if (pendingLeads.length > 0) {
+      const nextFollowUp = pendingLeads[0];
+      const timeUntilFollowUp = new Date(nextFollowUp.followUpAt) - currentTime;
+      const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
+      
+      if (hoursUntil <= 1 && hoursUntil > 0) {
+        setUpcomingFollowUpAlert({
+          message: `${pendingLeads.length} follow-up${pendingLeads.length > 1 ? 's' : ''} coming up within 1 hour`,
+          count: pendingLeads.length
+        });
+      } else {
+        setUpcomingFollowUpAlert(null);
+      }
+    } else {
+      setUpcomingFollowUpAlert(null);
+    }
+  }, [pendingLeads, currentTime]);
 
   // ============================================================================
   // AI & ADVANCED FEATURES STATES
@@ -1046,14 +1075,27 @@ export default function Dashboard() {
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
   const getWhatsAppFollowUpCandidates = useCallback(() => {
-    if (!whatsappLinks || whatsappLinks.length === 0) {
+    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (sentLeads with phone)
+    const databaseWhatsAppContacts = sentLeads.filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')));
+    const allWhatsAppContacts = [...whatsappLinks, ...databaseWhatsAppContacts];
+    
+    // Remove duplicates by phone/email
+    const uniqueContacts = new Map();
+    allWhatsAppContacts.forEach(contact => {
+      const key = contact.phone || contact.email;
+      if (key && !uniqueContacts.has(key)) {
+        uniqueContacts.set(key, contact);
+      }
+    });
+
+    if (uniqueContacts.size === 0) {
       return [];
     }
 
     const now = new Date();
     const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3; // WhatsApp follow-ups should be less frequent
 
-    const candidates = whatsappLinks
+    const candidates = Array.from(uniqueContacts.values())
       .filter(contact => {
         if (!contact || !contact.phone) return false;
 
@@ -1095,12 +1137,12 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [whatsappLinks, lastWhatsAppSent]);
+  }, [whatsappLinks, lastWhatsAppSent, sentLeads]);
 
   const whatsappFollowUpCandidates = useMemo(() => {
     const candidates = getWhatsAppFollowUpCandidates();
     return candidates;
-  }, [whatsappLinks, lastWhatsAppSent]);
+  }, [whatsappLinks, lastWhatsAppSent, sentLeads]);
 
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
@@ -7596,6 +7638,30 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
+            
+            {/* Upcoming Follow-Up Alert Banner */}
+            {upcomingFollowUpAlert && (
+              <div className="bg-gradient-to-r from-yellow-900/40 to-orange-900/40 border border-yellow-500/50 rounded-lg p-3 sm:p-4 mb-4 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl sm:text-3xl">⏰</span>
+                  <div className="flex-1">
+                    <div className="text-sm sm:text-base font-bold text-yellow-300">
+                      {upcomingFollowUpAlert.message}
+                    </div>
+                    <div className="text-xs text-yellow-200 mt-1">
+                      Be prepared to send follow-ups when they become available
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setUpcomingFollowUpAlert(null)}
+                    className="text-yellow-400 hover:text-yellow-300 text-xl"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-700/50">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
                 <div className="relative group">
@@ -7961,11 +8027,14 @@ export default function Dashboard() {
                       </button>
 
                       {/* WHATSAPP FOLLOW-UP TRACKING PANEL */}
-                      {whatsappLinks.length > 0 && (
+                      {(whatsappLinks.length > 0 || whatsappFollowUpCandidates.length > 0) && (
                         <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
                           <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
                             <span className="text-xl sm:text-2xl">💬</span>
                             <span>WhatsApp Follow-Up Tracking</span>
+                            <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                              {whatsappFollowUpCandidates.length} Candidates
+                            </span>
                           </div>
                           
                           {/* WhatsApp Stats */}
@@ -8016,7 +8085,14 @@ export default function Dashboard() {
                           {whatsappFollowUpCandidates.length > 0 && (
                             <div className="space-y-3">
                               <div className="text-sm font-semibold text-green-200">Ready for Follow-Up:</div>
-                              {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => (
+                              {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => {
+                                const timeUntilFollowUp = contact.readyForFollowUp ? 0 : (contact.daysRemaining * 24 * 60 * 60 * 1000);
+                                const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
+                                const minutesUntil = Math.floor((timeUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
+                                const secondsUntil = Math.floor((timeUntilFollowUp % (1000 * 60)) / 1000);
+                                const isReady = timeUntilFollowUp <= 0;
+                                
+                                return (
                                 <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:border-green-500/50 transition-all">
                                   <div className="flex justify-between items-start">
                                     <div className="flex-1">
@@ -8025,10 +8101,10 @@ export default function Dashboard() {
                                       <div className="text-xs text-gray-400">{contact.email}</div>
                                     </div>
                                     <div className="text-right ml-4">
-                                      {contact.readyForFollowUp ? (
+                                      {isReady ? (
                                         <div className="flex flex-col gap-2">
-                                          <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                            Ready @ 9 AM
+                                          <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold animate-pulse">
+                                            🔓 Ready Now!
                                           </span>
                                           <button
                                             onClick={() => handleSendWhatsApp(contact)}
@@ -8039,14 +8115,19 @@ export default function Dashboard() {
                                           </button>
                                         </div>
                                       ) : (
-                                        <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
-                                          {Math.ceil(contact.daysRemaining)}d @ 9 AM
-                                        </span>
+                                        <div className="flex flex-col gap-2">
+                                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${hoursUntil <= 1 ? 'bg-yellow-500/30 text-yellow-300' : 'bg-gray-500/30 text-gray-300'}`}>
+                                            {hoursUntil > 0 ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s` : `${minutesUntil}m ${secondsUntil}s`}
+                                          </span>
+                                          <span className="text-xs text-gray-500">
+                                            @ 9 AM
+                                          </span>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
                                 </div>
-                              ))}
+                              )})}
                               {whatsappFollowUpCandidates.length > 5 && (
                                 <div className="text-center text-xs text-gray-400">
                                   +{whatsappFollowUpCandidates.length - 5} more contacts
