@@ -1010,19 +1010,31 @@ export default function Dashboard() {
         const sentAtDate = safeParseDate(lead.sentAt);
         const daysSinceSent = sentAtDate ?
           (now - sentAtDate) / (1000 * 60 * 60 * 24) : 999;
+        
+        // Check if this is a WhatsApp number (+94 7...)
+        const isWhatsApp = lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947'));
+        
         // Urgency score: higher for leads that haven't been followed up recently
         // Clamp to 0-100 range to prevent negative values
         const urgencyScore = Math.max(0, Math.min(100, 100 - (daysSinceSent * 1.5)));
+        
         return {
           ...lead,
           followUpAt: getLeadNextFollowUpAt(lead)?.toISOString() || lead.followUpAt,
           followUpCount,
           daysSinceSent,
           urgencyScore,
-          safetyScore: Math.max(0, (3 - followUpCount) * 33.33)
+          safetyScore: Math.max(0, (3 - followUpCount) * 33.33),
+          isWhatsApp // Add flag for WhatsApp numbers
         };
       })
-      .sort((a, b) => b.urgencyScore - a.urgencyScore);
+      .sort((a, b) => {
+        // Prioritize WhatsApp numbers at the top
+        if (a.isWhatsApp && !b.isWhatsApp) return -1;
+        if (!a.isWhatsApp && b.isWhatsApp) return 1;
+        // Then sort by urgency score
+        return b.urgencyScore - a.urgencyScore;
+      });
 
     return candidates;
   }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
@@ -1881,16 +1893,24 @@ export default function Dashboard() {
         const repliedAtDate = safeParseDate(lead.repliedAt);
         const daysSinceReply = repliedAtDate ?
           (now - repliedAtDate) / (1000 * 60 * 60 * 24) : 0;
+        
+        // Check if this is a WhatsApp number (+94 7...)
+        const isWhatsApp = lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947'));
+        
         return {
           ...lead,
           daysSinceSent,
           daysSinceReply,
           repliedAt: lead.repliedAt || lead.sentAt,
-          isHotLead: daysSinceReply <= 7 // Hot if replied within 7 days
+          isHotLead: daysSinceReply <= 7, // Hot if replied within 7 days
+          isWhatsApp // Add flag for WhatsApp numbers
         };
       })
       .sort((a, b) => {
-        // Sort by most recent reply first
+        // Prioritize WhatsApp numbers at the top
+        if (a.isWhatsApp && !b.isWhatsApp) return -1;
+        if (!a.isWhatsApp && b.isWhatsApp) return 1;
+        // Then sort by most recent reply first
         const dateA = new Date(a.repliedAt || a.sentAt);
         const dateB = new Date(b.repliedAt || b.sentAt);
         return dateB - dateA;
