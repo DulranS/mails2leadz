@@ -45,7 +45,7 @@ try {
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
-const AUTO_CLEANUP_DAYS = 12; // Delete records older than this (reduced from 30 to reduce Firestore costs)
+const AUTO_CLEANUP_DAYS = 15; // Delete records older than this (strategic 15-day retention)
 const MAX_FOLLOW_UPS = 3;
 const CAMPAIGN_WINDOW_DAYS = 30;
 
@@ -75,10 +75,6 @@ export async function POST(request) {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
-    // Get all sent emails for user
-    const q = query(collection(db, 'sent_emails'), where('userId', '==', userId));
-    const snapshot = await getDocs(q);
-
     let deletedCount = 0;
     let skippedCount = 0;
     const errors = [];
@@ -98,24 +94,57 @@ export async function POST(request) {
 
     const now = new Date();
 
-    for (const docSnapshot of snapshot.docs) {
+    // Cleanup sent emails
+    const sentEmailsQuery = query(collection(db, 'sent_emails'), where('userId', '==', userId));
+    const sentEmailsSnapshot = await getDocs(sentEmailsQuery);
+
+    for (const docSnapshot of sentEmailsSnapshot.docs) {
       const data = docSnapshot.data();
       try {
         const sentAt = safeToDate(data.sentAt);
         const daysSinceSent = (now - sentAt) / (1000 * 60 * 60 * 24);
 
-        // Delete all records older than cutoff date (no loop closed restriction)
+        // Delete all records older than cutoff date
         if (sentAt < cutoffDate) {
           await deleteDoc(doc(db, 'sent_emails', docSnapshot.id));
-          console.log(`🗑️ Deleted: ${data.to || data.email} (${daysSinceSent.toFixed(0)} days old)`);
+          console.log(`🗑️ Deleted email: ${data.to || data.email} (${daysSinceSent.toFixed(0)} days old)`);
           deletedCount++;
         } else {
           skippedCount++;
         }
       } catch (deleteError) {
-        console.error(`❌ Error processing record ${docSnapshot.id}:`, deleteError);
+        console.error(`❌ Error processing email record ${docSnapshot.id}:`, deleteError);
         errors.push({
           id: docSnapshot.id,
+          type: 'email',
+          error: deleteError.message
+        });
+      }
+    }
+
+    // Cleanup WhatsApp contacts
+    const whatsappQuery = query(collection(db, 'whatsapp_contacts'), where('userId', '==', userId));
+    const whatsappSnapshot = await getDocs(whatsappQuery);
+
+    for (const docSnapshot of whatsappSnapshot.docs) {
+      const data = docSnapshot.data();
+      try {
+        const createdAt = safeToDate(data.createdAt || data.sentAt);
+        const daysSinceCreated = (now - createdAt) / (1000 * 60 * 60 * 24);
+
+        // Delete all records older than cutoff date
+        if (createdAt < cutoffDate) {
+          await deleteDoc(doc(db, 'whatsapp_contacts', docSnapshot.id));
+          console.log(`🗑️ Deleted WhatsApp contact: ${data.phone || data.business} (${daysSinceCreated.toFixed(0)} days old)`);
+          deletedCount++;
+        } else {
+          skippedCount++;
+        }
+      } catch (deleteError) {
+        console.error(`❌ Error processing WhatsApp record ${docSnapshot.id}:`, deleteError);
+        errors.push({
+          id: docSnapshot.id,
+          type: 'whatsapp',
           error: deleteError.message
         });
       }

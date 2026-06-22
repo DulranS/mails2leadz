@@ -2388,6 +2388,7 @@ export default function Dashboard() {
         loadAbResults();
         loadRepliedAndFollowUp();
         loadSentLeads();
+        loadWhatsAppContacts();
         loadDailyEmailCount();
         loadSendTimeOptimization();
         loadManualContactStatus(user.uid);
@@ -2664,6 +2665,17 @@ export default function Dashboard() {
       }
     }
 
+    // Check for duplicate follow-up sent within 24 hours
+    const contactHistory = followUpHistory[task.leadEmail];
+    if (contactHistory && contactHistory.lastFollowUpAt) {
+      const lastFollowUp = new Date(contactHistory.lastFollowUpAt);
+      const hoursSinceLastFollowUp = (Date.now() - lastFollowUp.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastFollowUp < 24) {
+        addNotification(`Follow-up already sent to this contact ${Math.floor(hoursSinceLastFollowUp)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastFollowUp)} more hours.`, 'warning');
+        return;
+      }
+    }
+
     // PHASE 6: Check idempotency - verify task still exists and is pending
     const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'email', task.followUpStage);
     if (!exists) {
@@ -2717,6 +2729,18 @@ export default function Dashboard() {
 
       // Still allow sending, but warn the user
       if (!confirm('It\'s currently outside business hours. Sending now may reduce response rates. Continue anyway?')) {
+        return;
+      }
+    }
+
+    // Check for duplicate WhatsApp follow-up sent within 24 hours
+    const contactKey = task.leadEmail || task.leadPhone;
+    const lastWhatsAppTime = lastWhatsAppSent[contactKey];
+    if (lastWhatsAppTime) {
+      const lastSent = new Date(lastWhatsAppTime);
+      const hoursSinceLastSend = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastSend < 24) {
+        addNotification(`WhatsApp follow-up already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`, 'warning');
         return;
       }
     }
@@ -3520,6 +3544,30 @@ export default function Dashboard() {
   }, [user?.uid, addNotification, normalizeSentLead]);
 
   // ============================================================================
+  // LOAD WHATSAPP CONTACTS FROM DATABASE (ENSURE THEY SHOW REGARDLESS OF CSV)
+  // ============================================================================
+  const loadWhatsAppContacts = useCallback(async () => {
+    if (!user?.uid) return;
+
+    try {
+      const res = await fetch('/api/list-whatsapp-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const contacts = data.contacts || [];
+        setWhatsappLinks(contacts);
+      }
+    } catch (err) {
+      console.error('Load WhatsApp contacts error:', err);
+      // Don't show notification, just log error
+    }
+  }, [user]);
+
+  // ============================================================================
   // LOAD CONTACTED COMPANIES FROM API
   // ============================================================================
   const loadContactedCompanies = async () => {
@@ -4194,6 +4242,17 @@ export default function Dashboard() {
     if (!quotaCheck.available) {
       addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
       return;
+    }
+
+    // Check for duplicate WhatsApp sent within 24 hours
+    const lastWhatsAppTime = lastWhatsAppSent[contactKey];
+    if (lastWhatsAppTime) {
+      const lastSent = new Date(lastWhatsAppTime);
+      const hoursSinceLastSend = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceLastSend < 24) {
+        addNotification(`WhatsApp already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`, 'warning');
+        return;
+      }
     }
 
     // Check if safe to contact
@@ -7941,15 +8000,24 @@ export default function Dashboard() {
                                 <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:border-green-500/50 transition-all">
                                   <div className="flex justify-between items-start">
                                     <div className="flex-1">
-                                      <div className="font-medium text-white">{contact.businessName || 'Unknown'}</div>
+                                      <div className="font-medium text-white">{contact.business || contact.businessName || 'Unknown'}</div>
                                       <div className="text-xs text-gray-400">{contact.phone}</div>
                                       <div className="text-xs text-gray-400">{contact.email}</div>
                                     </div>
                                     <div className="text-right ml-4">
                                       {contact.readyForFollowUp ? (
-                                        <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                          Ready @ 9 AM
-                                        </span>
+                                        <div className="flex flex-col gap-2">
+                                          <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                            Ready @ 9 AM
+                                          </span>
+                                          <button
+                                            onClick={() => handleSendWhatsApp(contact)}
+                                            className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
+                                            title="Send WhatsApp Follow-Up"
+                                          >
+                                            💬 Send Follow-Up
+                                          </button>
+                                        </div>
                                       ) : (
                                         <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
                                           {Math.ceil(contact.daysRemaining)}d @ 9 AM
@@ -7981,15 +8049,24 @@ export default function Dashboard() {
                               <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
                                 <div className="flex justify-between items-start">
                                   <div className="flex-1">
-                                    <div className="font-medium text-white">{contact.businessName || 'Unknown'}</div>
+                                    <div className="font-medium text-white">{contact.business || contact.businessName || 'Unknown'}</div>
                                     <div className="text-xs text-gray-400">{contact.phone}</div>
                                     <div className="text-xs text-gray-400">{contact.email}</div>
                                   </div>
                                   <div className="text-right ml-4">
                                     {contact.readyForFollowUp ? (
-                                      <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                        Ready @ 9 AM
-                                      </span>
+                                      <div className="flex flex-col gap-2">
+                                        <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                          Ready @ 9 AM
+                                        </span>
+                                        <button
+                                          onClick={() => handleSendWhatsApp(contact)}
+                                          className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
+                                          title="Send WhatsApp Follow-Up"
+                                        >
+                                          💬 Send Follow-Up
+                                        </button>
+                                      </div>
                                     ) : (
                                       <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
                                         Wait {Math.ceil(contact.daysRemaining)}d @ 9 AM
