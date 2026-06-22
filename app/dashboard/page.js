@@ -2729,18 +2729,23 @@ export default function Dashboard() {
     }
 
     try {
-      // Find the contact from whatsappLinks
-      const contact = whatsappLinks.find(l => l.email === task.leadEmail || l.phone === task.leadPhone);
+      // Find the contact from whatsappLinks using phone number
+      const contact = whatsappLinks.find(l => l.phone === task.leadPhone || l.email === task.leadEmail);
       if (!contact) {
-        addNotification('Contact not found', 'error');
-        return;
+        // If not found in whatsappLinks, try to use the phone directly from task
+        if (!task.leadPhone) {
+          addNotification('Contact not found and no phone number available', 'error');
+          return;
+        }
       }
 
       // Open WhatsApp with pre-filled message
       const template = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES.find(t => t.id === task.templateId);
       const message = template ? template.body : 'Hi, following up on our previous conversation.';
       
-      const whatsappUrl = `https://wa.me/${contact.phone}?text=${encodeURIComponent(message)}`;
+      const phoneToUse = contact?.phone || task.leadPhone;
+      const formattedPhone = formatForDialing(phoneToUse);
+      const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
       window.open(whatsappUrl, '_blank');
       
       // Mark task as completed
@@ -9201,7 +9206,11 @@ export default function Dashboard() {
                                 </div>
                                 <div className="font-bold text-white text-sm sm:text-base">{task.leadName || task.leadEmail}</div>
                                 {task.companyName && <div className="text-xs text-gray-400">{task.companyName}</div>}
-                                <div className="text-xs text-gray-500 mt-1">{task.leadEmail}</div>
+                                {task.channel === 'whatsapp' && task.leadPhone ? (
+                                  <div className="text-xs text-gray-500 mt-1">{task.leadPhone}</div>
+                                ) : (
+                                  <div className="text-xs text-gray-500 mt-1">{task.leadEmail}</div>
+                                )}
                               </div>
                               <div className="flex flex-col items-end gap-2">
                                 <div className={`text-sm font-bold ${isOverdue ? 'text-red-400' : 'text-orange-400'}`}>
