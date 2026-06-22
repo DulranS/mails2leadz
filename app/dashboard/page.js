@@ -569,6 +569,7 @@ export default function Dashboard() {
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
+  const [databaseWhatsAppContacts, setDatabaseWhatsAppContacts] = useState([]);
 
   // Update current time every second for real-time countdown
   useEffect(() => {
@@ -578,25 +579,37 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Check for upcoming follow-ups and show alert
+  // Populate databaseWhatsAppContacts from sentLeads
   useEffect(() => {
-    if (pendingLeads.length > 0) {
-      const nextFollowUp = pendingLeads[0];
-      const timeUntilFollowUp = new Date(nextFollowUp.followUpAt) - currentTime;
-      const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
-      
-      if (hoursUntil <= 1 && hoursUntil > 0) {
-        setUpcomingFollowUpAlert({
-          message: `${pendingLeads.length} follow-up${pendingLeads.length > 1 ? 's' : ''} coming up within 1 hour`,
-          count: pendingLeads.length
-        });
+    if (sentLeads && sentLeads.length > 0) {
+      const whatsappContacts = sentLeads.filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')));
+      setDatabaseWhatsAppContacts(whatsappContacts);
+    }
+  }, [sentLeads]);
+
+  // Check for upcoming follow-ups and show alert (simplified to avoid circular dependency)
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      if (pendingLeads.length > 0) {
+        const nextFollowUp = pendingLeads[0];
+        const timeUntilFollowUp = new Date(nextFollowUp.followUpAt) - new Date();
+        const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
+        
+        if (hoursUntil <= 1 && hoursUntil > 0) {
+          setUpcomingFollowUpAlert({
+            message: `${pendingLeads.length} follow-up${pendingLeads.length > 1 ? 's' : ''} coming up within 1 hour`,
+            count: pendingLeads.length
+          });
+        } else {
+          setUpcomingFollowUpAlert(null);
+        }
       } else {
         setUpcomingFollowUpAlert(null);
       }
-    } else {
-      setUpcomingFollowUpAlert(null);
-    }
-  }, [pendingLeads, currentTime]);
+    }, 60000); // Check every minute instead of every second to reduce overhead
+    
+    return () => clearInterval(checkInterval);
+  }, [pendingLeads.length]); // Only depend on length, not the full array
 
   // ============================================================================
   // AI & ADVANCED FEATURES STATES
@@ -1075,8 +1088,7 @@ export default function Dashboard() {
   // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
   const getWhatsAppFollowUpCandidates = useCallback(() => {
-    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (sentLeads with phone)
-    const databaseWhatsAppContacts = sentLeads.filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')));
+    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (databaseWhatsAppContacts)
     const allWhatsAppContacts = [...whatsappLinks, ...databaseWhatsAppContacts];
     
     // Remove duplicates by phone/email
@@ -1137,12 +1149,12 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [whatsappLinks, lastWhatsAppSent, sentLeads]);
+  }, [whatsappLinks, lastWhatsAppSent, databaseWhatsAppContacts]);
 
   const whatsappFollowUpCandidates = useMemo(() => {
     const candidates = getWhatsAppFollowUpCandidates();
     return candidates;
-  }, [whatsappLinks, lastWhatsAppSent, sentLeads]);
+  }, [whatsappLinks, lastWhatsAppSent, databaseWhatsAppContacts]);
 
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
