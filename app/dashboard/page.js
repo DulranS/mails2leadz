@@ -7342,13 +7342,13 @@ export default function Dashboard() {
                               <button
                                 onClick={() => handleCall(link.phone)}
                                 title="Direct call"
-                                className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded"
+                                className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded"
                               >
                                 📞
                               </button>
                               <button
                                 onClick={() => handleTwilioCall(link, 'direct')}
-                                className="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded"
+                                className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded"
                                 title="Automated message"
                               >
                                 🤖
@@ -7362,42 +7362,42 @@ export default function Dashboard() {
                               </button>
                               <button
                                 onClick={() => handleOpenLinkedIn(link, 'company')}
-                                className="text-xs bg-blue-900 hover:bg-blue-800 text-blue-200 px-2 py-1 rounded"
+                                className="text-xs bg-blue-900 hover:bg-blue-800 text-blue-200 px-3 py-2 rounded"
                                 title="LinkedIn search"
                               >
                                 💼
                               </button>
                               <button
                                 onClick={() => handleSendWhatsApp(link)}
-                                className="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded"
+                                className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded"
                                 title="WhatsApp"
                               >
                                 💬
                               </button>
                               <button
                                 onClick={() => handleSmartResearchOutreach(link)}
-                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded"
+                                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded"
                                 title="Smart AI Outreach"
                               >
                                 🤖
                               </button>
                               <button
                                 onClick={() => handleOpenNativeSMS(link)}
-                                className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded"
+                                className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded"
                                 title="SMS"
                               >
                                 📱
                               </button>
                               <button
                                 onClick={() => handleOpenInstagram(link)}
-                                className="text-xs bg-pink-700 hover:bg-pink-600 text-white px-2 py-1 rounded"
+                                className="text-xs bg-pink-700 hover:bg-pink-600 text-white px-3 py-2 rounded"
                                 title="Instagram"
                               >
                                 📷
                               </button>
                               <button
                                 onClick={() => handleOpenTwitter(link)}
-                                className="text-xs bg-sky-700 hover:bg-sky-600 text-white px-2 py-1 rounded"
+                                className="text-xs bg-sky-700 hover:bg-sky-600 text-white px-3 py-2 rounded"
                                 title="Twitter"
                               >
                                 𝕏
@@ -7406,7 +7406,7 @@ export default function Dashboard() {
                             {smsConsent && (
                               <button
                                 onClick={() => handleSendSMS(link)}
-                                className="text-xs bg-orange-700 hover:bg-orange-600 text-white px-2 py-1 rounded mt-1 w-full"
+                                className="text-xs bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded mt-1 w-full"
                               >
                                 Twilio SMS
                               </button>
@@ -7429,7 +7429,7 @@ export default function Dashboard() {
                             {/* ✅ Manual Contact Mark Button */}
                             <button
                               onClick={() => markContactManually(link, !isContacted, 'Manual update')}
-                              className={`text-xs px-2 py-1 rounded mt-1 w-full ${isContacted
+                              className={`text-xs px-3 py-2 rounded mt-1 w-full ${isContacted
                                   ? 'bg-gray-600 hover:bg-gray-500 text-white'
                                   : 'bg-green-600 hover:bg-green-500 text-white'
                                 }`}
@@ -8792,7 +8792,7 @@ export default function Dashboard() {
       </div>
 
       {analyticsTab !== 'hidden' && (
-        <div className="fixed bottom-24 right-4 z-40 bg-gray-900 border-2 border-cyan-500/50 rounded-2xl shadow-2xl w-96 max-h-96 overflow-hidden">
+        <div className="fixed bottom-24 right-4 z-40 bg-gray-900 border-2 border-cyan-500/50 rounded-2xl shadow-2xl w-80 sm:w-96 max-h-96 overflow-hidden">
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 border-b border-cyan-500/30 flex justify-between items-center">
             <h3 className="text-lg font-bold text-cyan-200">📊 Business Intelligence</h3>
             <button
