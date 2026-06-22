@@ -2550,11 +2550,87 @@ export default function Dashboard() {
   }, [user?.uid]);
 
   // ============================================================================
+  // BUSINESS HOURS HELPER (MAXIMIZE BUSINESS VALUE: Improve deliverability)
+  // ============================================================================
+  const isBusinessHours = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+
+    // Business hours: 9 AM to 6 PM (9:00 - 18:00) on weekdays (Monday - Friday)
+    const isWeekday = day >= 1 && day <= 5;
+    const isWorkingHour = hour >= 9 && hour < 18;
+
+    return isWeekday && isWorkingHour;
+  };
+
+  const getNextBusinessHour = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay();
+
+    // If it's weekend, schedule for Monday 9 AM
+    if (day === 0) { // Sunday
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + 1);
+      monday.setHours(9, 0, 0, 0);
+      return monday;
+    }
+    if (day === 6) { // Saturday
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + 2);
+      monday.setHours(9, 0, 0, 0);
+      return monday;
+    }
+
+    // If it's weekday but outside business hours
+    if (hour < 9) {
+      // Schedule for today 9 AM
+      const today = new Date(now);
+      today.setHours(9, 0, 0, 0);
+      return today;
+    }
+    if (hour >= 18) {
+      // Schedule for tomorrow 9 AM
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      tomorrow.setHours(9, 0, 0, 0);
+      return tomorrow;
+    }
+
+    // Already in business hours
+    return now;
+  };
+
+  // ============================================================================
   // FOLLOW-UP QUEUE HANDLERS (PHASE 2-6)
   // ============================================================================
   const handleSendEmailFollowUp = async (task) => {
     if (!user?.uid) return;
-    
+
+    // MAXIMIZE BUSINESS VALUE: Check business hours for better deliverability
+    if (!isBusinessHours()) {
+      const nextBusinessTime = getNextBusinessHour();
+      const timeString = nextBusinessTime.toLocaleString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      addNotification(
+        `Outside business hours (9 AM - 6 PM, weekdays). Best to send at ${timeString} for better deliverability.`,
+        'warning',
+        5000
+      );
+
+      // Still allow sending, but warn the user
+      if (!confirm('It\'s currently outside business hours. Sending now may reduce email deliverability. Continue anyway?')) {
+        return;
+      }
+    }
+
     // PHASE 6: Check idempotency - verify task still exists and is pending
     const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'email', task.followUpStage);
     if (!exists) {
@@ -2588,7 +2664,30 @@ export default function Dashboard() {
 
   const handleSendWhatsAppFollowUp = async (task) => {
     if (!user?.uid) return;
-    
+
+    // MAXIMIZE BUSINESS VALUE: Check business hours for better deliverability
+    if (!isBusinessHours()) {
+      const nextBusinessTime = getNextBusinessHour();
+      const timeString = nextBusinessTime.toLocaleString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      addNotification(
+        `Outside business hours (9 AM - 6 PM, weekdays). Best to send at ${timeString} for better response rates.`,
+        'warning',
+        5000
+      );
+
+      // Still allow sending, but warn the user
+      if (!confirm('It\'s currently outside business hours. Sending now may reduce response rates. Continue anyway?')) {
+        return;
+      }
+    }
+
     // PHASE 6: Check idempotency
     const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'whatsapp', task.followUpStage);
     if (!exists) {
