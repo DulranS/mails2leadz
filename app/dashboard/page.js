@@ -519,13 +519,13 @@ export default function Dashboard() {
   const [completedTasksPage, setCompletedTasksPage] = useState(1);
   const TASKS_PER_PAGE = 20;
 
-  const safeParseDate = useCallback((value) => {
+  const safeParseDate = (value) => {
     if (!value) return null;
     if (value instanceof Date) return value;
     if (typeof value?.toDate === 'function') return value.toDate();
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }, []);
+  };
 
   const normalizeLeadEmail = useCallback((lead) => {
     if (!lead) return '';
@@ -567,9 +567,8 @@ export default function Dashboard() {
   const [conversationThread, setConversationThread] = useState(null);
   const [showConversationModal, setShowConversationModal] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
-  const [databaseWhatsAppContacts, setDatabaseWhatsAppContacts] = useState([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Update current time every second for real-time countdown
   useEffect(() => {
@@ -579,37 +578,36 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Populate databaseWhatsAppContacts from sentLeads
+  // Check for upcoming follow-ups and show alert
   useEffect(() => {
-    if (sentLeads && sentLeads.length > 0) {
-      const whatsappContacts = sentLeads.filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')));
-      setDatabaseWhatsAppContacts(whatsappContacts);
+    if (safeFollowUpCandidates.length === 0) {
+      setUpcomingFollowUpAlert(null);
+      return;
     }
-  }, [sentLeads]);
 
-  // Check for upcoming follow-ups and show alert (simplified to avoid circular dependency)
-  useEffect(() => {
-    const checkInterval = setInterval(() => {
-      if (pendingLeads.length > 0) {
-        const nextFollowUp = pendingLeads[0];
-        const timeUntilFollowUp = new Date(nextFollowUp.followUpAt) - new Date();
-        const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
-        
-        if (hoursUntil <= 1 && hoursUntil > 0) {
-          setUpcomingFollowUpAlert({
-            message: `${pendingLeads.length} follow-up${pendingLeads.length > 1 ? 's' : ''} coming up within 1 hour`,
-            count: pendingLeads.length
-          });
-        } else {
-          setUpcomingFollowUpAlert(null);
-        }
-      } else {
-        setUpcomingFollowUpAlert(null);
-      }
-    }, 60000); // Check every minute instead of every second to reduce overhead
-    
-    return () => clearInterval(checkInterval);
-  }, [pendingLeads.length]); // Only depend on length, not the full array
+    const now = new Date();
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+
+    const upcomingLeads = safeFollowUpCandidates.filter(lead => {
+      if (!lead.followUpAt) return false;
+      const followUpDate = new Date(lead.followUpAt);
+      return followUpDate > now && followUpDate <= oneHourFromNow;
+    });
+
+    if (upcomingLeads.length > 0) {
+      const nearestLead = upcomingLeads[0];
+      const timeUntil = new Date(nearestLead.followUpAt) - now;
+      const minutesUntil = Math.floor(timeUntil / (1000 * 60));
+      
+      setUpcomingFollowUpAlert({
+        message: `${upcomingLeads.length} follow-up${upcomingLeads.length > 1 ? 's' : ''} available in ${minutesUntil} minute${minutesUntil !== 1 ? 's' : ''}`,
+        count: upcomingLeads.length,
+        minutesUntil
+      });
+    } else {
+      setUpcomingFollowUpAlert(null);
+    }
+  }, [safeFollowUpCandidates, currentTime]);
 
   // ============================================================================
   // AI & ADVANCED FEATURES STATES
@@ -984,7 +982,7 @@ export default function Dashboard() {
   // ============================================================================
   // FILTER SENT LEADS (Exclude leads too soon to follow up)
   // ============================================================================
-  const filteredSentLeads = useMemo(() => {
+  const filteredSentLeads = (() => {
     if (!sentLeads || sentLeads.length === 0) return [];
     
     const now = new Date();
@@ -1010,12 +1008,12 @@ export default function Dashboard() {
       return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
     });
     return sentLeadsFiltered;
-  }, [sentLeads, safeParseDate]);
+  })();
 
   // ============================================================================
   // ✅ GET SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
   // ============================================================================
-  const getSafeFollowUpCandidates = useCallback(() => {
+  const getSafeFollowUpCandidates = () => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -1079,17 +1077,31 @@ export default function Dashboard() {
       });
 
     return candidates;
-  }, [filteredSentLeads, followUpHistory, normalizeSentLead]);
+  };
 
-  // Memoize the result to prevent recalculation on every render
-  const safeFollowUpCandidates = useMemo(() => getSafeFollowUpCandidates(), [filteredSentLeads, followUpHistory, normalizeSentLead]);
+  const safeFollowUpCandidates = getSafeFollowUpCandidates();
 
   // ============================================================================
-  // ✅ GET WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
+  // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
-  const getWhatsAppFollowUpCandidates = useCallback(() => {
-    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (databaseWhatsAppContacts)
-    const allWhatsAppContacts = [...whatsappLinks, ...databaseWhatsAppContacts];
+  const whatsappFollowUpCandidates = (() => {
+    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (sentLeads)
+    const csvWhatsAppContacts = whatsappLinks || [];
+    
+    // Extract WhatsApp contacts from sentLeads (database)
+    const databaseWhatsAppContacts = (sentLeads || [])
+      .filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')))
+      .map(lead => ({
+        phone: lead.phone,
+        email: lead.email,
+        businessName: lead.businessName || lead.companyName || 'Unknown',
+        name: lead.name || lead.firstName || lead.recipientName || '',
+        followUpCount: lead.followUpCount || 0,
+        sentAt: lead.sentAt
+      }));
+
+    // Combine both sources
+    const allWhatsAppContacts = [...csvWhatsAppContacts, ...databaseWhatsAppContacts];
     
     // Remove duplicates by phone/email
     const uniqueContacts = new Map();
@@ -1149,12 +1161,7 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  }, [whatsappLinks, lastWhatsAppSent, databaseWhatsAppContacts]);
-
-  const whatsappFollowUpCandidates = useMemo(() => {
-    const candidates = getWhatsAppFollowUpCandidates();
-    return candidates;
-  }, [whatsappLinks, lastWhatsAppSent, databaseWhatsAppContacts]);
+  })();
 
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
@@ -2995,17 +3002,6 @@ export default function Dashboard() {
     const maxPage = followUpTasks?.completed ? Math.ceil(followUpTasks.completed.length / TASKS_PER_PAGE) : 1;
     setCompletedTasksPage(p => Math.min(maxPage, p + 1));
   };
-
-  // ============================================================================
-  // REAL-TIME COUNTDOWN TIMER FOR FOLLOW-UP UNLOCK TIMES
-  // ============================================================================
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000); // Update every second
-
-    return () => clearInterval(interval);
-  }, []);
 
   // ============================================================================
   // CACHE STATS MONITORING (Log every 5 minutes)
@@ -7650,10 +7646,10 @@ export default function Dashboard() {
                 </button>
               </div>
             </div>
-            
+
             {/* Upcoming Follow-Up Alert Banner */}
             {upcomingFollowUpAlert && (
-              <div className="bg-gradient-to-r from-yellow-900/40 to-orange-900/40 border border-yellow-500/50 rounded-lg p-3 sm:p-4 mb-4 animate-pulse">
+              <div className="bg-gradient-to-r from-yellow-900/40 to-orange-900/40 border border-yellow-500/50 rounded-lg p-3 sm:p-4 mx-4 sm:mx-6 mt-4 animate-pulse">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl sm:text-3xl">⏰</span>
                   <div className="flex-1">
@@ -7673,7 +7669,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            
+
             <div className="p-4 sm:p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 border-b border-gray-700/50">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
                 <div className="relative group">
