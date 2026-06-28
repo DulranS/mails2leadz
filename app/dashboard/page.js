@@ -518,6 +518,9 @@ export default function Dashboard() {
   const [pendingTasksPage, setPendingTasksPage] = useState(1);
   const [completedTasksPage, setCompletedTasksPage] = useState(1);
   const TASKS_PER_PAGE = 20;
+  const [followUpQueueSearch, setFollowUpQueueSearch] = useState('');
+  const [followUpQueueFilter, setFollowUpQueueFilter] = useState('all');
+  const [followUpQueueChannel, setFollowUpQueueChannel] = useState('all');
 
   const safeParseDate = (value) => {
     if (!value) return null;
@@ -568,11 +571,11 @@ export default function Dashboard() {
   const [showConversationModal, setShowConversationModal] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
-  // Update current time every second for real-time countdown
+  // Update current time every 30 seconds for real-time countdowns
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 1000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -2383,23 +2386,25 @@ export default function Dashboard() {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
         setSenderEmail(user.email || '');
         if (!senderName.trim()) {
           setSenderName(user.displayName || '');
         }
-        loadSettings(user.uid);
-        loadClickStats();
-        loadDeals();
-        loadAbResults();
-        loadRepliedAndFollowUp();
-        loadSentLeads();
-        loadWhatsAppContacts();
-        loadDailyEmailCount();
-        loadSendTimeOptimization();
-        loadManualContactStatus(user.uid);
+        await Promise.allSettled([
+          loadSettings(user.uid),
+          loadClickStats(),
+          loadDeals(),
+          loadAbResults(),
+          loadRepliedAndFollowUp(),
+          loadSentLeads(),
+          loadWhatsAppContacts(),
+          loadDailyEmailCount(),
+          loadSendTimeOptimization(),
+          loadManualContactStatus(user.uid)
+        ]);
         addNotification(`Welcome back, ${user.displayName || user.email}!`, 'success', 3000);
       } else {
         setUser(null);
@@ -3220,7 +3225,7 @@ export default function Dashboard() {
   // ============================================================================
   // LOAD DEALS FROM FIREBASE
   // ============================================================================
-  const loadDeals = async () => {
+   const loadDeals = async () => {
     if (!user?.uid || !db) return;
 
     try {
@@ -3232,8 +3237,10 @@ export default function Dashboard() {
 
       snapshot.forEach(doc => {
         const data = doc.data();
-        stages[data.email] = data.stage || 'new';
-        if (data.stage !== 'won') {
+        let stage = data.stage || 'new';
+        if (stage === 'won') stage = 'closed_won';
+        stages[data.email] = stage;
+        if (!['closed_won', 'closed_lost'].includes(stage)) {
           totalValue += CONFIG.DEFAULT_AVG_DEAL_VALUE;
         }
       });
@@ -3243,6 +3250,15 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('Deals load failed:', e);
     }
+  };
+
+  const refreshAllData = async () => {
+    if (!user?.uid) return;
+    await Promise.allSettled([
+      loadSentLeads(),
+      loadRepliedAndFollowUp(),
+      loadDeals()
+    ]);
   };
 
   // ============================================================================
@@ -3839,9 +3855,7 @@ export default function Dashboard() {
         invalidateCache('sent_emails');
         invalidateCache('replied_followup');
 
-        await loadSentLeads();
-        await loadRepliedAndFollowUp();
-        await loadDeals();
+        await refreshAllData();
       } else {
         addNotification(`❌ Follow-up failed: ${data.error}`, 'error');
       }
@@ -3879,8 +3893,7 @@ export default function Dashboard() {
       setAiProcessorStatus(`Done · processed ${data.processed || 0} replies`);
       addNotification('✅ AI auto-reply processor completed', 'success', 4000);
 
-      await loadSentLeads();
-      await loadRepliedAndFollowUp();
+      await refreshAllData();
     } catch (error) {
       setAiProcessorStatus(`Error · ${error.message}`);
       addNotification(`❌ Auto-reply processor error: ${error.message}`, 'error', 6000);
@@ -3915,8 +3928,7 @@ export default function Dashboard() {
       setFollowupSchedulerStatus(`Done · processed ${data.processed || 0} followups`);
       addNotification('✅ Smart follow-up scheduler completed', 'success', 4000);
 
-      await loadSentLeads();
-      await loadRepliedAndFollowUp();
+      await refreshAllData();
     } catch (error) {
       setFollowupSchedulerStatus(`Error · ${error.message}`);
       addNotification(`❌ Follow-up scheduler error: ${error.message}`, 'error', 6000);
@@ -4088,9 +4100,7 @@ export default function Dashboard() {
       invalidateCache('sent_emails');
       invalidateCache('replied_followup');
 
-      await loadSentLeads();
-      await loadRepliedAndFollowUp();
-      await loadDeals();
+      await refreshAllData();
 
       // Show comprehensive results
       const message = `Mass Follow-Up Complete!\n\n` +
@@ -4390,8 +4400,7 @@ export default function Dashboard() {
       setStatusType('success');
       setStatus(`Outreach sent to ${contact.email}`);
 
-      await loadSentLeads();
-      await loadRepliedAndFollowUp();
+      await refreshAllData();
     } catch (err) {
       console.error('Smart outreach error:', err);
       addNotification(`❌ Smart outreach failed: ${err.message}`, 'error');
@@ -7422,7 +7431,9 @@ export default function Dashboard() {
                                 <option value="contacted">Contacted</option>
                                 <option value="demo">Demo Scheduled</option>
                                 <option value="proposal">Proposal Sent</option>
-                                <option value="won">🎉 Closed Won</option>
+                                <option value="negotiation">Negotiation</option>
+                                <option value="closed_won">🎉 Closed Won</option>
+                                <option value="closed_lost">❌ Closed Lost</option>
                                 <option value="delivery">🚀 Delivery</option>
                                 <option value="retention">💎 Retention</option>
                                 <option value="expansion">📈 Expansion</option>
@@ -8151,11 +8162,10 @@ export default function Dashboard() {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ userId: user.uid, email: contact.email })
                                   });
-                                  if (res.ok) {
-                                    addNotification(`✅ Marked ${contact.email} as replied`, 'success');
-                                    await loadSentLeads();
-                                    await loadRepliedAndFollowUp();
-                                  } else {
+                                   if (res.ok) {
+                                     addNotification(`✅ Marked ${contact.email} as replied`, 'success');
+                                     await refreshAllData();
+                                   } else {
                                     addNotification('Failed to mark as replied', 'error');
                                   }
                                 } catch (err) {
@@ -8664,7 +8674,9 @@ export default function Dashboard() {
                             <option value="new">New</option>
                             <option value="contacted">Contacted</option>
                             <option value="demo">Demo</option>
-                            <option value="won">🎉 Won</option>
+                            <option value="negotiation">Negotiation</option>
+                            <option value="closed_won">🎉 Closed Won</option>
+                            <option value="closed_lost">❌ Closed Lost</option>
                             <option value="delivery">🚀 Delivery</option>
                             <option value="retention">💎 Retention</option>
                             <option value="expansion">📈 Expansion</option>
@@ -9186,13 +9198,56 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
+              {/* FILTER BAR */}
+              <div className="mb-4 p-3 bg-gray-800/80 rounded-xl border border-gray-700 flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Search by name, email, or stage..."
+                  value={followUpQueueSearch}
+                  onChange={(e) => setFollowUpQueueSearch(e.target.value)}
+                  className="flex-1 p-2 bg-gray-700 text-white border border-gray-600 rounded-lg text-sm"
+                />
+                <select
+                  value={followUpQueueFilter}
+                  onChange={(e) => setFollowUpQueueFilter(e.target.value)}
+                  className="p-2 bg-gray-700 text-white border border-gray-600 rounded-lg text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <select
+                  value={followUpQueueChannel}
+                  onChange={(e) => setFollowUpQueueChannel(e.target.value)}
+                  className="p-2 bg-gray-700 text-white border border-gray-600 rounded-lg text-sm"
+                >
+                  <option value="all">All Channels</option>
+                  <option value="email">📧 Email</option>
+                  <option value="whatsapp">💬 WhatsApp</option>
+                  <option value="phone">📞 Phone</option>
+                </select>
+              </div>
+
               {/* PENDING TASKS */}
               <div className="mb-6">
                 <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
                   <span>📋</span>
                   <span>Pending Follow-Ups ({followUpTasks.pending?.length || 0})</span>
                 </h3>
-                {(followUpTasks.pending?.length || 0) === 0 ? (
+                {(followUpTasks.pending || []).filter(task => {
+                  if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
+                  const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
+                  const isOverdue = scheduledDate < new Date();
+                  if (followUpQueueFilter === 'completed') return false;
+                  if (followUpQueueFilter === 'overdue' && !isOverdue) return false;
+                  if (followUpQueueSearch) {
+                    const q = followUpQueueSearch.toLowerCase();
+                    const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                    if (!s.includes(q)) return false;
+                  }
+                  return true;
+                }).length === 0 ? (
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">🎉</div>
                     <div className="text-gray-300">No pending follow-ups</div>
@@ -9201,6 +9256,19 @@ export default function Dashboard() {
                 ) : (
                   <div className="space-y-3">
                     {(followUpTasks.pending || [])
+                      .filter(task => {
+                        if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
+                        const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
+                        const isOverdue = scheduledDate < new Date();
+                        if (followUpQueueFilter === 'completed') return false;
+                        if (followUpQueueFilter === 'overdue' && !isOverdue) return false;
+                        if (followUpQueueSearch) {
+                          const q = followUpQueueSearch.toLowerCase();
+                          const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                          if (!s.includes(q)) return false;
+                        }
+                        return true;
+                      })
                       .sort((a, b) => new Date(a.scheduledFor || 0) - new Date(b.scheduledFor || 0))
                       .slice((pendingTasksPage - 1) * TASKS_PER_PAGE, pendingTasksPage * TASKS_PER_PAGE)
                       .map((task) => {
@@ -9312,15 +9380,36 @@ export default function Dashboard() {
                   <span>✅</span>
                   <span>Completed History ({followUpTasks.completed?.length || 0})</span>
                 </h3>
-                {(followUpTasks.completed?.length || 0) === 0 ? (
+                 {(followUpTasks.completed || []).filter(task => {
+                   if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
+                   if (followUpQueueFilter === 'pending') return false;
+                   if (followUpQueueFilter === 'overdue') return false;
+                   if (followUpQueueSearch) {
+                     const q = followUpQueueSearch.toLowerCase();
+                     const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                     if (!s.includes(q)) return false;
+                   }
+                   return true;
+                 }).length === 0 ? (
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">📝</div>
                     <div className="text-gray-300">No completed follow-ups yet</div>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {(followUpTasks.completed || [])
-                      .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
+                 ) : (
+                   <div className="space-y-2">
+                     {(followUpTasks.completed || [])
+                       .filter(task => {
+                         if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
+                         if (followUpQueueFilter === 'pending') return false;
+                         if (followUpQueueFilter === 'overdue') return false;
+                         if (followUpQueueSearch) {
+                           const q = followUpQueueSearch.toLowerCase();
+                           const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                           if (!s.includes(q)) return false;
+                         }
+                         return true;
+                       })
+                       .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
                       .slice((completedTasksPage - 1) * TASKS_PER_PAGE, completedTasksPage * TASKS_PER_PAGE)
                       .map((task) => {
                         const completedDate = task.completedAt ? new Date(task.completedAt) : new Date();
