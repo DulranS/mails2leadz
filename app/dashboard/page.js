@@ -15,7 +15,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore,
@@ -527,7 +527,7 @@ export default function Dashboard() {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  const normalizeLeadEmail = useCallback((lead) => {
+  const normalizeLeadEmail = (lead) => {
     if (!lead) return '';
     const rawEmail =
       lead.email ||
@@ -538,9 +538,9 @@ export default function Dashboard() {
       lead.toEmail ||
       '';
     return String(rawEmail).trim().toLowerCase();
-  }, []);
+  };
 
-  const normalizeSentLead = useCallback((lead) => {
+  const normalizeSentLead = (lead) => {
     const email = normalizeLeadEmail(lead);
     const sentAt = safeParseDate(lead.sentAt);
     const followUpAt = safeParseDate(lead.followUpAt);
@@ -554,7 +554,7 @@ export default function Dashboard() {
       lastFollowUpAt: lastFollowUpAt ? lastFollowUpAt.toISOString() : null,
       followUpCount: Number(lead.followUpCount ?? lead.followUpSentCount ?? 0)
     };
-  }, [normalizeLeadEmail, safeParseDate]);
+  };
 
 
   const [autoReplyProcessorEnabled, setAutoReplyProcessorEnabled] = useState(true);
@@ -568,8 +568,6 @@ export default function Dashboard() {
   const [showConversationModal, setShowConversationModal] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
   // Update current time every second for real-time countdown
   useEffect(() => {
     const interval = setInterval(() => {
@@ -577,37 +575,6 @@ export default function Dashboard() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // Check for upcoming follow-ups and show alert
-  useEffect(() => {
-    if (safeFollowUpCandidates.length === 0) {
-      setUpcomingFollowUpAlert(null);
-      return;
-    }
-
-    const now = new Date();
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
-
-    const upcomingLeads = safeFollowUpCandidates.filter(lead => {
-      if (!lead.followUpAt) return false;
-      const followUpDate = new Date(lead.followUpAt);
-      return followUpDate > now && followUpDate <= oneHourFromNow;
-    });
-
-    if (upcomingLeads.length > 0) {
-      const nearestLead = upcomingLeads[0];
-      const timeUntil = new Date(nearestLead.followUpAt) - now;
-      const minutesUntil = Math.floor(timeUntil / (1000 * 60));
-      
-      setUpcomingFollowUpAlert({
-        message: `${upcomingLeads.length} follow-up${upcomingLeads.length > 1 ? 's' : ''} available in ${minutesUntil} minute${minutesUntil !== 1 ? 's' : ''}`,
-        count: upcomingLeads.length,
-        minutesUntil
-      });
-    } else {
-      setUpcomingFollowUpAlert(null);
-    }
-  }, [safeFollowUpCandidates, currentTime]);
 
   // ============================================================================
   // AI & ADVANCED FEATURES STATES
@@ -733,7 +700,7 @@ export default function Dashboard() {
   // ============================================================================
   // NOTIFICATION HELPER
   // ============================================================================
-  const addNotification = useCallback((message, type = 'info', duration = CONFIG.NOTIFICATION_DURATION_MS) => {
+  const addNotification = (message, type = 'info', duration = CONFIG.NOTIFICATION_DURATION_MS) => {
     const id = generateId();
     const notification = {
       id,
@@ -752,22 +719,22 @@ export default function Dashboard() {
     }
 
     return id;
-  }, []);
+  };
 
-  const markNotificationRead = useCallback((id) => {
+  const markNotificationRead = (id) => {
     setNotifications(prev => prev.map(n =>
       n.id === id ? { ...n, read: true } : n
     ));
-  }, []);
+  };
 
-  const clearNotifications = useCallback(() => {
+  const clearNotifications = () => {
     setNotifications([]);
-  }, []);
+  };
 
   // ============================================================================
   // HELPER: Check if contact was reached on ANY channel
   // ============================================================================
-  const isContactedOnAnyChannel = useCallback((contact) => {
+  const isContactedOnAnyChannel = (contact) => {
     if (!contact) return false;
     const key = normalizeContactKey(contact);
     if (!key) return false;
@@ -788,12 +755,12 @@ export default function Dashboard() {
       lastCallMade[key] ||
       (contactedChannels[key] && contactedChannels[key].length > 0)
     );
-  }, [lastSent, lastWhatsAppSent, lastSMSSent, lastCallMade, contactedChannels, manualContactStatus, getContactSummary]);
+  };
 
   // ============================================================================
   // HELPER: Get all contact attempts for a contact
   // ============================================================================
-  const getContactHistory = useCallback((contact) => {
+  const getContactHistory = (contact) => {
     if (!contact) return {
       email: null,
       whatsapp: null,
@@ -818,12 +785,12 @@ export default function Dashboard() {
       lastContacted: summary.lastContacted || manualStatus?.lastContacted || null,
       manuallyMarked: manualStatus?.contacted || false
     };
-  }, [lastSent, lastWhatsAppSent, lastSMSSent, lastCallMade, contactedChannels, getContactSummary, manualContactStatus]);
+  };
 
   // ============================================================================
   // HELPER: Check if safe to contact on specific channel
   // ============================================================================
-  const isSafeToContactOnChannel = useCallback((contact, channel, minDaysBetween = CONFIG.MIN_DAYS_BETWEEN_CONTACT) => {
+  const isSafeToContactOnChannel = (contact, channel, minDaysBetween = CONFIG.MIN_DAYS_BETWEEN_CONTACT) => {
     if (!contact) return { safe: true, reason: 'No contact' };
 
     const key = contact.email || contact.phone;
@@ -843,21 +810,21 @@ export default function Dashboard() {
       daysSince: canContactResult.daysSince,
       lastContact: canContactResult.lastContact
     };
-  }, [canContact, manualContactStatus]);
+  };
 
   // ============================================================================
   // HELPER: Check if phone is a 077 priority number (formatted as 9477...)
   // ============================================================================
-  const isPriorityPhone = useCallback((phone) => {
+  const isPriorityPhone = (phone) => {
     if (!phone) return false;
     const cleaned = phone.toString().replace(/\D/g, '');
     return cleaned.startsWith('9477') || cleaned.startsWith('9476') || cleaned.startsWith('9475');
-  }, []);
+  };
 
   // ============================================================================
   // HELPER: Get recommended channel based on engagement
   // ============================================================================
-  const getRecommendedChannel = useCallback((contact) => {
+  const getRecommendedChannel = (contact) => {
     if (!contact) return 'email';
 
     const history = getContactHistory(contact);
@@ -893,12 +860,12 @@ export default function Dashboard() {
       .sort((a, b) => b[1] - a[1])[0];
 
     return bestChannel ? bestChannel[0] : 'email';
-  }, [leadScores, getContactHistory, isSafeToContactOnChannel]);
+  };
 
   // ============================================================================
   // HELPER: Mark contact as manually contacted/not contacted
   // ============================================================================
-  const markContactManually = useCallback(async (contact, contacted, reason = '') => {
+  const markContactManually = async (contact, contacted, reason = '') => {
     if (!contact) {
       addNotification('❌ Invalid contact provided', 'error');
       return false;
@@ -977,7 +944,7 @@ export default function Dashboard() {
       addNotification(`❌ Failed to update contact status: ${error?.message || 'Unknown error'}`, 'error');
       return false;
     }
-  }, [user?.uid, db, updateContact, addNotification]);
+  };
 
   // ============================================================================
   // FILTER SENT LEADS (Exclude leads too soon to follow up)
@@ -1011,9 +978,9 @@ export default function Dashboard() {
   })();
 
   // ============================================================================
-  // ✅ GET SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
+  // ✅ SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
   // ============================================================================
-  const getSafeFollowUpCandidates = () => {
+  const safeFollowUpCandidates = (() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -1077,49 +1044,23 @@ export default function Dashboard() {
       });
 
     return candidates;
-  };
-
-  const safeFollowUpCandidates = getSafeFollowUpCandidates();
+  })();
 
   // ============================================================================
   // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
   // ============================================================================
   const whatsappFollowUpCandidates = (() => {
-    // Get WhatsApp contacts from both CSV uploads (whatsappLinks) and database (sentLeads)
+    // Only use whatsappLinks initially to avoid circular dependency
     const csvWhatsAppContacts = whatsappLinks || [];
     
-    // Extract WhatsApp contacts from sentLeads (database)
-    const databaseWhatsAppContacts = (sentLeads || [])
-      .filter(lead => lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947')))
-      .map(lead => ({
-        phone: lead.phone,
-        email: lead.email,
-        businessName: lead.businessName || lead.companyName || 'Unknown',
-        name: lead.name || lead.firstName || lead.recipientName || '',
-        followUpCount: lead.followUpCount || 0,
-        sentAt: lead.sentAt
-      }));
-
-    // Combine both sources
-    const allWhatsAppContacts = [...csvWhatsAppContacts, ...databaseWhatsAppContacts];
-    
-    // Remove duplicates by phone/email
-    const uniqueContacts = new Map();
-    allWhatsAppContacts.forEach(contact => {
-      const key = contact.phone || contact.email;
-      if (key && !uniqueContacts.has(key)) {
-        uniqueContacts.set(key, contact);
-      }
-    });
-
-    if (uniqueContacts.size === 0) {
+    if (csvWhatsAppContacts.length === 0) {
       return [];
     }
 
     const now = new Date();
     const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3; // WhatsApp follow-ups should be less frequent
 
-    const candidates = Array.from(uniqueContacts.values())
+    const candidates = csvWhatsAppContacts
       .filter(contact => {
         if (!contact || !contact.phone) return false;
 
@@ -1166,7 +1107,7 @@ export default function Dashboard() {
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
   // ============================================================================
-  const calculateWhatsAppFollowUpStats = useCallback(() => {
+  const calculateWhatsAppFollowUpStats = () => {
     if (!whatsappLinks || whatsappLinks.length === 0) {
       return {
         totalSent: 0,
@@ -1181,7 +1122,7 @@ export default function Dashboard() {
     const readyForFollowUp = whatsappFollowUpCandidates.filter(c => c.readyForFollowUp).length;
     const alreadyFollowedUp = whatsappLinks.filter(c => c.followUpCount > 0).length;
     const awaitingReply = totalSent - readyForFollowUp - alreadyFollowedUp;
-    
+
     // For WhatsApp, we don't have a reliable way to track replies yet
     // This would need to be implemented with WhatsApp Business API
     const totalReplied = 0;
@@ -1193,7 +1134,7 @@ export default function Dashboard() {
       alreadyFollowedUp,
       awaitingReply
     };
-  }, [whatsappLinks, whatsappFollowUpCandidates]);
+  };
 
   // Update WhatsApp follow-up stats when dependencies change
   useEffect(() => {
@@ -1203,7 +1144,7 @@ export default function Dashboard() {
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
   // ============================================================================
-  const calculatePredictiveScore = useCallback((lead) => {
+  const calculatePredictiveScore = (lead) => {
     if (!lead) return { score: 0, probability: 0, tier: 'cold' };
 
     let score = 0;
@@ -1297,10 +1238,10 @@ export default function Dashboard() {
       tier,
       factors
     };
-  }, []);
+  };
 
   // Apply predictive scoring to all leads
-  const scoredLeads = useMemo(() => {
+  const scoredLeads = (() => {
     if (!sentLeads || sentLeads.length === 0) return [];
     
     return sentLeads
@@ -1309,18 +1250,17 @@ export default function Dashboard() {
         predictive: calculatePredictiveScore(lead)
       }))
       .sort((a, b) => b.predictive.score - a.predictive.score);
-  }, [sentLeads, calculatePredictiveScore]);
+  })();
 
   // Get high-value leads (hot tier)
-  const hotLeads = useMemo(() => 
-    scoredLeads.filter(lead => lead.predictive.tier === 'hot' && !lead.replied),
-    [scoredLeads]
-  );
+  const hotLeads = (() => 
+    scoredLeads.filter(lead => lead.predictive.tier === 'hot' && !lead.replied)
+  )();
 
   // ============================================================================
   // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING
   // ============================================================================
-  const calculateOptimalSendTime = useCallback((lead, historicalData = {}) => {
+  const calculateOptimalSendTime = (lead, historicalData = {}) => {
     // Default optimal times based on industry research
     const defaultOptimalHours = [10, 11, 14, 15]; // 10am, 11am, 2pm, 3pm
     const defaultOptimalDays = [2, 3, 4]; // Tuesday, Wednesday, Thursday
@@ -1369,9 +1309,9 @@ export default function Dashboard() {
     }
     
     return targetDate;
-  }, []);
+  };
 
-  const scheduleAutomatedFollowUp = useCallback(async (lead, template, scheduledTime) => {
+  const scheduleAutomatedFollowUp = async (lead, template, scheduledTime) => {
     if (!user?.uid) {
       addNotification('User not authenticated', 'error');
       return { success: false, error: 'Not authenticated' };
@@ -1397,9 +1337,9 @@ export default function Dashboard() {
       console.error('Error scheduling follow-up:', error);
       return { success: false, error: error.message };
     }
-  }, [user?.uid, db, addNotification]);
+  };
 
-  const batchScheduleFollowUps = useCallback(async (leads, template) => {
+  const batchScheduleFollowUps = async (leads, template) => {
     if (!leads || leads.length === 0) {
       addNotification('No leads to schedule', 'warning');
       return { success: false, scheduled: 0, errors: [] };
@@ -1436,12 +1376,12 @@ export default function Dashboard() {
     }
 
     return results;
-  }, [calculateOptimalSendTime, scheduleAutomatedFollowUp, addNotification]);
+  };
 
   // ============================================================================
   // ✅ LEAD ENGAGEMENT TRACKING AND BEHAVIORAL ANALYSIS
   // ============================================================================
-  const analyzeLeadBehavior = useCallback((lead) => {
+  const analyzeLeadBehavior = (lead) => {
     if (!lead) return null;
 
     const behavior = {
@@ -1530,20 +1470,20 @@ export default function Dashboard() {
     }
 
     return behavior;
-  }, [lastWhatsAppSent, lastSMSSent]);
+  };
 
   // Apply behavioral analysis to all leads
-  const leadsWithBehavior = useMemo(() => {
+  const leadsWithBehavior = (() => {
     if (!scoredLeads || scoredLeads.length === 0) return [];
     
     return scoredLeads.map(lead => ({
       ...lead,
       behavior: analyzeLeadBehavior(lead)
     }));
-  }, [scoredLeads, analyzeLeadBehavior]);
+  })();
 
   // Get leads by engagement pattern
-  const leadsByEngagementPattern = useMemo(() => {
+  const leadsByEngagementPattern = (() => {
     const engagementPatterns = {};
     leadsWithBehavior.forEach(lead => {
       const pattern = lead.behavior?.engagementPattern || 'unknown';
@@ -1553,18 +1493,17 @@ export default function Dashboard() {
       engagementPatterns[pattern].push(lead);
     });
     return engagementPatterns;
-  }, [leadsWithBehavior]);
+  })();
 
   // Get high-risk leads (high churn risk)
-  const highRiskLeads = useMemo(() => 
-    leadsWithBehavior.filter(lead => lead.behavior?.riskOfChurn === 'high'),
-    [leadsWithBehavior]
-  );
+  const highRiskLeads = (() => 
+    leadsWithBehavior.filter(lead => lead.behavior?.riskOfChurn === 'high')
+  )();
 
   // ============================================================================
   // ✅ CAMPAIGN PERFORMANCE INSIGHTS AND RECOMMENDATIONS
   // ============================================================================
-  const generateCampaignInsights = useCallback(() => {
+  const generateCampaignInsights = () => {
     if (!sentLeads || sentLeads.length === 0) {
       return {
         overallHealth: 'unknown',
@@ -1750,12 +1689,12 @@ export default function Dashboard() {
       underperformers,
       templatePerformance: templateStats
     };
-  }, [sentLeads, leadsWithBehavior]);
+  };
 
   // ============================================================================
   // ✅ LEAD LIFECYCLE MANAGEMENT WITH FUNNEL STAGES
   // ============================================================================
-  const determineLeadStage = useCallback((lead) => {
+  const determineLeadStage = (lead) => {
     if (!lead) return 'unknown';
 
     // Stage definitions
@@ -1770,9 +1709,9 @@ export default function Dashboard() {
     } else {
       return 'new'; // Just sent - new
     }
-  }, []);
+  };
 
-  const calculateFunnelMetrics = useCallback(() => {
+  const calculateFunnelMetrics = () => {
     if (!sentLeads || sentLeads.length === 0) {
       return {
         total: 0,
@@ -1841,12 +1780,12 @@ export default function Dashboard() {
       conversionRates,
       dropOffPoints
     };
-  }, [sentLeads, determineLeadStage]);
+  };
 
-  const funnelMetrics = useMemo(() => calculateFunnelMetrics(), [sentLeads, determineLeadStage]);
+  const funnelMetrics = calculateFunnelMetrics();
 
   // Get leads by stage
-  const leadsByStage = useMemo(() => {
+  const leadsByStage = (() => {
     const leadStages = {
       new: [],
       nurturing: [],
@@ -1861,10 +1800,10 @@ export default function Dashboard() {
     });
 
     return leadStages;
-  }, [leadsWithBehavior, determineLeadStage]);
+  })();
 
   // Calculate pipeline value (estimated revenue potential)
-  const calculatePipelineValue = useCallback(() => {
+  const calculatePipelineValue = () => {
     let totalValue = 0;
     const stageValueMap = {
       new: 50,
@@ -1879,12 +1818,12 @@ export default function Dashboard() {
     });
 
     return totalValue;
-  }, [leadsByStage]);
+  };
 
-  const estimatedPipelineValue = useMemo(() => calculatePipelineValue(), [leadsByStage]);
+  const estimatedPipelineValue = calculatePipelineValue();
 
   // Get pending leads (un-replied but not yet ready for follow-up)
-  const getPendingLeads = useCallback(() => {
+  const getPendingLeads = () => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -1930,12 +1869,12 @@ export default function Dashboard() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
+  };
 
-  const pendingLeads = useMemo(() => getPendingLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
+  const pendingLeads = getPendingLeads();
 
   // Get replied leads with details
-  const getRepliedLeads = useCallback(() => {
+  const getRepliedLeads = () => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -1978,14 +1917,14 @@ export default function Dashboard() {
       });
 
     return replied;
-  }, [filteredSentLeads, normalizeSentLead, safeParseDate]);
+  };
 
-  const repliedLeadsList = useMemo(() => getRepliedLeads(), [filteredSentLeads, normalizeSentLead, safeParseDate]);
+  const repliedLeadsList = getRepliedLeads();
 
   // ============================================================================
   // ✅ HANDLE SEND BULK SMS (DEFINED BEFORE JSX - FIXES REFERENCE ERROR)
   // ============================================================================
-  const handleSendBulkSMS = useCallback(async () => {
+  const handleSendBulkSMS = async () => {
     if (!user?.uid || whatsappLinks.length === 0) {
       addNotification('No contacts available', 'error');
       return;
@@ -2093,12 +2032,12 @@ export default function Dashboard() {
       `SMS batch complete!\nSent: ${successCount}\nFailed: ${failCount}\nSkipped: ${skipCount}`,
       successCount > 0 ? 'success' : 'error'
     );
-  }, [user?.uid, whatsappLinks, canUse, smsTemplate, fieldMappings, senderName, isSafeToContactOnChannel, updateContact, dealStage, addNotification]);
+  };
 
   // ============================================================================
   // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY
   // ============================================================================
-  const getFilteredAndSortedContacts = useCallback(() => {
+  const getFilteredAndSortedContacts = () => {
     let filteredContacts = [...whatsappLinks];
 
     // Apply search
@@ -2172,24 +2111,12 @@ export default function Dashboard() {
     });
 
     return filteredContacts;
-  }, [
-    whatsappLinks,
-    debouncedSearchQuery,
-    contactFilter,
-    sortBy,
-    sortOrder,
-    leadScores,
-    lastSent,
-    lastWhatsAppSent,
-    repliedLeads,
-    isContactedOnAnyChannel,
-    isPriorityPhone
-  ]);
+  };
 
   // ============================================================================
   // PAGINATED CONTACTS
   // ============================================================================
-  const paginatedContacts = useMemo(() => {
+  const paginatedContacts = (() => {
     const filteredContacts = getFilteredAndSortedContacts();
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -2200,12 +2127,12 @@ export default function Dashboard() {
       currentPage,
       itemsPerPage
     };
-  }, [getFilteredAndSortedContacts, currentPage, itemsPerPage]);
+  })();
 
   // ============================================================================
   // PREPARE SORTED CONTACTS FOR MAIN OUTREACH LIST
   // ============================================================================
-  const sortedWhatsappLinks = useMemo(() => {
+  const sortedWhatsappLinks = (() => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
     const sortedContacts = [...whatsappLinks].sort((a, b) => {
@@ -2231,12 +2158,12 @@ export default function Dashboard() {
       return bScore - aScore;
     });
     return sortedContacts;
-  }, [whatsappLinks, leadScores, isContactedOnAnyChannel, isPriorityPhone]);
+  })();
 
   // ============================================================================
   // CALCULATE CONVERSION FUNNEL
   // ============================================================================
-  const calculateConversionFunnel = useCallback(() => {
+  const calculateConversionFunnel = () => {
     const total = whatsappLinks.length;
     const replied = Object.values(repliedLeads).filter(Boolean).length;
     const contacted = whatsappLinks.filter(c => isContactedOnAnyChannel(c)).length;
@@ -2258,12 +2185,12 @@ export default function Dashboard() {
         closeRate: stages.demo > 0 ? Math.round((stages.closed / stages.demo) * 100) : 0
       }
     };
-  }, [whatsappLinks, repliedLeads, isContactedOnAnyChannel]);
+  };
 
   // ============================================================================
   // CALCULATE REVENUE FORECASTS
   // ============================================================================
-  const calculateRevenueForecasts = useCallback(() => {
+  const calculateRevenueForecasts = () => {
     const avgDealValue = CONFIG.DEFAULT_AVG_DEAL_VALUE;
     const replies = Object.values(repliedLeads).filter(Boolean).length;
     const demoOpportunities = Math.ceil(replies * CONFIG.DEFAULT_DEMO_RATE);
@@ -2281,12 +2208,12 @@ export default function Dashboard() {
         expectedAnnualRunRate: expectedClosures * avgDealValue * 12
       }
     };
-  }, [repliedLeads]);
+  };
 
   // ============================================================================
   // SEGMENT LEADS
   // ============================================================================
-  const segmentLeads = useCallback(() => {
+  const segmentLeads = () => {
     const leadSegments = {
       veryHot: [],
       hot: [],
@@ -2317,12 +2244,12 @@ export default function Dashboard() {
     });
 
     return leadSegments;
-  }, [whatsappLinks, leadScores, repliedLeads]);
+  };
 
   // ============================================================================
   // GET NEW LEADS (NOT YET EMAILED)
   // ============================================================================
-  const getNewLeads = useCallback(() => {
+  const getNewLeads = () => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
     const sentLeadsData = sentLeads;
@@ -2383,9 +2310,9 @@ export default function Dashboard() {
       return scoreB - scoreA;
     });
     return sortedGroupedLeads;
-  }, [whatsappLinks, sentLeads, leadScores]);
+  };
 
-  const getNewLeadsDisabledReason = useCallback(() => {
+  const getNewLeadsDisabledReason = () => {
     if (!csvContent) return 'Upload a CSV to start outreach.';
     if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS) {
       return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
@@ -2393,31 +2320,31 @@ export default function Dashboard() {
     // Note: newLeads is checked in the useMemo, not here to avoid circular dependency
     if (isSending) return 'Email send in progress. Wait for completion.';
     return '';
-  }, [csvContent, dailyEmailCount, isSending]);
+  };
 
-  const getSafeFollowUpDisabledReason = useCallback(() => {
+  const getSafeFollowUpDisabledReason = () => {
     if (isSending) return 'Send in progress. Please wait.';
     if (!safeFollowUpCandidates || safeFollowUpCandidates.length === 0) {
       return 'No safe follow-up candidates available (replied or maximum follow-ups reached).';
     }
     return '';
-  }, [isSending, safeFollowUpCandidates]);
+  };
 
-  const getSendEmailsDisabledReason = useCallback(() => {
+  const getSendEmailsDisabledReason = () => {
     if (!csvContent) return 'Upload a CSV before sending emails.';
     if (validEmails === 0) return 'No valid email recipients. Already sent or invalid email list.';
     if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS) return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
     if (isSending) return 'Email sending in progress.';
     return '';
-  }, [csvContent, validEmails, dailyEmailCount, isSending]);
+  };
 
-  const newLeads = useMemo(() => {
+  const newLeads = (() => {
     const leads = getNewLeads();
     return leads;
-  }, [whatsappLinks, sentLeads, leadScores]);
-  const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [csvContent, dailyEmailCount, isSending]);
-  const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [csvContent, validEmails, dailyEmailCount, isSending]);
-  const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [safeFollowUpCandidates, isSending]);
+  })();
+  const newLeadsDisabledReason = (() => getNewLeadsDisabledReason())();
+  const sendEmailsDisabledReason = (() => getSendEmailsDisabledReason())();
+  const safeFollowUpDisabledReason = (() => getSafeFollowUpDisabledReason())();
 
   // ============================================================================
   // GOOGLE OAUTH SCRIPT LOADER
@@ -3004,25 +2931,24 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // CACHE STATS MONITORING (Log every 5 minutes)
-  // ============================================================================
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/cache-stats');
-          if (res.ok) {
-            const data = await res.json();
-            console.log('[Cache Stats]', data.stats);
-          }
-        } catch (error) {
-          console.warn('Failed to fetch cache stats:', error);
-        }
-      }, 5 * 60 * 1000); // Every 5 minutes
+  // CACHE STATS MONITORING (Log every 5 minutes) - DISABLED TO REDUCE CONSOLE NOISE
+  // useEffect(() => {
+  //   if (process.env.NODE_ENV === 'development') {
+  //     const interval = setInterval(async () => {
+  //       try {
+  //         const res = await fetch('/api/cache-stats');
+  //         if (res.ok) {
+  //           const data = await res.json();
+  //           console.log('[Cache Stats]', data.stats);
+  //         }
+  //       } catch (error) {
+  //         console.warn('Failed to fetch cache stats:', error);
+  //       }
+  //     }, 5 * 60 * 1000); // Every 5 minutes
 
-      return () => clearInterval(interval);
-    }
-  }, []);
+  //     return () => clearInterval(interval);
+  //   }
+  // }, []);
 
   // ============================================================================
   // LOAD MANUAL CONTACT STATUS FROM FIREBASE
@@ -3055,7 +2981,7 @@ export default function Dashboard() {
   // ============================================================================
   // AUTO-SAVE SETTINGS WITH LOCALSTORAGE CACHING
   // ============================================================================
-  const saveSettings = useCallback(async () => {
+  const saveSettings = async () => {
     if (!user?.uid || !db || !userPreferences.autoSaveEnabled) return;
 
     try {
@@ -3103,25 +3029,7 @@ export default function Dashboard() {
       console.warn('Failed to save settings:', error);
       addNotification('Failed to auto-save settings', 'warning');
     }
-  }, [
-    user?.uid,
-    db,
-    senderName,
-    senderEmail,
-    templateA,
-    templateB,
-    whatsappTemplate,
-    smsTemplate,
-    instagramTemplate,
-    twitterTemplate,
-    linkedinTemplate,
-    followUpTemplates,
-    fieldMappings,
-    abTestMode,
-    smsConsent,
-    userPreferences,
-    addNotification
-  ]);
+  };
 
   // Debounced auto-save
   useEffect(() => {
@@ -3210,7 +3118,7 @@ export default function Dashboard() {
         setAbTestMode(cached.abTestMode || false);
         setSmsConsent(cached.smsConsent !== undefined ? cached.smsConsent : true);
         setUserPreferences(cached.userPreferences || userPreferences);
-        console.log('✅ Settings loaded from localStorage cache');
+        // console.log('✅ Settings loaded from localStorage cache');
       } catch (e) {
         console.warn('Failed to parse cached settings:', e);
       }
@@ -3273,7 +3181,7 @@ export default function Dashboard() {
   // ============================================================================
   // LOAD CLICK STATS FROM FIREBASE
   // ============================================================================
-  const loadClickStats = useCallback(async () => {
+  const loadClickStats = async () => {
     if (!user?.uid || !db) return;
 
     try {
@@ -3289,12 +3197,12 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('Click stats load failed:', e);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD A/B TEST RESULTS FROM FIREBASE
   // ============================================================================
-  const loadAbResults = useCallback(async () => {
+  const loadAbResults = async () => {
     if (!user?.uid || !db) return;
 
     try {
@@ -3307,12 +3215,12 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('AB results load failed:', e);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD DEALS FROM FIREBASE
   // ============================================================================
-  const loadDeals = useCallback(async () => {
+  const loadDeals = async () => {
     if (!user?.uid || !db) return;
 
     try {
@@ -3335,12 +3243,12 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('Deals load failed:', e);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD REPLIED LEADS AND FOLLOW-UP FROM FIREBASE
   // ============================================================================
-  const loadRepliedAndFollowUp = useCallback(async () => {
+  const loadRepliedAndFollowUp = async () => {
     if (!user?.uid || !db) return;
 
     try {
@@ -3401,7 +3309,7 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('Replied/Follow-up load failed:', e);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD DAILY EMAIL COUNT FROM API WITH ERROR HANDLING
@@ -3443,7 +3351,7 @@ export default function Dashboard() {
   // ============================================================================
   // LOAD DAILY EMAIL COUNT FROM API WITH ERROR HANDLING
   // ============================================================================
-  const loadDailyEmailCount = useCallback(async () => {
+  const loadDailyEmailCount = async () => {
     if (!user?.uid) return;
 
     setLoadingDailyCount(true);
@@ -3484,12 +3392,12 @@ export default function Dashboard() {
     } finally {
       setLoadingDailyCount(false);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD SEND TIME OPTIMIZATION FROM API
   // ============================================================================
-  const loadSendTimeOptimization = useCallback(async () => {
+  const loadSendTimeOptimization = async () => {
     if (!user?.uid) return;
 
     try {
@@ -3507,12 +3415,12 @@ export default function Dashboard() {
     } catch (err) {
       console.error('Send time optimization error:', err);
     }
-  }, [user?.uid]);
+  };
 
   // ============================================================================
   // LOAD SENT LEADS FROM API WITH ERROR HANDLING
   // ============================================================================
-  const loadSentLeads = useCallback(async () => {
+  const loadSentLeads = async () => {
     if (!user?.uid) return;
 
     setLoadingSentLeads(true);
@@ -3611,12 +3519,12 @@ export default function Dashboard() {
     } finally {
       setLoadingSentLeads(false);
     }
-  }, [user?.uid, addNotification, normalizeSentLead]);
+  };
 
   // ============================================================================
   // LOAD WHATSAPP CONTACTS FROM DATABASE (ENSURE THEY SHOW REGARDLESS OF CSV)
   // ============================================================================
-  const loadWhatsAppContacts = useCallback(async () => {
+  const loadWhatsAppContacts = async () => {
     if (!user?.uid) return;
 
     try {
@@ -3635,7 +3543,7 @@ export default function Dashboard() {
       console.error('Load WhatsApp contacts error:', err);
       // Don't show notification, just log error
     }
-  }, [user]);
+  };
 
   // ============================================================================
   // LOAD CONTACTED COMPANIES FROM API
@@ -3811,9 +3719,46 @@ export default function Dashboard() {
 
       setDealStage(prev => ({ ...prev, [email]: stage }));
 
+      // Strategic post-close workflow for maximum business value
       if (stage === 'won') {
         setPipelineValue(prev => prev - CONFIG.DEFAULT_AVG_DEAL_VALUE);
         addNotification(`🎉 Deal won: ${email}`, 'success');
+        // Auto-create onboarding follow-up task
+        createFollowUpTask(user.uid, {
+          leadEmail: email,
+          leadName: email,
+          companyName: 'Won Deal',
+          channel: 'email',
+          followUpStage: 'onboarding',
+          templateId: 'onboarding',
+          scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 1 day after close
+        });
+      } else if (stage === 'delivery') {
+        addNotification(`🚀 Delivery started for ${email}`, 'info');
+        // Create delivery milestone check-in
+        createFollowUpTask(user.uid, {
+          leadEmail: email,
+          leadName: email,
+          companyName: 'Delivery',
+          channel: 'email',
+          followUpStage: 'delivery_check',
+          templateId: 'delivery',
+          scheduledFor: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week check-in
+        });
+      } else if (stage === 'retention') {
+        addNotification(`💎 Retention phase for ${email}`, 'success');
+        // Create upsell opportunity task
+        createFollowUpTask(user.uid, {
+          leadEmail: email,
+          leadName: email,
+          companyName: 'Retention',
+          channel: 'email',
+          followUpStage: 'upsell_opportunity',
+          templateId: 'upsell',
+          scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days for upsell
+        });
+      } else if (stage === 'expansion') {
+        addNotification(`📈 Expansion opportunity: ${email}`, 'success');
       } else if (dealStage[email] === 'won') {
         setPipelineValue(prev => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
       }
@@ -3824,124 +3769,23 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // DEBUG FOLLOW-UP FUNCTION
-  // ============================================================================
-  const testFollowUpSend = useCallback(async () => {
-    console.log('🧪 Starting follow-up test...');
-
-    // Test 1: Check basic setup
-    console.log('👤 User:', user);
-    console.log('📧 Sender Name:', senderName);
-    console.log('🔑 Google Client ID:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? '✅' : '❌ Missing');
-
-    // Test 2: Check quotas
-    console.log('💳 Current quotas:', quotas);
-    console.log('📧 Email quota:', quotas.emails);
-
-    // Test 3: Check safe candidates
-    const candidates = safeFollowUpCandidates;
-    console.log('📊 Safe candidates:', candidates.length);
-
-    if (candidates.length === 0) {
-      console.log('❌ No safe candidates found');
-      addNotification('No safe candidates available for testing', 'warning');
-      return;
-    }
-
-    const testCandidate = candidates[0];
-    console.log('🎯 Test candidate:', testCandidate.email);
-
-    try {
-      // Test 4: Request Gmail token
-      console.log('🔐 Testing Gmail token request...');
-      const accessToken = await requestGmailToken();
-      console.log('✅ Gmail token obtained:', accessToken ? 'Success' : 'Failed');
-
-      if (!accessToken) {
-        addNotification('❌ Failed to get Gmail token', 'error');
-        return;
-      }
-
-      // Test 5: Test API call
-      console.log('📡 Testing API call to /api/send-followup...');
-      const res = await fetch('/api/send-followup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: testCandidate.email,
-          accessToken,
-          userId: user.uid,
-          senderName
-        })
-      });
-
-      console.log('📬 API Response status:', res.status);
-      const data = await res.json();
-      console.log('📬 API Response data:', data);
-
-      if (res.ok) {
-        addNotification(`✅ Test follow-up sent to ${testCandidate.email}`, 'success');
-        // Refresh data after successful test
-        await loadSentLeads();
-        await loadContactedCompanies();
-        await loadRepliedAndFollowUp();
-      } else {
-        addNotification(`❌ Test failed: ${data.error || 'Unknown error'}`, 'error');
-      }
-
-    } catch (error) {
-      console.error('💥 Test failed:', error);
-      addNotification(`❌ Test error: ${error.message}`, 'error');
-    }
-  }, [user, senderName, quotas, safeFollowUpCandidates, requestGmailToken, addNotification, loadSentLeads, loadRepliedAndFollowUp, repliedLeads, followUpHistory]);
+  // DEBUG FOLLOW-UP FUNCTION - DISABLED TO REDUCE CONSOLE NOISE
+  // const testFollowUpSend = async () => {
+  //   console.log('🧪 Starting follow-up test...');
+  //   // ... rest of debug code
+  // };
 
   // ============================================================================
-  // BYPASS QUOTA TEST (For debugging only)
-  // ============================================================================
-  const testFollowUpBypassQuota = useCallback(async () => {
-    console.log('🚀 Starting bypass quota test...');
-
-    const candidates = safeFollowUpCandidates;
-    if (candidates.length === 0) {
-      addNotification('No safe candidates available', 'warning');
-      return;
-    }
-
-    const testCandidate = candidates[0];
-
-    try {
-      // Skip quota check
-      console.log('⚡ Bypassing quota check...');
-      const accessToken = await requestGmailToken();
-
-      const res = await fetch('/api/send-followup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: testCandidate.email,
-          accessToken,
-          userId: user.uid,
-          senderName
-        })
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        addNotification(`✅ Bypass test successful: ${testCandidate.email}`, 'success');
-      } else {
-        addNotification(`❌ Bypass test failed: ${data.error}`, 'error');
-      }
-
-    } catch (error) {
-      addNotification(`❌ Bypass test error: ${error.message}`, 'error');
-    }
-  }, [safeFollowUpCandidates, requestGmailToken, user, senderName, addNotification]);
+  // BYPASS QUOTA TEST (For debugging only) - DISABLED TO REDUCE CONSOLE NOISE
+  // const testFollowUpBypassQuota = async () => {
+  //   console.log('🚀 Starting bypass quota test...');
+  //   // ... rest of debug code
+  // };
 
   // ============================================================================
   // SEND FOLLOW-UP WITH GMAIL TOKEN
   // ============================================================================
-  const sendFollowUpWithToken = useCallback(async (email, accessToken) => {
+  const sendFollowUpWithToken = async (email, accessToken) => {
     if (!user?.uid || !email || !accessToken) {
       addNotification('Missing required data to send follow-up.', 'error');
       return;
@@ -4005,12 +3849,12 @@ export default function Dashboard() {
       console.error('Follow-up send error:', err);
       addNotification(`❌ Error: ${err.message}`, 'error');
     }
-  }, [user, repliedLeads, sentLeads, safeFollowUpCandidates, addNotification, loadSentLeads, loadRepliedAndFollowUp, loadDeals]);
+  };
 
   // ============================================================================
   // AI AUTO-REPLY PROCESSOR
   // ============================================================================
-  const runAutoReplyProcessor = useCallback(async () => {
+  const runAutoReplyProcessor = async () => {
     if (!autoReplyProcessorEnabled) {
       setAiProcessorStatus('Disabled');
       addNotification('AI auto-reply processor is disabled', 'warning');
@@ -4041,12 +3885,12 @@ export default function Dashboard() {
       setAiProcessorStatus(`Error · ${error.message}`);
       addNotification(`❌ Auto-reply processor error: ${error.message}`, 'error', 6000);
     }
-  }, [user, addNotification, loadSentLeads, loadRepliedAndFollowUp]);
+  };
 
   // ============================================================================
   // AI FOLLOWUP SCHEDULER
   // ============================================================================
-  const runFollowupScheduler = useCallback(async () => {
+  const runFollowupScheduler = async () => {
     if (!autoFollowupSchedulerEnabled) {
       setFollowupSchedulerStatus('Disabled');
       addNotification('Smart follow-up scheduler is disabled', 'warning');
@@ -4077,12 +3921,12 @@ export default function Dashboard() {
       setFollowupSchedulerStatus(`Error · ${error.message}`);
       addNotification(`❌ Follow-up scheduler error: ${error.message}`, 'error', 6000);
     }
-  }, [user, addNotification, loadSentLeads, loadRepliedAndFollowUp]);
+  };
 
   // ============================================================================
   // MASS EMAIL FOLLOW-UP TO ALL SAFE LEADS
   // ============================================================================
-  const handleMassEmailFollowUps = useCallback(async () => {
+  const handleMassEmailFollowUps = async () => {
     if (!user?.uid) {
       addNotification('Please sign in first', 'error');
       return;
@@ -4278,22 +4122,12 @@ export default function Dashboard() {
       console.error('[Mass Follow-Up] Fatal error:', error);
       addNotification(`Mass follow-up failed: ${error.message}`, 'error');
     } finally {
-      console.log('[Mass Follow-Up] Cleaning up...');
+      // console.log('[Mass Follow-Up] Cleaning up...');
       setIsSending(false);
       setSendProgress(null);
       setStatus('');
     }
-  }, [
-    user,
-    addNotification,
-    safeFollowUpCandidates,
-    canUse,
-    requestGmailToken,
-    loadSentLeads,
-    loadRepliedAndFollowUp,
-    loadDeals,
-    repliedLeads
-  ]);
+  };
 
   // ============================================================================
   // WHATSAPP SEND WITH TRACKING & DUPLICATE PREVENTION
@@ -4508,7 +4342,7 @@ export default function Dashboard() {
   // ============================================================================
   // SMART AI RESEARCH + OUTREACH
   // ============================================================================
-  const handleSmartResearchOutreach = useCallback(async (contact) => {
+  const handleSmartResearchOutreach = async (contact) => {
     if (!contact?.business) {
       addNotification('Contact business name is required', 'error');
       return;
@@ -4564,7 +4398,7 @@ export default function Dashboard() {
       setStatusType('error');
       setStatus('Smart outreach failed');
     }
-  }, [user, senderName, senderEmail, addNotification, loadSentLeads, loadRepliedAndFollowUp]);
+  };
 
   // ============================================================================
   // SMS SEND WITH TRACKING & DUPLICATE PREVENTION
@@ -6178,7 +6012,7 @@ export default function Dashboard() {
   // ============================================================================
   // BUSINESS INTELLIGENCE HANDLERS
   // ============================================================================
-  const loadAnalytics = useCallback(async (action = 'comprehensive', timeframe = '30d') => {
+  const loadAnalytics = async (action = 'comprehensive', timeframe = '30d') => {
     if (!user?.uid) {
       addNotification('Please sign in first', 'error');
       return;
@@ -6208,9 +6042,9 @@ export default function Dashboard() {
     } finally {
       setLoadingAnalytics(false);
     }
-  }, [user, addNotification]);
+  };
 
-  const loadPipeline = useCallback(async (action = 'comprehensive') => {
+  const loadPipeline = async (action = 'comprehensive') => {
     if (!user?.uid) {
       addNotification('Please sign in first', 'error');
       return;
@@ -6239,9 +6073,9 @@ export default function Dashboard() {
     } finally {
       setLoadingPipeline(false);
     }
-  }, [user, addNotification]);
+  };
 
-  const loadPredictiveAnalysis = useCallback(async (action = 'comprehensive', leadId = null) => {
+  const loadPredictiveAnalysis = async (action = 'comprehensive', leadId = null) => {
     if (!user?.uid) {
       addNotification('Please sign in first', 'error');
       return;
@@ -6270,7 +6104,7 @@ export default function Dashboard() {
     } finally {
       setLoadingPredictive(false);
     }
-  }, [user, addNotification]);
+  };
 
   // ============================================================================
   // LOADING STATE
@@ -6427,7 +6261,7 @@ export default function Dashboard() {
 
               <button
                 onClick={() => {
-                  console.log('[Dashboard] Opening replies panel, current state:', showRepliesPanel);
+                  // console.log('[Dashboard] Opening replies panel, current state:', showRepliesPanel);
                   setShowRepliesPanel(true);
                 }}
                 className="text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white px-4 py-2 rounded-lg transition flex items-center gap-2 relative shadow-lg"
@@ -7588,7 +7422,10 @@ export default function Dashboard() {
                                 <option value="contacted">Contacted</option>
                                 <option value="demo">Demo Scheduled</option>
                                 <option value="proposal">Proposal Sent</option>
-                                <option value="won">Closed Won</option>
+                                <option value="won">🎉 Closed Won</option>
+                                <option value="delivery">🚀 Delivery</option>
+                                <option value="retention">💎 Retention</option>
+                                <option value="expansion">📈 Expansion</option>
                               </select>
                             ) : (
                               <div className="text-xs text-gray-500 mt-1 italic">No email → CRM not tracked</div>
@@ -8199,13 +8036,13 @@ export default function Dashboard() {
                         <div className="mt-3 text-center space-y-2">
                           <button
                             onClick={() => {
-                              console.log('🔍 DEBUG - Mass Email Diagnostic Info:');
-                              console.log('📊 Safe Candidates:', safeFollowUpCandidates);
-                              console.log('👤 User:', user);
-                              console.log('📧 Quota Check:', canUse('email', safeFollowUpCandidates.length));
-                              console.log('📈 Sent Leads:', sentLeads);
-                              console.log('🔄 Follow-up History:', followUpHistory);
-                              console.log('❌ Replied Leads:', repliedLeads);
+                              // console.log('🔍 DEBUG - Mass Email Diagnostic Info:');
+                              // console.log('📊 Safe Candidates:', safeFollowUpCandidates);
+                              // console.log('👤 User:', user);
+                              // console.log('📧 Quota Check:', canUse('email', safeFollowUpCandidates.length));
+                              // console.log('📈 Sent Leads:', sentLeads);
+                              // console.log('🔄 Follow-up History:', followUpHistory);
+                              // console.log('❌ Replied Leads:', repliedLeads);
 
                               alert(`Debug Info:\n\nSafe Candidates: ${safeFollowUpCandidates.length}\nUser ID: ${user?.uid ? '✅' : '❌'}\nSent Leads: ${sentLeads?.length || 0}\n\nCheck console for detailed info.`);
                             }}
@@ -8827,7 +8664,10 @@ export default function Dashboard() {
                             <option value="new">New</option>
                             <option value="contacted">Contacted</option>
                             <option value="demo">Demo</option>
-                            <option value="won">Won</option>
+                            <option value="won">🎉 Won</option>
+                            <option value="delivery">🚀 Delivery</option>
+                            <option value="retention">💎 Retention</option>
+                            <option value="expansion">📈 Expansion</option>
                           </select>
                         )}
                         <button
@@ -9382,27 +9222,27 @@ export default function Dashboard() {
                         const channelColor = task.channel === 'email' ? 'blue' : task.channel === 'whatsapp' ? 'green' : task.channel === 'phone' ? 'orange' : 'gray';
 
                         return (
-                          <div key={task.id} className={`group relative p-4 rounded-xl border-2 ${isOverdue ? 'bg-red-900/20 border-red-500/50' : 'bg-gray-800/80 border-gray-700 hover:border-orange-500/50'} transition-all`}>
+                          <div key={task.id || `${task.leadEmail}-${task.channel}-${task.followUpStage}`} className={`group relative p-4 rounded-xl border-2 ${isOverdue ? 'bg-red-900/20 border-red-500/50' : 'bg-gray-800/80 border-gray-700 hover:border-orange-500/50'} transition-all`}>
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                                   <span className="text-2xl">{channelIcon}</span>
-                                  <span className={`text-xs sm:text-sm font-bold text-${channelColor}-400 uppercase`}>{task.channel}</span>
+                                  <span className={`text-xs sm:text-sm font-bold text-${channelColor}-400 uppercase`}>{task.channel || 'unknown'}</span>
                                   {isOverdue && <span className="text-xs bg-red-500/30 text-red-300 px-2 py-1 rounded-full font-bold">OVERDUE</span>}
                                 </div>
-                                <div className="font-bold text-white text-sm sm:text-base">{task.leadName || task.leadEmail}</div>
+                                <div className="font-bold text-white text-sm sm:text-base">{task.leadName || task.leadEmail || 'Unknown Lead'}</div>
                                 {task.companyName && <div className="text-xs text-gray-400">{task.companyName}</div>}
                                 {task.channel === 'whatsapp' && task.leadPhone ? (
                                   <div className="text-xs text-gray-500 mt-1">{task.leadPhone}</div>
                                 ) : (
-                                  <div className="text-xs text-gray-500 mt-1">{task.leadEmail}</div>
+                                  <div className="text-xs text-gray-500 mt-1">{task.leadEmail || 'No email'}</div>
                                 )}
                               </div>
                               <div className="flex flex-col items-end gap-2">
                                 <div className={`text-sm font-bold ${isOverdue ? 'text-red-400' : 'text-orange-400'}`}>
                                   {timeDisplay}
                                 </div>
-                                <div className="text-xs text-gray-400">{task.followUpStage}</div>
+                                <div className="text-xs text-gray-400">{task.followUpStage || 'Follow-up'}</div>
                                 <div className="flex gap-2 mt-2">
                                   {task.channel === 'email' && (
                                     <button
@@ -9487,13 +9327,13 @@ export default function Dashboard() {
                         const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
                         
                         return (
-                          <div key={task.id} className="p-3 rounded-xl bg-gray-800/50 border border-gray-700">
+                          <div key={task.id || `${task.leadEmail}-${task.channel}-${task.followUpStage}-completed`} className="p-3 rounded-xl bg-gray-800/50 border border-gray-700">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span>{channelIcon}</span>
                                 <div>
-                                  <div className="font-medium text-white text-sm">{task.leadName || task.leadEmail}</div>
-                                  <div className="text-xs text-gray-400">{task.followUpStage}</div>
+                                  <div className="font-medium text-white text-sm">{task.leadName || task.leadEmail || 'Unknown Lead'}</div>
+                                  <div className="text-xs text-gray-400">{task.followUpStage || 'Completed'}</div>
                                 </div>
                               </div>
                               <div className="text-xs text-gray-500">
