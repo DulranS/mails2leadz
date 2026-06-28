@@ -363,7 +363,7 @@ export async function DELETE(request) {
         success: true,
         message: "Deal deleted successfully",
       },
-      { headers,
+      { headers },
     );
   } catch (error) {
     console.error("Deal deletion error:", error);
