@@ -1,14 +1,29 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '../components/ui/DashboardLayout';
-import CRM from '../components/CRM';
-import { useNotifications } from '../components/ui/NotificationProvider';
+import React, { useState, useEffect } from "react";
+import { DashboardLayout } from "../components/ui/DashboardLayout";
+import CRM from "../components/CRM";
+import { useNotifications } from "../components/ui/NotificationProvider";
 
 // Import Firebase functions
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, updateDoc, doc, addDoc, query, where, getDoc, setDoc } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, browserLocalPersistence } from 'firebase/auth';
+import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  updateDoc,
+  doc,
+  addDoc,
+  query,
+  where,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
+import {
+  getAuth,
+  onAuthStateChanged,
+  browserLocalPersistence,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,7 +32,7 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.FIREBASE_MEASUREMENT_ID
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase with error handling
@@ -28,13 +43,13 @@ try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
   db = getFirestore(app);
   auth = getAuth(app);
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     auth.setPersistence(browserLocalPersistence).catch((error) => {
-      console.error('Firebase auth persistence error:', error);
+      console.error("Firebase auth persistence error:", error);
     });
   }
 } catch (error) {
-  console.error('Firebase initialization error:', error);
+  console.error("Firebase initialization error:", error);
 }
 
 export default function CRMPage() {
@@ -79,17 +94,17 @@ export default function CRMPage() {
 
     try {
       // Load sent emails (these are the leads from the dashboard)
-      const sentEmailsRef = collection(db, 'sent_emails');
+      const sentEmailsRef = collection(db, "sent_emails");
       const sentEmailsSnapshot = await getDocs(sentEmailsRef);
       const leads = sentEmailsSnapshot.docs
-        .filter(doc => doc.data().userId === user.uid)
-        .map(doc => {
+        .filter((doc) => doc.data().userId === user.uid)
+        .map((doc) => {
           const data = doc.data();
           return {
             id: doc.id,
             email: data.to || data.recipientEmail,
-            business: data.recipientName || data.business_name || 'Unknown',
-            company: data.business_name || 'Unknown',
+            business: data.recipientName || data.business_name || "Unknown",
+            company: data.business_name || "Unknown",
             phone: data.recipientPhone || null,
             website: data.recipientWebsite || null,
             industry: data.industry || null,
@@ -97,36 +112,36 @@ export default function CRMPage() {
             replied: data.replied || false,
             repliedAt: data.repliedAt || null,
             followUpAt: data.followUpAt || null,
-            status: data.replied ? 'replied' : 'sent',
+            status: data.replied ? "replied" : "sent",
             notes: data.notes || [],
             nextFollowUp: data.followUpAt || null,
-            ...data
+            ...data,
           };
         });
 
       // Load contacts from nested user collection
-      const contactsRef = collection(db, 'users', user.uid, 'contacts');
+      const contactsRef = collection(db, "users", user.uid, "contacts");
       const contactsSnapshot = await getDocs(contactsRef);
       const contacts = {};
-      contactsSnapshot.docs.forEach(doc => {
+      contactsSnapshot.docs.forEach((doc) => {
         const contact = doc.data();
         contacts[contact.email] = contact;
       });
 
       // Load deals from top-level collection
-      const dealsRef = collection(db, 'deals');
+      const dealsRef = collection(db, "deals");
       const dealsSnapshot = await getDocs(dealsRef);
       const dealStages = {};
-      dealsSnapshot.docs.forEach(doc => {
+      dealsSnapshot.docs.forEach((doc) => {
         const deal = doc.data();
         if (deal.userId === user.uid) {
-          dealStages[deal.email] = deal.stage || 'new';
+          dealStages[deal.email] = deal.stage || "new";
         }
       });
 
       // Create replied leads map from sent_emails data
       const repliedLeads = {};
-      leads.forEach(lead => {
+      leads.forEach((lead) => {
         if (lead.replied) {
           repliedLeads[lead.email] = true;
         }
@@ -134,7 +149,7 @@ export default function CRMPage() {
 
       // Calculate lead scores using dashboard logic
       const leadScores = {};
-      leads.forEach(lead => {
+      leads.forEach((lead) => {
         let score = 50; // Base score
         if (lead.email) score += 15;
         if (lead.phone) score += 10;
@@ -142,21 +157,26 @@ export default function CRMPage() {
         if (lead.industry) score += 5;
         if (repliedLeads[lead.email]) score += 25;
         if (lead.repliedAt) {
-          const daysSinceReply = Math.floor((new Date() - new Date(lead.repliedAt)) / (1000 * 60 * 60 * 24));
+          const daysSinceReply = Math.floor(
+            (new Date() - new Date(lead.repliedAt)) / (1000 * 60 * 60 * 24),
+          );
           if (daysSinceReply < 7) score += 10;
         }
         leadScores[lead.email] = Math.min(score, 100);
       });
 
       // Update deal stages for leads without explicit deal records
-      leads.forEach(lead => {
+      leads.forEach((lead) => {
         if (!dealStages[lead.email]) {
           if (lead.replied) {
-            dealStages[lead.email] = 'engaged';
-          } else if (lead.followUpAt && new Date(lead.followUpAt) > new Date()) {
-            dealStages[lead.email] = 'followup';
+            dealStages[lead.email] = "engaged";
+          } else if (
+            lead.followUpAt &&
+            new Date(lead.followUpAt) > new Date()
+          ) {
+            dealStages[lead.email] = "followup";
           } else {
-            dealStages[lead.email] = 'new';
+            dealStages[lead.email] = "new";
           }
         }
       });
@@ -169,8 +189,8 @@ export default function CRMPage() {
         dealStages,
       });
     } catch (error) {
-      console.error('Error loading CRM data:', error);
-      addNotification('Error loading CRM data', 'error');
+      console.error("Error loading CRM data:", error);
+      addNotification("Error loading CRM data", "error");
     } finally {
       setLoading(false);
     }
@@ -181,22 +201,26 @@ export default function CRMPage() {
 
     try {
       // Find the lead document in sent_emails
-      const leadsRef = collection(db, 'sent_emails');
-      const q = query(leadsRef, where('userId', '==', user.uid), where('to', '==', email));
+      const leadsRef = collection(db, "sent_emails");
+      const q = query(
+        leadsRef,
+        where("userId", "==", user.uid),
+        where("to", "==", email),
+      );
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
         const leadDoc = querySnapshot.docs[0];
-        await updateDoc(doc(db, 'sent_emails', leadDoc.id), updates);
+        await updateDoc(doc(db, "sent_emails", leadDoc.id), updates);
 
         // Update deal stage in deals collection if status changed
         if (updates.status) {
-          const dealRef = doc(db, 'deals', `${user.uid}_${email}`);
+          const dealRef = doc(db, "deals", `${user.uid}_${email}`);
           const dealSnap = await getDoc(dealRef);
           if (dealSnap.exists()) {
-            await updateDoc(dealRef, { 
+            await updateDoc(dealRef, {
               stage: updates.status,
-              lastUpdate: new Date().toISOString()
+              lastUpdate: new Date().toISOString(),
             });
           } else {
             await setDoc(dealRef, {
@@ -204,16 +228,16 @@ export default function CRMPage() {
               userId: user.uid,
               stage: updates.status,
               value: 5000,
-              lastUpdate: new Date().toISOString()
+              lastUpdate: new Date().toISOString(),
             });
           }
         }
 
         // Update local state
-        setData(prev => ({
+        setData((prev) => ({
           ...prev,
-          leads: prev.leads.map(lead =>
-            lead.email === email ? { ...lead, ...updates } : lead
+          leads: prev.leads.map((lead) =>
+            lead.email === email ? { ...lead, ...updates } : lead,
           ),
           dealStages: {
             ...prev.dealStages,
@@ -221,13 +245,13 @@ export default function CRMPage() {
           },
         }));
 
-        addNotification('Lead updated successfully', 'success');
+        addNotification("Lead updated successfully", "success");
       } else {
-        addNotification('Lead not found', 'error');
+        addNotification("Lead not found", "error");
       }
     } catch (error) {
-      console.error('Error updating lead:', error);
-      addNotification('Error updating lead', 'error');
+      console.error("Error updating lead:", error);
+      addNotification("Error updating lead", "error");
     }
   };
 
@@ -238,39 +262,43 @@ export default function CRMPage() {
       const note = {
         text: noteText,
         timestamp: new Date().toISOString(),
-        type: 'manual',
-        addedBy: user.email || user.displayName || 'User'
+        type: "manual",
+        addedBy: user.email || user.displayName || "User",
       };
 
       // Find the lead and update notes in sent_emails
-      const leadsRef = collection(db, 'sent_emails');
-      const q = query(leadsRef, where('userId', '==', user.uid), where('to', '==', email));
+      const leadsRef = collection(db, "sent_emails");
+      const q = query(
+        leadsRef,
+        where("userId", "==", user.uid),
+        where("to", "==", email),
+      );
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
         const leadDoc = querySnapshot.docs[0];
         const currentNotes = leadDoc.data().notes || [];
-        await updateDoc(doc(db, 'sent_emails', leadDoc.id), {
+        await updateDoc(doc(db, "sent_emails", leadDoc.id), {
           notes: [...currentNotes, note],
         });
 
         // Update local state
-        setData(prev => ({
+        setData((prev) => ({
           ...prev,
-          leads: prev.leads.map(lead =>
+          leads: prev.leads.map((lead) =>
             lead.email === email
               ? { ...lead, notes: [...(lead.notes || []), note] }
-              : lead
+              : lead,
           ),
         }));
 
-        addNotification('Note added successfully', 'success');
+        addNotification("Note added successfully", "success");
       } else {
-        addNotification('Lead not found', 'error');
+        addNotification("Lead not found", "error");
       }
     } catch (error) {
-      console.error('Error adding note:', error);
-      addNotification('Error adding note', 'error');
+      console.error("Error adding note:", error);
+      addNotification("Error adding note", "error");
     }
   };
 
@@ -282,37 +310,45 @@ export default function CRMPage() {
       followUpDate.setDate(followUpDate.getDate() + 3); // 3 days from now
 
       // Find the lead and update next follow-up in sent_emails
-      const leadsRef = collection(db, 'sent_emails');
-      const q = query(leadsRef, where('userId', '==', user.uid), where('to', '==', email));
+      const leadsRef = collection(db, "sent_emails");
+      const q = query(
+        leadsRef,
+        where("userId", "==", user.uid),
+        where("to", "==", email),
+      );
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
         const leadDoc = querySnapshot.docs[0];
-        await updateDoc(doc(db, 'sent_emails', leadDoc.id), {
+        await updateDoc(doc(db, "sent_emails", leadDoc.id), {
           followUpAt: followUpDate,
         });
 
         // Update local state
-        setData(prev => ({
+        setData((prev) => ({
           ...prev,
-          leads: prev.leads.map(lead =>
+          leads: prev.leads.map((lead) =>
             lead.email === email
-              ? { ...lead, nextFollowUp: followUpDate, followUpAt: followUpDate }
-              : lead
+              ? {
+                  ...lead,
+                  nextFollowUp: followUpDate,
+                  followUpAt: followUpDate,
+                }
+              : lead,
           ),
           dealStages: {
             ...prev.dealStages,
-            [email]: 'followup'
+            [email]: "followup",
           },
         }));
 
-        addNotification('Follow-up scheduled successfully', 'success');
+        addNotification("Follow-up scheduled successfully", "success");
       } else {
-        addNotification('Lead not found', 'error');
+        addNotification("Lead not found", "error");
       }
     } catch (error) {
-      console.error('Error scheduling follow-up:', error);
-      addNotification('Error scheduling follow-up', 'error');
+      console.error("Error scheduling follow-up:", error);
+      addNotification("Error scheduling follow-up", "error");
     }
   };
 
@@ -330,7 +366,9 @@ export default function CRMPage() {
     return (
       <DashboardLayout title="CRM" subtitle="Authentication Required">
         <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">Please sign in to access the CRM.</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please sign in to access the CRM.
+          </p>
         </div>
       </DashboardLayout>
     );

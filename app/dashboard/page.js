@@ -1,22 +1,22 @@
 // app/dashboard/page.js
-'use client';
+"use client";
 
 // Global error handler to catch the actual error
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
-    console.error('[GLOBAL ERROR]', event.error);
-    console.error('[GLOBAL ERROR] Message:', event.message);
-    console.error('[GLOBAL ERROR] Filename:', event.filename);
-    console.error('[GLOBAL ERROR] Line:', event.lineno);
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (event) => {
+    console.error("[GLOBAL ERROR]", event.error);
+    console.error("[GLOBAL ERROR] Message:", event.message);
+    console.error("[GLOBAL ERROR] Filename:", event.filename);
+    console.error("[GLOBAL ERROR] Line:", event.lineno);
   });
 
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error('[UNHANDLED REJECTION]', event.reason);
+  window.addEventListener("unhandledrejection", (event) => {
+    console.error("[UNHANDLED REJECTION]", event.reason);
   });
 }
 
-import { useState, useEffect, useRef } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { useState, useEffect, useRef } from "react";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getFirestore,
   doc,
@@ -36,8 +36,8 @@ import {
   arrayRemove,
   orderBy,
   limit,
-  Timestamp
-} from 'firebase/firestore';
+  Timestamp,
+} from "firebase/firestore";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -46,17 +46,21 @@ import {
   signOut,
   updateProfile,
   sendPasswordResetEmail,
-  browserLocalPersistence
-} from 'firebase/auth';
-import Head from 'next/head';
-import { useRouter } from 'next/navigation';
-import RepliesPanel from '../../components/RepliesPanel';
-import { useAppSelector } from '../../lib/redux/hooks';
-import { selectUnreadCount } from '../../lib/redux/slices/repliesSlice';
+  browserLocalPersistence,
+} from "firebase/auth";
+import Head from "next/head";
+import { useRouter } from "next/navigation";
+import RepliesPanel from "../../components/RepliesPanel";
+import { useAppSelector } from "../../lib/redux/hooks";
+import { selectUnreadCount } from "../../lib/redux/slices/repliesSlice";
 
 // Import from new modules
-import { CONFIG, generateId } from '../../lib/dashboard-config.js';
-import { generateQualificationSMS, parseQualificationResponse, formatQualificationSummary } from '../../lib/sms-qualifier';
+import { CONFIG, generateId } from "../../lib/dashboard-config.js";
+import {
+  generateQualificationSMS,
+  parseQualificationResponse,
+  formatQualificationSummary,
+} from "../../lib/sms-qualifier";
 import {
   formatForDialing,
   formatPhoneForDisplay,
@@ -72,11 +76,11 @@ import {
   sessionStorageHelper,
   copyToClipboard,
   debounce,
-  normalizeContactKey
-} from '../../lib/dashboard-utils.js';
-import { useContactTracking } from '../../hooks/useContactTracking.js';
-import { useDailyQuotas } from '../../hooks/useDailyQuotas.js';
-import { useLeadScoring } from '../../hooks/useLeadScoring.js';
+  normalizeContactKey,
+} from "../../lib/dashboard-utils.js";
+import { useContactTracking } from "../../hooks/useContactTracking.js";
+import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
+import { useLeadScoring } from "../../hooks/useLeadScoring.js";
 import {
   loadSettingsFromFirebase,
   saveSettingsToFirebase,
@@ -95,9 +99,9 @@ import {
   loadLeadNotes,
   updateLeadState,
   loadLeadStates,
-  autoCleanupOldRecords
-} from '../../lib/firebase-operations.js';
-import { invalidateCache } from '../../lib/firebase-cache.js';
+  autoCleanupOldRecords,
+} from "../../lib/firebase-operations.js";
+import { invalidateCache } from "../../lib/firebase-cache.js";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -109,24 +113,24 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.FIREBASE_MEASUREMENT_ID
+  measurementId: process.env.FIREBASE_MEASUREMENT_ID,
 };
 
 const initializeFirebase = () => {
   try {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === "undefined") return null;
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     const auth = getAuth(app);
     auth.setPersistence(browserLocalPersistence).catch((error) => {
-      console.error('Firebase auth persistence error:', error);
+      console.error("Firebase auth persistence error:", error);
     });
     return {
       db: getFirestore(app),
       auth,
-      app
+      app,
     };
   } catch (error) {
-    console.error('Firebase initialization error:', error);
+    console.error("Firebase initialization error:", error);
     return null;
   }
 };
@@ -139,9 +143,9 @@ const auth = firebase?.auth;
 // EMAIL TEMPLATES - YOUR ACTUAL PITCH
 // ============================================================================
 const DEFAULT_TEMPLATE_A = {
-  id: 'template_a',
-  name: 'Initial Outreach',
-  subject: 'Quick question for {{business_name}}',
+  id: "template_a",
+  name: "Initial Outreach",
+  subject: "Quick question for {{business_name}}",
   body: `Hi {{business_name}}, 😊👋🏻
 I hope you're doing well.
 My name is {{sender_name}}. I run Syndicate Solutions, a Sri Lanka–based mini agency supporting
@@ -166,16 +170,16 @@ Best regards,
 {{sender_name}}
 Founder – Syndicate Solutions
 `,
-  channel: 'email',
+  channel: "email",
   enabled: true,
   createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
+  updatedAt: new Date().toISOString(),
 };
 
 const DEFAULT_TEMPLATE_B = {
-  id: 'template_b',
-  name: 'Alternative Outreach',
-  subject: '{{business_name}}, quick question',
+  id: "template_b",
+  name: "Alternative Outreach",
+  subject: "{{business_name}}, quick question",
   body: `Hi {{business_name}},
 I noticed your company and wanted to reach out.
 We help businesses like yours with web development, AI automation, and digital operations.
@@ -185,10 +189,10 @@ Best,
 {{sender_name}}
 Syndicate Solutions
 `,
-  channel: 'email',
+  channel: "email",
   enabled: true,
   createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
+  updatedAt: new Date().toISOString(),
 };
 
 // ============================================================================
@@ -196,12 +200,12 @@ Syndicate Solutions
 // ============================================================================
 const DEFAULT_FOLLOW_UP_TEMPLATES = [
   {
-    id: 'followup_1',
-    name: 'Follow-Up 1 (Day 2)',
-    channel: 'email',
+    id: "followup_1",
+    name: "Follow-Up 1 (Day 2)",
+    channel: "email",
     enabled: true,
     delayDays: 2,
-    subject: 'Quick question for {{business_name}}',
+    subject: "Quick question for {{business_name}}",
     body: `Hi {{business_name}},
 Just circling back—did my note about outsourced dev & ops support land at a bad time?
 No pressure at all, but if you're ever swamped with web, automation, or backend work and need a reliable extra hand (especially for white-label or fast-turnaround needs), we're ready to help.
@@ -213,15 +217,15 @@ Founder – Syndicate Solutions
 WhatsApp: 0741143323
 `,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'followup_2',
-    name: 'Follow-Up 2 (Day 5)',
-    channel: 'email',
+    id: "followup_2",
+    name: "Follow-Up 2 (Day 5)",
+    channel: "email",
     enabled: true,
     delayDays: 5,
-    subject: '{{business_name}}, a quick offer (no strings)',
+    subject: "{{business_name}}, a quick offer (no strings)",
     body: `Hi again,
 I noticed you haven't had a chance to reply—totally understand!
 To make this zero-risk: **I'll audit one of your digital workflows (e.g., lead capture, client onboarding, internal tooling) for free** and send 2–3 actionable automation ideas you can implement immediately—even if you never work with us.
@@ -232,15 +236,15 @@ Cheers,
 Portfolio: https://syndicatesolutions.vercel.app/
 Book a call: https://cal.com/syndicate-solutions/15min`,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'followup_3',
-    name: 'Breakup Email (Day 10)',
-    channel: 'email',
+    id: "followup_3",
+    name: "Breakup Email (Day 10)",
+    channel: "email",
     enabled: true,
     delayDays: 10,
-    subject: 'Closing the loop',
+    subject: "Closing the loop",
     body: `Hi {{business_name}},
 I'll stop emailing after this one! 😅
 Just wanted to say: if outsourcing ever becomes a priority—whether for web dev, AI tools, or ongoing ops—we're here. Many of our clients started with a tiny $100 task and now work with us monthly.
@@ -250,8 +254,8 @@ Either way, keep crushing it!
 WhatsApp: 0741143323
 `,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 // ============================================================================
@@ -259,9 +263,9 @@ WhatsApp: 0741143323
 // ============================================================================
 const DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES = [
   {
-    id: 'whatsapp_followup_1',
-    name: 'WhatsApp Follow-Up 1 (Day 3)',
-    channel: 'whatsapp',
+    id: "whatsapp_followup_1",
+    name: "WhatsApp Follow-Up 1 (Day 3)",
+    channel: "whatsapp",
     enabled: true,
     delayDays: 3,
     body: `Hi {{business_name}} 👋
@@ -270,12 +274,12 @@ No pressure at all—just wanted to check if you're still interested in discussi
 Best,
 {{sender_name}}`,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   },
   {
-    id: 'whatsapp_followup_2',
-    name: 'WhatsApp Follow-Up 2 (Day 7)',
-    channel: 'whatsapp',
+    id: "whatsapp_followup_2",
+    name: "WhatsApp Follow-Up 2 (Day 7)",
+    channel: "whatsapp",
     enabled: true,
     delayDays: 7,
     body: `Hi {{business_name}} 👋
@@ -285,8 +289,8 @@ Would you be open to a quick chat about it?
 Cheers,
 {{sender_name}}`,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 // ============================================================================
@@ -336,60 +340,72 @@ export default function Dashboard() {
   // ============================================================================
   // CSV & LEAD DATA STATES
   // ============================================================================
-  const [csvContent, setCsvContent] = useState('');
+  const [csvContent, setCsvContent] = useState("");
   const [csvHeaders, setCsvHeaders] = useState([]);
   const [availableCsvVariables, setAvailableCsvVariables] = useState([]);
   const [whatsappLinks, setWhatsappLinks] = useState([]);
   const [validEmails, setValidEmails] = useState(0);
   const [validWhatsApp, setValidWhatsApp] = useState(0);
-  const [leadQualityFilter, setLeadQualityFilter] = useState('HOT');
+  const [leadQualityFilter, setLeadQualityFilter] = useState("HOT");
   const [previewRecipient, setPreviewRecipient] = useState(null);
   const [fieldMappings, setFieldMappings] = useState({});
-  const [csvFileName, setCsvFileName] = useState('');
+  const [csvFileName, setCsvFileName] = useState("");
   const [csvUploadDate, setCsvUploadDate] = useState(null);
   const [isEnrichingCsv, setIsEnrichingCsv] = useState(false);
-  const [enrichMode, setEnrichMode] = useState('download');
-  const [enrichStatusMessage, setEnrichStatusMessage] = useState('');
+  const [enrichMode, setEnrichMode] = useState("download");
+  const [enrichStatusMessage, setEnrichStatusMessage] = useState("");
 
   // ============================================================================
   // SENDER & TEMPLATE STATES
   // ============================================================================
-  const [senderName, setSenderName] = useState('');
-  const [senderEmail, setSenderEmail] = useState('');
+  const [senderName, setSenderName] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
   const [abTestMode, setAbTestMode] = useState(false);
   const [templateA, setTemplateA] = useState(DEFAULT_TEMPLATE_A);
   const [templateB, setTemplateB] = useState(DEFAULT_TEMPLATE_B);
-  const [whatsappTemplate, setWhatsappTemplate] = useState(DEFAULT_WHATSAPP_TEMPLATE);
+  const [whatsappTemplate, setWhatsappTemplate] = useState(
+    DEFAULT_WHATSAPP_TEMPLATE,
+  );
   const [smsTemplate, setSmsTemplate] = useState(DEFAULT_SMS_TEMPLATE);
-  const [instagramTemplate, setInstagramTemplate] = useState(DEFAULT_INSTAGRAM_TEMPLATE);
-  const [twitterTemplate, setTwitterTemplate] = useState(DEFAULT_TWITTER_TEMPLATE);
-  const [linkedinTemplate, setLinkedinTemplate] = useState(DEFAULT_LINKEDIN_TEMPLATE);
+  const [instagramTemplate, setInstagramTemplate] = useState(
+    DEFAULT_INSTAGRAM_TEMPLATE,
+  );
+  const [twitterTemplate, setTwitterTemplate] = useState(
+    DEFAULT_TWITTER_TEMPLATE,
+  );
+  const [linkedinTemplate, setLinkedinTemplate] = useState(
+    DEFAULT_LINKEDIN_TEMPLATE,
+  );
   const [emailImages, setEmailImages] = useState([]);
   const [emailAttachments, setEmailAttachments] = useState([]);
   const [smsConsent, setSmsConsent] = useState(true);
-  const [activeTemplateTab, setActiveTemplateTab] = useState('email');
+  const [activeTemplateTab, setActiveTemplateTab] = useState("email");
 
   // ============================================================================
   // TEMPLATE VARIABLES COLLECTION
   // ============================================================================
-  const uiVars = [...new Set([
-    ...extractTemplateVariables(templateA.subject),
-    ...extractTemplateVariables(templateA.body),
-    ...extractTemplateVariables(templateB.subject),
-    ...extractTemplateVariables(templateB.body),
-    ...extractTemplateVariables(whatsappTemplate),
-    ...extractTemplateVariables(smsTemplate),
-    ...extractTemplateVariables(instagramTemplate),
-    ...extractTemplateVariables(twitterTemplate),
-    ...extractTemplateVariables(linkedinTemplate)
-  ])];
+  const uiVars = [
+    ...new Set([
+      ...extractTemplateVariables(templateA.subject),
+      ...extractTemplateVariables(templateA.body),
+      ...extractTemplateVariables(templateB.subject),
+      ...extractTemplateVariables(templateB.body),
+      ...extractTemplateVariables(whatsappTemplate),
+      ...extractTemplateVariables(smsTemplate),
+      ...extractTemplateVariables(instagramTemplate),
+      ...extractTemplateVariables(twitterTemplate),
+      ...extractTemplateVariables(linkedinTemplate),
+    ]),
+  ];
 
-  const allTemplateVars = [...new Set([
-    ...uiVars,
-    ...csvHeaders,
-    ...availableCsvVariables,
-    'sender_name'
-  ])];
+  const allTemplateVars = [
+    ...new Set([
+      ...uiVars,
+      ...csvHeaders,
+      ...availableCsvVariables,
+      "sender_name",
+    ]),
+  ];
 
   // ============================================================================
   // CONTACT TRACKING STATES (Using custom hook)
@@ -401,7 +417,7 @@ export default function Dashboard() {
     updateContact,
     canContact,
     getContactSummary,
-    setContactHistory
+    setContactHistory,
   } = useContactTracking(user?.uid);
 
   // Legacy tracking states (for backward compatibility)
@@ -420,7 +436,7 @@ export default function Dashboard() {
     loading: loadingQuotas,
     canUse,
     incrementQuota,
-    setQuotas
+    setQuotas,
   } = useDailyQuotas(user?.uid);
 
   const [dailyEmailCount, setDailyEmailCount] = useState(0);
@@ -436,7 +452,7 @@ export default function Dashboard() {
     scores: leadScores,
     calculateScore,
     updateScore,
-    setScores: setLeadScores
+    setScores: setLeadScores,
   } = useLeadScoring();
 
   // ============================================================================
@@ -447,7 +463,7 @@ export default function Dashboard() {
   const [pipelineValue, setPipelineValue] = useState(0);
   const [abResults, setAbResults] = useState({
     a: { opens: 0, clicks: 0, sent: 0, replied: 0 },
-    b: { opens: 0, clicks: 0, sent: 0, replied: 0 }
+    b: { opens: 0, clicks: 0, sent: 0, replied: 0 },
   });
   const [advancedMetrics, setAdvancedMetrics] = useState({
     avgDaysToFirstReply: 0,
@@ -455,9 +471,9 @@ export default function Dashboard() {
     channelPerformance: {},
     leadVelocity: 0,
     churnRisk: [],
-    recommendedFollowUpTime: 'afternoon',
+    recommendedFollowUpTime: "afternoon",
     bestPerformingTemplate: null,
-    estimatedMonthlyRevenue: 0
+    estimatedMonthlyRevenue: 0,
   });
   const [showAdvancedAnalytics, setShowAdvancedAnalytics] = useState(false);
   const [showDetailedAnalytics, setShowDetailedAnalytics] = useState(false);
@@ -466,8 +482,8 @@ export default function Dashboard() {
   // SEND & STATUS STATES
   // ============================================================================
   const [isSending, setIsSending] = useState(false);
-  const [status, setStatus] = useState('');
-  const [statusType, setStatusType] = useState('info');
+  const [status, setStatus] = useState("");
+  const [statusType, setStatusType] = useState("info");
   const [sendProgress, setSendProgress] = useState({ current: 0, total: 0 });
   const [followUpAttachments, setFollowUpAttachments] = useState([]);
 
@@ -480,14 +496,14 @@ export default function Dashboard() {
   const [sentLeads, setSentLeads] = useState([]);
   const [loadingSentLeads, setLoadingSentLeads] = useState(false);
   const [followUpHistory, setFollowUpHistory] = useState({});
-  const [followUpFilter, setFollowUpFilter] = useState('all');
+  const [followUpFilter, setFollowUpFilter] = useState("all");
   const [followUpStats, setFollowUpStats] = useState({
     totalSent: 0,
     totalReplied: 0,
     readyForFollowUp: 0,
     alreadyFollowedUp: 0,
     awaitingReply: 0,
-    interestedLeads: 0
+    interestedLeads: 0,
   });
   const [whatsappFollowUpHistory, setWhatsappFollowUpHistory] = useState({});
   const [whatsappFollowUpStats, setWhatsappFollowUpStats] = useState({
@@ -495,43 +511,48 @@ export default function Dashboard() {
     totalReplied: 0,
     readyForFollowUp: 0,
     alreadyFollowedUp: 0,
-    awaitingReply: 0
+    awaitingReply: 0,
   });
-  const [followUpTemplates, setFollowUpTemplates] = useState(DEFAULT_FOLLOW_UP_TEMPLATES);
-  const [followUpTemplate, setFollowUpTemplate] = useState('auto');
+  const [followUpTemplates, setFollowUpTemplates] = useState(
+    DEFAULT_FOLLOW_UP_TEMPLATES,
+  );
+  const [followUpTemplate, setFollowUpTemplate] = useState("auto");
   const [scheduleFollowUp, setScheduleFollowUp] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledTime, setScheduledTime] = useState("");
 
   // ============================================================================
   // FOLLOW-UP QUEUE STATES (PHASE 2-7)
   // ============================================================================
-  const [followUpTasks, setFollowUpTasks] = useState({ pending: [], completed: [] });
+  const [followUpTasks, setFollowUpTasks] = useState({
+    pending: [],
+    completed: [],
+  });
   const [loadingFollowUpTasks, setLoadingFollowUpTasks] = useState(false);
   const [showFollowUpQueue, setShowFollowUpQueue] = useState(true);
   const [leadNotes, setLeadNotes] = useState({});
   const [leadStates, setLeadStates] = useState({});
   const [showLeadNotesModal, setShowLeadNotesModal] = useState(false);
   const [selectedLeadForNotes, setSelectedLeadForNotes] = useState(null);
-  const [currentLeadNote, setCurrentLeadNote] = useState('');
+  const [currentLeadNote, setCurrentLeadNote] = useState("");
   const [phoneCallStatus, setPhoneCallStatus] = useState({});
   const [migrationRan, setMigrationRan] = useState(false);
   const [pendingTasksPage, setPendingTasksPage] = useState(1);
   const [completedTasksPage, setCompletedTasksPage] = useState(1);
   const TASKS_PER_PAGE = 20;
-  const [followUpQueueSearch, setFollowUpQueueSearch] = useState('');
-  const [followUpQueueFilter, setFollowUpQueueFilter] = useState('all');
-  const [followUpQueueChannel, setFollowUpQueueChannel] = useState('all');
+  const [followUpQueueSearch, setFollowUpQueueSearch] = useState("");
+  const [followUpQueueFilter, setFollowUpQueueFilter] = useState("all");
+  const [followUpQueueChannel, setFollowUpQueueChannel] = useState("all");
 
   const safeParseDate = (value) => {
     if (!value) return null;
     if (value instanceof Date) return value;
-    if (typeof value?.toDate === 'function') return value.toDate();
+    if (typeof value?.toDate === "function") return value.toDate();
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
   const normalizeLeadEmail = (lead) => {
-    if (!lead) return '';
+    if (!lead) return "";
     const rawEmail =
       lead.email ||
       lead.to ||
@@ -539,7 +560,7 @@ export default function Dashboard() {
       lead.recipientEmail ||
       lead.recipient?.email ||
       lead.toEmail ||
-      '';
+      "";
     return String(rawEmail).trim().toLowerCase();
   };
 
@@ -547,7 +568,9 @@ export default function Dashboard() {
     const email = normalizeLeadEmail(lead);
     const sentAt = safeParseDate(lead.sentAt);
     const followUpAt = safeParseDate(lead.followUpAt);
-    const lastFollowUpAt = safeParseDate(lead.lastFollowUpAt) || safeParseDate(lead.lastFollowUpSentAt);
+    const lastFollowUpAt =
+      safeParseDate(lead.lastFollowUpAt) ||
+      safeParseDate(lead.lastFollowUpSentAt);
 
     return {
       ...lead,
@@ -555,15 +578,17 @@ export default function Dashboard() {
       sentAt: sentAt ? sentAt.toISOString() : null,
       followUpAt: followUpAt ? followUpAt.toISOString() : null,
       lastFollowUpAt: lastFollowUpAt ? lastFollowUpAt.toISOString() : null,
-      followUpCount: Number(lead.followUpCount ?? lead.followUpSentCount ?? 0)
+      followUpCount: Number(lead.followUpCount ?? lead.followUpSentCount ?? 0),
     };
   };
 
-
-  const [autoReplyProcessorEnabled, setAutoReplyProcessorEnabled] = useState(true);
-  const [autoFollowupSchedulerEnabled, setAutoFollowupSchedulerEnabled] = useState(true);
-  const [aiProcessorStatus, setAiProcessorStatus] = useState('Idle');
-  const [followupSchedulerStatus, setFollowupSchedulerStatus] = useState('Idle');
+  const [autoReplyProcessorEnabled, setAutoReplyProcessorEnabled] =
+    useState(true);
+  const [autoFollowupSchedulerEnabled, setAutoFollowupSchedulerEnabled] =
+    useState(true);
+  const [aiProcessorStatus, setAiProcessorStatus] = useState("Idle");
+  const [followupSchedulerStatus, setFollowupSchedulerStatus] =
+    useState("Idle");
   const [showAllPendingLeads, setShowAllPendingLeads] = useState(false);
   const [showAllReadyLeads, setShowAllReadyLeads] = useState(false);
   const [showAllRepliedLeads, setShowAllRepliedLeads] = useState(false);
@@ -590,27 +615,28 @@ export default function Dashboard() {
   const [predictiveScores, setPredictiveScores] = useState({});
   const [sentimentAnalysis, setSentimentAnalysis] = useState({});
   const [smartFollowUpSuggestions, setSmartFollowUpSuggestions] = useState({});
-  const [followUpTargeting, setFollowUpTargeting] = useState('ready');
+  const [followUpTargeting, setFollowUpTargeting] = useState("ready");
   const [batchSize, setBatchSize] = useState(50);
   const [followUpAnalytics, setFollowUpAnalytics] = useState({
     totalFollowUpsSent: 0,
     avgReplyRate: 0,
-    bestTemplate: 'auto',
-    bestTimeToSend: 'afternoon'
+    bestTemplate: "auto",
+    bestTimeToSend: "afternoon",
   });
 
   // ============================================================================
   // COMPANY TRACKING STATES
   // ============================================================================
   const [contactedCompanies, setContactedCompanies] = useState([]);
-  const [loadingContactedCompanies, setLoadingContactedCompanies] = useState(false);
-  const [companyFilter, setCompanyFilter] = useState('all');
+  const [loadingContactedCompanies, setLoadingContactedCompanies] =
+    useState(false);
+  const [companyFilter, setCompanyFilter] = useState("all");
   const [companyStats, setCompanyStats] = useState({
     totalCompanies: 0,
     totalContacts: 0,
     avgContactsPerCompany: 0,
     companiesReplied: 0,
-    replyRate: 0
+    replyRate: 0,
   });
 
   // ============================================================================
@@ -624,7 +650,7 @@ export default function Dashboard() {
   // ============================================================================
   // BUSINESS INTELLIGENCE & ANALYTICS STATES
   // ============================================================================
-  const [analyticsTab, setAnalyticsTab] = useState('overview');
+  const [analyticsTab, setAnalyticsTab] = useState("overview");
   const [analyticsData, setAnalyticsData] = useState(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
@@ -641,19 +667,20 @@ export default function Dashboard() {
   // MULTI-CHANNEL MODAL STATES
   // ============================================================================
   const [showMultiChannelModal, setShowMultiChannelModal] = useState(false);
-  const [isMultiChannelFullscreen, setIsMultiChannelFullscreen] = useState(false);
-  const [multiChannelView, setMultiChannelView] = useState('grid');
-  const [multiChannelPanel, setMultiChannelPanel] = useState('not-contacted');
-  const [multiChannelFilter, setMultiChannelFilter] = useState('all');
+  const [isMultiChannelFullscreen, setIsMultiChannelFullscreen] =
+    useState(false);
+  const [multiChannelView, setMultiChannelView] = useState("grid");
+  const [multiChannelPanel, setMultiChannelPanel] = useState("not-contacted");
+  const [multiChannelFilter, setMultiChannelFilter] = useState("all");
 
   // ============================================================================
   // SEARCH & FILTER STATES
   // ============================================================================
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [contactFilter, setContactFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('score');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [contactFilter, setContactFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   // Debounce search query to prevent filtering on every keystroke
   useEffect(() => {
@@ -679,12 +706,12 @@ export default function Dashboard() {
   const [showRepliesPanel, setShowRepliesPanel] = useState(false);
   const unreadRepliesCount = useAppSelector(selectUnreadCount);
   const [userPreferences, setUserPreferences] = useState({
-    theme: 'dark',
+    theme: "dark",
     notificationsEnabled: true,
     autoSaveEnabled: true,
     confirmBeforeSend: true,
-    defaultChannel: 'email',
-    timezone: 'Asia/Colombo'
+    defaultChannel: "email",
+    timezone: "Asia/Colombo",
   });
 
   // ============================================================================
@@ -698,26 +725,32 @@ export default function Dashboard() {
   // ============================================================================
   const autoSaveTimeoutRef = useRef(null);
   const enrichCsvInputRef = useRef(null);
-  const enrichModeRef = useRef('download');
+  const enrichModeRef = useRef("download");
 
   // ============================================================================
   // NOTIFICATION HELPER
   // ============================================================================
-  const addNotification = (message, type = 'info', duration = CONFIG.NOTIFICATION_DURATION_MS) => {
+  const addNotification = (
+    message,
+    type = "info",
+    duration = CONFIG.NOTIFICATION_DURATION_MS,
+  ) => {
     const id = generateId();
     const notification = {
       id,
       message,
       type,
       createdAt: new Date().toISOString(),
-      read: false
+      read: false,
     };
 
-    setNotifications(prev => [notification, ...prev].slice(0, CONFIG.MAX_NOTIFICATIONS));
+    setNotifications((prev) =>
+      [notification, ...prev].slice(0, CONFIG.MAX_NOTIFICATIONS),
+    );
 
     if (duration > 0) {
       setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== id));
+        setNotifications((prev) => prev.filter((n) => n.id !== id));
       }, duration);
     }
 
@@ -725,9 +758,9 @@ export default function Dashboard() {
   };
 
   const markNotificationRead = (id) => {
-    setNotifications(prev => prev.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    ));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
   };
 
   const clearNotifications = () => {
@@ -764,15 +797,16 @@ export default function Dashboard() {
   // HELPER: Get all contact attempts for a contact
   // ============================================================================
   const getContactHistory = (contact) => {
-    if (!contact) return {
-      email: null,
-      whatsapp: null,
-      sms: null,
-      call: null,
-      channels: [],
-      totalContacts: 0,
-      lastContacted: null
-    };
+    if (!contact)
+      return {
+        email: null,
+        whatsapp: null,
+        sms: null,
+        call: null,
+        channels: [],
+        totalContacts: 0,
+        lastContacted: null,
+      };
 
     const key = normalizeContactKey(contact);
     const summary = getContactSummary(key);
@@ -785,23 +819,28 @@ export default function Dashboard() {
       call: lastCallMade[key] ? new Date(lastCallMade[key]) : null,
       channels: contactedChannels[key] || summary.channels || [],
       totalContacts: summary.totalContacts || 0,
-      lastContacted: summary.lastContacted || manualStatus?.lastContacted || null,
-      manuallyMarked: manualStatus?.contacted || false
+      lastContacted:
+        summary.lastContacted || manualStatus?.lastContacted || null,
+      manuallyMarked: manualStatus?.contacted || false,
     };
   };
 
   // ============================================================================
   // HELPER: Check if safe to contact on specific channel
   // ============================================================================
-  const isSafeToContactOnChannel = (contact, channel, minDaysBetween = CONFIG.MIN_DAYS_BETWEEN_CONTACT) => {
-    if (!contact) return { safe: true, reason: 'No contact' };
+  const isSafeToContactOnChannel = (
+    contact,
+    channel,
+    minDaysBetween = CONFIG.MIN_DAYS_BETWEEN_CONTACT,
+  ) => {
+    if (!contact) return { safe: true, reason: "No contact" };
 
     const key = contact.email || contact.phone;
-    if (!key) return { safe: true, reason: 'No contact key' };
+    if (!key) return { safe: true, reason: "No contact key" };
 
     // Check manual override
     if (manualContactStatus[key]?.blocked) {
-      return { safe: false, reason: 'Manually blocked' };
+      return { safe: false, reason: "Manually blocked" };
     }
 
     // Use contact tracking hook
@@ -811,7 +850,7 @@ export default function Dashboard() {
       safe: canContactResult.canContact,
       reason: canContactResult.reason,
       daysSince: canContactResult.daysSince,
-      lastContact: canContactResult.lastContact
+      lastContact: canContactResult.lastContact,
     };
   };
 
@@ -820,28 +859,32 @@ export default function Dashboard() {
   // ============================================================================
   const isPriorityPhone = (phone) => {
     if (!phone) return false;
-    const cleaned = phone.toString().replace(/\D/g, '');
-    return cleaned.startsWith('9477') || cleaned.startsWith('9476') || cleaned.startsWith('9475');
+    const cleaned = phone.toString().replace(/\D/g, "");
+    return (
+      cleaned.startsWith("9477") ||
+      cleaned.startsWith("9476") ||
+      cleaned.startsWith("9475")
+    );
   };
 
   // ============================================================================
   // HELPER: Get recommended channel based on engagement
   // ============================================================================
   const getRecommendedChannel = (contact) => {
-    if (!contact) return 'email';
+    if (!contact) return "email";
 
     const history = getContactHistory(contact);
     const key = contact.email || contact.phone;
-    const canContactEmail = isSafeToContactOnChannel(contact, 'email');
-    const canContactWhatsApp = isSafeToContactOnChannel(contact, 'whatsapp');
-    const canContactSMS = isSafeToContactOnChannel(contact, 'sms');
-    const canContactCall = isSafeToContactOnChannel(contact, 'call');
+    const canContactEmail = isSafeToContactOnChannel(contact, "email");
+    const canContactWhatsApp = isSafeToContactOnChannel(contact, "whatsapp");
+    const canContactSMS = isSafeToContactOnChannel(contact, "sms");
+    const canContactCall = isSafeToContactOnChannel(contact, "call");
 
     const scores = {
-      email: contact.email && canContactEmail.safe ? (leadScores[key] || 50) : 0,
+      email: contact.email && canContactEmail.safe ? leadScores[key] || 50 : 0,
       whatsapp: contact.phone && canContactWhatsApp.safe ? 60 : 0,
       sms: contact.phone && canContactSMS.safe ? 50 : 0,
-      call: contact.phone && canContactCall.safe ? 70 : 0
+      call: contact.phone && canContactCall.safe ? 70 : 0,
     };
 
     // Boost channels that haven't been used yet
@@ -851,44 +894,53 @@ export default function Dashboard() {
     if (!history.call) scores.call += 20;
 
     // Reduce score for recently used channels
-    Object.keys(scores).forEach(channel => {
+    Object.keys(scores).forEach((channel) => {
       if (history[channel]) {
-        const daysSince = (new Date() - history[channel]) / (1000 * 60 * 60 * 24);
+        const daysSince =
+          (new Date() - history[channel]) / (1000 * 60 * 60 * 24);
         if (daysSince < 3) scores[channel] -= 30;
       }
     });
 
     const bestChannel = Object.entries(scores)
-      .filter(([channel]) => channel === 'email' ? contact.email : contact.phone)
+      .filter(([channel]) =>
+        channel === "email" ? contact.email : contact.phone,
+      )
       .sort((a, b) => b[1] - a[1])[0];
 
-    return bestChannel ? bestChannel[0] : 'email';
+    return bestChannel ? bestChannel[0] : "email";
   };
 
   // ============================================================================
   // HELPER: Mark contact as manually contacted/not contacted
   // ============================================================================
-  const markContactManually = async (contact, contacted, reason = '') => {
+  const markContactManually = async (contact, contacted, reason = "") => {
     if (!contact) {
-      addNotification('❌ Invalid contact provided', 'error');
+      addNotification("❌ Invalid contact provided", "error");
       return false;
     }
 
     const key = normalizeContactKey(contact);
     if (!key) {
-      addNotification('❌ Contact must have email or phone', 'error');
+      addNotification("❌ Contact must have email or phone", "error");
       return false;
     }
 
     // Validate Firebase initialization
     if (!user?.uid) {
-      addNotification('❌ User not authenticated. Please log in again.', 'error');
+      addNotification(
+        "❌ User not authenticated. Please log in again.",
+        "error",
+      );
       return false;
     }
 
     if (!db) {
-      console.error('Firebase database not initialized');
-      addNotification('❌ Database connection error. Please refresh and try again.', 'error');
+      console.error("Firebase database not initialized");
+      addNotification(
+        "❌ Database connection error. Please refresh and try again.",
+        "error",
+      );
       return false;
     }
 
@@ -899,52 +951,64 @@ export default function Dashboard() {
         lastContacted: contacted ? now : null,
         reason,
         updatedAt: now,
-        manual: true
+        manual: true,
       };
 
-      setManualContactStatus(prev => ({
+      setManualContactStatus((prev) => ({
         ...prev,
-        [key]: status
+        [key]: status,
       }));
 
       // Save to Firebase
       try {
-        const docRef = doc(db, 'manual_contact_status', `${user.uid}_${key}`);
-        await setDoc(docRef, {
-          userId: user.uid,
-          contactKey: key,
-          ...status
-        }, { merge: true });
+        const docRef = doc(db, "manual_contact_status", `${user.uid}_${key}`);
+        await setDoc(
+          docRef,
+          {
+            userId: user.uid,
+            contactKey: key,
+            ...status,
+          },
+          { merge: true },
+        );
       } catch (firebaseError) {
-        console.error('Firebase setDoc error in markContactManually:', firebaseError);
+        console.error(
+          "Firebase setDoc error in markContactManually:",
+          firebaseError,
+        );
         throw new Error(`Firebase save failed: ${firebaseError.message}`);
       }
 
       // Also update contact history if marked as contacted
       if (contacted) {
         try {
-          await updateContact(key, 'manual', { manuallyMarked: true });
+          await updateContact(key, "manual", { manuallyMarked: true });
         } catch (updateError) {
-          console.warn('Failed to update contact history:', updateError);
+          console.warn("Failed to update contact history:", updateError);
           // Don't fail completely if history update fails - status was already saved
         }
       }
 
       addNotification(
-        contacted ? `✅ Marked ${contact.business || key} as contacted` : `🔄 Marked ${contact.business || key} as not contacted`,
-        'success'
+        contacted
+          ? `✅ Marked ${contact.business || key} as contacted`
+          : `🔄 Marked ${contact.business || key} as not contacted`,
+        "success",
       );
 
       return true;
     } catch (error) {
-      console.error('Mark contact manually error:', error);
-      console.error('Error details:', {
+      console.error("Mark contact manually error:", error);
+      console.error("Error details:", {
         errorMessage: error?.message,
         errorCode: error?.code,
         contact: key,
-        user: user?.uid
+        user: user?.uid,
       });
-      addNotification(`❌ Failed to update contact status: ${error?.message || 'Unknown error'}`, 'error');
+      addNotification(
+        `❌ Failed to update contact status: ${error?.message || "Unknown error"}`,
+        "error",
+      );
       return false;
     }
   };
@@ -954,25 +1018,26 @@ export default function Dashboard() {
   // ============================================================================
   const filteredSentLeads = (() => {
     if (!sentLeads || sentLeads.length === 0) return [];
-    
+
     const now = new Date();
     const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
-    
-    const sentLeadsFiltered = sentLeads.filter(lead => {
+
+    const sentLeadsFiltered = sentLeads.filter((lead) => {
       if (!lead || !lead.email) return true; // Keep if no email (shouldn't happen but safety check)
       if (lead.replied) return true; // Keep replied leads
-      
+
       const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
       if (followUpCount >= 3) return true; // Keep leads at max follow-ups
-      
-      const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+
+      const lastFollowUpAt =
+        lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
       if (!lastFollowUpAt) return true;
-      
+
       const lastDate = safeParseDate(lastFollowUpAt);
       if (!lastDate) return true;
-      
+
       const daysSinceLastContact = (now - lastDate) / (1000 * 60 * 60 * 24);
-      
+
       // Filter out leads that are too soon to follow up from general display
       // Only show them in the safeFollowUpCandidates list
       return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
@@ -992,7 +1057,7 @@ export default function Dashboard() {
 
     const candidates = filteredSentLeads
       .map(normalizeSentLead)
-      .filter(lead => {
+      .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
 
@@ -1000,7 +1065,8 @@ export default function Dashboard() {
         if (followUpCount >= 3) return false;
 
         // Use same logic as API: check if enough time has passed since last contact
-        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+        const lastFollowUpAt =
+          lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
         if (!lastFollowUpAt) return false;
 
         const lastDate = safeParseDate(lastFollowUpAt);
@@ -1015,27 +1081,34 @@ export default function Dashboard() {
 
         return true;
       })
-      .map(lead => {
+      .map((lead) => {
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         const sentAtDate = safeParseDate(lead.sentAt);
-        const daysSinceSent = sentAtDate ?
-          (now - sentAtDate) / (1000 * 60 * 60 * 24) : 999;
-        
+        const daysSinceSent = sentAtDate
+          ? (now - sentAtDate) / (1000 * 60 * 60 * 24)
+          : 999;
+
         // Check if this is a WhatsApp number (+94 7...)
-        const isWhatsApp = lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947'));
-        
+        const isWhatsApp =
+          lead.phone &&
+          (lead.phone.includes("+947") || lead.phone.includes("947"));
+
         // Urgency score: higher for leads that haven't been followed up recently
         // Clamp to 0-100 range to prevent negative values
-        const urgencyScore = Math.max(0, Math.min(100, 100 - (daysSinceSent * 1.5)));
-        
+        const urgencyScore = Math.max(
+          0,
+          Math.min(100, 100 - daysSinceSent * 1.5),
+        );
+
         return {
           ...lead,
-          followUpAt: getLeadNextFollowUpAt(lead)?.toISOString() || lead.followUpAt,
+          followUpAt:
+            getLeadNextFollowUpAt(lead)?.toISOString() || lead.followUpAt,
           followUpCount,
           daysSinceSent,
           urgencyScore,
           safetyScore: Math.max(0, (3 - followUpCount) * 33.33),
-          isWhatsApp // Add flag for WhatsApp numbers
+          isWhatsApp, // Add flag for WhatsApp numbers
         };
       })
       .sort((a, b) => {
@@ -1055,7 +1128,7 @@ export default function Dashboard() {
   const whatsappFollowUpCandidates = (() => {
     // Only use whatsappLinks initially to avoid circular dependency
     const csvWhatsAppContacts = whatsappLinks || [];
-    
+
     if (csvWhatsAppContacts.length === 0) {
       return [];
     }
@@ -1064,7 +1137,7 @@ export default function Dashboard() {
     const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3; // WhatsApp follow-ups should be less frequent
 
     const candidates = csvWhatsAppContacts
-      .filter(contact => {
+      .filter((contact) => {
         if (!contact || !contact.phone) return false;
 
         const key = contact.email || contact.phone;
@@ -1085,21 +1158,29 @@ export default function Dashboard() {
 
         return true;
       })
-      .map(contact => {
+      .map((contact) => {
         const key = contact.email || contact.phone;
         const lastWhatsAppSentDate = lastWhatsAppSent[key];
-        const lastDate = lastWhatsAppSentDate ? new Date(lastWhatsAppSentDate) : null;
-        const daysSinceLastContact = lastDate ? (now - lastDate) / (1000 * 60 * 60 * 24) : 999;
+        const lastDate = lastWhatsAppSentDate
+          ? new Date(lastWhatsAppSentDate)
+          : null;
+        const daysSinceLastContact = lastDate
+          ? (now - lastDate) / (1000 * 60 * 60 * 24)
+          : 999;
         const MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP = 3;
-        const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP - daysSinceLastContact);
+        const daysRemaining = Math.max(
+          0,
+          MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP - daysSinceLastContact,
+        );
 
         return {
           ...contact,
           lastWhatsAppSent: lastDate?.toISOString() || null,
           daysSinceLastContact,
           daysRemaining,
-          readyForFollowUp: daysSinceLastContact >= MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP,
-          urgencyScore: Math.max(0, Math.min(100, daysSinceLastContact * 10))
+          readyForFollowUp:
+            daysSinceLastContact >= MIN_DAYS_BETWEEN_WHATSAPP_FOLLOWUP,
+          urgencyScore: Math.max(0, Math.min(100, daysSinceLastContact * 10)),
         };
       })
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
@@ -1117,13 +1198,17 @@ export default function Dashboard() {
         totalReplied: 0,
         readyForFollowUp: 0,
         alreadyFollowedUp: 0,
-        awaitingReply: 0
+        awaitingReply: 0,
       };
     }
 
     const totalSent = whatsappLinks.length;
-    const readyForFollowUp = whatsappFollowUpCandidates.filter(c => c.readyForFollowUp).length;
-    const alreadyFollowedUp = whatsappLinks.filter(c => c.followUpCount > 0).length;
+    const readyForFollowUp = whatsappFollowUpCandidates.filter(
+      (c) => c.readyForFollowUp,
+    ).length;
+    const alreadyFollowedUp = whatsappLinks.filter(
+      (c) => c.followUpCount > 0,
+    ).length;
     const awaitingReply = totalSent - readyForFollowUp - alreadyFollowedUp;
 
     // For WhatsApp, we don't have a reliable way to track replies yet
@@ -1135,7 +1220,7 @@ export default function Dashboard() {
       totalReplied,
       readyForFollowUp,
       alreadyFollowedUp,
-      awaitingReply
+      awaitingReply,
     };
   };
 
@@ -1148,7 +1233,7 @@ export default function Dashboard() {
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
   // ============================================================================
   const calculatePredictiveScore = (lead) => {
-    if (!lead) return { score: 0, probability: 0, tier: 'cold' };
+    if (!lead) return { score: 0, probability: 0, tier: "cold" };
 
     let score = 0;
     let factors = [];
@@ -1156,53 +1241,61 @@ export default function Dashboard() {
     // Engagement factors (weighted heavily)
     if (lead.replied) {
       score += 40;
-      factors.push({ name: 'Replied to email', weight: 40 });
+      factors.push({ name: "Replied to email", weight: 40 });
     }
     if (lead.opened) {
       score += 15;
-      factors.push({ name: 'Opened email', weight: 15 });
+      factors.push({ name: "Opened email", weight: 15 });
     }
     if (lead.clicked) {
       score += 25;
-      factors.push({ name: 'Clicked link', weight: 25 });
+      factors.push({ name: "Clicked link", weight: 25 });
     }
 
     // Engagement frequency
     const openCount = lead.openedCount || 0;
     if (openCount > 1) {
       score += Math.min(20, openCount * 5);
-      factors.push({ name: `Opened ${openCount} times`, weight: Math.min(20, openCount * 5) });
+      factors.push({
+        name: `Opened ${openCount} times`,
+        weight: Math.min(20, openCount * 5),
+      });
     }
 
     const clickCount = lead.clickCount || 0;
     if (clickCount > 1) {
       score += Math.min(30, clickCount * 10);
-      factors.push({ name: `Clicked ${clickCount} times`, weight: Math.min(30, clickCount * 10) });
+      factors.push({
+        name: `Clicked ${clickCount} times`,
+        weight: Math.min(30, clickCount * 10),
+      });
     }
 
     // Time-based factors (recency bias)
     const sentAt = safeParseDate(lead.sentAt);
-    const daysSinceSent = sentAt ? (new Date() - sentAt) / (1000 * 60 * 60 * 24) : 999;
-    
+    const daysSinceSent = sentAt
+      ? (new Date() - sentAt) / (1000 * 60 * 60 * 24)
+      : 999;
+
     if (daysSinceSent < 7) {
       score += 10; // Recent outreach
-      factors.push({ name: 'Recent outreach', weight: 10 });
+      factors.push({ name: "Recent outreach", weight: 10 });
     } else if (daysSinceSent < 14) {
       score += 5;
-      factors.push({ name: 'Moderate recency', weight: 5 });
+      factors.push({ name: "Moderate recency", weight: 5 });
     }
 
     // Follow-up stage (leads in follow-up are more engaged)
     const followUpCount = lead.followUpCount || 0;
     if (followUpCount > 0 && !lead.replied) {
       score += 15; // Still in follow-up sequence
-      factors.push({ name: 'Active follow-up', weight: 15 });
+      factors.push({ name: "Active follow-up", weight: 15 });
     }
 
     // Business signals (if available)
     if (lead.businessName && lead.businessName.length > 10) {
       score += 5; // Has detailed business info
-      factors.push({ name: 'Detailed business info', weight: 5 });
+      factors.push({ name: "Detailed business info", weight: 5 });
     }
 
     // Normalize to 0-100
@@ -1226,39 +1319,40 @@ export default function Dashboard() {
     probability = Math.min(0.95, probability + (normalizedScore / 100) * 0.3);
 
     // Determine tier
-    let tier = 'cold';
+    let tier = "cold";
     if (normalizedScore >= 70) {
-      tier = 'hot';
+      tier = "hot";
     } else if (normalizedScore >= 40) {
-      tier = 'warm';
+      tier = "warm";
     } else if (normalizedScore >= 20) {
-      tier = 'tepid';
+      tier = "tepid";
     }
 
     return {
       score: normalizedScore,
       probability: Math.round(probability * 100),
       tier,
-      factors
+      factors,
     };
   };
 
   // Apply predictive scoring to all leads
   const scoredLeads = (() => {
     if (!sentLeads || sentLeads.length === 0) return [];
-    
+
     return sentLeads
-      .map(lead => ({
+      .map((lead) => ({
         ...lead,
-        predictive: calculatePredictiveScore(lead)
+        predictive: calculatePredictiveScore(lead),
       }))
       .sort((a, b) => b.predictive.score - a.predictive.score);
   })();
 
   // Get high-value leads (hot tier)
-  const hotLeads = (() => 
-    scoredLeads.filter(lead => lead.predictive.tier === 'hot' && !lead.replied)
-  )();
+  const hotLeads = (() =>
+    scoredLeads.filter(
+      (lead) => lead.predictive.tier === "hot" && !lead.replied,
+    ))();
 
   // ============================================================================
   // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING
@@ -1273,56 +1367,56 @@ export default function Dashboard() {
       const bestHour = historicalData.bestHours[0];
       const now = new Date();
       const targetDate = new Date(now);
-      
+
       // Set to the best hour
       targetDate.setHours(bestHour, 0, 0, 0);
-      
+
       // If today is past the best hour, move to tomorrow
       if (targetDate <= now) {
         targetDate.setDate(targetDate.getDate() + 1);
       }
-      
+
       // Skip weekends
       const dayOfWeek = targetDate.getDay();
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         targetDate.setDate(targetDate.getDate() + (dayOfWeek === 0 ? 1 : 2));
       }
-      
+
       return targetDate;
     }
 
     // Fallback to default optimal times
     const now = new Date();
     const targetDate = new Date(now);
-    
+
     // Find the next optimal hour
-    let targetHour = defaultOptimalHours.find(hour => hour > now.getHours());
+    let targetHour = defaultOptimalHours.find((hour) => hour > now.getHours());
     if (!targetHour) {
       // No optimal hour today, move to tomorrow
       targetDate.setDate(targetDate.getDate() + 1);
       targetHour = defaultOptimalHours[0];
     }
-    
+
     targetDate.setHours(targetHour, 0, 0, 0);
-    
+
     // Skip weekends
     const dayOfWeek = targetDate.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       targetDate.setDate(targetDate.getDate() + (dayOfWeek === 0 ? 1 : 2));
     }
-    
+
     return targetDate;
   };
 
   const scheduleAutomatedFollowUp = async (lead, template, scheduledTime) => {
     if (!user?.uid) {
-      addNotification('User not authenticated', 'error');
-      return { success: false, error: 'Not authenticated' };
+      addNotification("User not authenticated", "error");
+      return { success: false, error: "Not authenticated" };
     }
 
     try {
       // Store scheduled follow-up in Firestore
-      const scheduledFollowUpRef = doc(db, 'scheduled_followups', generateId());
+      const scheduledFollowUpRef = doc(db, "scheduled_followups", generateId());
       await setDoc(scheduledFollowUpRef, {
         userId: user.uid,
         leadId: lead.id,
@@ -1330,48 +1424,52 @@ export default function Dashboard() {
         leadBusinessName: lead.businessName,
         template: template,
         scheduledTime: scheduledTime.toISOString(),
-        status: 'scheduled',
+        status: "scheduled",
         createdAt: serverTimestamp(),
-        priority: lead.predictive?.tier === 'hot' ? 'high' : 'normal'
+        priority: lead.predictive?.tier === "hot" ? "high" : "normal",
       });
 
       return { success: true, scheduledId: scheduledFollowUpRef.id };
     } catch (error) {
-      console.error('Error scheduling follow-up:', error);
+      console.error("Error scheduling follow-up:", error);
       return { success: false, error: error.message };
     }
   };
 
   const batchScheduleFollowUps = async (leads, template) => {
     if (!leads || leads.length === 0) {
-      addNotification('No leads to schedule', 'warning');
+      addNotification("No leads to schedule", "warning");
       return { success: false, scheduled: 0, errors: [] };
     }
 
     const results = {
       success: true,
       scheduled: 0,
-      errors: []
+      errors: [],
     };
 
     // Schedule leads in batches to avoid overwhelming
     const batchSize = 10;
     for (let i = 0; i < leads.length; i += batchSize) {
       const batch = leads.slice(i, i + batchSize);
-      
+
       for (const lead of batch) {
         const optimalTime = calculateOptimalSendTime(lead);
-        const result = await scheduleAutomatedFollowUp(lead, template, optimalTime);
-        
+        const result = await scheduleAutomatedFollowUp(
+          lead,
+          template,
+          optimalTime,
+        );
+
         if (result.success) {
           results.scheduled++;
         } else {
           results.errors.push({ lead: lead.email, error: result.error });
         }
       }
-      
+
       // Small delay between batches
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     if (results.errors.length > 0) {
@@ -1388,13 +1486,13 @@ export default function Dashboard() {
     if (!lead) return null;
 
     const behavior = {
-      engagementPattern: 'unknown',
-      preferredChannel: 'email',
+      engagementPattern: "unknown",
+      preferredChannel: "email",
       bestContactTime: null,
       responseSpeed: null,
-      engagementTrend: 'stable',
-      riskOfChurn: 'low',
-      nextBestAction: 'follow_up_email'
+      engagementTrend: "stable",
+      riskOfChurn: "low",
+      nextBestAction: "follow_up_email",
     };
 
     // Analyze engagement pattern
@@ -1403,40 +1501,42 @@ export default function Dashboard() {
     const lastSMSSentValue = lastSMSSent[lead.email || lead.phone];
 
     if (hasEmailEngagement && lastWhatsAppSentValue) {
-      behavior.engagementPattern = 'multi_channel';
+      behavior.engagementPattern = "multi_channel";
     } else if (lastWhatsAppSentValue) {
-      behavior.engagementPattern = 'mobile_first';
+      behavior.engagementPattern = "mobile_first";
     } else if (hasEmailEngagement) {
-      behavior.engagementPattern = 'email_focused';
+      behavior.engagementPattern = "email_focused";
     } else {
-      behavior.engagementPattern = 'passive';
+      behavior.engagementPattern = "passive";
     }
 
     // Determine preferred channel
     if (lead.replied) {
-      behavior.preferredChannel = 'email';
+      behavior.preferredChannel = "email";
     } else if (lastWhatsAppSentValue) {
-      behavior.preferredChannel = 'whatsapp';
+      behavior.preferredChannel = "whatsapp";
     } else if (lastSMSSentValue) {
-      behavior.preferredChannel = 'sms';
+      behavior.preferredChannel = "sms";
     }
 
     // Analyze response speed
     if (lead.replied && lead.sentAt) {
       const sentAt = safeParseDate(lead.sentAt);
-      const lastFollowUpAt = safeParseDate(lead.lastFollowUpAt || lead.lastFollowUpSentAt);
+      const lastFollowUpAt = safeParseDate(
+        lead.lastFollowUpAt || lead.lastFollowUpSentAt,
+      );
       if (sentAt && lastFollowUpAt) {
         const responseTime = (lastFollowUpAt - sentAt) / (1000 * 60 * 60 * 24);
         behavior.responseSpeed = responseTime;
-        
+
         if (responseTime < 1) {
-          behavior.bestContactTime = 'immediate';
+          behavior.bestContactTime = "immediate";
         } else if (responseTime < 3) {
-          behavior.bestContactTime = 'within_24h';
+          behavior.bestContactTime = "within_24h";
         } else if (responseTime < 7) {
-          behavior.bestContactTime = 'within_week';
+          behavior.bestContactTime = "within_week";
         } else {
-          behavior.bestContactTime = 'flexible';
+          behavior.bestContactTime = "flexible";
         }
       }
     }
@@ -1444,32 +1544,34 @@ export default function Dashboard() {
     // Analyze engagement trend
     const openCount = lead.openedCount || 0;
     const clickCount = lead.clickCount || 0;
-    
+
     if (openCount > 2 || clickCount > 1) {
-      behavior.engagementTrend = 'increasing';
+      behavior.engagementTrend = "increasing";
     } else if (openCount === 1 && clickCount === 0) {
-      behavior.engagementTrend = 'declining';
+      behavior.engagementTrend = "declining";
     } else if (openCount === 0 && clickCount === 0) {
-      behavior.engagementTrend = 'dormant';
+      behavior.engagementTrend = "dormant";
     }
 
     // Assess churn risk
     const sentAt = safeParseDate(lead.sentAt);
-    const daysSinceSent = sentAt ? (new Date() - sentAt) / (1000 * 60 * 60 * 24) : 999;
+    const daysSinceSent = sentAt
+      ? (new Date() - sentAt) / (1000 * 60 * 60 * 24)
+      : 999;
     const followUpCount = lead.followUpCount || 0;
 
     if (daysSinceSent > 30 && followUpCount >= 3 && !lead.replied) {
-      behavior.riskOfChurn = 'high';
-      behavior.nextBestAction = 'switch_channel';
+      behavior.riskOfChurn = "high";
+      behavior.nextBestAction = "switch_channel";
     } else if (daysSinceSent > 14 && !lead.replied) {
-      behavior.riskOfChurn = 'medium';
-      behavior.nextBestAction = 'aggressive_followup';
+      behavior.riskOfChurn = "medium";
+      behavior.nextBestAction = "aggressive_followup";
     } else if (lead.replied) {
-      behavior.riskOfChurn = 'low';
-      behavior.nextBestAction = 'nurture';
+      behavior.riskOfChurn = "low";
+      behavior.nextBestAction = "nurture";
     } else {
-      behavior.riskOfChurn = 'low';
-      behavior.nextBestAction = 'standard_followup';
+      behavior.riskOfChurn = "low";
+      behavior.nextBestAction = "standard_followup";
     }
 
     return behavior;
@@ -1478,18 +1580,18 @@ export default function Dashboard() {
   // Apply behavioral analysis to all leads
   const leadsWithBehavior = (() => {
     if (!scoredLeads || scoredLeads.length === 0) return [];
-    
-    return scoredLeads.map(lead => ({
+
+    return scoredLeads.map((lead) => ({
       ...lead,
-      behavior: analyzeLeadBehavior(lead)
+      behavior: analyzeLeadBehavior(lead),
     }));
   })();
 
   // Get leads by engagement pattern
   const leadsByEngagementPattern = (() => {
     const engagementPatterns = {};
-    leadsWithBehavior.forEach(lead => {
-      const pattern = lead.behavior?.engagementPattern || 'unknown';
+    leadsWithBehavior.forEach((lead) => {
+      const pattern = lead.behavior?.engagementPattern || "unknown";
       if (!engagementPatterns[pattern]) {
         engagementPatterns[pattern] = [];
       }
@@ -1499,9 +1601,10 @@ export default function Dashboard() {
   })();
 
   // Get high-risk leads (high churn risk)
-  const highRiskLeads = (() => 
-    leadsWithBehavior.filter(lead => lead.behavior?.riskOfChurn === 'high')
-  )();
+  const highRiskLeads = (() =>
+    leadsWithBehavior.filter(
+      (lead) => lead.behavior?.riskOfChurn === "high",
+    ))();
 
   // ============================================================================
   // ✅ CAMPAIGN PERFORMANCE INSIGHTS AND RECOMMENDATIONS
@@ -1509,19 +1612,19 @@ export default function Dashboard() {
   const generateCampaignInsights = () => {
     if (!sentLeads || sentLeads.length === 0) {
       return {
-        overallHealth: 'unknown',
+        overallHealth: "unknown",
         metrics: {},
         insights: [],
         recommendations: [],
         topPerformers: [],
-        underperformers: []
+        underperformers: [],
       };
     }
 
     const totalLeads = sentLeads.length;
-    const repliedLeadsCount = sentLeads.filter(lead => lead.replied).length;
-    const openedLeads = sentLeads.filter(lead => lead.opened).length;
-    const clickedLeads = sentLeads.filter(lead => lead.clicked).length;
+    const repliedLeadsCount = sentLeads.filter((lead) => lead.replied).length;
+    const openedLeads = sentLeads.filter((lead) => lead.opened).length;
+    const clickedLeads = sentLeads.filter((lead) => lead.clicked).length;
 
     const replyRate = (repliedLeadsCount / totalLeads) * 100;
     const openRate = (openedLeads / totalLeads) * 100;
@@ -1529,27 +1632,35 @@ export default function Dashboard() {
 
     // Calculate average response time
     const responseTimes = sentLeads
-      .filter(lead => lead.replied && lead.sentAt && (lead.lastFollowUpAt || lead.lastFollowUpSentAt))
-      .map(lead => {
+      .filter(
+        (lead) =>
+          lead.replied &&
+          lead.sentAt &&
+          (lead.lastFollowUpAt || lead.lastFollowUpSentAt),
+      )
+      .map((lead) => {
         const sentAt = safeParseDate(lead.sentAt);
-        const lastFollowUp = safeParseDate(lead.lastFollowUpAt || lead.lastFollowUpSentAt);
+        const lastFollowUp = safeParseDate(
+          lead.lastFollowUpAt || lead.lastFollowUpSentAt,
+        );
         return (lastFollowUp - sentAt) / (1000 * 60 * 60 * 24);
       });
-    
-    const avgResponseTime = responseTimes.length > 0 
-      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
-      : 0;
+
+    const avgResponseTime =
+      responseTimes.length > 0
+        ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+        : 0;
 
     // Analyze template performance
     const templatePerformance = {};
-    sentLeads.forEach(lead => {
-      const template = lead.template || 'A';
+    sentLeads.forEach((lead) => {
+      const template = lead.template || "A";
       if (!templatePerformance[template]) {
         templatePerformance[template] = {
           total: 0,
           replied: 0,
           opened: 0,
-          clicked: 0
+          clicked: 0,
         };
       }
       templatePerformance[template].total++;
@@ -1559,53 +1670,83 @@ export default function Dashboard() {
     });
 
     // Find best and worst performing templates
-    const templateStats = Object.entries(templatePerformance).map(([template, stats]) => ({
-      template,
-      replyRate: (stats.replied / stats.total) * 100,
-      openRate: (stats.opened / stats.total) * 100,
-      clickRate: (stats.clicked / stats.total) * 100,
-      total: stats.total
-    })).sort((a, b) => b.replyRate - a.replyRate);
+    const templateStats = Object.entries(templatePerformance)
+      .map(([template, stats]) => ({
+        template,
+        replyRate: (stats.replied / stats.total) * 100,
+        openRate: (stats.opened / stats.total) * 100,
+        clickRate: (stats.clicked / stats.total) * 100,
+        total: stats.total,
+      }))
+      .sort((a, b) => b.replyRate - a.replyRate);
 
     const topTemplate = templateStats[0];
     const worstTemplate = templateStats[templateStats.length - 1];
 
     // Determine overall health
-    let overallHealth = 'good';
-    if (replyRate < 5) overallHealth = 'poor';
-    else if (replyRate < 10) overallHealth = 'fair';
-    else if (replyRate > 20) overallHealth = 'excellent';
+    let overallHealth = "good";
+    if (replyRate < 5) overallHealth = "poor";
+    else if (replyRate < 10) overallHealth = "fair";
+    else if (replyRate > 20) overallHealth = "excellent";
 
     // Generate insights
     const insights = [
       {
-        type: 'metric',
-        title: 'Reply Rate',
+        type: "metric",
+        title: "Reply Rate",
         value: `${replyRate.toFixed(1)}%`,
-        status: replyRate > 15 ? 'positive' : replyRate > 8 ? 'neutral' : 'negative',
-        description: replyRate > 15 ? 'Above industry average' : replyRate > 8 ? 'Average performance' : 'Below industry average'
+        status:
+          replyRate > 15 ? "positive" : replyRate > 8 ? "neutral" : "negative",
+        description:
+          replyRate > 15
+            ? "Above industry average"
+            : replyRate > 8
+              ? "Average performance"
+              : "Below industry average",
       },
       {
-        type: 'metric',
-        title: 'Open Rate',
+        type: "metric",
+        title: "Open Rate",
         value: `${openRate.toFixed(1)}%`,
-        status: openRate > 40 ? 'positive' : openRate > 25 ? 'neutral' : 'negative',
-        description: openRate > 40 ? 'Excellent subject lines' : openRate > 25 ? 'Good open rate' : 'Improve subject lines'
+        status:
+          openRate > 40 ? "positive" : openRate > 25 ? "neutral" : "negative",
+        description:
+          openRate > 40
+            ? "Excellent subject lines"
+            : openRate > 25
+              ? "Good open rate"
+              : "Improve subject lines",
       },
       {
-        type: 'metric',
-        title: 'Click Rate',
+        type: "metric",
+        title: "Click Rate",
         value: `${clickRate.toFixed(1)}%`,
-        status: clickRate > 10 ? 'positive' : clickRate > 5 ? 'neutral' : 'negative',
-        description: clickRate > 10 ? 'Compelling CTAs' : clickRate > 5 ? 'Decent engagement' : 'Strengthen call-to-action'
+        status:
+          clickRate > 10 ? "positive" : clickRate > 5 ? "neutral" : "negative",
+        description:
+          clickRate > 10
+            ? "Compelling CTAs"
+            : clickRate > 5
+              ? "Decent engagement"
+              : "Strengthen call-to-action",
       },
       {
-        type: 'metric',
-        title: 'Avg Response Time',
+        type: "metric",
+        title: "Avg Response Time",
         value: `${avgResponseTime.toFixed(1)} days`,
-        status: avgResponseTime < 3 ? 'positive' : avgResponseTime < 7 ? 'neutral' : 'negative',
-        description: avgResponseTime < 3 ? 'Quick responders' : avgResponseTime < 7 ? 'Moderate response time' : 'Slow responders'
-      }
+        status:
+          avgResponseTime < 3
+            ? "positive"
+            : avgResponseTime < 7
+              ? "neutral"
+              : "negative",
+        description:
+          avgResponseTime < 3
+            ? "Quick responders"
+            : avgResponseTime < 7
+              ? "Moderate response time"
+              : "Slow responders",
+      },
     ];
 
     // Generate recommendations
@@ -1613,68 +1754,76 @@ export default function Dashboard() {
 
     if (replyRate < 8) {
       recommendations.push({
-        priority: 'high',
-        action: 'Improve email personalization',
-        reason: 'Low reply rate suggests emails are not resonating',
-        impact: 'Could increase reply rate by 2-3x'
+        priority: "high",
+        action: "Improve email personalization",
+        reason: "Low reply rate suggests emails are not resonating",
+        impact: "Could increase reply rate by 2-3x",
       });
     }
 
     if (openRate < 30) {
       recommendations.push({
-        priority: 'high',
-        action: 'A/B test subject lines',
-        reason: 'Low open rate indicates subject lines need improvement',
-        impact: 'Could increase open rate by 15-20%'
+        priority: "high",
+        action: "A/B test subject lines",
+        reason: "Low open rate indicates subject lines need improvement",
+        impact: "Could increase open rate by 15-20%",
       });
     }
 
     if (clickRate < 5) {
       recommendations.push({
-        priority: 'medium',
-        action: 'Optimize call-to-action',
-        reason: 'Low click rate suggests CTAs are not compelling',
-        impact: 'Could increase click rate by 10-15%'
+        priority: "medium",
+        action: "Optimize call-to-action",
+        reason: "Low click rate suggests CTAs are not compelling",
+        impact: "Could increase click rate by 10-15%",
       });
     }
 
     if (avgResponseTime > 7) {
       recommendations.push({
-        priority: 'medium',
-        action: 'Send follow-ups sooner',
-        reason: 'Slow response time indicates leads are losing interest',
-        impact: 'Could improve response rate by 20%'
+        priority: "medium",
+        action: "Send follow-ups sooner",
+        reason: "Slow response time indicates leads are losing interest",
+        impact: "Could improve response rate by 20%",
       });
     }
 
-    if (topTemplate && worstTemplate && topTemplate.replyRate > worstTemplate.replyRate * 1.5) {
+    if (
+      topTemplate &&
+      worstTemplate &&
+      topTemplate.replyRate > worstTemplate.replyRate * 1.5
+    ) {
       recommendations.push({
-        priority: 'high',
+        priority: "high",
         action: `Use Template ${topTemplate.template} more frequently`,
         reason: `Template ${topTemplate.template} outperforms Template ${worstTemplate.template} by ${((topTemplate.replyRate / worstTemplate.replyRate) * 100).toFixed(0)}%`,
-        impact: 'Could increase overall reply rate by 15-25%'
+        impact: "Could increase overall reply rate by 15-25%",
       });
     }
 
     // Find top and underperforming leads
     const topPerformers = leadsWithBehavior
-      .filter(lead => lead.predictive?.tier === 'hot')
+      .filter((lead) => lead.predictive?.tier === "hot")
       .slice(0, 5)
-      .map(lead => ({
+      .map((lead) => ({
         email: lead.email,
         businessName: lead.businessName,
         score: lead.predictive?.score,
-        probability: lead.predictive?.probability
+        probability: lead.predictive?.probability,
       }));
 
     const underperformers = leadsWithBehavior
-      .filter(lead => lead.predictive?.tier === 'cold' && !lead.replied)
+      .filter((lead) => lead.predictive?.tier === "cold" && !lead.replied)
       .slice(0, 5)
-      .map(lead => ({
+      .map((lead) => ({
         email: lead.email,
         businessName: lead.businessName,
         score: lead.predictive?.score,
-        daysSinceSent: lead.sentAt ? Math.round((new Date() - safeParseDate(lead.sentAt)) / (1000 * 60 * 60 * 24)) : 0
+        daysSinceSent: lead.sentAt
+          ? Math.round(
+              (new Date() - safeParseDate(lead.sentAt)) / (1000 * 60 * 60 * 24),
+            )
+          : 0,
       }));
 
     return {
@@ -1684,13 +1833,13 @@ export default function Dashboard() {
         replyRate,
         openRate,
         clickRate,
-        avgResponseTime
+        avgResponseTime,
       },
       insights,
       recommendations,
       topPerformers,
       underperformers,
-      templatePerformance: templateStats
+      templatePerformance: templateStats,
     };
   };
 
@@ -1698,19 +1847,19 @@ export default function Dashboard() {
   // ✅ LEAD LIFECYCLE MANAGEMENT WITH FUNNEL STAGES
   // ============================================================================
   const determineLeadStage = (lead) => {
-    if (!lead) return 'unknown';
+    if (!lead) return "unknown";
 
     // Stage definitions
     if (lead.replied) {
-      return 'qualified'; // Lead has replied - qualified
+      return "qualified"; // Lead has replied - qualified
     } else if (lead.clicked) {
-      return 'engaged'; // Lead clicked - engaged
+      return "engaged"; // Lead clicked - engaged
     } else if (lead.opened) {
-      return 'aware'; // Lead opened - aware
+      return "aware"; // Lead opened - aware
     } else if (lead.followUpCount > 0) {
-      return 'nurturing'; // In follow-up sequence - nurturing
+      return "nurturing"; // In follow-up sequence - nurturing
     } else {
-      return 'new'; // Just sent - new
+      return "new"; // Just sent - new
     }
   };
 
@@ -1720,7 +1869,7 @@ export default function Dashboard() {
         total: 0,
         stages: {},
         conversionRates: {},
-        dropOffPoints: []
+        dropOffPoints: [],
       };
     }
 
@@ -1729,51 +1878,55 @@ export default function Dashboard() {
       nurturing: 0,
       aware: 0,
       engaged: 0,
-      qualified: 0
+      qualified: 0,
     };
 
-    sentLeads.forEach(lead => {
+    sentLeads.forEach((lead) => {
       const stage = determineLeadStage(lead);
       stages[stage]++;
     });
 
     const total = sentLeads.length;
     const conversionRates = {
-      new_to_nurturing: stages.nurturing > 0 ? (stages.nurturing / stages.new) * 100 : 0,
-      nurturing_to_aware: stages.aware > 0 ? (stages.aware / stages.nurturing) * 100 : 0,
-      aware_to_engaged: stages.engaged > 0 ? (stages.engaged / stages.aware) * 100 : 0,
-      engaged_to_qualified: stages.qualified > 0 ? (stages.qualified / stages.engaged) * 100 : 0,
-      overall: stages.qualified > 0 ? (stages.qualified / stages.new) * 100 : 0
+      new_to_nurturing:
+        stages.nurturing > 0 ? (stages.nurturing / stages.new) * 100 : 0,
+      nurturing_to_aware:
+        stages.aware > 0 ? (stages.aware / stages.nurturing) * 100 : 0,
+      aware_to_engaged:
+        stages.engaged > 0 ? (stages.engaged / stages.aware) * 100 : 0,
+      engaged_to_qualified:
+        stages.qualified > 0 ? (stages.qualified / stages.engaged) * 100 : 0,
+      overall: stages.qualified > 0 ? (stages.qualified / stages.new) * 100 : 0,
     };
 
     // Identify drop-off points
     const dropOffPoints = [];
     if (conversionRates.new_to_nurturing < 50) {
       dropOffPoints.push({
-        stage: 'New → Nurturing',
+        stage: "New → Nurturing",
         rate: conversionRates.new_to_nurturing,
-        recommendation: 'Improve initial email quality and personalization'
+        recommendation: "Improve initial email quality and personalization",
       });
     }
     if (conversionRates.nurturing_to_aware < 30) {
       dropOffPoints.push({
-        stage: 'Nurturing → Aware',
+        stage: "Nurturing → Aware",
         rate: conversionRates.nurturing_to_aware,
-        recommendation: 'Optimize subject lines and send timing'
+        recommendation: "Optimize subject lines and send timing",
       });
     }
     if (conversionRates.aware_to_engaged < 20) {
       dropOffPoints.push({
-        stage: 'Aware → Engaged',
+        stage: "Aware → Engaged",
         rate: conversionRates.aware_to_engaged,
-        recommendation: 'Strengthen email content and CTAs'
+        recommendation: "Strengthen email content and CTAs",
       });
     }
     if (conversionRates.engaged_to_qualified < 15) {
       dropOffPoints.push({
-        stage: 'Engaged → Qualified',
+        stage: "Engaged → Qualified",
         rate: conversionRates.engaged_to_qualified,
-        recommendation: 'Improve follow-up strategy and response handling'
+        recommendation: "Improve follow-up strategy and response handling",
       });
     }
 
@@ -1781,7 +1934,7 @@ export default function Dashboard() {
       total,
       stages,
       conversionRates,
-      dropOffPoints
+      dropOffPoints,
     };
   };
 
@@ -1794,10 +1947,10 @@ export default function Dashboard() {
       nurturing: [],
       aware: [],
       engaged: [],
-      qualified: []
+      qualified: [],
     };
 
-    leadsWithBehavior.forEach(lead => {
+    leadsWithBehavior.forEach((lead) => {
       const stage = determineLeadStage(lead);
       leadStages[stage].push(lead);
     });
@@ -1813,7 +1966,7 @@ export default function Dashboard() {
       nurturing: 100,
       aware: 250,
       engaged: 500,
-      qualified: 2000
+      qualified: 2000,
     };
 
     Object.entries(leadsByStage).forEach(([stage, leads]) => {
@@ -1834,7 +1987,7 @@ export default function Dashboard() {
     const now = new Date(); // Use current time to match API logic exactly
     const pending = filteredSentLeads
       .map(normalizeSentLead)
-      .filter(lead => {
+      .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
 
@@ -1842,7 +1995,8 @@ export default function Dashboard() {
         if (followUpCount >= 3) return false;
 
         // Use same logic as API: check if enough time has passed since last contact
-        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+        const lastFollowUpAt =
+          lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
         if (!lastFollowUpAt) return false;
 
         const lastDate = safeParseDate(lastFollowUpAt);
@@ -1854,19 +2008,27 @@ export default function Dashboard() {
         // Include if not enough time has passed (pending)
         return daysSinceLastContact < MIN_DAYS_BETWEEN_FOLLOWUP;
       })
-      .map(lead => {
-        const lastFollowUpAt = lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
+      .map((lead) => {
+        const lastFollowUpAt =
+          lead.lastFollowUpAt || lead.lastFollowUpSentAt || lead.sentAt;
         const lastDate = safeParseDate(lastFollowUpAt);
-        const daysSinceLastContact = lastDate ? (now - lastDate) / (1000 * 60 * 60 * 24) : 0;
+        const daysSinceLastContact = lastDate
+          ? (now - lastDate) / (1000 * 60 * 60 * 24)
+          : 0;
         const MIN_DAYS_BETWEEN_FOLLOWUP = 2;
-        const daysRemaining = Math.max(0, MIN_DAYS_BETWEEN_FOLLOWUP - daysSinceLastContact);
+        const daysRemaining = Math.max(
+          0,
+          MIN_DAYS_BETWEEN_FOLLOWUP - daysSinceLastContact,
+        );
         const hoursRemaining = Math.floor(daysRemaining * 24);
-        const minutesRemaining = Math.floor((daysRemaining * 24 - hoursRemaining) * 60);
+        const minutesRemaining = Math.floor(
+          (daysRemaining * 24 - hoursRemaining) * 60,
+        );
         return {
           ...lead,
           daysRemaining,
           hoursRemaining,
-          minutesRemaining
+          minutesRemaining,
         };
       })
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
@@ -1885,28 +2047,32 @@ export default function Dashboard() {
     const now = new Date();
     const replied = filteredSentLeads
       .map(normalizeSentLead)
-      .filter(lead => {
+      .filter((lead) => {
         if (!lead || !lead.email) return false;
         return lead.replied === true;
       })
-      .map(lead => {
+      .map((lead) => {
         const sentAtDate = safeParseDate(lead.sentAt);
-        const daysSinceSent = sentAtDate ?
-          (now - sentAtDate) / (1000 * 60 * 60 * 24) : 999;
+        const daysSinceSent = sentAtDate
+          ? (now - sentAtDate) / (1000 * 60 * 60 * 24)
+          : 999;
         const repliedAtDate = safeParseDate(lead.repliedAt);
-        const daysSinceReply = repliedAtDate ?
-          (now - repliedAtDate) / (1000 * 60 * 60 * 24) : 0;
-        
+        const daysSinceReply = repliedAtDate
+          ? (now - repliedAtDate) / (1000 * 60 * 60 * 24)
+          : 0;
+
         // Check if this is a WhatsApp number (+94 7...)
-        const isWhatsApp = lead.phone && (lead.phone.includes('+947') || lead.phone.includes('947'));
-        
+        const isWhatsApp =
+          lead.phone &&
+          (lead.phone.includes("+947") || lead.phone.includes("947"));
+
         return {
           ...lead,
           daysSinceSent,
           daysSinceReply,
           repliedAt: lead.repliedAt || lead.sentAt,
           isHotLead: daysSinceReply <= 7, // Hot if replied within 7 days
-          isWhatsApp // Add flag for WhatsApp numbers
+          isWhatsApp, // Add flag for WhatsApp numbers
         };
       })
       .sort((a, b) => {
@@ -1929,18 +2095,18 @@ export default function Dashboard() {
   // ============================================================================
   const handleSendBulkSMS = async () => {
     if (!user?.uid || whatsappLinks.length === 0) {
-      addNotification('No contacts available', 'error');
+      addNotification("No contacts available", "error");
       return;
     }
 
-    const quotaCheck = canUse('sms', whatsappLinks.length);
+    const quotaCheck = canUse("sms", whatsappLinks.length);
     if (!quotaCheck.available) {
-      addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
+      addNotification(`⚠️ ${quotaCheck.reason}`, "warning");
       return;
     }
 
     const confirmed = window.confirm(
-      `Send SMS to ${whatsappLinks.length} contacts?\n\nThis will use ${whatsappLinks.length} of your daily SMS quota.`
+      `Send SMS to ${whatsappLinks.length} contacts?\n\nThis will use ${whatsappLinks.length} of your daily SMS quota.`,
     );
 
     if (!confirmed) return;
@@ -1949,8 +2115,8 @@ export default function Dashboard() {
     let failCount = 0;
     let skipCount = 0;
 
-    setStatus('📤 Sending SMS batch...');
-    setStatusType('info');
+    setStatus("📤 Sending SMS batch...");
+    setStatusType("info");
     setIsSending(true);
     setSendProgress({ current: 0, total: whatsappLinks.length });
 
@@ -1966,7 +2132,7 @@ export default function Dashboard() {
       const contactKey = contact.email || contact.phone;
 
       // Check if already contacted recently
-      const safetyCheck = isSafeToContactOnChannel(contact, 'sms');
+      const safetyCheck = isSafeToContactOnChannel(contact, "sms");
       if (!safetyCheck.safe) {
         skipCount++;
         continue;
@@ -1977,41 +2143,41 @@ export default function Dashboard() {
           smsTemplate,
           {
             business_name: contact.business,
-            address: contact.address || '',
-            phone_raw: contact.phone
+            address: contact.address || "",
+            phone_raw: contact.phone,
           },
           fieldMappings,
-          senderName
+          senderName,
         );
 
-        const response = await fetch('/api/send-sms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/api/send-sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             phone,
             message,
             businessName: contact.business,
-            userId: user.uid
-          })
+            userId: user.uid,
+          }),
         });
 
         if (response.ok) {
           successCount++;
 
           const now = new Date().toISOString();
-          setLastSMSSent(prev => ({ ...prev, [contactKey]: now }));
-          setContactedChannels(prev => ({
+          setLastSMSSent((prev) => ({ ...prev, [contactKey]: now }));
+          setContactedChannels((prev) => ({
             ...prev,
-            [contactKey]: [...(prev[contactKey] || []), 'sms']
+            [contactKey]: [...(prev[contactKey] || []), "sms"],
           }));
 
-          await updateContact(contactKey, 'sms', {
+          await updateContact(contactKey, "sms", {
             smsCount: increment(1),
-            lastSMSSent: now
+            lastSMSSent: now,
           });
 
-          if (dealStage[contactKey] === 'new' || !dealStage[contactKey]) {
-            updateDealStage(contactKey, 'contacted');
+          if (dealStage[contactKey] === "new" || !dealStage[contactKey]) {
+            updateDealStage(contactKey, "contacted");
           }
         } else {
           failCount++;
@@ -2024,16 +2190,20 @@ export default function Dashboard() {
       }
 
       // Add small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS));
+      await new Promise((resolve) =>
+        setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS),
+      );
     }
 
     setIsSending(false);
-    setStatus(`✅ SMS batch complete: ${successCount}/${whatsappLinks.length} sent.`);
-    setStatusType('success');
+    setStatus(
+      `✅ SMS batch complete: ${successCount}/${whatsappLinks.length} sent.`,
+    );
+    setStatusType("success");
 
     addNotification(
       `SMS batch complete!\nSent: ${successCount}\nFailed: ${failCount}\nSkipped: ${skipCount}`,
-      successCount > 0 ? 'success' : 'error'
+      successCount > 0 ? "success" : "error",
     );
   };
 
@@ -2046,28 +2216,37 @@ export default function Dashboard() {
     // Apply search
     if (debouncedSearchQuery.trim()) {
       const query = debouncedSearchQuery.toLowerCase();
-      filteredContacts = filteredContacts.filter(c =>
-        (c.business && c.business.toLowerCase().includes(query)) ||
-        (c.email && c.email.toLowerCase().includes(query)) ||
-        (c.phone && c.phone.includes(query.replace(/\D/g, '')))
+      filteredContacts = filteredContacts.filter(
+        (c) =>
+          (c.business && c.business.toLowerCase().includes(query)) ||
+          (c.email && c.email.toLowerCase().includes(query)) ||
+          (c.phone && c.phone.includes(query.replace(/\D/g, ""))),
       );
     }
 
     // Apply status filter
-    if (contactFilter === 'replied') {
-      filteredContacts = filteredContacts.filter(c => repliedLeads[c.email]);
-    } else if (contactFilter === 'pending') {
-      filteredContacts = filteredContacts.filter(c => !repliedLeads[c.email]);
-    } else if (contactFilter === 'high-quality') {
-      filteredContacts = filteredContacts.filter(c => (leadScores[c.email] || 0) >= 70);
-    } else if (contactFilter === 'contacted') {
-      filteredContacts = filteredContacts.filter(c => isContactedOnAnyChannel(c));
-    } else if (contactFilter === 'not-contacted') {
-      filteredContacts = filteredContacts.filter(c => !isContactedOnAnyChannel(c));
-    } else if (contactFilter === 'hot-leads') {
-      filteredContacts = filteredContacts.filter(c => (leadScores[c.email] || 0) >= CONFIG.LEAD_SCORE_HOT);
-    } else if (contactFilter === 'warm-leads') {
-      filteredContacts = filteredContacts.filter(c => {
+    if (contactFilter === "replied") {
+      filteredContacts = filteredContacts.filter((c) => repliedLeads[c.email]);
+    } else if (contactFilter === "pending") {
+      filteredContacts = filteredContacts.filter((c) => !repliedLeads[c.email]);
+    } else if (contactFilter === "high-quality") {
+      filteredContacts = filteredContacts.filter(
+        (c) => (leadScores[c.email] || 0) >= 70,
+      );
+    } else if (contactFilter === "contacted") {
+      filteredContacts = filteredContacts.filter((c) =>
+        isContactedOnAnyChannel(c),
+      );
+    } else if (contactFilter === "not-contacted") {
+      filteredContacts = filteredContacts.filter(
+        (c) => !isContactedOnAnyChannel(c),
+      );
+    } else if (contactFilter === "hot-leads") {
+      filteredContacts = filteredContacts.filter(
+        (c) => (leadScores[c.email] || 0) >= CONFIG.LEAD_SCORE_HOT,
+      );
+    } else if (contactFilter === "warm-leads") {
+      filteredContacts = filteredContacts.filter((c) => {
         const score = leadScores[c.email] || 0;
         return score >= CONFIG.LEAD_SCORE_WARM && score < CONFIG.LEAD_SCORE_HOT;
       });
@@ -2094,20 +2273,20 @@ export default function Dashboard() {
       if (!aIsPriority && bIsPriority) return 1;
 
       // Priority 3: Selected sort
-      if (sortBy === 'score') {
-        return sortOrder === 'desc' ? bScore - aScore : aScore - bScore;
-      } else if (sortBy === 'recent') {
+      if (sortBy === "score") {
+        return sortOrder === "desc" ? bScore - aScore : aScore - bScore;
+      } else if (sortBy === "recent") {
         const aDate = new Date(lastSent[aKey] || lastWhatsAppSent[aKey] || 0);
         const bDate = new Date(lastSent[bKey] || lastWhatsAppSent[bKey] || 0);
-        return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
-      } else if (sortBy === 'name') {
-        const aName = (a.business || '').toLowerCase();
-        const bName = (b.business || '').toLowerCase();
-        return sortOrder === 'desc'
+        return sortOrder === "desc" ? bDate - aDate : aDate - bDate;
+      } else if (sortBy === "name") {
+        const aName = (a.business || "").toLowerCase();
+        const bName = (b.business || "").toLowerCase();
+        return sortOrder === "desc"
           ? bName.localeCompare(aName)
           : aName.localeCompare(bName);
-      } else if (sortBy === 'added') {
-        return sortOrder === 'desc' ? b.id - a.id : a.id - b.id;
+      } else if (sortBy === "added") {
+        return sortOrder === "desc" ? b.id - a.id : a.id - b.id;
       }
 
       return 0;
@@ -2128,7 +2307,7 @@ export default function Dashboard() {
       total: filteredContacts.length,
       totalPages: Math.ceil(filteredContacts.length / itemsPerPage),
       currentPage,
-      itemsPerPage
+      itemsPerPage,
     };
   })();
 
@@ -2169,14 +2348,16 @@ export default function Dashboard() {
   const calculateConversionFunnel = () => {
     const total = whatsappLinks.length;
     const replied = Object.values(repliedLeads).filter(Boolean).length;
-    const contacted = whatsappLinks.filter(c => isContactedOnAnyChannel(c)).length;
+    const contacted = whatsappLinks.filter((c) =>
+      isContactedOnAnyChannel(c),
+    ).length;
 
     const stages = {
       total,
       contacted,
       replied,
-      demo: Math.round(replied * 0.40),
-      closed: Math.round(replied * 0.15)
+      demo: Math.round(replied * 0.4),
+      closed: Math.round(replied * 0.15),
     };
 
     return {
@@ -2185,8 +2366,9 @@ export default function Dashboard() {
         contactRate: total > 0 ? Math.round((contacted / total) * 100) : 0,
         replyRate: contacted > 0 ? Math.round((replied / contacted) * 100) : 0,
         demoRate: replied > 0 ? Math.round((stages.demo / replied) * 100) : 0,
-        closeRate: stages.demo > 0 ? Math.round((stages.closed / stages.demo) * 100) : 0
-      }
+        closeRate:
+          stages.demo > 0 ? Math.round((stages.closed / stages.demo) * 100) : 0,
+      },
     };
   };
 
@@ -2197,7 +2379,9 @@ export default function Dashboard() {
     const avgDealValue = CONFIG.DEFAULT_AVG_DEAL_VALUE;
     const replies = Object.values(repliedLeads).filter(Boolean).length;
     const demoOpportunities = Math.ceil(replies * CONFIG.DEFAULT_DEMO_RATE);
-    const expectedClosures = Math.ceil(demoOpportunities * CONFIG.DEFAULT_CLOSE_RATE);
+    const expectedClosures = Math.ceil(
+      demoOpportunities * CONFIG.DEFAULT_CLOSE_RATE,
+    );
 
     return {
       currentPipeline: replies * avgDealValue,
@@ -2208,8 +2392,8 @@ export default function Dashboard() {
         replies,
         demoOpportunities,
         expectedClosures,
-        expectedAnnualRunRate: expectedClosures * avgDealValue * 12
-      }
+        expectedAnnualRunRate: expectedClosures * avgDealValue * 12,
+      },
     };
   };
 
@@ -2222,16 +2406,17 @@ export default function Dashboard() {
       hot: [],
       warm: [],
       cold: [],
-      inactive: []
+      inactive: [],
     };
 
-    whatsappLinks.forEach(contact => {
+    whatsappLinks.forEach((contact) => {
       const key = contact.email || contact.phone;
       const score = leadScores[key] || 0;
       const replied = repliedLeads[contact.email];
       const contacted = isContactedOnAnyChannel(contact);
-      const daysSinceContact = contacted ?
-        daysBetween(getContactHistory(contact).lastContacted, new Date()) : 999;
+      const daysSinceContact = contacted
+        ? daysBetween(getContactHistory(contact).lastContacted, new Date())
+        : 999;
 
       if (replied) {
         leadSegments.veryHot.push(contact);
@@ -2257,7 +2442,7 @@ export default function Dashboard() {
 
     const sentLeadsData = sentLeads;
     const sentEmailsSet = new Set();
-    sentLeadsData.forEach(lead => {
+    sentLeadsData.forEach((lead) => {
       if (lead.email) {
         sentEmailsSet.add(lead.email.toLowerCase().trim());
       }
@@ -2265,14 +2450,14 @@ export default function Dashboard() {
 
     // Filter new leads
     const newLeadsFiltered = whatsappLinks
-      .filter(contact => {
+      .filter((contact) => {
         if (!contact.email) return false;
         const email = contact.email.toLowerCase().trim();
         return !sentEmailsSet.has(email);
       })
-      .map(contact => ({
+      .map((contact) => ({
         ...contact,
-        email: contact.email.toLowerCase().trim()
+        email: contact.email.toLowerCase().trim(),
       }));
 
     // Group by rowGroupId to send multiple emails from same row with delays
@@ -2280,10 +2465,12 @@ export default function Dashboard() {
     const processedGroups = new Set();
 
     const leads = newLeadsFiltered;
-    leads.forEach(lead => {
+    leads.forEach((lead) => {
       if (lead.rowGroupId && !processedGroups.has(lead.rowGroupId)) {
         // Get all leads from this group
-        const groupLeads = leads.filter(l => l.rowGroupId === lead.rowGroupId);
+        const groupLeads = leads.filter(
+          (l) => l.rowGroupId === lead.rowGroupId,
+        );
         if (groupLeads.length > 1) {
           // Multiple emails from same row - add all as individual emails with delay metadata
           groupLeads.forEach((groupLead, index) => {
@@ -2292,7 +2479,7 @@ export default function Dashboard() {
               isFromMultiEmailRow: true,
               emailIndex: index,
               totalEmailsInRow: groupLeads.length,
-              delayBeforeSend: index * 5000 // 5 second delay between each email from same row
+              delayBeforeSend: index * 5000, // 5 second delay between each email from same row
             });
           });
           processedGroups.add(lead.rowGroupId);
@@ -2316,29 +2503,31 @@ export default function Dashboard() {
   };
 
   const getNewLeadsDisabledReason = () => {
-    if (!csvContent) return 'Upload a CSV to start outreach.';
+    if (!csvContent) return "Upload a CSV to start outreach.";
     if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS) {
       return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
     }
     // Note: newLeads is checked in the useMemo, not here to avoid circular dependency
-    if (isSending) return 'Email send in progress. Wait for completion.';
-    return '';
+    if (isSending) return "Email send in progress. Wait for completion.";
+    return "";
   };
 
   const getSafeFollowUpDisabledReason = () => {
-    if (isSending) return 'Send in progress. Please wait.';
+    if (isSending) return "Send in progress. Please wait.";
     if (!safeFollowUpCandidates || safeFollowUpCandidates.length === 0) {
-      return 'No safe follow-up candidates available (replied or maximum follow-ups reached).';
+      return "No safe follow-up candidates available (replied or maximum follow-ups reached).";
     }
-    return '';
+    return "";
   };
 
   const getSendEmailsDisabledReason = () => {
-    if (!csvContent) return 'Upload a CSV before sending emails.';
-    if (validEmails === 0) return 'No valid email recipients. Already sent or invalid email list.';
-    if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS) return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
-    if (isSending) return 'Email sending in progress.';
-    return '';
+    if (!csvContent) return "Upload a CSV before sending emails.";
+    if (validEmails === 0)
+      return "No valid email recipients. Already sent or invalid email list.";
+    if (dailyEmailCount >= CONFIG.MAX_DAILY_EMAILS)
+      return `Daily email limit reached (${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}).`;
+    if (isSending) return "Email sending in progress.";
+    return "";
   };
 
   const newLeads = (() => {
@@ -2353,20 +2542,20 @@ export default function Dashboard() {
   // GOOGLE OAUTH SCRIPT LOADER
   // ============================================================================
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     if (window.google?.accounts?.oauth2?.initTokenClient) {
       setIsGoogleLoaded(true);
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.onload = () => setIsGoogleLoaded(true);
     script.onerror = () => {
-      console.error('Failed to load Google OAuth script');
-      addNotification('Failed to load Google OAuth. Please refresh.', 'error');
+      console.error("Failed to load Google OAuth script");
+      addNotification("Failed to load Google OAuth. Please refresh.", "error");
     };
     document.head.appendChild(script);
 
@@ -2389,9 +2578,9 @@ export default function Dashboard() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
-        setSenderEmail(user.email || '');
+        setSenderEmail(user.email || "");
         if (!senderName.trim()) {
-          setSenderName(user.displayName || '');
+          setSenderName(user.displayName || "");
         }
         await Promise.allSettled([
           loadSettings(user.uid),
@@ -2403,12 +2592,16 @@ export default function Dashboard() {
           loadWhatsAppContacts(),
           loadDailyEmailCount(),
           loadSendTimeOptimization(),
-          loadManualContactStatus(user.uid)
+          loadManualContactStatus(user.uid),
         ]);
-        addNotification(`Welcome back, ${user.displayName || user.email}!`, 'success', 3000);
+        addNotification(
+          `Welcome back, ${user.displayName || user.email}!`,
+          "success",
+          3000,
+        );
       } else {
         setUser(null);
-        setSenderEmail('');
+        setSenderEmail("");
       }
       setLoadingAuth(false);
     });
@@ -2421,7 +2614,12 @@ export default function Dashboard() {
   // ============================================================================
   useEffect(() => {
     // Only load tasks when queue modal is opened (lazy loading for performance)
-    if (user?.uid && showFollowUpQueue && (followUpTasks.pending?.length || 0) === 0 && (followUpTasks.completed?.length || 0) === 0) {
+    if (
+      user?.uid &&
+      showFollowUpQueue &&
+      (followUpTasks.pending?.length || 0) === 0 &&
+      (followUpTasks.completed?.length || 0) === 0
+    ) {
       const loadTasks = async () => {
         setLoadingFollowUpTasks(true);
         try {
@@ -2429,12 +2627,16 @@ export default function Dashboard() {
           setFollowUpTasks(tasks);
 
           // Only run migration once and only if no tasks exist and sent leads exist
-          if (!migrationRan && tasks.pending.length === 0 && sentLeads.length > 0) {
+          if (
+            !migrationRan &&
+            tasks.pending.length === 0 &&
+            sentLeads.length > 0
+          ) {
             await migrateExistingLeadsToTasks();
             setMigrationRan(true);
           }
         } catch (error) {
-          console.error('Load follow-up tasks error:', error);
+          console.error("Load follow-up tasks error:", error);
         } finally {
           setLoadingFollowUpTasks(false);
         }
@@ -2451,7 +2653,7 @@ export default function Dashboard() {
 
     try {
       const followUpSchedule = followUpTemplates
-        .filter(t => t.enabled)
+        .filter((t) => t.enabled)
         .sort((a, b) => a.delayDays - b.delayDays);
 
       if (followUpSchedule.length === 0) return;
@@ -2465,7 +2667,7 @@ export default function Dashboard() {
 
         const leadEmail = lead.email;
         const leadName = lead.business_name || lead.name || leadEmail;
-        const companyName = lead.company_name || lead.business_name || '';
+        const companyName = lead.company_name || lead.business_name || "";
 
         // Calculate scheduled dates based on sent date
         const sentDate = new Date(lead.sentAt);
@@ -2480,10 +2682,10 @@ export default function Dashboard() {
               leadEmail,
               leadName,
               companyName,
-              channel: 'email',
+              channel: "email",
               followUpStage: template.name,
               templateId: template.id,
-              scheduledFor: scheduledDate.toISOString()
+              scheduledFor: scheduledDate.toISOString(),
             });
           }
         }
@@ -2497,9 +2699,14 @@ export default function Dashboard() {
 
       for (let i = 0; i < tasksToCreate.length; i += batchSize) {
         const batch = tasksToCreate.slice(i, i + batchSize);
-        
+
         for (const task of batch) {
-          const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, task.channel, task.followUpStage);
+          const exists = await checkFollowUpTaskExists(
+            user.uid,
+            task.leadEmail,
+            task.channel,
+            task.followUpStage,
+          );
           if (!exists) {
             await createFollowUpTask(user.uid, task);
             tasksCreated++;
@@ -2510,10 +2717,13 @@ export default function Dashboard() {
       if (tasksCreated > 0) {
         const tasks = await loadFollowUpTasks(user.uid);
         setFollowUpTasks(tasks);
-        addNotification(`Created ${tasksCreated} follow-up tasks from existing leads`, 'success');
+        addNotification(
+          `Created ${tasksCreated} follow-up tasks from existing leads`,
+          "success",
+        );
       }
     } catch (error) {
-      console.error('Migrate existing leads error:', error);
+      console.error("Migrate existing leads error:", error);
     }
   };
 
@@ -2526,12 +2736,12 @@ export default function Dashboard() {
         try {
           const [notes, states] = await Promise.all([
             loadLeadNotes(user.uid),
-            loadLeadStates(user.uid)
+            loadLeadStates(user.uid),
           ]);
           setLeadNotes(notes);
           setLeadStates(states);
         } catch (error) {
-          console.error('Load lead notes and states error:', error);
+          console.error("Load lead notes and states error:", error);
         }
       };
       loadNotesAndStates();
@@ -2549,16 +2759,19 @@ export default function Dashboard() {
       try {
         await autoCleanupOldRecords(user.uid);
       } catch (error) {
-        console.error('Auto cleanup error:', error);
+        console.error("Auto cleanup error:", error);
       }
     };
 
     runCleanup();
 
     // Run cleanup every 24 hours
-    const interval = setInterval(() => {
-      runCleanup();
-    }, 24 * 60 * 60 * 1000);
+    const interval = setInterval(
+      () => {
+        runCleanup();
+      },
+      24 * 60 * 60 * 1000,
+    );
 
     return () => clearInterval(interval);
   }, [user?.uid]);
@@ -2584,13 +2797,15 @@ export default function Dashboard() {
     const day = now.getDay();
 
     // If it's weekend, schedule for Monday 9 AM
-    if (day === 0) { // Sunday
+    if (day === 0) {
+      // Sunday
       const monday = new Date(now);
       monday.setDate(now.getDate() + 1);
       monday.setHours(9, 0, 0, 0);
       return monday;
     }
-    if (day === 6) { // Saturday
+    if (day === 6) {
+      // Saturday
       const monday = new Date(now);
       monday.setDate(now.getDate() + 2);
       monday.setHours(9, 0, 0, 0);
@@ -2622,12 +2837,14 @@ export default function Dashboard() {
     const day = adjusted.getDay();
 
     // If it's weekend, move to Monday 9 AM
-    if (day === 0) { // Sunday
+    if (day === 0) {
+      // Sunday
       adjusted.setDate(adjusted.getDate() + 1);
       adjusted.setHours(9, 0, 0, 0);
       return adjusted;
     }
-    if (day === 6) { // Saturday
+    if (day === 6) {
+      // Saturday
       adjusted.setDate(adjusted.getDate() + 2);
       adjusted.setHours(9, 0, 0, 0);
       return adjusted;
@@ -2659,21 +2876,25 @@ export default function Dashboard() {
     if (!isBusinessHours()) {
       const nextBusinessTime = getNextBusinessHour();
       const timeString = nextBusinessTime.toLocaleString([], {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
 
       addNotification(
         `Outside business hours (9 AM - 6 PM, weekdays). Best to send at ${timeString} for better deliverability.`,
-        'warning',
-        5000
+        "warning",
+        5000,
       );
 
       // Still allow sending, but warn the user
-      if (!confirm('It\'s currently outside business hours. Sending now may reduce email deliverability. Continue anyway?')) {
+      if (
+        !confirm(
+          "It's currently outside business hours. Sending now may reduce email deliverability. Continue anyway?",
+        )
+      ) {
         return;
       }
     }
@@ -2682,41 +2903,50 @@ export default function Dashboard() {
     const contactHistory = followUpHistory[task.leadEmail];
     if (contactHistory && contactHistory.lastFollowUpAt) {
       const lastFollowUp = new Date(contactHistory.lastFollowUpAt);
-      const hoursSinceLastFollowUp = (Date.now() - lastFollowUp.getTime()) / (1000 * 60 * 60);
+      const hoursSinceLastFollowUp =
+        (Date.now() - lastFollowUp.getTime()) / (1000 * 60 * 60);
       if (hoursSinceLastFollowUp < 24) {
-        addNotification(`Follow-up already sent to this contact ${Math.floor(hoursSinceLastFollowUp)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastFollowUp)} more hours.`, 'warning');
+        addNotification(
+          `Follow-up already sent to this contact ${Math.floor(hoursSinceLastFollowUp)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastFollowUp)} more hours.`,
+          "warning",
+        );
         return;
       }
     }
 
     // PHASE 6: Check idempotency - verify task still exists and is pending
-    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'email', task.followUpStage);
+    const exists = await checkFollowUpTaskExists(
+      user.uid,
+      task.leadEmail,
+      "email",
+      task.followUpStage,
+    );
     if (!exists) {
-      addNotification('Follow-up task no longer exists', 'warning');
+      addNotification("Follow-up task no longer exists", "warning");
       return;
     }
 
     try {
       // Find the lead from sentLeads
-      const lead = sentLeads.find(l => l.email === task.leadEmail);
+      const lead = sentLeads.find((l) => l.email === task.leadEmail);
       if (!lead) {
-        addNotification('Lead not found', 'error');
+        addNotification("Lead not found", "error");
         return;
       }
 
       // Send the follow-up email using existing logic
       await handleSendFollowUp(lead, task.followUpStage);
-      
+
       // Mark task as completed
       await completeFollowUpTask(user.uid, task.id, {
         completedBy: user.email,
-        method: 'email'
+        method: "email",
       });
-      
-      addNotification('Follow-up email sent successfully', 'success');
+
+      addNotification("Follow-up email sent successfully", "success");
     } catch (error) {
-      console.error('Send email follow-up error:', error);
-      addNotification('Failed to send follow-up email', 'error');
+      console.error("Send email follow-up error:", error);
+      addNotification("Failed to send follow-up email", "error");
     }
   };
 
@@ -2727,21 +2957,25 @@ export default function Dashboard() {
     if (!isBusinessHours()) {
       const nextBusinessTime = getNextBusinessHour();
       const timeString = nextBusinessTime.toLocaleString([], {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
 
       addNotification(
         `Outside business hours (9 AM - 6 PM, weekdays). Best to send at ${timeString} for better response rates.`,
-        'warning',
-        5000
+        "warning",
+        5000,
       );
 
       // Still allow sending, but warn the user
-      if (!confirm('It\'s currently outside business hours. Sending now may reduce response rates. Continue anyway?')) {
+      if (
+        !confirm(
+          "It's currently outside business hours. Sending now may reduce response rates. Continue anyway?",
+        )
+      ) {
         return;
       }
     }
@@ -2751,87 +2985,112 @@ export default function Dashboard() {
     const lastWhatsAppTime = lastWhatsAppSent[contactKey];
     if (lastWhatsAppTime) {
       const lastSent = new Date(lastWhatsAppTime);
-      const hoursSinceLastSend = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+      const hoursSinceLastSend =
+        (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
       if (hoursSinceLastSend < 24) {
-        addNotification(`WhatsApp follow-up already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`, 'warning');
+        addNotification(
+          `WhatsApp follow-up already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`,
+          "warning",
+        );
         return;
       }
     }
 
     // PHASE 6: Check idempotency
-    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'whatsapp', task.followUpStage);
+    const exists = await checkFollowUpTaskExists(
+      user.uid,
+      task.leadEmail,
+      "whatsapp",
+      task.followUpStage,
+    );
     if (!exists) {
-      addNotification('Follow-up task no longer exists', 'warning');
+      addNotification("Follow-up task no longer exists", "warning");
       return;
     }
 
     try {
       // Find the contact from whatsappLinks using phone number
-      const contact = whatsappLinks.find(l => l.phone === task.leadPhone || l.email === task.leadEmail);
+      const contact = whatsappLinks.find(
+        (l) => l.phone === task.leadPhone || l.email === task.leadEmail,
+      );
       if (!contact) {
         // If not found in whatsappLinks, try to use the phone directly from task
         if (!task.leadPhone) {
-          addNotification('Contact not found and no phone number available', 'error');
+          addNotification(
+            "Contact not found and no phone number available",
+            "error",
+          );
           return;
         }
       }
 
       // Open WhatsApp with pre-filled message
-      const template = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES.find(t => t.id === task.templateId);
-      const message = template ? template.body : 'Hi, following up on our previous conversation.';
-      
+      const template = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES.find(
+        (t) => t.id === task.templateId,
+      );
+      const message = template
+        ? template.body
+        : "Hi, following up on our previous conversation.";
+
       const phoneToUse = contact?.phone || task.leadPhone;
       const formattedPhone = formatForDialing(phoneToUse);
       const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
-      window.open(whatsappUrl, '_blank');
-      
+      window.open(whatsappUrl, "_blank");
+
       // Mark task as completed
       await completeFollowUpTask(user.uid, task.id, {
         completedBy: user.email,
-        method: 'whatsapp_manual'
+        method: "whatsapp_manual",
       });
-      
-      addNotification('WhatsApp opened successfully', 'success');
+
+      addNotification("WhatsApp opened successfully", "success");
     } catch (error) {
-      console.error('Send WhatsApp follow-up error:', error);
-      addNotification('Failed to open WhatsApp', 'error');
+      console.error("Send WhatsApp follow-up error:", error);
+      addNotification("Failed to open WhatsApp", "error");
     }
   };
 
   const handlePhoneCall = async (task) => {
     if (!user?.uid) return;
-    
+
     // PHASE 6: Check idempotency
-    const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, 'phone', task.followUpStage);
+    const exists = await checkFollowUpTaskExists(
+      user.uid,
+      task.leadEmail,
+      "phone",
+      task.followUpStage,
+    );
     if (!exists) {
-      addNotification('Follow-up task no longer exists', 'warning');
+      addNotification("Follow-up task no longer exists", "warning");
       return;
     }
 
     try {
       // Find the contact from whatsappLinks
-      const contact = whatsappLinks.find(l => l.email === task.leadEmail || l.phone === task.leadPhone);
+      const contact = whatsappLinks.find(
+        (l) => l.email === task.leadEmail || l.phone === task.leadPhone,
+      );
       if (!contact) {
-        addNotification('Contact not found', 'error');
+        addNotification("Contact not found", "error");
         return;
       }
 
       // Initiate phone call
       handleCall(contact.phone);
-      
+
       // Update phone call status
-      setPhoneCallStatus(prev => ({
+      setPhoneCallStatus((prev) => ({
         ...prev,
         [task.leadEmail]: {
-          status: 'in_progress',
-          startedAt: new Date().toISOString()
-        }
+          status: "in_progress",
+          startedAt: new Date().toISOString(),
+        },
       }));
-      
-      addNotification('Phone call initiated', 'success');
+
+      addNotification("Phone call initiated", "success");
     } catch (error) {
-      console.error('Phone call error:', error);
-      addNotification('Failed to initiate phone call', 'error');
+      console.error("Phone call error:", error);
+      addNotification("Failed to initiate phone call", "error");
     }
   };
 
@@ -2839,64 +3098,64 @@ export default function Dashboard() {
     if (!user?.uid) return;
 
     // Optimistic UI update (MAXIMIZE BUSINESS VALUE: Better perceived performance)
-    const task = (followUpTasks.pending || []).find(t => t.id === taskId);
+    const task = (followUpTasks.pending || []).find((t) => t.id === taskId);
     if (task) {
-      setFollowUpTasks(prev => ({
-        pending: prev.pending.filter(t => t.id !== taskId),
+      setFollowUpTasks((prev) => ({
+        pending: prev.pending.filter((t) => t.id !== taskId),
         completed: [
           {
             ...task,
-            status: 'completed',
+            status: "completed",
             completedAt: new Date().toISOString(),
             completedBy: user.email,
-            method: 'manual'
+            method: "manual",
           },
-          ...prev.completed
-        ]
+          ...prev.completed,
+        ],
       }));
     }
 
     try {
       await completeFollowUpTask(user.uid, taskId, {
         completedBy: user.email,
-        method: 'manual'
+        method: "manual",
       });
-      
-      addNotification('Task completed successfully', 'success');
+
+      addNotification("Task completed successfully", "success");
     } catch (error) {
-      console.error('Complete task error:', error);
-      addNotification('Failed to complete task', 'error');
-      
+      console.error("Complete task error:", error);
+      addNotification("Failed to complete task", "error");
+
       // Revert optimistic update on error
       const tasks = await loadFollowUpTasks(user.uid);
       setFollowUpTasks(tasks);
     }
   };
 
-  const handleUpdatePhoneCallStatus = async (leadEmail, status, notes = '') => {
+  const handleUpdatePhoneCallStatus = async (leadEmail, status, notes = "") => {
     if (!user?.uid) return;
 
     try {
-      setPhoneCallStatus(prev => ({
+      setPhoneCallStatus((prev) => ({
         ...prev,
         [leadEmail]: {
           ...prev[leadEmail],
           status,
           notes,
-          updatedAt: new Date().toISOString()
-        }
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      
+
       // Update lead state
       await updateLeadState(user.uid, leadEmail, {
         phoneCallStatus: status,
-        phoneCallNotes: notes
+        phoneCallNotes: notes,
       });
-      
-      addNotification('Phone call status updated', 'success');
+
+      addNotification("Phone call status updated", "success");
     } catch (error) {
-      console.error('Update phone call status error:', error);
-      addNotification('Failed to update phone call status', 'error');
+      console.error("Update phone call status error:", error);
+      addNotification("Failed to update phone call status", "error");
     }
   };
 
@@ -2905,34 +3164,38 @@ export default function Dashboard() {
 
     try {
       await saveLeadNotes(user.uid, leadEmail, notes);
-      setLeadNotes(prev => ({
+      setLeadNotes((prev) => ({
         ...prev,
-        [leadEmail]: notes
+        [leadEmail]: notes,
       }));
-      addNotification('Lead notes saved successfully', 'success');
+      addNotification("Lead notes saved successfully", "success");
     } catch (error) {
-      console.error('Save lead notes error:', error);
-      addNotification('Failed to save lead notes', 'error');
+      console.error("Save lead notes error:", error);
+      addNotification("Failed to save lead notes", "error");
     }
   };
 
   // Pagination handlers (MAXIMIZE BUSINESS VALUE: Performance optimization)
   const handlePreviousPendingPage = () => {
-    setPendingTasksPage(p => Math.max(1, p - 1));
+    setPendingTasksPage((p) => Math.max(1, p - 1));
   };
 
   const handleNextPendingPage = () => {
-    const maxPage = followUpTasks?.pending ? Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE) : 1;
-    setPendingTasksPage(p => Math.min(maxPage, p + 1));
+    const maxPage = followUpTasks?.pending
+      ? Math.ceil(followUpTasks.pending.length / TASKS_PER_PAGE)
+      : 1;
+    setPendingTasksPage((p) => Math.min(maxPage, p + 1));
   };
 
   const handlePreviousCompletedPage = () => {
-    setCompletedTasksPage(p => Math.max(1, p - 1));
+    setCompletedTasksPage((p) => Math.max(1, p - 1));
   };
 
   const handleNextCompletedPage = () => {
-    const maxPage = followUpTasks?.completed ? Math.ceil(followUpTasks.completed.length / TASKS_PER_PAGE) : 1;
-    setCompletedTasksPage(p => Math.min(maxPage, p + 1));
+    const maxPage = followUpTasks?.completed
+      ? Math.ceil(followUpTasks.completed.length / TASKS_PER_PAGE)
+      : 1;
+    setCompletedTasksPage((p) => Math.min(maxPage, p + 1));
   };
 
   // ============================================================================
@@ -2963,15 +3226,21 @@ export default function Dashboard() {
 
     try {
       const q = query(
-        collection(db, 'manual_contact_status'),
-        where('userId', '==', userId)
+        collection(db, "manual_contact_status"),
+        where("userId", "==", userId),
       );
       const snapshot = await getDocs(q);
 
       const status = {};
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         const data = doc.data();
-        const key = normalizeContactKey(data.contactKey || data.email || data.phone || data.phone_primary || data.phone_number);
+        const key = normalizeContactKey(
+          data.contactKey ||
+            data.email ||
+            data.phone ||
+            data.phone_primary ||
+            data.phone_number,
+        );
         if (key) {
           status[key] = data;
         }
@@ -2979,7 +3248,7 @@ export default function Dashboard() {
 
       setManualContactStatus(status);
     } catch (error) {
-      console.error('Load manual contact status error:', error);
+      console.error("Load manual contact status error:", error);
     }
   };
 
@@ -2990,24 +3259,28 @@ export default function Dashboard() {
     if (!user?.uid || !db || !userPreferences.autoSaveEnabled) return;
 
     try {
-      const docRef = doc(db, 'users', user.uid, 'settings', 'templates');
-      await setDoc(docRef, {
-        senderName,
-        senderEmail,
-        templateA,
-        templateB,
-        whatsappTemplate,
-        smsTemplate,
-        instagramTemplate,
-        twitterTemplate,
-        linkedinTemplate,
-        followUpTemplates,
-        fieldMappings,
-        abTestMode,
-        smsConsent,
-        userPreferences,
-        lastSaved: new Date().toISOString()
-      }, { merge: true });
+      const docRef = doc(db, "users", user.uid, "settings", "templates");
+      await setDoc(
+        docRef,
+        {
+          senderName,
+          senderEmail,
+          templateA,
+          templateB,
+          whatsappTemplate,
+          smsTemplate,
+          instagramTemplate,
+          twitterTemplate,
+          linkedinTemplate,
+          followUpTemplates,
+          fieldMappings,
+          abTestMode,
+          smsConsent,
+          userPreferences,
+          lastSaved: new Date().toISOString(),
+        },
+        { merge: true },
+      );
 
       // Also save to localStorage for persistence
       const settingsToCache = {
@@ -3025,14 +3298,17 @@ export default function Dashboard() {
         abTestMode,
         smsConsent,
         userPreferences,
-        cachedAt: new Date().toISOString()
+        cachedAt: new Date().toISOString(),
       };
-      localStorage.setItem(`autoleads_settings_${user.uid}`, JSON.stringify(settingsToCache));
+      localStorage.setItem(
+        `autoleads_settings_${user.uid}`,
+        JSON.stringify(settingsToCache),
+      );
 
-      addNotification('Settings auto-saved', 'success', 2000);
+      addNotification("Settings auto-saved", "success", 2000);
     } catch (error) {
-      console.warn('Failed to save settings:', error);
-      addNotification('Failed to auto-save settings', 'warning');
+      console.warn("Failed to save settings:", error);
+      addNotification("Failed to auto-save settings", "warning");
     }
   };
 
@@ -3057,10 +3333,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (!csvContent) return;
 
-    const lines = csvContent.split('\n').filter(line => line.trim() !== '');
+    const lines = csvContent.split("\n").filter((line) => line.trim() !== "");
     if (lines.length < 2) return;
 
-    const headers = parseCsvRow(lines[0]).map(h => h.trim());
+    const headers = parseCsvRow(lines[0]).map((h) => h.trim());
     let hotEmails = 0;
     let warmEmails = 0;
 
@@ -3071,27 +3347,27 @@ export default function Dashboard() {
 
       const row = {};
       headers.forEach((header, idx) => {
-        row[header] = values[idx]?.toString().trim() || '';
+        row[header] = values[idx]?.toString().trim() || "";
       });
 
-      const emailCol = fieldMappings.email || 'email';
-      const email = row[emailCol] || '';
+      const emailCol = fieldMappings.email || "email";
+      const email = row[emailCol] || "";
 
       if (isValidEmail(email)) {
-        const qualityCol = fieldMappings.lead_quality || 'lead_quality';
-        const quality = (row[qualityCol] || '').trim().toUpperCase() || 'HOT';
+        const qualityCol = fieldMappings.lead_quality || "lead_quality";
+        const quality = (row[qualityCol] || "").trim().toUpperCase() || "HOT";
 
-        if (quality === 'HOT') {
+        if (quality === "HOT") {
           hotEmails++;
-        } else if (quality === 'WARM') {
+        } else if (quality === "WARM") {
           warmEmails++;
         }
       }
     }
 
-    if (leadQualityFilter === 'HOT') {
+    if (leadQualityFilter === "HOT") {
       setValidEmails(hotEmails);
-    } else if (leadQualityFilter === 'WARM') {
+    } else if (leadQualityFilter === "WARM") {
       setValidEmails(warmEmails);
     } else {
       setValidEmails(hotEmails + warmEmails);
@@ -3109,23 +3385,33 @@ export default function Dashboard() {
     if (cachedSettings) {
       try {
         const cached = JSON.parse(cachedSettings);
-        setSenderName(cached.senderName || '');
-        setSenderEmail(cached.senderEmail || '');
+        setSenderName(cached.senderName || "");
+        setSenderEmail(cached.senderEmail || "");
         setTemplateA(cached.templateA || DEFAULT_TEMPLATE_A);
         setTemplateB(cached.templateB || DEFAULT_TEMPLATE_B);
-        setWhatsappTemplate(cached.whatsappTemplate || DEFAULT_WHATSAPP_TEMPLATE);
+        setWhatsappTemplate(
+          cached.whatsappTemplate || DEFAULT_WHATSAPP_TEMPLATE,
+        );
         setSmsTemplate(cached.smsTemplate || DEFAULT_SMS_TEMPLATE);
-        setInstagramTemplate(cached.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE);
+        setInstagramTemplate(
+          cached.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE,
+        );
         setTwitterTemplate(cached.twitterTemplate || DEFAULT_TWITTER_TEMPLATE);
-        setLinkedinTemplate(cached.linkedinTemplate || DEFAULT_LINKEDIN_TEMPLATE);
-        setFollowUpTemplates(cached.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES);
+        setLinkedinTemplate(
+          cached.linkedinTemplate || DEFAULT_LINKEDIN_TEMPLATE,
+        );
+        setFollowUpTemplates(
+          cached.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES,
+        );
         setFieldMappings(cached.fieldMappings || {});
         setAbTestMode(cached.abTestMode || false);
-        setSmsConsent(cached.smsConsent !== undefined ? cached.smsConsent : true);
+        setSmsConsent(
+          cached.smsConsent !== undefined ? cached.smsConsent : true,
+        );
         setUserPreferences(cached.userPreferences || userPreferences);
         // console.log('✅ Settings loaded from localStorage cache');
       } catch (e) {
-        console.warn('Failed to parse cached settings:', e);
+        console.warn("Failed to parse cached settings:", e);
       }
     }
 
@@ -3133,21 +3419,25 @@ export default function Dashboard() {
     if (!db) return;
 
     try {
-      const docRef = doc(db, 'users', userId, 'settings', 'templates');
+      const docRef = doc(db, "users", userId, "settings", "templates");
       const snap = await getDoc(docRef);
 
       if (snap.exists()) {
         const data = snap.data();
-        setSenderName(data.senderName || '');
-        setSenderEmail(data.senderEmail || '');
+        setSenderName(data.senderName || "");
+        setSenderEmail(data.senderEmail || "");
         setTemplateA(data.templateA || DEFAULT_TEMPLATE_A);
         setTemplateB(data.templateB || DEFAULT_TEMPLATE_B);
         setWhatsappTemplate(data.whatsappTemplate || DEFAULT_WHATSAPP_TEMPLATE);
         setSmsTemplate(data.smsTemplate || DEFAULT_SMS_TEMPLATE);
-        setInstagramTemplate(data.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE);
+        setInstagramTemplate(
+          data.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE,
+        );
         setTwitterTemplate(data.twitterTemplate || DEFAULT_TWITTER_TEMPLATE);
         setLinkedinTemplate(data.linkedinTemplate || DEFAULT_LINKEDIN_TEMPLATE);
-        setFollowUpTemplates(data.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES);
+        setFollowUpTemplates(
+          data.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES,
+        );
         setFieldMappings(data.fieldMappings || {});
         setAbTestMode(data.abTestMode || false);
         setSmsConsent(data.smsConsent !== undefined ? data.smsConsent : true);
@@ -3155,30 +3445,35 @@ export default function Dashboard() {
 
         // Cache to localStorage
         const settingsToCache = {
-          senderName: data.senderName || '',
-          senderEmail: data.senderEmail || '',
+          senderName: data.senderName || "",
+          senderEmail: data.senderEmail || "",
           templateA: data.templateA || DEFAULT_TEMPLATE_A,
           templateB: data.templateB || DEFAULT_TEMPLATE_B,
           whatsappTemplate: data.whatsappTemplate || DEFAULT_WHATSAPP_TEMPLATE,
           smsTemplate: data.smsTemplate || DEFAULT_SMS_TEMPLATE,
-          instagramTemplate: data.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE,
+          instagramTemplate:
+            data.instagramTemplate || DEFAULT_INSTAGRAM_TEMPLATE,
           twitterTemplate: data.twitterTemplate || DEFAULT_TWITTER_TEMPLATE,
           linkedinTemplate: data.linkedinTemplate || DEFAULT_LINKEDIN_TEMPLATE,
-          followUpTemplates: data.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES,
+          followUpTemplates:
+            data.followUpTemplates || DEFAULT_FOLLOW_UP_TEMPLATES,
           fieldMappings: data.fieldMappings || {},
           abTestMode: data.abTestMode || false,
           smsConsent: data.smsConsent !== undefined ? data.smsConsent : true,
           userPreferences: data.userPreferences || userPreferences,
-          cachedAt: new Date().toISOString()
+          cachedAt: new Date().toISOString(),
         };
-        localStorage.setItem(`autoleads_settings_${userId}`, JSON.stringify(settingsToCache));
+        localStorage.setItem(
+          `autoleads_settings_${userId}`,
+          JSON.stringify(settingsToCache),
+        );
 
-        addNotification('Settings loaded successfully', 'success', 2000);
+        addNotification("Settings loaded successfully", "success", 2000);
       }
     } catch (error) {
-      console.warn('Failed to load settings from Firebase:', error);
+      console.warn("Failed to load settings from Firebase:", error);
       if (!cachedSettings) {
-        addNotification('Using default settings', 'info', 2000);
+        addNotification("Using default settings", "info", 2000);
       }
     }
   };
@@ -3190,17 +3485,21 @@ export default function Dashboard() {
     if (!user?.uid || !db) return;
 
     try {
-      const q = query(collection(db, 'clicks'), where('userId', '==', user.uid), limit(100));
+      const q = query(
+        collection(db, "clicks"),
+        where("userId", "==", user.uid),
+        limit(100),
+      );
       const snapshot = await getDocs(q);
 
       const stats = {};
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         stats[doc.id] = doc.data();
       });
 
       setClickStats(stats);
     } catch (e) {
-      console.warn('Click stats load failed:', e);
+      console.warn("Click stats load failed:", e);
     }
   };
 
@@ -3211,36 +3510,44 @@ export default function Dashboard() {
     if (!user?.uid || !db) return;
 
     try {
-      const q = query(collection(db, 'ab_results'), where('userId', '==', user.uid), limit(50));
+      const q = query(
+        collection(db, "ab_results"),
+        where("userId", "==", user.uid),
+        limit(50),
+      );
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
         setAbResults(snapshot.docs[0].data());
       }
     } catch (e) {
-      console.warn('AB results load failed:', e);
+      console.warn("AB results load failed:", e);
     }
   };
 
   // ============================================================================
   // LOAD DEALS FROM FIREBASE
   // ============================================================================
-   const loadDeals = async () => {
+  const loadDeals = async () => {
     if (!user?.uid || !db) return;
 
     try {
-      const q = query(collection(db, 'deals'), where('userId', '==', user.uid), limit(100));
+      const q = query(
+        collection(db, "deals"),
+        where("userId", "==", user.uid),
+        limit(100),
+      );
       const snapshot = await getDocs(q);
 
       const stages = {};
       let totalValue = 0;
 
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         const data = doc.data();
-        let stage = data.stage || 'new';
-        if (stage === 'won') stage = 'closed_won';
+        let stage = data.stage || "new";
+        if (stage === "won") stage = "closed_won";
         stages[data.email] = stage;
-        if (!['closed_won', 'closed_lost'].includes(stage)) {
+        if (!["closed_won", "closed_lost"].includes(stage)) {
           totalValue += CONFIG.DEFAULT_AVG_DEAL_VALUE;
         }
       });
@@ -3248,7 +3555,7 @@ export default function Dashboard() {
       setDealStage(stages);
       setPipelineValue(totalValue);
     } catch (e) {
-      console.warn('Deals load failed:', e);
+      console.warn("Deals load failed:", e);
     }
   };
 
@@ -3257,7 +3564,7 @@ export default function Dashboard() {
     await Promise.allSettled([
       loadSentLeads(),
       loadRepliedAndFollowUp(),
-      loadDeals()
+      loadDeals(),
     ]);
   };
 
@@ -3268,7 +3575,10 @@ export default function Dashboard() {
     if (!user?.uid || !db) return;
 
     try {
-      const q = query(collection(db, 'sent_emails'), where('userId', '==', user.uid));
+      const q = query(
+        collection(db, "sent_emails"),
+        where("userId", "==", user.uid),
+      );
       const snapshot = await getDocs(q);
 
       const repliedMap = {};
@@ -3277,8 +3587,8 @@ export default function Dashboard() {
       const now = new Date();
 
       const normalizedLeads = snapshot.docs
-        .map(doc => normalizeSentLead(doc.data()))
-        .filter(lead => lead.email);
+        .map((doc) => normalizeSentLead(doc.data()))
+        .filter((lead) => lead.email);
 
       normalizedLeads.forEach((data) => {
         if (data.replied) {
@@ -3293,7 +3603,7 @@ export default function Dashboard() {
         history[data.email] = {
           count: Number(data.followUpCount ?? 0),
           lastFollowUpAt: data.lastFollowUpAt ?? null,
-          dates: data.followUpDates || []
+          dates: data.followUpDates || [],
         };
       });
 
@@ -3302,17 +3612,21 @@ export default function Dashboard() {
       setFollowUpHistory(history);
 
       // Calculate follow-up stats
-      const replied = normalizedLeads.filter(l => l.replied).length;
-      const followedUp = normalizedLeads.filter(l => Number(l.followUpCount) > 0).length;
-      const readyForFU = normalizedLeads.filter(l => {
+      const replied = normalizedLeads.filter((l) => l.replied).length;
+      const followedUp = normalizedLeads.filter(
+        (l) => Number(l.followUpCount) > 0,
+      ).length;
+      const readyForFU = normalizedLeads.filter((l) => {
         const followUpAt = getLeadNextFollowUpAt(l);
         return !l.replied && followUpAt && followUpAt <= now;
       }).length;
-      const awaiting = normalizedLeads.filter(l => {
+      const awaiting = normalizedLeads.filter((l) => {
         const followUpAt = getLeadNextFollowUpAt(l);
         return !l.replied && (!followUpAt || followUpAt > now);
       }).length;
-      const interested = normalizedLeads.filter(l => l.seemsInterested && !l.replied).length;
+      const interested = normalizedLeads.filter(
+        (l) => l.seemsInterested && !l.replied,
+      ).length;
 
       setFollowUpStats({
         totalSent: normalizedLeads.length,
@@ -3320,10 +3634,10 @@ export default function Dashboard() {
         readyForFollowUp: readyForFU,
         alreadyFollowedUp: followedUp,
         awaitingReply: awaiting,
-        interestedLeads: interested
+        interestedLeads: interested,
       });
     } catch (e) {
-      console.warn('Replied/Follow-up load failed:', e);
+      console.warn("Replied/Follow-up load failed:", e);
     }
   };
 
@@ -3341,26 +3655,30 @@ export default function Dashboard() {
       const accessToken = await requestGmailToken();
       if (!accessToken) return;
 
-      const res = await fetch('/api/check-replies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/check-replies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           accessToken,
-          senderEmail
-        })
+          senderEmail,
+        }),
       });
 
       if (res.ok) {
         const responseData = await res.json();
         if (responseData.replyCount > 0) {
-          addNotification(`📬 Detected ${responseData.replyCount} new reply/replies!`, 'success', 5000);
+          addNotification(
+            `📬 Detected ${responseData.replyCount} new reply/replies!`,
+            "success",
+            5000,
+          );
           await loadRepliedAndFollowUp();
         }
       }
     } catch (error) {
-      console.error('Error checking for replies:', error);
-      addNotification('Failed to check for replies', 'error');
+      console.error("Error checking for replies:", error);
+      addNotification("Failed to check for replies", "error");
     }
   };
 
@@ -3373,15 +3691,15 @@ export default function Dashboard() {
     setLoadingDailyCount(true);
 
     try {
-      const res = await fetch('/api/get-daily-count', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid })
+      const res = await fetch("/api/get-daily-count", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
       });
 
       // Handle 404 gracefully
       if (res.status === 404) {
-        console.warn('Daily count API not found, using local state');
+        console.warn("Daily count API not found, using local state");
         setDailyEmailCount(0);
         setDailyWhatsAppCount(0);
         setDailySMSCount(0);
@@ -3399,7 +3717,7 @@ export default function Dashboard() {
         setDailyCallCount(data.callCount || 0);
       }
     } catch (err) {
-      console.error('Load daily count error:', err);
+      console.error("Load daily count error:", err);
       // Fallback to 0
       setDailyEmailCount(0);
       setDailyWhatsAppCount(0);
@@ -3417,10 +3735,10 @@ export default function Dashboard() {
     if (!user?.uid) return;
 
     try {
-      const res = await fetch('/api/ai-send-time-optimizer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid })
+      const res = await fetch("/api/ai-send-time-optimizer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
       });
 
       const data = await res.json();
@@ -3429,7 +3747,7 @@ export default function Dashboard() {
         setSendTimeOptimization(data);
       }
     } catch (err) {
-      console.error('Send time optimization error:', err);
+      console.error("Send time optimization error:", err);
     }
   };
 
@@ -3442,10 +3760,10 @@ export default function Dashboard() {
     setLoadingSentLeads(true);
 
     try {
-      const res = await fetch('/api/list-sent-leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid })
+      const res = await fetch("/api/list-sent-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
       });
 
       // Handle 404 gracefully
@@ -3457,16 +3775,16 @@ export default function Dashboard() {
           readyForFollowUp: 0,
           alreadyFollowedUp: 0,
           awaitingReply: 0,
-          interestedLeads: 0
+          interestedLeads: 0,
         });
         setLoadingSentLeads(false);
         return;
       }
 
       // Check if response is JSON
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Response is not JSON');
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Response is not JSON");
       }
 
       const data = await res.json();
@@ -3474,7 +3792,7 @@ export default function Dashboard() {
       if (res.ok) {
         const normalizedLeads = (data.leads || [])
           .map(normalizeSentLead)
-          .filter(lead => lead.email);
+          .filter((lead) => lead.email);
 
         setSentLeads(normalizedLeads);
 
@@ -3485,7 +3803,7 @@ export default function Dashboard() {
         let awaiting = 0;
         const now = new Date();
 
-        normalizedLeads.forEach(lead => {
+        normalizedLeads.forEach((lead) => {
           if (lead.replied) {
             replied++;
           }
@@ -3498,7 +3816,7 @@ export default function Dashboard() {
           history[lead.email] = {
             count: followUpCount,
             lastFollowUpAt: lead.lastFollowUpAt ?? null,
-            dates: lead.followUpDates || []
+            dates: lead.followUpDates || [],
           };
 
           const followUpAt = getLeadNextFollowUpAt(lead);
@@ -3511,8 +3829,8 @@ export default function Dashboard() {
           }
         });
 
-        const interested = normalizedLeads.filter(lead =>
-          lead.seemsInterested && !lead.replied
+        const interested = normalizedLeads.filter(
+          (lead) => lead.seemsInterested && !lead.replied,
         );
 
         setInterestedLeadsList(interested);
@@ -3523,15 +3841,15 @@ export default function Dashboard() {
           readyForFollowUp: readyForFU,
           alreadyFollowedUp: followedUp,
           awaitingReply: awaiting,
-          interestedLeads: interested.length
+          interestedLeads: interested.length,
         });
       } else {
-        addNotification('Failed to load sent leads', 'error');
+        addNotification("Failed to load sent leads", "error");
       }
     } catch (err) {
-      console.error('Load sent leads error:', err);
+      console.error("Load sent leads error:", err);
       setSentLeads([]);
-      addNotification('Error loading sent leads', 'error');
+      addNotification("Error loading sent leads", "error");
     } finally {
       setLoadingSentLeads(false);
     }
@@ -3544,10 +3862,10 @@ export default function Dashboard() {
     if (!user?.uid) return;
 
     try {
-      const res = await fetch('/api/list-whatsapp-contacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid })
+      const res = await fetch("/api/list-whatsapp-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
       });
 
       if (res.ok) {
@@ -3556,7 +3874,7 @@ export default function Dashboard() {
         setWhatsappLinks(contacts);
       }
     } catch (err) {
-      console.error('Load WhatsApp contacts error:', err);
+      console.error("Load WhatsApp contacts error:", err);
       // Don't show notification, just log error
     }
   };
@@ -3573,14 +3891,14 @@ export default function Dashboard() {
       const res = await fetch(`/api/track-company?userId=${user.uid}`);
 
       if (res.status === 404) {
-        console.warn('Company tracking API not found, using empty state');
+        console.warn("Company tracking API not found, using empty state");
         setContactedCompanies([]);
         setCompanyStats({
           totalCompanies: 0,
           totalContacts: 0,
           avgContactsPerCompany: 0,
           companiesReplied: 0,
-          replyRate: 0
+          replyRate: 0,
         });
         setLoadingContactedCompanies(false);
         return;
@@ -3594,25 +3912,34 @@ export default function Dashboard() {
         // Calculate stats
         const companies = data.companies || [];
         const totalCompanies = companies.length;
-        const totalContacts = companies.reduce((sum, company) => sum + (company.totalContacts || 0), 0);
-        const avgContactsPerCompany = totalCompanies > 0 ? (totalContacts / totalCompanies).toFixed(1) : 0;
-        const companiesReplied = companies.filter(company => company.hasReplied).length;
-        const replyRate = totalCompanies > 0 ? ((companiesReplied / totalCompanies) * 100).toFixed(1) : 0;
+        const totalContacts = companies.reduce(
+          (sum, company) => sum + (company.totalContacts || 0),
+          0,
+        );
+        const avgContactsPerCompany =
+          totalCompanies > 0 ? (totalContacts / totalCompanies).toFixed(1) : 0;
+        const companiesReplied = companies.filter(
+          (company) => company.hasReplied,
+        ).length;
+        const replyRate =
+          totalCompanies > 0
+            ? ((companiesReplied / totalCompanies) * 100).toFixed(1)
+            : 0;
 
         setCompanyStats({
           totalCompanies,
           totalContacts,
           avgContactsPerCompany,
           companiesReplied,
-          replyRate
+          replyRate,
         });
       } else {
-        addNotification('Failed to load contacted companies', 'error');
+        addNotification("Failed to load contacted companies", "error");
       }
     } catch (err) {
-      console.error('Load contacted companies error:', err);
+      console.error("Load contacted companies error:", err);
       setContactedCompanies([]);
-      addNotification('Error loading contacted companies', 'error');
+      addNotification("Error loading contacted companies", "error");
     } finally {
       setLoadingContactedCompanies(false);
     }
@@ -3623,37 +3950,38 @@ export default function Dashboard() {
   // ============================================================================
   const requestGmailToken = () => {
     return new Promise((resolve, reject) => {
-      if (typeof window === 'undefined') {
-        reject('Browser only');
+      if (typeof window === "undefined") {
+        reject("Browser only");
         return;
       }
 
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
       if (!clientId) {
-        reject('Google Client ID missing');
+        reject("Google Client ID missing");
         return;
       }
 
       if (!window.google?.accounts?.oauth2) {
-        reject('Google OAuth not loaded');
+        reject("Google OAuth not loaded");
         return;
       }
 
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
+        scope:
+          "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
         callback: (res) => {
           if (res.access_token) {
             resolve(res.access_token);
           } else {
-            reject('No access token received');
+            reject("No access token received");
           }
         },
         error_callback: (err) => {
-          reject(err.message || 'OAuth error');
+          reject(err.message || "OAuth error");
         },
-        ...(senderEmail ? { login_hint: senderEmail } : {})
+        ...(senderEmail ? { login_hint: senderEmail } : {}),
       });
 
       client.requestAccessToken();
@@ -3665,12 +3993,12 @@ export default function Dashboard() {
   // ============================================================================
   const handleDebugSystem = async () => {
     try {
-      addNotification('🔍 Running system diagnostics...', 'info');
+      addNotification("🔍 Running system diagnostics...", "info");
 
-      const response = await fetch('/api/email-debug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+      const response = await fetch("/api/email-debug", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
 
       const data = await response.json();
@@ -3678,13 +4006,15 @@ export default function Dashboard() {
       if (data.success) {
         const { debugInfo } = data;
 
-        let message = '🔍 System Debug Results:\n\n';
+        let message = "🔍 System Debug Results:\n\n";
 
         // Environment status
         message += `Environment Variables:\n`;
-        Object.entries(debugInfo.environment.requiredVars).forEach(([key, status]) => {
-          message += `  ${key}: ${status}\n`;
-        });
+        Object.entries(debugInfo.environment.requiredVars).forEach(
+          ([key, status]) => {
+            message += `  ${key}: ${status}\n`;
+          },
+        );
 
         // Dependencies
         message += `\nDependencies:\n`;
@@ -3695,25 +4025,29 @@ export default function Dashboard() {
         // Issues and fixes
         if (debugInfo.issues.length > 0) {
           message += `\n❌ Issues Found:\n`;
-          debugInfo.issues.forEach(issue => {
+          debugInfo.issues.forEach((issue) => {
             message += `  • ${issue}\n`;
           });
 
           message += `\n💡 Recommended Fixes:\n`;
-          debugInfo.fixes.forEach(fix => {
+          debugInfo.fixes.forEach((fix) => {
             message += `  • ${fix}\n`;
           });
         } else {
-          message += '\n✅ No issues found!';
+          message += "\n✅ No issues found!";
         }
 
-        addNotification(message, debugInfo.issues.length > 0 ? 'warning' : 'success', 10000);
+        addNotification(
+          message,
+          debugInfo.issues.length > 0 ? "warning" : "success",
+          10000,
+        );
       } else {
-        addNotification(`❌ Debug failed: ${data.error}`, 'error');
+        addNotification(`❌ Debug failed: ${data.error}`, "error");
       }
     } catch (error) {
-      console.error('Debug error:', error);
-      addNotification(`❌ Debug error: ${error.message}`, 'error');
+      console.error("Debug error:", error);
+      addNotification(`❌ Debug error: ${error.message}`, "error");
     }
   };
 
@@ -3724,63 +4058,73 @@ export default function Dashboard() {
     if (!user?.uid || !email || !db) return;
 
     try {
-      const dealRef = doc(db, 'deals', email);
-      await setDoc(dealRef, {
-        userId: user.uid,
-        email,
-        stage,
-        lastUpdate: new Date().toISOString(),
-        value: CONFIG.DEFAULT_AVG_DEAL_VALUE
-      }, { merge: true });
+      const dealRef = doc(db, "deals", email);
+      await setDoc(
+        dealRef,
+        {
+          userId: user.uid,
+          email,
+          stage,
+          lastUpdate: new Date().toISOString(),
+          value: CONFIG.DEFAULT_AVG_DEAL_VALUE,
+        },
+        { merge: true },
+      );
 
-      setDealStage(prev => ({ ...prev, [email]: stage }));
+      setDealStage((prev) => ({ ...prev, [email]: stage }));
 
       // Strategic post-close workflow for maximum business value
-      if (stage === 'won') {
-        setPipelineValue(prev => prev - CONFIG.DEFAULT_AVG_DEAL_VALUE);
-        addNotification(`🎉 Deal won: ${email}`, 'success');
+      if (stage === "won") {
+        setPipelineValue((prev) => prev - CONFIG.DEFAULT_AVG_DEAL_VALUE);
+        addNotification(`🎉 Deal won: ${email}`, "success");
         // Auto-create onboarding follow-up task
         createFollowUpTask(user.uid, {
           leadEmail: email,
           leadName: email,
-          companyName: 'Won Deal',
-          channel: 'email',
-          followUpStage: 'onboarding',
-          templateId: 'onboarding',
-          scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 1 day after close
+          companyName: "Won Deal",
+          channel: "email",
+          followUpStage: "onboarding",
+          templateId: "onboarding",
+          scheduledFor: new Date(
+            Date.now() + 24 * 60 * 60 * 1000,
+          ).toISOString(), // 1 day after close
         });
-      } else if (stage === 'delivery') {
-        addNotification(`🚀 Delivery started for ${email}`, 'info');
+      } else if (stage === "delivery") {
+        addNotification(`🚀 Delivery started for ${email}`, "info");
         // Create delivery milestone check-in
         createFollowUpTask(user.uid, {
           leadEmail: email,
           leadName: email,
-          companyName: 'Delivery',
-          channel: 'email',
-          followUpStage: 'delivery_check',
-          templateId: 'delivery',
-          scheduledFor: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 1 week check-in
+          companyName: "Delivery",
+          channel: "email",
+          followUpStage: "delivery_check",
+          templateId: "delivery",
+          scheduledFor: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000,
+          ).toISOString(), // 1 week check-in
         });
-      } else if (stage === 'retention') {
-        addNotification(`💎 Retention phase for ${email}`, 'success');
+      } else if (stage === "retention") {
+        addNotification(`💎 Retention phase for ${email}`, "success");
         // Create upsell opportunity task
         createFollowUpTask(user.uid, {
           leadEmail: email,
           leadName: email,
-          companyName: 'Retention',
-          channel: 'email',
-          followUpStage: 'upsell_opportunity',
-          templateId: 'upsell',
-          scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days for upsell
+          companyName: "Retention",
+          channel: "email",
+          followUpStage: "upsell_opportunity",
+          templateId: "upsell",
+          scheduledFor: new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000,
+          ).toISOString(), // 30 days for upsell
         });
-      } else if (stage === 'expansion') {
-        addNotification(`📈 Expansion opportunity: ${email}`, 'success');
-      } else if (dealStage[email] === 'won') {
-        setPipelineValue(prev => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
+      } else if (stage === "expansion") {
+        addNotification(`📈 Expansion opportunity: ${email}`, "success");
+      } else if (dealStage[email] === "won") {
+        setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
       }
     } catch (e) {
-      console.error('Update deal error:', e);
-      addNotification('Failed to update deal stage', 'error');
+      console.error("Update deal error:", e);
+      addNotification("Failed to update deal stage", "error");
     }
   };
 
@@ -3803,20 +4147,26 @@ export default function Dashboard() {
   // ============================================================================
   const sendFollowUpWithToken = async (email, accessToken) => {
     if (!user?.uid || !email || !accessToken) {
-      addNotification('Missing required data to send follow-up.', 'error');
+      addNotification("Missing required data to send follow-up.", "error");
       return;
     }
 
     // Client-side check: verify lead is safe to follow up before calling API
     const candidates = safeFollowUpCandidates;
-    const lead = candidates.find(c => c.email === email);
+    const lead = candidates.find((c) => c.email === email);
     if (!lead) {
-      addNotification('Lead is not ready for follow-up yet. Please wait.', 'warning');
+      addNotification(
+        "Lead is not ready for follow-up yet. Please wait.",
+        "warning",
+      );
       return;
     }
 
     if (repliedLeads[email]) {
-      addNotification(`❌ Cannot send follow-up: ${email} has already replied.`, 'error');
+      addNotification(
+        `❌ Cannot send follow-up: ${email} has already replied.`,
+        "error",
+      );
       return;
     }
 
@@ -3824,21 +4174,21 @@ export default function Dashboard() {
     const followUpCount = history?.count || 0;
 
     if (followUpCount >= 3) {
-      addNotification(`❌ Max follow-ups reached for ${email}`, 'error');
+      addNotification(`❌ Max follow-ups reached for ${email}`, "error");
       return;
     }
 
     try {
       // Use the dedicated follow-up API for proper tracking
-      const res = await fetch('/api/send-followup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/send-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email,
           accessToken,
           userId: user.uid,
-          senderName
-        })
+          senderName,
+        }),
       });
 
       const data = await res.json();
@@ -3847,21 +4197,21 @@ export default function Dashboard() {
         const isFinalFollowUp = data.followUpCount >= 3;
         addNotification(
           `✅ Follow-up #${data.followUpCount} sent to ${email}` +
-          (isFinalFollowUp ? '\n⚠️ Loop closed' : ''),
-          'success'
+            (isFinalFollowUp ? "\n⚠️ Loop closed" : ""),
+          "success",
         );
 
         // Invalidate cache to ensure fresh data
-        invalidateCache('sent_emails');
-        invalidateCache('replied_followup');
+        invalidateCache("sent_emails");
+        invalidateCache("replied_followup");
 
         await refreshAllData();
       } else {
-        addNotification(`❌ Follow-up failed: ${data.error}`, 'error');
+        addNotification(`❌ Follow-up failed: ${data.error}`, "error");
       }
     } catch (err) {
-      console.error('Follow-up send error:', err);
-      addNotification(`❌ Error: ${err.message}`, 'error');
+      console.error("Follow-up send error:", err);
+      addNotification(`❌ Error: ${err.message}`, "error");
     }
   };
 
@@ -3870,33 +4220,37 @@ export default function Dashboard() {
   // ============================================================================
   const runAutoReplyProcessor = async () => {
     if (!autoReplyProcessorEnabled) {
-      setAiProcessorStatus('Disabled');
-      addNotification('AI auto-reply processor is disabled', 'warning');
+      setAiProcessorStatus("Disabled");
+      addNotification("AI auto-reply processor is disabled", "warning");
       return;
     }
 
     if (!user?.uid) {
-      addNotification('User not authenticated', 'error');
+      addNotification("User not authenticated", "error");
       return;
     }
 
-    setAiProcessorStatus('Running...');
+    setAiProcessorStatus("Running...");
 
     try {
-      const res = await fetch('/api/auto-reply-processor', { method: 'POST' });
+      const res = await fetch("/api/auto-reply-processor", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || 'Auto-reply processor failed');
+        throw new Error(data?.error || "Auto-reply processor failed");
       }
 
       setAiProcessorStatus(`Done · processed ${data.processed || 0} replies`);
-      addNotification('✅ AI auto-reply processor completed', 'success', 4000);
+      addNotification("✅ AI auto-reply processor completed", "success", 4000);
 
       await refreshAllData();
     } catch (error) {
       setAiProcessorStatus(`Error · ${error.message}`);
-      addNotification(`❌ Auto-reply processor error: ${error.message}`, 'error', 6000);
+      addNotification(
+        `❌ Auto-reply processor error: ${error.message}`,
+        "error",
+        6000,
+      );
     }
   };
 
@@ -3905,33 +4259,43 @@ export default function Dashboard() {
   // ============================================================================
   const runFollowupScheduler = async () => {
     if (!autoFollowupSchedulerEnabled) {
-      setFollowupSchedulerStatus('Disabled');
-      addNotification('Smart follow-up scheduler is disabled', 'warning');
+      setFollowupSchedulerStatus("Disabled");
+      addNotification("Smart follow-up scheduler is disabled", "warning");
       return;
     }
 
     if (!user?.uid) {
-      addNotification('User not authenticated', 'error');
+      addNotification("User not authenticated", "error");
       return;
     }
 
-    setFollowupSchedulerStatus('Running...');
+    setFollowupSchedulerStatus("Running...");
 
     try {
-      const res = await fetch('/api/followup-scheduler', { method: 'POST' });
+      const res = await fetch("/api/followup-scheduler", { method: "POST" });
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || 'Follow-up scheduler failed');
+        throw new Error(data?.error || "Follow-up scheduler failed");
       }
 
-      setFollowupSchedulerStatus(`Done · processed ${data.processed || 0} followups`);
-      addNotification('✅ Smart follow-up scheduler completed', 'success', 4000);
+      setFollowupSchedulerStatus(
+        `Done · processed ${data.processed || 0} followups`,
+      );
+      addNotification(
+        "✅ Smart follow-up scheduler completed",
+        "success",
+        4000,
+      );
 
       await refreshAllData();
     } catch (error) {
       setFollowupSchedulerStatus(`Error · ${error.message}`);
-      addNotification(`❌ Follow-up scheduler error: ${error.message}`, 'error', 6000);
+      addNotification(
+        `❌ Follow-up scheduler error: ${error.message}`,
+        "error",
+        6000,
+      );
     }
   };
 
@@ -3940,28 +4304,28 @@ export default function Dashboard() {
   // ============================================================================
   const handleMassEmailFollowUps = async () => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     const candidates = safeFollowUpCandidates;
     if (candidates.length === 0) {
-      addNotification('No safe leads available for follow-up', 'warning');
+      addNotification("No safe leads available for follow-up", "warning");
       return;
     }
 
     // Check email quota
-    const quotaCheck = canUse('email', candidates.length);
+    const quotaCheck = canUse("email", candidates.length);
 
     if (!quotaCheck.available) {
-      addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
+      addNotification(`⚠️ ${quotaCheck.reason}`, "warning");
       return;
     }
 
     const confirmed = window.confirm(
       `Send follow-up emails to ${candidates.length} leads?\n\n` +
-      `This will use ${candidates.length} of your daily email quota.\n\n` +
-      `Continue?`
+        `This will use ${candidates.length} of your daily email quota.\n\n` +
+        `Continue?`,
     );
 
     if (!confirmed) {
@@ -3969,17 +4333,17 @@ export default function Dashboard() {
     }
 
     setIsSending(true);
-    setStatus('Sending follow-ups...');
+    setStatus("Sending follow-ups...");
     setSendProgress({ current: 0, total: candidates.length });
 
     // Final quota check before starting sends
-    const finalQuotaCheck = canUse('email', candidates.length);
+    const finalQuotaCheck = canUse("email", candidates.length);
 
     if (!finalQuotaCheck.available) {
-      addNotification(`⚠️ ${finalQuotaCheck.reason}`, 'error');
+      addNotification(`⚠️ ${finalQuotaCheck.reason}`, "error");
       setIsSending(false);
       setSendProgress(null);
-      setStatus('');
+      setStatus("");
       return;
     }
 
@@ -3994,7 +4358,7 @@ export default function Dashboard() {
       const accessToken = await requestGmailToken();
 
       if (!accessToken) {
-        addNotification('Failed to get Gmail access token', 'error');
+        addNotification("Failed to get Gmail access token", "error");
         setIsSending(false);
         return;
       }
@@ -4012,36 +4376,48 @@ export default function Dashboard() {
             // Double-check safety before sending
             if (repliedLeads[contact.email]) {
               skipCount++;
-              results.push({ email: contact.email, status: 'skipped', reason: 'Already replied' });
+              results.push({
+                email: contact.email,
+                status: "skipped",
+                reason: "Already replied",
+              });
               continue;
             }
 
             const followUpCount = contact.followUpCount || 0;
             if (followUpCount >= 3) {
               skipCount++;
-              results.push({ email: contact.email, status: 'skipped', reason: 'Max follow-ups reached' });
+              results.push({
+                email: contact.email,
+                status: "skipped",
+                reason: "Max follow-ups reached",
+              });
               continue;
             }
 
             // Use the Gmail token requested once at the beginning
             if (!accessToken) {
               skipCount++;
-              results.push({ email: contact.email, status: 'skipped', reason: 'No access token' });
+              results.push({
+                email: contact.email,
+                status: "skipped",
+                reason: "No access token",
+              });
               continue;
             }
 
             // Send follow-up using the dedicated follow-up API
-            const res = await fetch('/api/send-followup', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+            const res = await fetch("/api/send-followup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 email: contact.email,
                 accessToken,
                 userId: user.uid,
                 senderName,
                 attachments: followUpAttachments,
-                customTemplates: followUpTemplates
-              })
+                customTemplates: followUpTemplates,
+              }),
             });
 
             const data = await res.json();
@@ -4050,60 +4426,80 @@ export default function Dashboard() {
               // Check if email was skipped due to duplicate
               if (data.skipped && data.skipped > 0) {
                 skipCount++;
-                results.push({ email: contact.email, status: 'skipped', reason: 'Already sent' });
+                results.push({
+                  email: contact.email,
+                  status: "skipped",
+                  reason: "Already sent",
+                });
                 continue;
               }
 
               successCount++;
               results.push({
                 email: contact.email,
-                status: 'success',
+                status: "success",
                 followUpCount: data.followUpCount,
-                loopClosed: data.followUpCount >= 3
+                loopClosed: data.followUpCount >= 3,
               });
 
               // Update quota
-              incrementQuota('email', 1);
-
+              incrementQuota("email", 1);
             } else {
               // Check if error is "too soon to follow up" - count as pending instead of failed
-              if (data.error && data.error.includes('Too soon to follow up')) {
+              if (data.error && data.error.includes("Too soon to follow up")) {
                 pendingCount++;
-                results.push({ email: contact.email, status: 'pending', reason: data.error || 'Too soon to follow up' });
+                results.push({
+                  email: contact.email,
+                  status: "pending",
+                  reason: data.error || "Too soon to follow up",
+                });
               } else {
                 failCount++;
-                results.push({ email: contact.email, status: 'failed', reason: data.error || 'API error' });
+                results.push({
+                  email: contact.email,
+                  status: "failed",
+                  reason: data.error || "API error",
+                });
               }
             }
-
           } catch (error) {
             failCount++;
-            results.push({ email: contact.email, status: 'failed', reason: error.message });
+            results.push({
+              email: contact.email,
+              status: "failed",
+              reason: error.message,
+            });
           }
 
           // Update progress
           const currentProgress = i + batch.indexOf(contact) + 1;
-          setSendProgress({ current: currentProgress, total: candidates.length });
+          setSendProgress({
+            current: currentProgress,
+            total: candidates.length,
+          });
 
           // Small delay between sends to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS));
+          await new Promise((resolve) =>
+            setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS),
+          );
         }
 
         // Brief pause between batches
         if (i + batchSize < candidates.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
 
       // Refresh data after all sends complete
       // Invalidate cache to ensure fresh data
-      invalidateCache('sent_emails');
-      invalidateCache('replied_followup');
+      invalidateCache("sent_emails");
+      invalidateCache("replied_followup");
 
       await refreshAllData();
 
       // Show comprehensive results
-      const message = `Mass Follow-Up Complete!\n\n` +
+      const message =
+        `Mass Follow-Up Complete!\n\n` +
         `✅ Success: ${successCount}\n` +
         `⏳ Pending: ${pendingCount}\n` +
         `❌ Failed: ${failCount}\n` +
@@ -4112,30 +4508,37 @@ export default function Dashboard() {
         `Email quota used: ${successCount}/${quotaCheck.limit}`;
 
       if (failCount > 0 || pendingCount > 0) {
-        let details = '';
+        let details = "";
         if (pendingCount > 0) {
-          const pendingEmails = results.filter(r => r.status === 'pending').slice(0, 3);
-          const pendingList = pendingEmails.map(p => `• ${p.email}: ${p.reason}`).join('\n');
-          details += `\n⏳ Pending (too soon to follow up):\n${pendingList}${pendingCount > 3 ? `\n... and ${pendingCount - 3} more` : ''}`;
+          const pendingEmails = results
+            .filter((r) => r.status === "pending")
+            .slice(0, 3);
+          const pendingList = pendingEmails
+            .map((p) => `• ${p.email}: ${p.reason}`)
+            .join("\n");
+          details += `\n⏳ Pending (too soon to follow up):\n${pendingList}${pendingCount > 3 ? `\n... and ${pendingCount - 3} more` : ""}`;
         }
         if (failCount > 0) {
-          const failedEmails = results.filter(r => r.status === 'failed').slice(0, 3);
-          const failedList = failedEmails.map(f => `• ${f.email}: ${f.reason}`).join('\n');
-          details += `\n❌ Failed sends:\n${failedList}${failCount > 3 ? `\n... and ${failCount - 3} more` : ''}`;
+          const failedEmails = results
+            .filter((r) => r.status === "failed")
+            .slice(0, 3);
+          const failedList = failedEmails
+            .map((f) => `• ${f.email}: ${f.reason}`)
+            .join("\n");
+          details += `\n❌ Failed sends:\n${failedList}${failCount > 3 ? `\n... and ${failCount - 3} more` : ""}`;
         }
-        addNotification(message + details, 'warning');
+        addNotification(message + details, "warning");
       } else {
-        addNotification(message, 'success');
+        addNotification(message, "success");
       }
-
     } catch (error) {
-      console.error('[Mass Follow-Up] Fatal error:', error);
-      addNotification(`Mass follow-up failed: ${error.message}`, 'error');
+      console.error("[Mass Follow-Up] Fatal error:", error);
+      addNotification(`Mass follow-up failed: ${error.message}`, "error");
     } finally {
       // console.log('[Mass Follow-Up] Cleaning up...');
       setIsSending(false);
       setSendProgress(null);
-      setStatus('');
+      setStatus("");
     }
   };
 
@@ -4144,17 +4547,17 @@ export default function Dashboard() {
   // ============================================================================
   const handleSendWhatsApp = async (contact) => {
     if (!contact?.phone) {
-      addNotification('No phone number for this contact', 'error');
+      addNotification("No phone number for this contact", "error");
       return;
     }
 
     const contactKey = contact.email || contact.phone;
-    const business = contact.business || 'Contact';
+    const business = contact.business || "Contact";
 
     // Check quota
-    const quotaCheck = canUse('whatsapp');
+    const quotaCheck = canUse("whatsapp");
     if (!quotaCheck.available) {
-      addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
+      addNotification(`⚠️ ${quotaCheck.reason}`, "warning");
       return;
     }
 
@@ -4162,18 +4565,22 @@ export default function Dashboard() {
     const lastWhatsAppTime = lastWhatsAppSent[contactKey];
     if (lastWhatsAppTime) {
       const lastSent = new Date(lastWhatsAppTime);
-      const hoursSinceLastSend = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+      const hoursSinceLastSend =
+        (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
       if (hoursSinceLastSend < 24) {
-        addNotification(`WhatsApp already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`, 'warning');
+        addNotification(
+          `WhatsApp already sent to this contact ${Math.floor(hoursSinceLastSend)} hours ago. Please wait ${24 - Math.floor(hoursSinceLastSend)} more hours.`,
+          "warning",
+        );
         return;
       }
     }
 
     // Check if safe to contact
-    const safetyCheck = isSafeToContactOnChannel(contact, 'whatsapp');
+    const safetyCheck = isSafeToContactOnChannel(contact, "whatsapp");
     if (!safetyCheck.safe) {
       const confirmed = window.confirm(
-        `⚠️ ${safetyCheck.reason}\n\nSend WhatsApp anyway?`
+        `⚠️ ${safetyCheck.reason}\n\nSend WhatsApp anyway?`,
       );
       if (!confirmed) return;
     }
@@ -4183,63 +4590,68 @@ export default function Dashboard() {
         whatsappTemplate,
         {
           business_name: contact.business,
-          address: contact.address || '',
-          phone_raw: contact.phone
+          address: contact.address || "",
+          phone_raw: contact.phone,
         },
         fieldMappings,
-        senderName
+        senderName,
       );
 
       const formattedPhone = formatForDialing(contact.phone);
       const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
 
-      window.open(whatsappUrl, '_blank');
+      window.open(whatsappUrl, "_blank");
 
       // Track WhatsApp
       const now = new Date().toISOString();
-      setLastWhatsAppSent(prev => ({ ...prev, [contactKey]: now }));
-      setContactedChannels(prev => ({
+      setLastWhatsAppSent((prev) => ({ ...prev, [contactKey]: now }));
+      setContactedChannels((prev) => ({
         ...prev,
-        [contactKey]: [...(prev[contactKey] || []), 'whatsapp']
+        [contactKey]: [...(prev[contactKey] || []), "whatsapp"],
       }));
 
       // Update contact history
-      await updateContact(contactKey, 'whatsapp', {
+      await updateContact(contactKey, "whatsapp", {
         whatsappCount: increment(1),
-        lastWhatsAppSent: now
+        lastWhatsAppSent: now,
       });
 
       // Update quota
-      incrementQuota('whatsapp', 1);
-      setDailyWhatsAppCount(prev => prev + 1);
+      incrementQuota("whatsapp", 1);
+      setDailyWhatsAppCount((prev) => prev + 1);
 
       // Update deal stage
-      if (dealStage[contactKey] === 'new' || !dealStage[contactKey]) {
-        updateDealStage(contactKey, 'contacted');
+      if (dealStage[contactKey] === "new" || !dealStage[contactKey]) {
+        updateDealStage(contactKey, "contacted");
       }
 
       // Create follow-up tasks for WhatsApp (PHASE 3)
       if (user?.uid) {
         try {
-          const followUpSchedule = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES
-            .filter(t => t.enabled)
-            .sort((a, b) => a.delayDays - b.delayDays);
+          const followUpSchedule = DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES.filter(
+            (t) => t.enabled,
+          ).sort((a, b) => a.delayDays - b.delayDays);
 
           for (const template of followUpSchedule) {
             const scheduledDate = new Date();
             scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
 
-            const exists = await checkFollowUpTaskExists(user.uid, contact.email || contact.phone, 'whatsapp', template.name);
+            const exists = await checkFollowUpTaskExists(
+              user.uid,
+              contact.email || contact.phone,
+              "whatsapp",
+              template.name,
+            );
             if (!exists) {
               await createFollowUpTask(user.uid, {
                 leadEmail: contact.email || contact.phone,
-                leadName: contact.business || 'Contact',
-                companyName: contact.business || '',
-                channel: 'whatsapp',
+                leadName: contact.business || "Contact",
+                companyName: contact.business || "",
+                channel: "whatsapp",
                 leadPhone: contact.phone,
                 followUpStage: template.name,
                 templateId: template.id,
-                scheduledFor: scheduledDate.toISOString()
+                scheduledFor: scheduledDate.toISOString(),
               });
             }
           }
@@ -4250,14 +4662,14 @@ export default function Dashboard() {
             setFollowUpTasks(tasks);
           }
         } catch (error) {
-          console.error('Error creating WhatsApp follow-up tasks:', error);
+          console.error("Error creating WhatsApp follow-up tasks:", error);
         }
       }
 
-      addNotification(`✅ WhatsApp opened for ${business}!`, 'success');
+      addNotification(`✅ WhatsApp opened for ${business}!`, "success");
     } catch (error) {
-      console.error('WhatsApp send error:', error);
-      addNotification(`❌ Failed to open WhatsApp: ${error.message}`, 'error');
+      console.error("WhatsApp send error:", error);
+      addNotification(`❌ Failed to open WhatsApp: ${error.message}`, "error");
     }
   };
 
@@ -4266,34 +4678,34 @@ export default function Dashboard() {
   // ============================================================================
   const handleSMSQualification = async (leads) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     if (!leads || leads.length === 0) {
-      addNotification('No leads selected for qualification', 'warning');
+      addNotification("No leads selected for qualification", "warning");
       return;
     }
 
     const confirmed = window.confirm(
       `Send qualification SMS to ${leads.length} leads?\n\n` +
-      `This will ask for their budget, timeframe, and preferred contact method.\n\n` +
-      `Continue?`
+        `This will ask for their budget, timeframe, and preferred contact method.\n\n` +
+        `Continue?`,
     );
 
     if (!confirmed) return;
 
-    setStatus('Sending qualification SMS...');
+    setStatus("Sending qualification SMS...");
     setIsSending(true);
 
     try {
-      const response = await fetch('/api/send-sms-qualification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/send-sms-qualification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           leads,
-          userId: user.uid
-        })
+          userId: user.uid,
+        }),
       });
 
       const data = await response.json();
@@ -4301,51 +4713,54 @@ export default function Dashboard() {
       if (data.success) {
         addNotification(
           `Qualification SMS sent: ${data.successCount} success, ${data.failCount} failed`,
-          data.failCount > 0 ? 'warning' : 'success'
+          data.failCount > 0 ? "warning" : "success",
         );
       } else {
-        addNotification(`Failed to send qualification SMS: ${data.error}`, 'error');
+        addNotification(
+          `Failed to send qualification SMS: ${data.error}`,
+          "error",
+        );
       }
     } catch (error) {
-      addNotification(`SMS qualification error: ${error.message}`, 'error');
+      addNotification(`SMS qualification error: ${error.message}`, "error");
     } finally {
       setIsSending(false);
-      setStatus('');
+      setStatus("");
     }
   };
 
   const handleSMSReply = async (phone, response) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     try {
-      const res = await fetch('/api/handle-sms-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/handle-sms-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone,
           response,
-          userId: user.uid
-        })
+          userId: user.uid,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
         if (data.qualified) {
-          addNotification(`✅ Lead qualified! ${data.summary}`, 'success');
+          addNotification(`✅ Lead qualified! ${data.summary}`, "success");
         } else {
-          addNotification(`❌ Lead archived: ${data.summary}`, 'warning');
+          addNotification(`❌ Lead archived: ${data.summary}`, "warning");
         }
-        
+
         await loadSentLeads();
       } else {
-        addNotification(`Failed to handle SMS reply: ${data.error}`, 'error');
+        addNotification(`Failed to handle SMS reply: ${data.error}`, "error");
       }
     } catch (error) {
-      addNotification(`SMS reply error: ${error.message}`, 'error');
+      addNotification(`SMS reply error: ${error.message}`, "error");
     }
   };
 
@@ -4354,58 +4769,62 @@ export default function Dashboard() {
   // ============================================================================
   const handleSmartResearchOutreach = async (contact) => {
     if (!contact?.business) {
-      addNotification('Contact business name is required', 'error');
+      addNotification("Contact business name is required", "error");
       return;
     }
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
     if (!contact?.email) {
-      addNotification('Target email is required to send outreach', 'error');
+      addNotification("Target email is required to send outreach", "error");
       return;
     }
 
-    setStatusType('info');
+    setStatusType("info");
     setStatus(`🤖 Running smart outreach on ${contact.business}...`);
 
     try {
-      const response = await fetch('/api/ai-smart-outreach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/ai-smart-outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyName: contact.business,
-          companyWebsite: contact.website || '',
+          companyWebsite: contact.website || "",
           contactEmail: contact.email,
           contactName: contact.business,
           userId: user.uid,
           senderName,
           senderEmail,
-          accessToken: (user?.accessToken || ''),
-          refreshToken: (user?.refreshToken || ''),
-          sendNow: true
-        })
+          accessToken: user?.accessToken || "",
+          refreshToken: user?.refreshToken || "",
+          sendNow: true,
+        }),
       });
 
       const data = await response.json();
       if (!response.ok || !data.success) {
-        const msg = data.error || 'Unknown error';
-        addNotification(`❌ Smart outreach failed: ${msg}`, 'error');
-        setStatusType('error');
+        const msg = data.error || "Unknown error";
+        addNotification(`❌ Smart outreach failed: ${msg}`, "error");
+        setStatusType("error");
         setStatus(`Error: ${msg}`);
         return;
       }
 
-      addNotification('✅ Smart outreach launched and email sent', 'success', 5000);
-      setStatusType('success');
+      addNotification(
+        "✅ Smart outreach launched and email sent",
+        "success",
+        5000,
+      );
+      setStatusType("success");
       setStatus(`Outreach sent to ${contact.email}`);
 
       await refreshAllData();
     } catch (err) {
-      console.error('Smart outreach error:', err);
-      addNotification(`❌ Smart outreach failed: ${err.message}`, 'error');
-      setStatusType('error');
-      setStatus('Smart outreach failed');
+      console.error("Smart outreach error:", err);
+      addNotification(`❌ Smart outreach failed: ${err.message}`, "error");
+      setStatusType("error");
+      setStatus("Smart outreach failed");
     }
   };
 
@@ -4414,31 +4833,31 @@ export default function Dashboard() {
   // ============================================================================
   const handleSendSMS = async (contact) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     const contactKey = contact.email || contact.phone;
-    const business = contact.business || 'Contact';
+    const business = contact.business || "Contact";
 
     // Check quota
-    const quotaCheck = canUse('sms');
+    const quotaCheck = canUse("sms");
     if (!quotaCheck.available) {
-      addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
+      addNotification(`⚠️ ${quotaCheck.reason}`, "warning");
       return;
     }
 
     // Check if safe to contact
-    const safetyCheck = isSafeToContactOnChannel(contact, 'sms');
+    const safetyCheck = isSafeToContactOnChannel(contact, "sms");
     if (!safetyCheck.safe) {
       const confirmed = window.confirm(
-        `⚠️ ${safetyCheck.reason}\n\nSend SMS anyway?`
+        `⚠️ ${safetyCheck.reason}\n\nSend SMS anyway?`,
       );
       if (!confirmed) return;
     }
 
     const confirmed = window.confirm(
-      `Send SMS to ${business} at ${formatPhoneForDisplay(contact.phone)}?`
+      `Send SMS to ${business} at ${formatPhoneForDisplay(contact.phone)}?`,
     );
 
     if (!confirmed) return;
@@ -4448,22 +4867,22 @@ export default function Dashboard() {
         smsTemplate,
         {
           business_name: contact.business,
-          address: contact.address || '',
-          phone_raw: contact.phone
+          address: contact.address || "",
+          phone_raw: contact.phone,
         },
         fieldMappings,
-        senderName
+        senderName,
       );
 
-      const response = await fetch('/api/send-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/send-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: contact.phone,
           message,
           businessName: contact.business,
-          userId: user.uid
-        })
+          userId: user.uid,
+        }),
       });
 
       const data = await response.json();
@@ -4471,34 +4890,34 @@ export default function Dashboard() {
       if (response.ok) {
         // Track SMS
         const now = new Date().toISOString();
-        setLastSMSSent(prev => ({ ...prev, [contactKey]: now }));
-        setContactedChannels(prev => ({
+        setLastSMSSent((prev) => ({ ...prev, [contactKey]: now }));
+        setContactedChannels((prev) => ({
           ...prev,
-          [contactKey]: [...(prev[contactKey] || []), 'sms']
+          [contactKey]: [...(prev[contactKey] || []), "sms"],
         }));
 
         // Update contact history
-        await updateContact(contactKey, 'sms', {
+        await updateContact(contactKey, "sms", {
           smsCount: increment(1),
-          lastSMSSent: now
+          lastSMSSent: now,
         });
 
         // Update quota
-        incrementQuota('sms', 1);
-        setDailySMSCount(prev => prev + 1);
+        incrementQuota("sms", 1);
+        setDailySMSCount((prev) => prev + 1);
 
         // Update deal stage
-        if (dealStage[contactKey] === 'new' || !dealStage[contactKey]) {
-          updateDealStage(contactKey, 'contacted');
+        if (dealStage[contactKey] === "new" || !dealStage[contactKey]) {
+          updateDealStage(contactKey, "contacted");
         }
 
-        addNotification(`✅ SMS sent to ${business}!`, 'success');
+        addNotification(`✅ SMS sent to ${business}!`, "success");
       } else {
-        addNotification(`❌ SMS failed: ${data.error}`, 'error');
+        addNotification(`❌ SMS failed: ${data.error}`, "error");
       }
     } catch (error) {
-      console.error('SMS send error:', error);
-      addNotification(`❌ Failed to send SMS: ${error.message}`, 'error');
+      console.error("SMS send error:", error);
+      addNotification(`❌ Failed to send SMS: ${error.message}`, "error");
     }
   };
 
@@ -4507,7 +4926,7 @@ export default function Dashboard() {
   // ============================================================================
   const handleOpenNativeSMS = (contact) => {
     if (!contact?.phone) {
-      addNotification('No phone number', 'error');
+      addNotification("No phone number", "error");
       return;
     }
 
@@ -4515,21 +4934,21 @@ export default function Dashboard() {
       smsTemplate,
       {
         business_name: contact.business,
-        address: contact.address || '',
-        phone_raw: contact.phone
+        address: contact.address || "",
+        phone_raw: contact.phone,
       },
       fieldMappings,
-      senderName
+      senderName,
     );
 
-    let formattedPhone = contact.phone.toString().replace(/\D/g, '');
+    let formattedPhone = contact.phone.toString().replace(/\D/g, "");
 
-    if (formattedPhone.startsWith('0') && formattedPhone.length >= 9) {
-      formattedPhone = '94' + formattedPhone.slice(1);
+    if (formattedPhone.startsWith("0") && formattedPhone.length >= 9) {
+      formattedPhone = "94" + formattedPhone.slice(1);
     }
 
-    if (!formattedPhone.startsWith('+')) {
-      formattedPhone = '+' + formattedPhone;
+    if (!formattedPhone.startsWith("+")) {
+      formattedPhone = "+" + formattedPhone;
     }
 
     const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(messageBody)}`;
@@ -4541,21 +4960,22 @@ export default function Dashboard() {
   // ============================================================================
   const handleCall = (phone) => {
     if (!phone) {
-      addNotification('No phone number', 'error');
+      addNotification("No phone number", "error");
       return;
     }
 
-    const dialNumber = formatForDialing(phone) || phone.toString().replace(/\D/g, '');
+    const dialNumber =
+      formatForDialing(phone) || phone.toString().replace(/\D/g, "");
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const isMobile = /iPhone|Android/i.test(navigator.userAgent);
 
       if (isMobile) {
         window.location.href = `tel:${dialNumber}`;
       } else {
         // Desktop - open WhatsApp as fallback
-        window.open(`https://wa.me/${dialNumber}`, '_blank');
-        addNotification('Desktop detected - opened WhatsApp instead', 'info');
+        window.open(`https://wa.me/${dialNumber}`, "_blank");
+        addNotification("Desktop detected - opened WhatsApp instead", "info");
       }
     }
   };
@@ -4565,7 +4985,7 @@ export default function Dashboard() {
   // ============================================================================
   const handleViewConversation = async (lead) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
@@ -4573,15 +4993,15 @@ export default function Dashboard() {
     setShowConversationModal(true);
 
     try {
-      const response = await fetch('/api/get-thread', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/get-thread", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           email: lead.email,
           messageId: lead.messageId,
-          threadId: lead.threadId
-        })
+          threadId: lead.threadId,
+        }),
       });
 
       const data = await response.json();
@@ -4590,15 +5010,15 @@ export default function Dashboard() {
         setConversationThread({
           ...data,
           leadEmail: lead.email,
-          leadBusiness: lead.businessName
+          leadBusiness: lead.businessName,
         });
       } else {
-        addNotification(data.error || 'Failed to load conversation', 'error');
+        addNotification(data.error || "Failed to load conversation", "error");
         setShowConversationModal(false);
       }
     } catch (error) {
-      console.error('View conversation error:', error);
-      addNotification('Failed to load conversation', 'error');
+      console.error("View conversation error:", error);
+      addNotification("Failed to load conversation", "error");
       setShowConversationModal(false);
     } finally {
       setLoadingConversation(false);
@@ -4620,33 +5040,37 @@ export default function Dashboard() {
           return;
         }
 
-        const callDoc = await getDoc(doc(db, 'calls', callId));
+        const callDoc = await getDoc(doc(db, "calls", callId));
 
         if (callDoc.exists()) {
           const callData = callDoc.data();
           const status = callData.status;
 
-          setActiveCallStatus(prev => ({
+          setActiveCallStatus((prev) => ({
             ...prev,
             status: status,
             duration: callData.duration || 0,
-            answeredBy: callData.answeredBy || 'unknown',
-            updatedAt: callData.updatedAt
+            answeredBy: callData.answeredBy || "unknown",
+            updatedAt: callData.updatedAt,
           }));
 
-          if (status === 'ringing') {
+          if (status === "ringing") {
             setStatus(`📞 Ringing ${businessName}...`);
-            setStatusType('info');
-          } else if (status === 'in-progress' || status === 'answered') {
-            setStatus(`✅ Call connected to ${businessName}!\nDuration: ${callData.duration || 0}s`);
-            setStatusType('success');
-          } else if (status === 'completed') {
-            setStatus(`✅ Call Completed!\nBusiness: ${businessName}\nDuration: ${callData.duration || 0}s`);
-            setStatusType('success');
+            setStatusType("info");
+          } else if (status === "in-progress" || status === "answered") {
+            setStatus(
+              `✅ Call connected to ${businessName}!\nDuration: ${callData.duration || 0}s`,
+            );
+            setStatusType("success");
+          } else if (status === "completed") {
+            setStatus(
+              `✅ Call Completed!\nBusiness: ${businessName}\nDuration: ${callData.duration || 0}s`,
+            );
+            setStatusType("success");
             clearInterval(interval);
-          } else if (['failed', 'busy', 'no-answer'].includes(status)) {
+          } else if (["failed", "busy", "no-answer"].includes(status)) {
             setStatus(`❌ Call ${status}\nBusiness: ${businessName}`);
-            setStatusType('error');
+            setStatusType("error");
             clearInterval(interval);
           }
         }
@@ -4654,10 +5078,10 @@ export default function Dashboard() {
         if (attempts >= CONFIG.MAX_POLL_ATTEMPTS) {
           clearInterval(interval);
           setStatus(`⏱️ Status polling stopped. Check call history.`);
-          setStatusType('warning');
+          setStatusType("warning");
         }
       } catch (error) {
-        console.error('Poll error:', error);
+        console.error("Poll error:", error);
       }
     }, CONFIG.POLL_INTERVAL_MS);
   };
@@ -4665,77 +5089,79 @@ export default function Dashboard() {
   // ============================================================================
   // HANDLE TWILIO CALL WITH TRACKING
   // ============================================================================
-  const handleTwilioCall = async (contact, callType = 'direct') => {
+  const handleTwilioCall = async (contact, callType = "direct") => {
     if (!contact || !contact.phone || !contact.business) {
-      addNotification('❌ Contact data is incomplete', 'error');
+      addNotification("❌ Contact data is incomplete", "error");
       return;
     }
 
     if (!user?.uid) {
-      addNotification('❌ You must be signed in to make calls', 'error');
+      addNotification("❌ You must be signed in to make calls", "error");
       return;
     }
 
     const contactKey = contact.email || contact.phone;
 
     // Check quota
-    const quotaCheck = canUse('calls');
+    const quotaCheck = canUse("calls");
     if (!quotaCheck.available) {
-      addNotification(`⚠️ ${quotaCheck.reason}`, 'warning');
+      addNotification(`⚠️ ${quotaCheck.reason}`, "warning");
       return;
     }
 
     // Check if safe to contact
-    if (!isSafeToContactOnChannel(contact, 'call', 1).safe) {
-      const confirmed = window.confirm('⚠️ This contact was recently called. Continue anyway?');
+    if (!isSafeToContactOnChannel(contact, "call", 1).safe) {
+      const confirmed = window.confirm(
+        "⚠️ This contact was recently called. Continue anyway?",
+      );
       if (!confirmed) return;
     }
 
     const callTypeLabels = {
-      direct: 'Automated Message',
-      bridge: 'Bridge Call',
-      interactive: 'Interactive Menu'
+      direct: "Automated Message",
+      bridge: "Bridge Call",
+      interactive: "Interactive Menu",
     };
 
     const confirmed = window.confirm(
-      `📞 Call ${contact.business} at ${formatPhoneForDisplay(contact.phone)}?\nType: ${callTypeLabels[callType]}`
+      `📞 Call ${contact.business} at ${formatPhoneForDisplay(contact.phone)}?\nType: ${callTypeLabels[callType]}`,
     );
 
     if (!confirmed) return;
 
     try {
       setStatus(`📞 Initiating ${callType} call to ${contact.business}...`);
-      setStatusType('info');
+      setStatusType("info");
       setIsSending(true);
 
       setActiveCallStatus({
         business: contact.business,
         phone: contact.phone,
-        status: 'initiating',
-        timestamp: new Date().toISOString()
+        status: "initiating",
+        timestamp: new Date().toISOString(),
       });
 
-      const response = await fetch('/api/make-call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/make-call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           toPhone: contact.phone,
           businessName: contact.business,
           userId: user.uid,
-          callType
-        })
+          callType,
+        }),
       });
 
       let data;
       try {
         data = await response.json();
       } catch (parseError) {
-        throw new Error('Server returned an invalid response');
+        throw new Error("Server returned an invalid response");
       }
 
       if (response.ok) {
         setStatus(`✅ Call initiated to ${contact.business}!`);
-        setStatusType('success');
+        setStatusType("success");
 
         setActiveCallStatus({
           business: contact.business,
@@ -4743,44 +5169,47 @@ export default function Dashboard() {
           status: data.status,
           callId: data.callId,
           callSid: data.callSid,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
 
         // Track call
         const now = new Date().toISOString();
-        setLastCallMade(prev => ({ ...prev, [contactKey]: now }));
-        setContactedChannels(prev => ({
+        setLastCallMade((prev) => ({ ...prev, [contactKey]: now }));
+        setContactedChannels((prev) => ({
           ...prev,
-          [contactKey]: [...(prev[contactKey] || []), 'call']
+          [contactKey]: [...(prev[contactKey] || []), "call"],
         }));
 
-        await updateContact(contactKey, 'call', {
+        await updateContact(contactKey, "call", {
           callCount: increment(1),
-          lastCallMade: now
+          lastCallMade: now,
         });
 
         // Update quota
-        incrementQuota('calls', 1);
-        setDailyCallCount(prev => prev + 1);
+        incrementQuota("calls", 1);
+        setDailyCallCount((prev) => prev + 1);
 
         // Update deal stage
-        if (contact.email && (dealStage[contactKey] === 'new' || !dealStage[contactKey])) {
-          updateDealStage(contactKey, 'contacted');
+        if (
+          contact.email &&
+          (dealStage[contactKey] === "new" || !dealStage[contactKey])
+        ) {
+          updateDealStage(contactKey, "contacted");
         }
 
-        addNotification(`✅ Call initiated to ${contact.business}`, 'success');
+        addNotification(`✅ Call initiated to ${contact.business}`, "success");
         pollCallStatus(data.callId, contact.business);
       } else {
-        const errorMsg = data.error || 'Unknown error';
+        const errorMsg = data.error || "Unknown error";
         setStatus(`❌ Call Failed: ${errorMsg}`);
-        setStatusType('error');
-        addNotification(`❌ Call failed: ${errorMsg}`, 'error');
+        setStatusType("error");
+        addNotification(`❌ Call failed: ${errorMsg}`, "error");
       }
     } catch (error) {
-      console.error('Twilio call error:', error);
+      console.error("Twilio call error:", error);
       setStatus(`❌ ${error.message}`);
-      setStatusType('error');
-      addNotification(`❌ Call error: ${error.message}`, 'error');
+      setStatusType("error");
+      addNotification(`❌ Call error: ${error.message}`, "error");
     } finally {
       setIsSending(false);
     }
@@ -4798,11 +5227,11 @@ export default function Dashboard() {
     const followUpCount = history?.count || 0;
 
     if (repliedLeads[contact.email] || score >= 80) {
-      handleTwilioCall(contact, 'bridge');
+      handleTwilioCall(contact, "bridge");
     } else if (followUpCount >= 2) {
-      handleTwilioCall(contact, 'voicemail');
+      handleTwilioCall(contact, "voicemail");
     } else {
-      handleTwilioCall(contact, 'interactive');
+      handleTwilioCall(contact, "interactive");
     }
   };
 
@@ -4815,19 +5244,23 @@ export default function Dashboard() {
     setLoadingCallHistory(true);
 
     try {
-      const q = query(collection(db, 'calls'), where('userId', '==', user.uid), limit(100));
+      const q = query(
+        collection(db, "calls"),
+        where("userId", "==", user.uid),
+        limit(100),
+      );
       const snapshot = await getDocs(q);
 
       const calls = [];
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         calls.push({ id: doc.id, ...doc.data() });
       });
 
       calls.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setCallHistory(calls);
     } catch (error) {
-      console.error('Failed to load call history:', error);
-      addNotification('Failed to load call history', 'error');
+      console.error("Failed to load call history:", error);
+      addNotification("Failed to load call history", "error");
     } finally {
       setLoadingCallHistory(false);
     }
@@ -4836,68 +5269,74 @@ export default function Dashboard() {
   // ============================================================================
   // HANDLE SOCIAL MEDIA OUTREACH
   // ============================================================================
-  const handleOpenLinkedIn = (contact, type = 'company') => {
+  const handleOpenLinkedIn = (contact, type = "company") => {
     if (!contact?.business) {
-      addNotification('No business name', 'error');
+      addNotification("No business name", "error");
       return;
     }
 
     let url;
 
-    if (type === 'company' && contact.linkedin_company) {
+    if (type === "company" && contact.linkedin_company) {
       url = contact.linkedin_company;
-    } else if (type === 'ceo' && contact.linkedin_ceo) {
+    } else if (type === "ceo" && contact.linkedin_ceo) {
       url = contact.linkedin_ceo;
-    } else if (type === 'founder' && contact.linkedin_founder) {
+    } else if (type === "founder" && contact.linkedin_founder) {
       url = contact.linkedin_founder;
     } else {
       const query = encodeURIComponent(contact.business);
       url = `https://www.linkedin.com/search/results/companies/?keywords=${query}`;
     }
 
-    window.open(url, '_blank');
+    window.open(url, "_blank");
   };
 
   const handleOpenInstagram = (contact) => {
     if (!contact?.business) {
-      addNotification('No business name', 'error');
+      addNotification("No business name", "error");
       return;
     }
 
-    const igHandle = generateSocialHandle(contact.business, 'instagram');
+    const igHandle = generateSocialHandle(contact.business, "instagram");
 
     if (igHandle) {
-      window.open(`https://www.instagram.com/${igHandle}/`, '_blank');
+      window.open(`https://www.instagram.com/${igHandle}/`, "_blank");
     } else {
-      window.open('https://www.instagram.com/', '_blank');
+      window.open("https://www.instagram.com/", "_blank");
     }
   };
 
   const handleOpenTwitter = (contact) => {
     if (!contact?.business) {
-      addNotification('No business name', 'error');
+      addNotification("No business name", "error");
       return;
     }
 
-    const twitterHandle = generateSocialHandle(contact.business, 'twitter');
+    const twitterHandle = generateSocialHandle(contact.business, "twitter");
 
     if (twitterHandle) {
       const tweetText = encodeURIComponent(
         `@${twitterHandle} ${renderPreviewText(
           twitterTemplate,
-          { business_name: contact.business, address: contact.address || '' },
+          { business_name: contact.business, address: contact.address || "" },
           fieldMappings,
-          senderName
-        )}`
+          senderName,
+        )}`,
       );
-      window.open(`https://twitter.com/intent/tweet?text=${tweetText}`, '_blank');
+      window.open(
+        `https://twitter.com/intent/tweet?text=${tweetText}`,
+        "_blank",
+      );
     } else {
       const query = encodeURIComponent(contact.business);
-      window.open(`https://twitter.com/search?q=${query}&src=typed_query`, '_blank');
+      window.open(
+        `https://twitter.com/search?q=${query}&src=typed_query`,
+        "_blank",
+      );
     }
   };
 
-  const processCsvContent = (rawContent, sourceFileName = '') => {
+  const processCsvContent = (rawContent, sourceFileName = "") => {
     setValidEmails(0);
     setValidWhatsApp(0);
     setWhatsappLinks([]);
@@ -4905,41 +5344,49 @@ export default function Dashboard() {
     setCsvFileName(sourceFileName);
     setCsvUploadDate(new Date().toISOString());
     try {
-      const normalizedContent = rawContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      const lines = normalizedContent.split('\n').filter(line => line.trim() !== '');
+      const normalizedContent = rawContent
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n");
+      const lines = normalizedContent
+        .split("\n")
+        .filter((line) => line.trim() !== "");
 
       if (lines.length < 2) {
-        addNotification('CSV must have headers and data rows', 'error');
+        addNotification("CSV must have headers and data rows", "error");
         return;
       }
 
-      const headers = parseCsvRow(lines[0]).map(h => h.trim());
+      const headers = parseCsvRow(lines[0]).map((h) => h.trim());
       setCsvHeaders(headers);
       setAvailableCsvVariables(headers);
       setPreviewRecipient(null);
 
       // Extract all template variables
       const allTemplateTexts = [
-        templateA.subject, templateA.body,
-        templateB.subject, templateB.body,
+        templateA.subject,
+        templateA.body,
+        templateB.subject,
+        templateB.body,
         whatsappTemplate,
         smsTemplate,
         instagramTemplate,
         twitterTemplate,
         linkedinTemplate,
-        ...followUpTemplates.flatMap(t => [t.subject || '', t.body || ''])
+        ...followUpTemplates.flatMap((t) => [t.subject || "", t.body || ""]),
       ];
 
-      const allVars = [...new Set([
-        ...allTemplateTexts.flatMap(text => extractTemplateVariables(text)),
-        'sender_name',
-        ...emailImages.map(img => img.placeholder.replace(/{{|}}/g, '')),
-        ...headers
-      ])];
+      const allVars = [
+        ...new Set([
+          ...allTemplateTexts.flatMap((text) => extractTemplateVariables(text)),
+          "sender_name",
+          ...emailImages.map((img) => img.placeholder.replace(/{{|}}/g, "")),
+          ...headers,
+        ]),
+      ];
 
       // Auto-map fields
       const initialMappings = {};
-      allVars.forEach(varName => {
+      allVars.forEach((varName) => {
         if (headers.includes(varName)) {
           initialMappings[varName] = varName;
         }
@@ -4947,25 +5394,25 @@ export default function Dashboard() {
 
       // Common mappings
       const commonMappings = {
-        email: ['email', 'email_address', 'email_primary'],
-        phone: ['phone', 'phone_number', 'whatsapp_number', 'phone_raw'],
-        business_name: ['business_name', 'business', 'company', 'company_name'],
-        website: ['website', 'url', 'site'],
-        address: ['address', 'location']
+        email: ["email", "email_address", "email_primary"],
+        phone: ["phone", "phone_number", "whatsapp_number", "phone_raw"],
+        business_name: ["business_name", "business", "company", "company_name"],
+        website: ["website", "url", "site"],
+        address: ["address", "location"],
       };
 
       Object.entries(commonMappings).forEach(([varName, possibleCols]) => {
         if (!initialMappings[varName]) {
-          const found = possibleCols.find(col => headers.includes(col));
+          const found = possibleCols.find((col) => headers.includes(col));
           if (found) {
             initialMappings[varName] = found;
           }
         }
       });
 
-      initialMappings.sender_name = 'sender_name';
-      initialMappings.email = 'email';
-      initialMappings.lead_quality = 'lead_quality';
+      initialMappings.sender_name = "sender_name";
+      initialMappings.email = "email";
+      initialMappings.lead_quality = "lead_quality";
       setFieldMappings(initialMappings);
 
       // Process rows
@@ -4974,7 +5421,7 @@ export default function Dashboard() {
       const validPhoneContacts = [];
       const contactMap = new Map(); // For deduplication
       const newLeadScores = {};
-      const hasLeadQualityCol = headers.includes('lead_quality');
+      const hasLeadQualityCol = headers.includes("lead_quality");
 
       for (let i = 1; i < lines.length; i++) {
         const values = parseCsvRow(lines[i]);
@@ -4985,45 +5432,47 @@ export default function Dashboard() {
 
         const row = {};
         headers.forEach((header, idx) => {
-          row[header] = values[idx] || '';
+          row[header] = values[idx] || "";
         });
 
         // Filter by lead quality
         let includeEmail = true;
         if (hasLeadQualityCol) {
-          const quality = (row.lead_quality || '').trim().toUpperCase() || 'HOT';
-          if (leadQualityFilter !== 'all' && quality !== leadQualityFilter) {
+          const quality =
+            (row.lead_quality || "").trim().toUpperCase() || "HOT";
+          if (leadQualityFilter !== "all" && quality !== leadQualityFilter) {
             includeEmail = false;
           }
         }
 
         // Validate email - handle multiple emails
-        const emailCol = initialMappings.email || 'email';
-        const emailString = row[emailCol] || '';
+        const emailCol = initialMappings.email || "email";
+        const emailString = row[emailCol] || "";
         const emails = parseMultipleEmails(emailString);
         const hasValidEmail = emails.length > 0;
 
         if (hasValidEmail && includeEmail) {
           const score = calculateScore(row);
-          emails.forEach(email => {
+          emails.forEach((email) => {
             newLeadScores[email] = score;
           });
 
-          const quality = (row.lead_quality || '').trim().toUpperCase() || 'HOT';
-          if (quality === 'HOT') {
+          const quality =
+            (row.lead_quality || "").trim().toUpperCase() || "HOT";
+          if (quality === "HOT") {
             hotEmails += emails.length;
-          } else if (quality === 'WARM') {
+          } else if (quality === "WARM") {
             warmEmails += emails.length;
           }
         }
 
         // Validate phone
-        const phoneCol = initialMappings.phone || 'phone';
+        const phoneCol = initialMappings.phone || "phone";
         const rawPhone = row[phoneCol] || row.whatsapp_number || row.phone_raw;
         const formattedPhone = formatForDialing(rawPhone);
 
         if (formattedPhone) {
-          const businessCol = initialMappings.business_name || 'business_name';
+          const businessCol = initialMappings.business_name || "business_name";
           const rowGroupId = generateId(); // Group emails from same row
 
           // Create separate contacts for each email
@@ -5039,36 +5488,37 @@ export default function Dashboard() {
               const contact = {
                 id: contactId,
                 rowGroupId, // Track which row this came from
-                business: row[businessCol] || 'Business',
-                address: row.address || '',
+                business: row[businessCol] || "Business",
+                address: row.address || "",
                 phone: formattedPhone,
                 email: email,
                 allEmails: emails, // Store all emails from this row
                 emailIndex: index, // Position in the email list
-                place_id: row.place_id || '',
-                website: row.website || '',
-                instagram: row.instagram || '',
-                twitter: row.twitter || '',
-                facebook: row.facebook || '',
-                youtube: row.youtube || '',
-                tiktok: row.tiktok || '',
-                linkedin_company: row.linkedin_company || '',
-                linkedin_ceo: row.linkedin_ceo || '',
-                linkedin_founder: row.linkedin_founder || '',
-                contact_page_found: row.contact_page_found || 'No',
-                social_media_score: row.social_media_score || '0',
+                place_id: row.place_id || "",
+                website: row.website || "",
+                instagram: row.instagram || "",
+                twitter: row.twitter || "",
+                facebook: row.facebook || "",
+                youtube: row.youtube || "",
+                tiktok: row.tiktok || "",
+                linkedin_company: row.linkedin_company || "",
+                linkedin_ceo: row.linkedin_ceo || "",
+                linkedin_founder: row.linkedin_founder || "",
+                contact_page_found: row.contact_page_found || "No",
+                social_media_score: row.social_media_score || "0",
                 email_primary: row.email_primary || email,
-                phone_primary: row.phone_primary || formattedPhone || '',
-                lead_quality_score: row.lead_quality_score || '0',
-                contact_confidence: row.contact_confidence || 'Low',
-                best_contact_method: row.best_contact_method || 'Email',
-                decision_maker_found: row.decision_maker_found || 'No',
-                tech_stack_detected: row.tech_stack_detected || '',
-                company_size_indicator: row.company_size_indicator || 'unknown',
-                lead_quality: (row.lead_quality || '').trim().toUpperCase() || 'HOT',
-                rating: row.rating || '0',
-                review_count: row.review_count || '0',
-                createdAt: new Date().toISOString()
+                phone_primary: row.phone_primary || formattedPhone || "",
+                lead_quality_score: row.lead_quality_score || "0",
+                contact_confidence: row.contact_confidence || "Low",
+                best_contact_method: row.best_contact_method || "Email",
+                decision_maker_found: row.decision_maker_found || "No",
+                tech_stack_detected: row.tech_stack_detected || "",
+                company_size_indicator: row.company_size_indicator || "unknown",
+                lead_quality:
+                  (row.lead_quality || "").trim().toUpperCase() || "HOT",
+                rating: row.rating || "0",
+                review_count: row.review_count || "0",
+                createdAt: new Date().toISOString(),
               };
 
               validPhoneContacts.push(contact);
@@ -5086,35 +5536,36 @@ export default function Dashboard() {
             const contact = {
               id: contactId,
               rowGroupId,
-              business: row[businessCol] || 'Business',
-              address: row.address || '',
+              business: row[businessCol] || "Business",
+              address: row.address || "",
               phone: formattedPhone,
               email: null,
               allEmails: [],
-              place_id: row.place_id || '',
-              website: row.website || '',
-              instagram: row.instagram || '',
-              twitter: row.twitter || '',
-              facebook: row.facebook || '',
-              youtube: row.youtube || '',
-              tiktok: row.tiktok || '',
-              linkedin_company: row.linkedin_company || '',
-              linkedin_ceo: row.linkedin_ceo || '',
-              linkedin_founder: row.linkedin_founder || '',
-              contact_page_found: row.contact_page_found || 'No',
-              social_media_score: row.social_media_score || '0',
-              email_primary: row.email_primary || '',
-              phone_primary: row.phone_primary || formattedPhone || '',
-              lead_quality_score: row.lead_quality_score || '0',
-              contact_confidence: row.contact_confidence || 'Low',
-              best_contact_method: row.best_contact_method || 'Email',
-              decision_maker_found: row.decision_maker_found || 'No',
-              tech_stack_detected: row.tech_stack_detected || '',
-              company_size_indicator: row.company_size_indicator || 'unknown',
-              lead_quality: (row.lead_quality || '').trim().toUpperCase() || 'HOT',
-              rating: row.rating || '0',
-              review_count: row.review_count || '0',
-              createdAt: new Date().toISOString()
+              place_id: row.place_id || "",
+              website: row.website || "",
+              instagram: row.instagram || "",
+              twitter: row.twitter || "",
+              facebook: row.facebook || "",
+              youtube: row.youtube || "",
+              tiktok: row.tiktok || "",
+              linkedin_company: row.linkedin_company || "",
+              linkedin_ceo: row.linkedin_ceo || "",
+              linkedin_founder: row.linkedin_founder || "",
+              contact_page_found: row.contact_page_found || "No",
+              social_media_score: row.social_media_score || "0",
+              email_primary: row.email_primary || "",
+              phone_primary: row.phone_primary || formattedPhone || "",
+              lead_quality_score: row.lead_quality_score || "0",
+              contact_confidence: row.contact_confidence || "Low",
+              best_contact_method: row.best_contact_method || "Email",
+              decision_maker_found: row.decision_maker_found || "No",
+              tech_stack_detected: row.tech_stack_detected || "",
+              company_size_indicator: row.company_size_indicator || "unknown",
+              lead_quality:
+                (row.lead_quality || "").trim().toUpperCase() || "HOT",
+              rating: row.rating || "0",
+              review_count: row.review_count || "0",
+              createdAt: new Date().toISOString(),
             };
 
             validPhoneContacts.push(contact);
@@ -5129,9 +5580,9 @@ export default function Dashboard() {
       }
 
       // Update counts
-      if (leadQualityFilter === 'HOT') {
+      if (leadQualityFilter === "HOT") {
         setValidEmails(hotEmails);
-      } else if (leadQualityFilter === 'WARM') {
+      } else if (leadQualityFilter === "WARM") {
         setValidEmails(warmEmails);
       } else {
         setValidEmails(hotEmails + warmEmails);
@@ -5144,27 +5595,27 @@ export default function Dashboard() {
 
       addNotification(
         `✅ CSV loaded successfully!\n${validPhoneContacts.length} contacts\n${hotEmails + warmEmails} valid emails`,
-        'success'
+        "success",
       );
     } catch (error) {
-      console.error('CSV upload error:', error);
-      addNotification(`❌ CSV upload failed: ${error.message}`, 'error');
+      console.error("CSV upload error:", error);
+      addNotification(`❌ CSV upload failed: ${error.message}`, "error");
     }
   };
 
   const getDownloadFilenameFromResponse = (res) => {
-    const disposition = res.headers.get('content-disposition') || '';
+    const disposition = res.headers.get("content-disposition") || "";
     const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
     const basicMatch = disposition.match(/filename="?([^"]+)"?/i);
     if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
     if (basicMatch?.[1]) return basicMatch[1];
-    return `enriched-${new Date().toISOString().split('T')[0]}.csv`;
+    return `enriched-${new Date().toISOString().split("T")[0]}.csv`;
   };
 
   const triggerCsvDownload = (csvText, filename) => {
-    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
@@ -5173,49 +5624,53 @@ export default function Dashboard() {
 
   const runCsvEnrichment = async (file, mode) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      addNotification('Please choose a CSV file', 'error');
-      setEnrichStatusMessage('Please choose a valid CSV file.');
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      addNotification("Please choose a CSV file", "error");
+      setEnrichStatusMessage("Please choose a valid CSV file.");
       return;
     }
 
     try {
       setIsEnrichingCsv(true);
-      setEnrichStatusMessage('Uploading CSV for enrichment...');
+      setEnrichStatusMessage("Uploading CSV for enrichment...");
       const rawCsv = await file.text();
 
-      const res = await fetch('/api/enrich', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/csv' },
-        body: rawCsv
+      const res = await fetch("/api/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "text/csv" },
+        body: rawCsv,
       });
 
       const enrichedCsv = await res.text();
       if (!res.ok) {
-        throw new Error(enrichedCsv || `Enrichment request failed (${res.status})`);
+        throw new Error(
+          enrichedCsv || `Enrichment request failed (${res.status})`,
+        );
       }
       if (!enrichedCsv?.trim()) {
-        throw new Error('Enrichment API returned an empty response');
+        throw new Error("Enrichment API returned an empty response");
       }
 
       const responseFileName = getDownloadFilenameFromResponse(res);
       triggerCsvDownload(enrichedCsv, responseFileName);
-      addNotification('✅ Enriched CSV downloaded', 'success');
+      addNotification("✅ Enriched CSV downloaded", "success");
       setEnrichStatusMessage(`Enrichment completed: ${responseFileName}`);
 
-      if (mode === 'autoload') {
+      if (mode === "autoload") {
         processCsvContent(enrichedCsv, responseFileName);
-        addNotification('✅ Enriched CSV auto-loaded into app', 'success');
-        setEnrichStatusMessage(`Enriched file loaded into app: ${responseFileName}`);
+        addNotification("✅ Enriched CSV auto-loaded into app", "success");
+        setEnrichStatusMessage(
+          `Enriched file loaded into app: ${responseFileName}`,
+        );
       }
     } catch (error) {
-      console.error('CSV enrichment failed:', error);
-      addNotification(`❌ Enrichment failed: ${error.message}`, 'error');
+      console.error("CSV enrichment failed:", error);
+      addNotification(`❌ Enrichment failed: ${error.message}`, "error");
       setEnrichStatusMessage(`Enrichment failed: ${error.message}`);
     } finally {
       setIsEnrichingCsv(false);
-      setEnrichMode('download');
-      enrichModeRef.current = 'download';
+      setEnrichMode("download");
+      enrichModeRef.current = "download";
     }
   };
 
@@ -5228,7 +5683,7 @@ export default function Dashboard() {
   const handleEnrichCsvSelect = async (e) => {
     const file = e.target.files?.[0];
     await runCsvEnrichment(file, enrichModeRef.current);
-    e.target.value = '';
+    e.target.value = "";
   };
 
   // ============================================================================
@@ -5238,12 +5693,12 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
 
     if (!file) {
-      addNotification('No file selected', 'error');
+      addNotification("No file selected", "error");
       return;
     }
 
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      addNotification('Please upload a CSV file', 'error');
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      addNotification("Please upload a CSV file", "error");
       return;
     }
 
@@ -5254,7 +5709,7 @@ export default function Dashboard() {
     };
 
     reader.onerror = () => {
-      addNotification('Failed to read file', 'error');
+      addNotification("Failed to read file", "error");
     };
 
     reader.readAsText(file);
@@ -5264,18 +5719,26 @@ export default function Dashboard() {
   // HANDLE IMAGE UPLOAD
   // ============================================================================
   const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files).slice(0, CONFIG.MAX_IMAGES_PER_EMAIL);
+    const files = Array.from(e.target.files).slice(
+      0,
+      CONFIG.MAX_IMAGES_PER_EMAIL,
+    );
 
     if (files.length === 0) {
-      addNotification('No files selected', 'info');
+      addNotification("No files selected", "info");
       return;
     }
 
     // Validate file sizes
-    const validFiles = files.filter(file => file.size <= CONFIG.MAX_IMAGE_SIZE_MB * 1024 * 1024);
+    const validFiles = files.filter(
+      (file) => file.size <= CONFIG.MAX_IMAGE_SIZE_MB * 1024 * 1024,
+    );
 
     if (validFiles.length < files.length) {
-      addNotification(`${files.length - validFiles.length} file(s) exceeded ${CONFIG.MAX_IMAGE_SIZE_MB}MB limit`, 'warning');
+      addNotification(
+        `${files.length - validFiles.length} file(s) exceeded ${CONFIG.MAX_IMAGE_SIZE_MB}MB limit`,
+        "warning",
+      );
     }
 
     const newImages = validFiles.map((file, index) => {
@@ -5287,35 +5750,46 @@ export default function Dashboard() {
         cid,
         placeholder: `{{image${index + 1}}}`,
         size: file.size,
-        type: file.type
+        type: file.type,
       };
     });
 
     setEmailImages(newImages);
-    addNotification(`✅ ${newImages.length} image(s) uploaded`, 'success');
+    addNotification(`✅ ${newImages.length} image(s) uploaded`, "success");
   };
 
   const handleAttachmentUpload = (e) => {
-    const files = Array.from(e.target.files || []).slice(0, CONFIG.MAX_ATTACHMENTS_PER_EMAIL);
+    const files = Array.from(e.target.files || []).slice(
+      0,
+      CONFIG.MAX_ATTACHMENTS_PER_EMAIL,
+    );
     if (files.length === 0) {
-      addNotification('No files selected', 'info');
+      addNotification("No files selected", "info");
       return;
     }
 
-    const validFiles = files.filter(file => file.size <= CONFIG.MAX_ATTACHMENT_SIZE_MB * 1024 * 1024);
+    const validFiles = files.filter(
+      (file) => file.size <= CONFIG.MAX_ATTACHMENT_SIZE_MB * 1024 * 1024,
+    );
     if (validFiles.length < files.length) {
-      addNotification(`${files.length - validFiles.length} file(s) exceeded ${CONFIG.MAX_ATTACHMENT_SIZE_MB}MB limit`, 'warning');
+      addNotification(
+        `${files.length - validFiles.length} file(s) exceeded ${CONFIG.MAX_ATTACHMENT_SIZE_MB}MB limit`,
+        "warning",
+      );
     }
 
     const newAttachments = validFiles.map((file) => ({
       file,
       filename: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      size: file.size
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
     }));
 
     setEmailAttachments([...emailAttachments, ...newAttachments]);
-    addNotification(`✅ ${newAttachments.length} attachment(s) added`, 'success');
+    addNotification(
+      `✅ ${newAttachments.length} attachment(s) added`,
+      "success",
+    );
   };
 
   const handleRemoveAttachment = (index) => {
@@ -5327,14 +5801,17 @@ export default function Dashboard() {
   // ============================================================================
   const handleSendToNewLeads = async () => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     const newLeadsLocal = newLeads;
 
     if (newLeadsLocal.length === 0) {
-      addNotification('✅ No new leads to email. All contacts have been reached.', 'success');
+      addNotification(
+        "✅ No new leads to email. All contacts have been reached.",
+        "success",
+      );
       return;
     }
 
@@ -5343,15 +5820,21 @@ export default function Dashboard() {
     if (remainingQuota <= 0) {
       addNotification(
         `⚠️ Daily email limit reached (${CONFIG.MAX_DAILY_EMAILS} emails/day). ${dailyEmailCount} emails sent today.`,
-        'warning'
+        "warning",
       );
       return;
     }
 
-    const leadsToSend = newLeads.slice(0, Math.min(remainingQuota, newLeads.length));
-    const potentialValue = Math.round((leadsToSend.length * 0.15 * CONFIG.DEFAULT_AVG_DEAL_VALUE) / 1000);
+    const leadsToSend = newLeads.slice(
+      0,
+      Math.min(remainingQuota, newLeads.length),
+    );
+    const potentialValue = Math.round(
+      (leadsToSend.length * 0.15 * CONFIG.DEFAULT_AVG_DEAL_VALUE) / 1000,
+    );
 
-    const confirmMsg = `🚀 Smart New Lead Outreach\n\n` +
+    const confirmMsg =
+      `🚀 Smart New Lead Outreach\n\n` +
       `📊 ${leadsToSend.length} new leads ready (${newLeads.length} total available)\n` +
       `📈 Prioritized by lead quality\n` +
       `💰 Estimated potential value: $${potentialValue}k\n` +
@@ -5361,13 +5844,13 @@ export default function Dashboard() {
     if (!window.confirm(confirmMsg)) return;
 
     if (!templateA.subject?.trim()) {
-      addNotification('Email subject is required', 'error');
+      addNotification("Email subject is required", "error");
       return;
     }
 
     setIsSending(true);
-    setStatus('Getting Gmail access...');
-    setStatusType('info');
+    setStatus("Getting Gmail access...");
+    setStatusType("info");
     setSendProgress({ current: 0, total: leadsToSend.length });
 
     try {
@@ -5378,7 +5861,7 @@ export default function Dashboard() {
         emailImages.map(async (img, index) => {
           const base64 = await new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onload = () => resolve(reader.result.split(",")[1]);
             reader.readAsDataURL(img.file);
           });
 
@@ -5386,30 +5869,30 @@ export default function Dashboard() {
             cid: img.cid,
             mimeType: img.file.type,
             base64,
-            placeholder: img.placeholder
+            placeholder: img.placeholder,
           };
-        })
+        }),
       );
 
       const attachmentsWithBase64 = await Promise.all(
         emailAttachments.map(async (att) => {
           const base64 = await new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onload = () => resolve(reader.result.split(",")[1]);
             reader.readAsDataURL(att.file);
           });
           return {
             filename: att.filename,
             mimeType: att.mimeType,
             size: att.size,
-            base64
+            base64,
           };
-        })
+        }),
       );
 
-      const res = await fetch('/api/send-new-leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/send-new-leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipients: leadsToSend,
           senderName,
@@ -5419,46 +5902,54 @@ export default function Dashboard() {
           template: templateA,
           userId: user.uid,
           emailImages: imagesWithBase64,
-          emailAttachments: attachmentsWithBase64
-        })
+          emailAttachments: attachmentsWithBase64,
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
         const sentCount = data.sent || 0;
-        setStatus(`✅ ${sentCount}/${leadsToSend.length} emails sent to new leads!`);
-        setStatusType('success');
+        setStatus(
+          `✅ ${sentCount}/${leadsToSend.length} emails sent to new leads!`,
+        );
+        setStatusType("success");
 
         setDailyEmailCount(data.dailyCount || dailyEmailCount + sentCount);
 
         addNotification(
           `✅ Successfully sent ${sentCount} emails!\n` +
-          `📊 Stats:\n` +
-          `• Sent: ${sentCount}\n` +
-          `• Failed: ${data.failed || 0}\n` +
-          `• Skipped: ${data.skipped || 0}\n` +
-          `• Daily count: ${data.dailyCount}/${CONFIG.MAX_DAILY_EMAILS}`,
-          'success'
+            `📊 Stats:\n` +
+            `• Sent: ${sentCount}\n` +
+            `• Failed: ${data.failed || 0}\n` +
+            `• Skipped: ${data.skipped || 0}\n` +
+            `• Daily count: ${data.dailyCount}/${CONFIG.MAX_DAILY_EMAILS}`,
+          "success",
         );
 
         await loadSentLeads();
         await loadDailyEmailCount();
       } else {
         if (res.status === 429) {
-          addNotification(`⚠️ Daily limit reached! ${data.error}`, 'warning');
+          addNotification(`⚠️ Daily limit reached! ${data.error}`, "warning");
           setDailyEmailCount(data.dailyCount || CONFIG.MAX_DAILY_EMAILS);
         } else {
-          addNotification(`❌ Error: ${data.error || 'Failed to send emails'}`, 'error');
+          addNotification(
+            `❌ Error: ${data.error || "Failed to send emails"}`,
+            "error",
+          );
         }
-        setStatus(`❌ ${data.error || 'Failed'}`);
-        setStatusType('error');
+        setStatus(`❌ ${data.error || "Failed"}`);
+        setStatusType("error");
       }
     } catch (err) {
-      console.error('Send new leads error:', err);
-      addNotification(`❌ Error: ${err.message || 'Failed to send emails'}`, 'error');
-      setStatus(`❌ ${err.message || 'Error'}`);
-      setStatusType('error');
+      console.error("Send new leads error:", err);
+      addNotification(
+        `❌ Error: ${err.message || "Failed to send emails"}`,
+        "error",
+      );
+      setStatus(`❌ ${err.message || "Error"}`);
+      setStatusType("error");
     } finally {
       setIsSending(false);
       setSendProgress({ current: 0, total: 0 });
@@ -5469,15 +5960,16 @@ export default function Dashboard() {
   // SEND EMAILS (MAIN FUNCTION)
   // ============================================================================
   const handleSendEmails = async (templateToSend = null) => {
-    const lines = csvContent?.split('\n').filter(line => line.trim() !== '') || [];
+    const lines =
+      csvContent?.split("\n").filter((line) => line.trim() !== "") || [];
 
     if (lines.length < 2) {
-      addNotification('Please upload a valid CSV file first', 'error');
+      addNotification("Please upload a valid CSV file first", "error");
       return;
     }
 
     if (validEmails === 0) {
-      addNotification('No valid recipients available', 'error');
+      addNotification("No valid recipients available", "error");
       return;
     }
 
@@ -5486,28 +5978,28 @@ export default function Dashboard() {
     if (remainingQuota <= 0) {
       addNotification(
         `⚠️ Daily email limit reached (${CONFIG.MAX_DAILY_EMAILS} emails/day). Try again tomorrow.`,
-        'warning'
+        "warning",
       );
       return;
     }
 
     if (abTestMode && !templateToSend) {
-      addNotification('Please select Template A or B', 'error');
+      addNotification("Please select Template A or B", "error");
       return;
     }
 
     if (abTestMode) {
-      if (templateToSend === 'A' && !templateA.subject?.trim()) {
-        addNotification('Template A subject is required', 'error');
+      if (templateToSend === "A" && !templateA.subject?.trim()) {
+        addNotification("Template A subject is required", "error");
         return;
       }
-      if (templateToSend === 'B' && !templateB.subject?.trim()) {
-        addNotification('Template B subject is required', 'error');
+      if (templateToSend === "B" && !templateB.subject?.trim()) {
+        addNotification("Template B subject is required", "error");
         return;
       }
     } else {
       if (!templateA.subject?.trim()) {
-        addNotification('Email subject is required', 'error');
+        addNotification("Email subject is required", "error");
         return;
       }
     }
@@ -5515,15 +6007,15 @@ export default function Dashboard() {
     // Confirm before sending
     if (userPreferences.confirmBeforeSend) {
       const confirmed = window.confirm(
-        `Send emails to ${validEmails} leads?\n\nDaily quota: ${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}\nRemaining: ${remainingQuota}`
+        `Send emails to ${validEmails} leads?\n\nDaily quota: ${dailyEmailCount}/${CONFIG.MAX_DAILY_EMAILS}\nRemaining: ${remainingQuota}`,
       );
 
       if (!confirmed) return;
     }
 
     setIsSending(true);
-    setStatus('Getting Gmail access...');
-    setStatusType('info');
+    setStatus("Getting Gmail access...");
+    setStatusType("info");
     setSendProgress({ current: 0, total: validEmails });
 
     try {
@@ -5536,7 +6028,7 @@ export default function Dashboard() {
         emailImages.map(async (img, index) => {
           const base64 = await new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onload = () => resolve(reader.result.split(",")[1]);
             reader.readAsDataURL(img.file);
           });
 
@@ -5544,32 +6036,38 @@ export default function Dashboard() {
             cid: img.cid,
             mimeType: img.file.type,
             base64,
-            placeholder: img.placeholder
+            placeholder: img.placeholder,
           };
-        })
+        }),
       );
 
       const attachmentsWithBase64 = await Promise.all(
         emailAttachments.map(async (att) => {
           const base64 = await new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onload = () => resolve(reader.result.split(",")[1]);
             reader.readAsDataURL(att.file);
           });
           return {
             filename: att.filename,
             mimeType: att.mimeType,
             size: att.size,
-            base64
+            base64,
           };
-        })
+        }),
       );
 
-      const headers = parseCsvRow(lines[0]).map(h => h.trim());
+      const headers = parseCsvRow(lines[0]).map((h) => h.trim());
       let validRecipients = [];
 
-      const emailColumnName = Object.entries(fieldMappings).find(([key, val]) => key === 'email')?.[1] || 'email';
-      const qualityColumnName = Object.entries(fieldMappings).find(([key, val]) => key === 'lead_quality')?.[1] || 'lead_quality';
+      const emailColumnName =
+        Object.entries(fieldMappings).find(
+          ([key, val]) => key === "email",
+        )?.[1] || "email";
+      const qualityColumnName =
+        Object.entries(fieldMappings).find(
+          ([key, val]) => key === "lead_quality",
+        )?.[1] || "lead_quality";
 
       for (let i = 1; i < lines.length; i++) {
         const values = parseCsvRow(lines[i]);
@@ -5580,10 +6078,10 @@ export default function Dashboard() {
 
         const row = {};
         headers.forEach((header, idx) => {
-          row[header] = values[idx]?.toString().trim() || '';
+          row[header] = values[idx]?.toString().trim() || "";
         });
 
-        const emailValue = row[emailColumnName] || '';
+        const emailValue = row[emailColumnName] || "";
         const emails = parseMultipleEmails(emailValue);
 
         if (emails.length === 0) {
@@ -5605,9 +6103,11 @@ export default function Dashboard() {
         });
 
         const hasQualityColumn = headers.includes(qualityColumnName);
-        const quality = hasQualityColumn ? (row[qualityColumnName] || '').trim().toUpperCase() || 'HOT' : 'HOT';
+        const quality = hasQualityColumn
+          ? (row[qualityColumnName] || "").trim().toUpperCase() || "HOT"
+          : "HOT";
 
-        if (leadQualityFilter !== 'all' && quality !== leadQualityFilter) {
+        if (leadQualityFilter !== "all" && quality !== leadQualityFilter) {
           continue;
         }
       }
@@ -5628,13 +6128,17 @@ export default function Dashboard() {
       });
 
       // Check for multi-email rows and notify user
-      const multiEmailRowCount = validRecipients.filter(r => r.isFromMultiEmailRow).length;
+      const multiEmailRowCount = validRecipients.filter(
+        (r) => r.isFromMultiEmailRow,
+      ).length;
       if (multiEmailRowCount > 0) {
-        const uniqueRows = new Set(validRecipients.filter(r => r.rowGroupId).map(r => r.rowGroupId)).size;
+        const uniqueRows = new Set(
+          validRecipients.filter((r) => r.rowGroupId).map((r) => r.rowGroupId),
+        ).size;
         addNotification(
           `📧 Found ${uniqueRows} row(s) with multiple emails. These will be sent individually with built-in delays to avoid spam detection.`,
-          'info',
-          5000
+          "info",
+          5000,
         );
       }
 
@@ -5642,7 +6146,7 @@ export default function Dashboard() {
 
       if (abTestMode && templateToSend) {
         const half = Math.ceil(validRecipients.length / 2);
-        if (templateToSend === 'A') {
+        if (templateToSend === "A") {
           recipientsToSend = validRecipients.slice(0, half);
         } else {
           recipientsToSend = validRecipients.slice(half);
@@ -5654,41 +6158,44 @@ export default function Dashboard() {
       // Limit by quota
       if (recipientsToSend.length > remainingQuota) {
         recipientsToSend = recipientsToSend.slice(0, remainingQuota);
-        addNotification(`Limited to ${remainingQuota} emails due to daily quota`, 'warning');
+        addNotification(
+          `Limited to ${remainingQuota} emails due to daily quota`,
+          "warning",
+        );
       }
 
       if (recipientsToSend.length === 0) {
-        setStatus('❌ No valid leads for selected criteria');
-        setStatusType('error');
+        setStatus("❌ No valid leads for selected criteria");
+        setStatusType("error");
         setIsSending(false);
-        addNotification('No valid recipients found', 'error');
+        addNotification("No valid recipients found", "error");
         return;
       }
 
       // Reconstruct CSV
-      const csvLines = [headers.join(',')];
+      const csvLines = [headers.join(",")];
       for (const row of recipientsToSend) {
-        const csvFields = headers.map(h => {
-          const val = (row[h] || '').toString().trim();
-          if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        const csvFields = headers.map((h) => {
+          const val = (row[h] || "").toString().trim();
+          if (val.includes(",") || val.includes('"') || val.includes("\n")) {
             return `"${val.replace(/"/g, '""')}"`;
           }
           return val;
         });
-        csvLines.push(csvFields.join(','));
+        csvLines.push(csvFields.join(","));
       }
-      const reconstructedCsv = csvLines.join('\n');
+      const reconstructedCsv = csvLines.join("\n");
 
-      const res = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           csvContent: reconstructedCsv,
           senderName,
           senderEmail,
           fieldMappings,
           accessToken,
-          refreshToken: user?.refreshToken || '',
+          refreshToken: user?.refreshToken || "",
           abTestMode,
           templateA,
           templateB,
@@ -5697,8 +6204,8 @@ export default function Dashboard() {
           emailImages: imagesWithBase64,
           emailAttachments: attachmentsWithBase64,
           userId: user.uid,
-          csvSource: csvFileName || 'uploaded_csv'
-        })
+          csvSource: csvFileName || "uploaded_csv",
+        }),
       });
 
       const data = await res.json();
@@ -5706,14 +6213,14 @@ export default function Dashboard() {
       if (res.ok) {
         const sentCount = data.sent || 0;
         setStatus(`✅ ${sentCount}/${recipientsToSend.length} emails sent!`);
-        setStatusType('success');
+        setStatusType("success");
 
         // Create follow-up tasks for sent emails (PHASE 2) - OPTIMIZED
         if (user?.uid && sentCount > 0) {
           try {
             // Calculate follow-up schedule based on templates
             const followUpSchedule = followUpTemplates
-              .filter(t => t.enabled)
+              .filter((t) => t.enabled)
               .sort((a, b) => a.delayDays - b.delayDays);
 
             if (followUpSchedule.length > 0) {
@@ -5723,21 +6230,29 @@ export default function Dashboard() {
 
               for (const recipient of recipientsToSend) {
                 const leadEmail = recipient.email;
-                const leadName = recipient[fieldMappings.business_name] || recipient[fieldMappings.name] || leadEmail;
-                const companyName = recipient[fieldMappings.company_name] || recipient[fieldMappings.business_name] || '';
+                const leadName =
+                  recipient[fieldMappings.business_name] ||
+                  recipient[fieldMappings.name] ||
+                  leadEmail;
+                const companyName =
+                  recipient[fieldMappings.company_name] ||
+                  recipient[fieldMappings.business_name] ||
+                  "";
 
                 for (const template of followUpSchedule) {
                   const scheduledDate = new Date();
-                  scheduledDate.setDate(scheduledDate.getDate() + template.delayDays);
+                  scheduledDate.setDate(
+                    scheduledDate.getDate() + template.delayDays,
+                  );
 
                   tasksToCreate.push({
                     leadEmail,
                     leadName,
                     companyName,
-                    channel: 'email',
+                    channel: "email",
                     followUpStage: template.name,
                     templateId: template.id,
-                    scheduledFor: scheduledDate.toISOString()
+                    scheduledFor: scheduledDate.toISOString(),
                   });
                 }
               }
@@ -5745,9 +6260,14 @@ export default function Dashboard() {
               // Process in batches
               for (let i = 0; i < tasksToCreate.length; i += batchSize) {
                 const batch = tasksToCreate.slice(i, i + batchSize);
-                
+
                 for (const task of batch) {
-                  const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, task.channel, task.followUpStage);
+                  const exists = await checkFollowUpTaskExists(
+                    user.uid,
+                    task.leadEmail,
+                    task.channel,
+                    task.followUpStage,
+                  );
                   if (!exists) {
                     await createFollowUpTask(user.uid, task);
                   }
@@ -5761,14 +6281,14 @@ export default function Dashboard() {
               }
             }
           } catch (error) {
-            console.error('Error creating follow-up tasks:', error);
+            console.error("Error creating follow-up tasks:", error);
           }
         }
 
         // Update A/B test results
         if (abTestMode) {
           const newResults = { ...abResults };
-          if (templateToSend === 'A') {
+          if (templateToSend === "A") {
             newResults.a.sent = (newResults.a.sent || 0) + sentCount;
           } else {
             newResults.b.sent = (newResults.b.sent || 0) + sentCount;
@@ -5776,48 +6296,65 @@ export default function Dashboard() {
           setAbResults(newResults);
 
           if (db) {
-            await setDoc(doc(db, 'ab_results', user.uid), newResults);
+            await setDoc(doc(db, "ab_results", user.uid), newResults);
           }
         }
 
         // Update daily count
-        setDailyEmailCount(prev => prev + sentCount);
-        incrementQuota('emails', sentCount);
+        setDailyEmailCount((prev) => prev + sentCount);
+        incrementQuota("emails", sentCount);
 
         addNotification(
           `✅ Successfully sent ${sentCount} emails!\nFailed: ${data.failed || 0}\nSkipped: ${data.skipped || 0}`,
-          'success'
+          "success",
         );
 
         await loadSentLeads();
         await loadDailyEmailCount();
       } else {
         setStatus(`❌ ${data.error}`);
-        setStatusType('error');
+        setStatusType("error");
 
         if (res.status === 429) {
-          addNotification(`⚠️ Daily limit reached! ${data.error}`, 'warning');
+          addNotification(`⚠️ Daily limit reached! ${data.error}`, "warning");
           setDailyEmailCount(data.dailyCount || CONFIG.MAX_DAILY_EMAILS);
-        } else if (res.status === 403 && data.code === 'GMAIL_PERMISSIONS_ERROR') {
-          addNotification(`❌ Gmail permissions issue: ${data.details}`, 'error');
+        } else if (
+          res.status === 403 &&
+          data.code === "GMAIL_PERMISSIONS_ERROR"
+        ) {
+          addNotification(
+            `❌ Gmail permissions issue: ${data.details}`,
+            "error",
+          );
           if (data.troubleshooting) {
             setTimeout(() => {
-              alert(`🔧 Gmail Permission Fix:\n\n${data.troubleshooting.steps.join('\n')}`);
+              alert(
+                `🔧 Gmail Permission Fix:\n\n${data.troubleshooting.steps.join("\n")}`,
+              );
             }, 1000);
           }
-        } else if (res.status === 403 && data.code === 'GMAIL_ACCOUNT_MISMATCH') {
-          addNotification(`❌ Account mismatch: ${data.details}`, 'error');
-        } else if (res.status === 401 && data.code === 'GMAIL_AUTH_ERROR') {
-          addNotification(`❌ Gmail authentication expired. Please re-authenticate.`, 'error');
+        } else if (
+          res.status === 403 &&
+          data.code === "GMAIL_ACCOUNT_MISMATCH"
+        ) {
+          addNotification(`❌ Account mismatch: ${data.details}`, "error");
+        } else if (res.status === 401 && data.code === "GMAIL_AUTH_ERROR") {
+          addNotification(
+            `❌ Gmail authentication expired. Please re-authenticate.`,
+            "error",
+          );
         } else {
-          addNotification(`❌ Error: ${data.error || 'Failed to send emails'}`, 'error');
+          addNotification(
+            `❌ Error: ${data.error || "Failed to send emails"}`,
+            "error",
+          );
         }
       }
     } catch (err) {
-      console.error('Send error:', err);
-      setStatus(`❌ ${err.message || 'Failed to send'}`);
-      setStatusType('error');
-      addNotification(`❌ ${err.message || 'Failed to send emails'}`, 'error');
+      console.error("Send error:", err);
+      setStatus(`❌ ${err.message || "Failed to send"}`);
+      setStatusType("error");
+      addNotification(`❌ ${err.message || "Failed to send emails"}`, "error");
     } finally {
       setIsSending(false);
       setSendProgress({ current: 0, total: 0 });
@@ -5829,7 +6366,7 @@ export default function Dashboard() {
   // ============================================================================
   const researchCompany = async (companyName, companyWebsite, email) => {
     if (!user?.uid) {
-      addNotification('Please sign in to use AI research', 'error');
+      addNotification("Please sign in to use AI research", "error");
       return;
     }
 
@@ -5838,32 +6375,38 @@ export default function Dashboard() {
     try {
       const defaultTemplate = `${templateA.subject}\n${templateA.body}`;
 
-      const res = await fetch('/api/research-company', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/research-company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyName,
-          companyWebsite: companyWebsite || '',
+          companyWebsite: companyWebsite || "",
           defaultEmailTemplate: defaultTemplate,
-          userId: user.uid
-        })
+          userId: user.uid,
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setResearchResults(prev => ({
+        setResearchResults((prev) => ({
           ...prev,
-          [email]: data
+          [email]: data,
         }));
         setShowResearchModal(true);
-        addNotification('✅ AI research completed', 'success');
+        addNotification("✅ AI research completed", "success");
       } else {
-        addNotification(`Research failed: ${data.error || 'Unknown error'}`, 'error');
+        addNotification(
+          `Research failed: ${data.error || "Unknown error"}`,
+          "error",
+        );
       }
     } catch (err) {
-      console.error('Research error:', err);
-      addNotification(`Error: ${err.message || 'Failed to research company'}`, 'error');
+      console.error("Research error:", err);
+      addNotification(
+        `Error: ${err.message || "Failed to research company"}`,
+        "error",
+      );
     } finally {
       setResearchingCompany(null);
     }
@@ -5874,59 +6417,65 @@ export default function Dashboard() {
   // ============================================================================
   const exportData = async (type) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     try {
       let data = [];
-      let filename = '';
+      let filename = "";
 
-      if (type === 'contacts') {
+      if (type === "contacts") {
         data = whatsappLinks;
-        filename = `contacts-${new Date().toISOString().split('T')[0]}.csv`;
-      } else if (type === 'sent-leads') {
+        filename = `contacts-${new Date().toISOString().split("T")[0]}.csv`;
+      } else if (type === "sent-leads") {
         data = sentLeads;
-        filename = `sent-leads-${new Date().toISOString().split('T')[0]}.csv`;
-      } else if (type === 'call-history') {
+        filename = `sent-leads-${new Date().toISOString().split("T")[0]}.csv`;
+      } else if (type === "call-history") {
         await loadCallHistory();
         data = callHistory;
-        filename = `call-history-${new Date().toISOString().split('T')[0]}.csv`;
+        filename = `call-history-${new Date().toISOString().split("T")[0]}.csv`;
       }
 
       if (data.length === 0) {
-        addNotification('No data to export', 'warning');
+        addNotification("No data to export", "warning");
         return;
       }
 
       // Convert to CSV
       const headers = Object.keys(data[0]);
       const csvContent = [
-        headers.join(','),
-        ...data.map(row =>
-          headers.map(h => {
-            const val = (row[h] || '').toString();
-            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-              return `"${val.replace(/"/g, '""')}"`;
-            }
-            return val;
-          }).join(',')
-        )
-      ].join('\n');
+        headers.join(","),
+        ...data.map((row) =>
+          headers
+            .map((h) => {
+              const val = (row[h] || "").toString();
+              if (
+                val.includes(",") ||
+                val.includes('"') ||
+                val.includes("\n")
+              ) {
+                return `"${val.replace(/"/g, '""')}"`;
+              }
+              return val;
+            })
+            .join(","),
+        ),
+      ].join("\n");
 
       // Download
-      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const blob = new Blob([csvContent], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       a.click();
       window.URL.revokeObjectURL(url);
 
-      addNotification(`✅ Exported ${data.length} records`, 'success');
+      addNotification(`✅ Exported ${data.length} records`, "success");
     } catch (error) {
-      console.error('Export error:', error);
-      addNotification('Failed to export data', 'error');
+      console.error("Export error:", error);
+      addNotification("Failed to export data", "error");
     }
   };
 
@@ -5954,7 +6503,7 @@ export default function Dashboard() {
           instagramTemplate,
           twitterTemplate,
           linkedinTemplate,
-          followUpTemplates
+          followUpTemplates,
         },
         settings: {
           senderName,
@@ -5962,13 +6511,13 @@ export default function Dashboard() {
           fieldMappings,
           abTestMode,
           smsConsent,
-          userPreferences
-        }
+          userPreferences,
+        },
       };
 
       // Save to Firebase
       if (db) {
-        const backupRef = doc(db, 'backups', `${user.uid}_${Date.now()}`);
+        const backupRef = doc(db, "backups", `${user.uid}_${Date.now()}`);
         await setDoc(backupRef, backup);
       }
 
@@ -5976,10 +6525,10 @@ export default function Dashboard() {
       localStorageHelper.set(`backup_${user.uid}`, backup);
 
       setLastBackup(new Date().toISOString());
-      addNotification('✅ Backup completed successfully', 'success');
+      addNotification("✅ Backup completed successfully", "success");
     } catch (error) {
-      console.error('Backup error:', error);
-      addNotification('Failed to create backup', 'error');
+      console.error("Backup error:", error);
+      addNotification("Failed to create backup", "error");
     } finally {
       setIsBackingUp(false);
     }
@@ -5989,7 +6538,7 @@ export default function Dashboard() {
   // HANDLE FIELD MAPPING CHANGE
   // ============================================================================
   const handleMappingChange = (varName, csvColumn) => {
-    setFieldMappings(prev => ({ ...prev, [varName]: csvColumn }));
+    setFieldMappings((prev) => ({ ...prev, [varName]: csvColumn }));
   };
 
   // ============================================================================
@@ -5997,17 +6546,27 @@ export default function Dashboard() {
   // ============================================================================
   const abSummary = abTestMode ? (
     <div className="bg-blue-900/30 p-4 rounded-xl mt-4 border border-blue-700/50">
-      <h3 className="text-sm font-bold text-blue-300 mb-3">📊 A/B Test Results</h3>
+      <h3 className="text-sm font-bold text-blue-300 mb-3">
+        📊 A/B Test Results
+      </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-blue-800/30 p-3 rounded-lg">
           <div className="text-xs text-blue-300">Template A</div>
-          <div className="text-xl font-bold text-white">{abResults.a.sent || 0} sent</div>
-          <div className="text-xs text-blue-400">{abResults.a.replied || 0} replied</div>
+          <div className="text-xl font-bold text-white">
+            {abResults.a.sent || 0} sent
+          </div>
+          <div className="text-xs text-blue-400">
+            {abResults.a.replied || 0} replied
+          </div>
         </div>
         <div className="bg-purple-800/30 p-3 rounded-lg">
           <div className="text-xs text-purple-300">Template B</div>
-          <div className="text-xl font-bold text-white">{abResults.b.sent || 0} sent</div>
-          <div className="text-xs text-purple-400">{abResults.b.replied || 0} replied</div>
+          <div className="text-xl font-bold text-white">
+            {abResults.b.sent || 0} sent
+          </div>
+          <div className="text-xs text-purple-400">
+            {abResults.b.replied || 0} replied
+          </div>
         </div>
       </div>
       <div className="text-xs text-blue-400 mt-3">
@@ -6021,95 +6580,101 @@ export default function Dashboard() {
   // ============================================================================
   // BUSINESS INTELLIGENCE HANDLERS
   // ============================================================================
-  const loadAnalytics = async (action = 'comprehensive', timeframe = '30d') => {
+  const loadAnalytics = async (action = "comprehensive", timeframe = "30d") => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     try {
       setLoadingAnalytics(true);
-      const res = await fetch('/api/analytics-engine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/analytics-engine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           action,
           timeframe,
-          data: { avg_deal_value: 5000 }
-        })
+          data: { avg_deal_value: 5000 },
+        }),
       });
 
       if (res.ok) {
         const data = await res.json();
         setAnalyticsData(data.analytics);
-        addNotification('✅ Analytics loaded', 'success', 2000);
+        addNotification("✅ Analytics loaded", "success", 2000);
       }
     } catch (error) {
-      console.error('Load analytics error:', error);
-      addNotification(`❌ Failed to load analytics: ${error.message}`, 'error');
+      console.error("Load analytics error:", error);
+      addNotification(`❌ Failed to load analytics: ${error.message}`, "error");
     } finally {
       setLoadingAnalytics(false);
     }
   };
 
-  const loadPipeline = async (action = 'comprehensive') => {
+  const loadPipeline = async (action = "comprehensive") => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     try {
       setLoadingPipeline(true);
-      const res = await fetch('/api/deal-pipeline', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/deal-pipeline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           action,
-          data: { targetDays: 90 }
-        })
+          data: { targetDays: 90 },
+        }),
       });
 
       if (res.ok) {
         const data = await res.json();
         setPipelineData(data.pipeline);
-        addNotification('✅ Pipeline loaded', 'success', 2000);
+        addNotification("✅ Pipeline loaded", "success", 2000);
       }
     } catch (error) {
-      console.error('Load pipeline error:', error);
-      addNotification(`❌ Failed to load pipeline: ${error.message}`, 'error');
+      console.error("Load pipeline error:", error);
+      addNotification(`❌ Failed to load pipeline: ${error.message}`, "error");
     } finally {
       setLoadingPipeline(false);
     }
   };
 
-  const loadPredictiveAnalysis = async (action = 'comprehensive', leadId = null) => {
+  const loadPredictiveAnalysis = async (
+    action = "comprehensive",
+    leadId = null,
+  ) => {
     if (!user?.uid) {
-      addNotification('Please sign in first', 'error');
+      addNotification("Please sign in first", "error");
       return;
     }
 
     try {
       setLoadingPredictive(true);
-      const res = await fetch('/api/predictive-scoring', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/predictive-scoring", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.uid,
           leadId,
-          action
-        })
+          action,
+        }),
       });
 
       if (res.ok) {
         const data = await res.json();
         setPredictiveData(data.predictions);
-        addNotification('✅ Predictions generated', 'success', 2000);
+        addNotification("✅ Predictions generated", "success", 2000);
       }
     } catch (error) {
-      console.error('Load predictive error:', error);
-      addNotification(`❌ Failed to generate predictions: ${error.message}`, 'error');
+      console.error("Load predictive error:", error);
+      addNotification(
+        `❌ Failed to generate predictions: ${error.message}`,
+        "error",
+      );
     } finally {
       setLoadingPredictive(false);
     }
@@ -6123,7 +6688,9 @@ export default function Dashboard() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <div className="text-lg text-white font-medium">Loading your strategic outreach dashboard...</div>
+          <div className="text-lg text-white font-medium">
+            Loading your strategic outreach dashboard...
+          </div>
           <div className="text-sm text-gray-400 mt-2">Please wait</div>
         </div>
       </div>
@@ -6138,7 +6705,9 @@ export default function Dashboard() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full mx-4">
           <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold text-white mb-2">B2B Growth Engine</h1>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              B2B Growth Engine
+            </h1>
             <p className="text-gray-400">Strategic Outreach Automation</p>
           </div>
 
@@ -6146,18 +6715,30 @@ export default function Dashboard() {
             <button
               onClick={() => {
                 setAuthError(null);
-                signInWithPopup(auth, new GoogleAuthProvider()).catch(err => {
+                signInWithPopup(auth, new GoogleAuthProvider()).catch((err) => {
                   setAuthError(err.message);
-                  addNotification(`Sign in failed: ${err.message}`, 'error');
+                  addNotification(`Sign in failed: ${err.message}`, "error");
                 });
               }}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl transition font-medium flex items-center justify-center gap-3"
             >
               <svg className="w-6 h-6" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                <path
+                  fill="currentColor"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
               </svg>
               Sign in with Google
             </button>
@@ -6186,22 +6767,31 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-200">
       <Head>
         <title>B2B Growth Engine | Strategic Outreach</title>
-        <meta name="description" content="Marketing automation dashboard for B2B outreach" />
+        <meta
+          name="description"
+          content="Marketing automation dashboard for B2B outreach"
+        />
       </Head>
 
       {/* NOTIFICATIONS */}
       <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-        {notifications.slice(0, 5).map(notification => (
+        {notifications.slice(0, 5).map((notification) => (
           <div
             key={notification.id}
-            className={`p-4 rounded-lg shadow-lg border backdrop-blur-sm animate-fade-in ${notification.type === 'success' ? 'bg-green-900/80 border-green-700 text-green-200' :
-                notification.type === 'error' ? 'bg-red-900/80 border-red-700 text-red-200' :
-                  notification.type === 'warning' ? 'bg-yellow-900/80 border-yellow-700 text-yellow-200' :
-                    'bg-blue-900/80 border-blue-700 text-blue-200'
-              }`}
+            className={`p-4 rounded-lg shadow-lg border backdrop-blur-sm animate-fade-in ${
+              notification.type === "success"
+                ? "bg-green-900/80 border-green-700 text-green-200"
+                : notification.type === "error"
+                  ? "bg-red-900/80 border-red-700 text-red-200"
+                  : notification.type === "warning"
+                    ? "bg-yellow-900/80 border-yellow-700 text-yellow-200"
+                    : "bg-blue-900/80 border-blue-700 text-blue-200"
+            }`}
           >
             <div className="flex justify-between items-start sm:items-center">
-              <div className="text-sm whitespace-pre-line flex-1 pr-2">{notification.message}</div>
+              <div className="text-sm whitespace-pre-line flex-1 pr-2">
+                {notification.message}
+              </div>
               <button
                 onClick={() => markNotificationRead(notification.id)}
                 className="ml-2 text-gray-400 hover:text-white flex-shrink-0"
@@ -6219,13 +6809,27 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex items-center gap-3">
               <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-white">B2B Growth Engine</h1>
-                <p className="text-xs text-gray-400 hidden sm:block">Strategic Outreach Automation</p>
+                <h1 className="text-lg sm:text-xl font-bold text-white">
+                  B2B Growth Engine
+                </h1>
+                <p className="text-xs text-gray-400 hidden sm:block">
+                  Strategic Outreach Automation
+                </p>
               </div>
             </div>
 
@@ -6261,7 +6865,7 @@ export default function Dashboard() {
               </button>
 
               <button
-                onClick={() => router.push('/format')}
+                onClick={() => router.push("/format")}
                 className="text-xs sm:text-sm bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg transition flex items-center gap-2"
               >
                 <span>🔥</span>
@@ -6277,7 +6881,9 @@ export default function Dashboard() {
                 title="View email replies"
               >
                 <span className="text-lg">📬</span>
-                <span className="hidden sm:inline font-medium">View Replies</span>
+                <span className="hidden sm:inline font-medium">
+                  View Replies
+                </span>
                 {unreadRepliesCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                     {unreadRepliesCount}
@@ -6291,7 +6897,9 @@ export default function Dashboard() {
                 title="View upcoming follow-ups"
               >
                 <span>📅</span>
-                <span className="hidden sm:inline font-medium">Follow-Up Queue</span>
+                <span className="hidden sm:inline font-medium">
+                  Follow-Up Queue
+                </span>
                 {(followUpTasks.pending?.length || 0) > 0 && (
                   <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
                     {followUpTasks.pending?.length || 0}
@@ -6320,22 +6928,34 @@ export default function Dashboard() {
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* STATUS BAR */}
         {status && (
-          <div className={`mb-4 p-4 rounded-xl border backdrop-blur-sm ${statusType === 'success' ? 'bg-green-900/30 border-green-700 text-green-200' :
-              statusType === 'error' ? 'bg-red-900/30 border-red-700 text-red-200' :
-                statusType === 'warning' ? 'bg-yellow-900/30 border-yellow-700 text-yellow-200' :
-                  'bg-blue-900/30 border-blue-700 text-blue-200'
-            }`}>
-            <div className="whitespace-pre-line text-sm sm:text-base">{status}</div>
+          <div
+            className={`mb-4 p-4 rounded-xl border backdrop-blur-sm ${
+              statusType === "success"
+                ? "bg-green-900/30 border-green-700 text-green-200"
+                : statusType === "error"
+                  ? "bg-red-900/30 border-red-700 text-red-200"
+                  : statusType === "warning"
+                    ? "bg-yellow-900/30 border-yellow-700 text-yellow-200"
+                    : "bg-blue-900/30 border-blue-700 text-blue-200"
+            }`}
+          >
+            <div className="whitespace-pre-line text-sm sm:text-base">
+              {status}
+            </div>
             {sendProgress.total > 0 && (
               <div className="mt-3">
                 <div className="flex justify-between text-xs mb-1">
                   <span>Progress</span>
-                  <span>{sendProgress.current}/{sendProgress.total}</span>
+                  <span>
+                    {sendProgress.current}/{sendProgress.total}
+                  </span>
                 </div>
                 <div className="w-full bg-gray-700 rounded-full h-2">
                   <div
                     className="bg-blue-500 h-2 rounded-full transition-all"
-                    style={{ width: `${(sendProgress.current / sendProgress.total) * 100}%` }}
+                    style={{
+                      width: `${(sendProgress.current / sendProgress.total) * 100}%`,
+                    }}
                   ></div>
                 </div>
               </div>
@@ -6348,18 +6968,31 @@ export default function Dashboard() {
           <div className="mb-6 sm:mb-8">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
               <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/50 p-4 rounded-xl shadow border border-blue-700/50 hover:border-blue-600 transition">
-                <div className="text-xs text-blue-300 font-semibold">📊 Total</div>
-                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">{whatsappLinks.length}</div>
-                <div className="text-xs text-blue-200 mt-1">contacts loaded</div>
+                <div className="text-xs text-blue-300 font-semibold">
+                  📊 Total
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
+                  {whatsappLinks.length}
+                </div>
+                <div className="text-xs text-blue-200 mt-1">
+                  contacts loaded
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-green-900/50 to-green-800/50 p-4 rounded-xl shadow border border-green-700/50 hover:border-green-600 transition">
-                <div className="text-xs text-green-300 font-semibold">✅ Replied</div>
+                <div className="text-xs text-green-300 font-semibold">
+                  ✅ Replied
+                </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
                   {Object.values(repliedLeads).filter(Boolean).length}
                 </div>
                 <div className="text-xs text-green-200 mt-1">
-                  {Math.round((Object.values(repliedLeads).filter(Boolean).length / Math.max(whatsappLinks.length, 1)) * 100)}% reply rate
+                  {Math.round(
+                    (Object.values(repliedLeads).filter(Boolean).length /
+                      Math.max(whatsappLinks.length, 1)) *
+                      100,
+                  )}
+                  % reply rate
                 </div>
               </div>
 
@@ -6367,46 +7000,83 @@ export default function Dashboard() {
                 <div
                   className="bg-gradient-to-br from-pink-900/50 to-pink-800/50 p-4 rounded-xl shadow border border-pink-700/50 hover:border-pink-600 transition cursor-pointer"
                   onClick={() => {
-                    document.getElementById('interested-leads-section')?.scrollIntoView({ behavior: 'smooth' });
+                    document
+                      .getElementById("interested-leads-section")
+                      ?.scrollIntoView({ behavior: "smooth" });
                   }}
                 >
-                  <div className="text-xs text-pink-300 font-semibold">🔥 Interested</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-white mt-1">{followUpStats.interestedLeads}</div>
-                  <div className="text-xs text-pink-200 mt-1">opens/clicks (no reply)</div>
+                  <div className="text-xs text-pink-300 font-semibold">
+                    🔥 Interested
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
+                    {followUpStats.interestedLeads}
+                  </div>
+                  <div className="text-xs text-pink-200 mt-1">
+                    opens/clicks (no reply)
+                  </div>
                 </div>
               )}
 
               <div className="bg-gradient-to-br from-indigo-900/50 to-purple-800/50 p-4 rounded-xl shadow border border-indigo-700/50 hover:border-indigo-600 transition">
-                <div className="text-xs text-indigo-300 font-semibold">📬 Followed Up</div>
-                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">{followUpStats.alreadyFollowedUp}</div>
-                <div className="text-xs text-indigo-200 mt-1">emails sent for followups</div>
+                <div className="text-xs text-indigo-300 font-semibold">
+                  📬 Followed Up
+                </div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
+                  {followUpStats.alreadyFollowedUp}
+                </div>
+                <div className="text-xs text-indigo-200 mt-1">
+                  emails sent for followups
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-yellow-900/50 to-yellow-800/50 p-4 rounded-xl shadow border border-yellow-700/50 hover:border-yellow-600 transition">
-                <div className="text-xs text-yellow-300 font-semibold">⭐ Quality</div>
+                <div className="text-xs text-yellow-300 font-semibold">
+                  ⭐ Quality
+                </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
                   {Object.values(leadScores).length > 0
-                    ? Math.round(Object.values(leadScores).reduce((a, b) => a + b, 0) / Object.values(leadScores).length)
+                    ? Math.round(
+                        Object.values(leadScores).reduce((a, b) => a + b, 0) /
+                          Object.values(leadScores).length,
+                      )
                     : 0}
                   <span className="text-sm text-yellow-300">/100</span>
                 </div>
-                <div className="text-xs text-yellow-200 mt-1">avg lead score</div>
+                <div className="text-xs text-yellow-200 mt-1">
+                  avg lead score
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/50 p-4 rounded-xl shadow border border-purple-700/50 hover:border-purple-600 transition">
-                <div className="text-xs text-purple-300 font-semibold">💰 Pipeline</div>
-                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${(Object.values(repliedLeads).filter(Boolean).length * 5).toFixed(0)}k
+                <div className="text-xs text-purple-300 font-semibold">
+                  💰 Pipeline
                 </div>
-                <div className="text-xs text-purple-200 mt-1">potential revenue</div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
+                  $
+                  {(
+                    Object.values(repliedLeads).filter(Boolean).length * 5
+                  ).toFixed(0)}
+                  k
+                </div>
+                <div className="text-xs text-purple-200 mt-1">
+                  potential revenue
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-orange-900/50 to-orange-800/50 p-4 rounded-xl shadow border border-orange-700/50 hover:border-orange-600 transition">
-                <div className="text-xs text-orange-300 font-semibold">📈 Monthly</div>
-                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${Math.round((calculateRevenueForecasts().expectedMonthlyRevenue) / 1000)}k
+                <div className="text-xs text-orange-300 font-semibold">
+                  📈 Monthly
                 </div>
-                <div className="text-xs text-orange-200 mt-1">forecast (30d)</div>
+                <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
+                  $
+                  {Math.round(
+                    calculateRevenueForecasts().expectedMonthlyRevenue / 1000,
+                  )}
+                  k
+                </div>
+                <div className="text-xs text-orange-200 mt-1">
+                  forecast (30d)
+                </div>
               </div>
             </div>
 
@@ -6426,15 +7096,23 @@ export default function Dashboard() {
 
                 {sendTimeOptimization && (
                   <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">⏰ Optimal Send Time</h3>
+                    <h3 className="text-sm font-bold text-purple-300 mb-2">
+                      ⏰ Optimal Send Time
+                    </h3>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-gray-400">Next Best Time:</span>
-                        <span className="font-bold text-purple-400">{sendTimeOptimization.nextOptimalTimeFormatted}</span>
+                        <span className="font-bold text-purple-400">
+                          {sendTimeOptimization.nextOptimalTimeFormatted}
+                        </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Potential Improvement:</span>
-                        <span className="font-bold text-green-400">+{sendTimeOptimization.potentialImprovement}%</span>
+                        <span className="text-gray-400">
+                          Potential Improvement:
+                        </span>
+                        <span className="font-bold text-green-400">
+                          +{sendTimeOptimization.potentialImprovement}%
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -6450,7 +7128,9 @@ export default function Dashboard() {
           <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* CSV Upload */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">1. Upload Leads CSV</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">
+                1. Upload Leads CSV
+              </h2>
               <input
                 type="file"
                 accept=".csv"
@@ -6467,30 +7147,41 @@ export default function Dashboard() {
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => startEnrichFlow('download')}
+                  onClick={() => startEnrichFlow("download")}
                   disabled={isEnrichingCsv}
                   className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
-                  {isEnrichingCsv && enrichMode === 'download' ? 'Processing...' : 'Enrich CSV (Download only)'}
+                  {isEnrichingCsv && enrichMode === "download"
+                    ? "Processing..."
+                    : "Enrich CSV (Download only)"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => startEnrichFlow('autoload')}
+                  onClick={() => startEnrichFlow("autoload")}
                   disabled={isEnrichingCsv}
                   className="px-3 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
-                  {isEnrichingCsv && enrichMode === 'autoload' ? 'Processing...' : 'Enrich CSV (Download + auto-load)'}
+                  {isEnrichingCsv && enrichMode === "autoload"
+                    ? "Processing..."
+                    : "Enrich CSV (Download + auto-load)"}
                 </button>
               </div>
               {enrichStatusMessage && (
-                <p className="mt-2 text-xs text-indigo-300">{enrichStatusMessage}</p>
+                <p className="mt-2 text-xs text-indigo-300">
+                  {enrichStatusMessage}
+                </p>
               )}
               {csvFileName && (
                 <div className="mt-2 text-xs text-gray-400">
-                  📁 {csvFileName} • {csvUploadDate ? new Date(csvUploadDate).toLocaleDateString() : ''}
+                  📁 {csvFileName} •{" "}
+                  {csvUploadDate
+                    ? new Date(csvUploadDate).toLocaleDateString()
+                    : ""}
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-3">Auto-scores leads and binds fields</p>
+              <p className="text-xs text-gray-400 mt-3">
+                Auto-scores leads and binds fields
+              </p>
 
               <div className="mt-4">
                 <label className="block text-sm font-medium mb-2 text-gray-200">
@@ -6526,7 +7217,9 @@ export default function Dashboard() {
             {/* Search & Filter */}
             {whatsappLinks.length > 0 && (
               <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-                <h2 className="text-lg font-bold mb-3 text-white">🔍 Smart Contact Search</h2>
+                <h2 className="text-lg font-bold mb-3 text-white">
+                  🔍 Smart Contact Search
+                </h2>
                 <input
                   type="text"
                   placeholder="Search by name, email, phone..."
@@ -6563,15 +7256,18 @@ export default function Dashboard() {
                   </select>
 
                   <button
-                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
+                    onClick={() =>
+                      setSortOrder(sortOrder === "desc" ? "asc" : "desc")
+                    }
                     className="px-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs"
                   >
-                    {sortOrder === 'desc' ? '↓' : '↑'}
+                    {sortOrder === "desc" ? "↓" : "↑"}
                   </button>
                 </div>
 
                 <div className="text-xs text-gray-400">
-                  Showing {paginatedContacts.contacts.length} of {paginatedContacts.total} contacts
+                  Showing {paginatedContacts.contacts.length} of{" "}
+                  {paginatedContacts.total} contacts
                 </div>
               </div>
             )}
@@ -6582,22 +7278,35 @@ export default function Dashboard() {
                 <h2 className="text-lg sm:text-xl font-bold mb-4 text-white sticky top-0 bg-gray-800 pb-2">
                   2. Field Mappings
                 </h2>
-                {allTemplateVars.map(varName => (
+                {allTemplateVars.map((varName) => (
                   <div key={varName} className="flex items-center mb-2">
                     <span className="bg-gray-700 px-2 py-1 rounded text-xs font-mono mr-2 text-gray-200 min-w-max">
                       {`{{${varName}}}`}
                     </span>
                     <select
-                      value={fieldMappings[varName] || ''}
-                      onChange={(e) => handleMappingChange(varName, e.target.value)}
+                      value={fieldMappings[varName] || ""}
+                      onChange={(e) =>
+                        handleMappingChange(varName, e.target.value)
+                      }
                       className="text-xs bg-gray-700 text-gray-200 border border-gray-600 rounded px-2 py-1 flex-1 min-w-0"
                     >
                       <option value="">-- Map to Column --</option>
-                      {csvHeaders.map(col => (
-                        <option key={col} value={col} className="bg-gray-800 text-gray-200">{col}</option>
+                      {csvHeaders.map((col) => (
+                        <option
+                          key={col}
+                          value={col}
+                          className="bg-gray-800 text-gray-200"
+                        >
+                          {col}
+                        </option>
                       ))}
-                      {varName === 'sender_name' && (
-                        <option value="sender_name" className="bg-gray-800 text-gray-200">Use sender name</option>
+                      {varName === "sender_name" && (
+                        <option
+                          value="sender_name"
+                          className="bg-gray-800 text-gray-200"
+                        >
+                          Use sender name
+                        </option>
                       )}
                     </select>
                   </div>
@@ -6610,7 +7319,9 @@ export default function Dashboard() {
           <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Sender Info */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">3. Your Info</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                3. Your Info
+              </h2>
               <div className="space-y-3">
                 <input
                   type="text"
@@ -6628,7 +7339,9 @@ export default function Dashboard() {
                   readOnly
                 />
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-200">Attachments</label>
+                  <label className="block text-sm font-medium text-gray-200">
+                    Attachments
+                  </label>
                   <input
                     type="file"
                     multiple
@@ -6636,15 +7349,23 @@ export default function Dashboard() {
                     className="w-full p-2 bg-gray-700 text-white border border-gray-600 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                   />
                   <p className="text-xs text-gray-400">
-                    Add up to {CONFIG.MAX_ATTACHMENTS_PER_EMAIL} files, each up to {CONFIG.MAX_ATTACHMENT_SIZE_MB}MB.
+                    Add up to {CONFIG.MAX_ATTACHMENTS_PER_EMAIL} files, each up
+                    to {CONFIG.MAX_ATTACHMENT_SIZE_MB}MB.
                   </p>
                   {emailAttachments.length > 0 && (
                     <div className="space-y-2 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-200">
                       {emailAttachments.map((attachment, index) => (
-                        <div key={attachment.filename + index} className="flex items-center justify-between gap-2">
+                        <div
+                          key={attachment.filename + index}
+                          className="flex items-center justify-between gap-2"
+                        >
                           <div>
-                            <div className="font-semibold">{attachment.filename}</div>
-                            <div className="text-xs text-gray-400">{Math.round(attachment.size / 1024)} KB</div>
+                            <div className="font-semibold">
+                              {attachment.filename}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {Math.round(attachment.size / 1024)} KB
+                            </div>
                           </div>
                           <button
                             type="button"
@@ -6664,7 +7385,9 @@ export default function Dashboard() {
             {/* Email Template */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-white">4. Email Template</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-white">
+                  4. Email Template
+                </h2>
                 <label className="flex items-center text-sm text-gray-200 cursor-pointer">
                   <input
                     type="checkbox"
@@ -6679,17 +7402,23 @@ export default function Dashboard() {
               {abTestMode ? (
                 <div className="grid grid-cols-1 gap-4">
                   <div className="border border-gray-700 rounded-lg p-3 bg-gray-750">
-                    <h3 className="font-bold text-green-400 mb-2">Template A</h3>
+                    <h3 className="font-bold text-green-400 mb-2">
+                      Template A
+                    </h3>
                     <input
                       type="text"
                       value={templateA.subject}
-                      onChange={(e) => setTemplateA({ ...templateA, subject: e.target.value })}
+                      onChange={(e) =>
+                        setTemplateA({ ...templateA, subject: e.target.value })
+                      }
                       className="w-full p-2 bg-gray-700 text-white border border-gray-600 rounded-lg mb-2 text-sm"
                       placeholder="Subject A"
                     />
                     <textarea
                       value={templateA.body}
-                      onChange={(e) => setTemplateA({ ...templateA, body: e.target.value })}
+                      onChange={(e) =>
+                        setTemplateA({ ...templateA, body: e.target.value })
+                      }
                       rows="4"
                       className="w-full p-2 font-mono text-sm bg-gray-700 text-white border border-gray-600 rounded-lg"
                       placeholder="Body A..."
@@ -6700,13 +7429,17 @@ export default function Dashboard() {
                     <input
                       type="text"
                       value={templateB.subject}
-                      onChange={(e) => setTemplateB({ ...templateB, subject: e.target.value })}
+                      onChange={(e) =>
+                        setTemplateB({ ...templateB, subject: e.target.value })
+                      }
                       className="w-full p-2 bg-gray-700 text-white border border-gray-600 rounded-lg mb-2 text-sm"
                       placeholder="Subject B"
                     />
                     <textarea
                       value={templateB.body}
-                      onChange={(e) => setTemplateB({ ...templateB, body: e.target.value })}
+                      onChange={(e) =>
+                        setTemplateB({ ...templateB, body: e.target.value })
+                      }
                       rows="4"
                       className="w-full p-2 font-mono text-sm bg-gray-700 text-white border border-gray-600 rounded-lg"
                       placeholder="Body B..."
@@ -6718,13 +7451,17 @@ export default function Dashboard() {
                   <input
                     type="text"
                     value={templateA.subject}
-                    onChange={(e) => setTemplateA({ ...templateA, subject: e.target.value })}
+                    onChange={(e) =>
+                      setTemplateA({ ...templateA, subject: e.target.value })
+                    }
                     className="w-full p-2 bg-gray-700 text-white border border-gray-600 rounded-lg mb-3"
                     placeholder="Subject"
                   />
                   <textarea
                     value={templateA.body}
-                    onChange={(e) => setTemplateA({ ...templateA, body: e.target.value })}
+                    onChange={(e) =>
+                      setTemplateA({ ...templateA, body: e.target.value })
+                    }
                     rows="6"
                     className="w-full p-2 font-mono bg-gray-700 text-white border border-gray-600 rounded-lg"
                     placeholder="Hello {{business_name}}, ..."
@@ -6735,29 +7472,41 @@ export default function Dashboard() {
               {abTestMode ? (
                 <div className="space-y-2 mt-4">
                   <button
-                    onClick={() => handleSendEmails('A')}
+                    onClick={() => handleSendEmails("A")}
                     disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(sendEmailsDisabledReason)
-                        ? 'bg-gray-600 cursor-not-allowed'
-                        : 'bg-green-700 hover:bg-green-600 text-white'
-                      }`}
-                    title={sendEmailsDisabledReason || `Send template A to ${Math.ceil(validEmails / 2)} leads`}
+                    className={`w-full py-3 rounded-lg font-bold transition ${
+                      Boolean(sendEmailsDisabledReason)
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-green-700 hover:bg-green-600 text-white"
+                    }`}
+                    title={
+                      sendEmailsDisabledReason ||
+                      `Send template A to ${Math.ceil(validEmails / 2)} leads`
+                    }
                   >
-                    📧 Send Template A (First {Math.ceil(validEmails / 2)} leads)
+                    📧 Send Template A (First {Math.ceil(validEmails / 2)}{" "}
+                    leads)
                   </button>
                   <button
-                    onClick={() => handleSendEmails('B')}
+                    onClick={() => handleSendEmails("B")}
                     disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold transition ${Boolean(sendEmailsDisabledReason)
-                        ? 'bg-gray-600 cursor-not-allowed'
-                        : 'bg-blue-700 hover:bg-blue-600 text-white'
-                      }`}
-                    title={sendEmailsDisabledReason || `Send template B to ${Math.floor(validEmails / 2)} leads`}
+                    className={`w-full py-3 rounded-lg font-bold transition ${
+                      Boolean(sendEmailsDisabledReason)
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-blue-700 hover:bg-blue-600 text-white"
+                    }`}
+                    title={
+                      sendEmailsDisabledReason ||
+                      `Send template B to ${Math.floor(validEmails / 2)} leads`
+                    }
                   >
-                    📧 Send Template B (Last {Math.floor(validEmails / 2)} leads)
+                    📧 Send Template B (Last {Math.floor(validEmails / 2)}{" "}
+                    leads)
                   </button>
                   {sendEmailsDisabledReason && (
-                    <div className="mt-2 text-xs text-yellow-300">⚠️ {sendEmailsDisabledReason}</div>
+                    <div className="mt-2 text-xs text-yellow-300">
+                      ⚠️ {sendEmailsDisabledReason}
+                    </div>
                   )}
                 </div>
               ) : (
@@ -6765,18 +7514,23 @@ export default function Dashboard() {
                   <button
                     onClick={() => handleSendEmails()}
                     disabled={Boolean(sendEmailsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold mt-4 transition ${Boolean(sendEmailsDisabledReason)
-                        ? 'bg-gray-600 cursor-not-allowed'
-                        : 'bg-green-700 hover:bg-green-600 text-white'
-                      }`}
-                    title={sendEmailsDisabledReason || `Send emails to ${validEmails} leads`}
+                    className={`w-full py-3 rounded-lg font-bold mt-4 transition ${
+                      Boolean(sendEmailsDisabledReason)
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-green-700 hover:bg-green-600 text-white"
+                    }`}
+                    title={
+                      sendEmailsDisabledReason ||
+                      `Send emails to ${validEmails} leads`
+                    }
                   >
                     📧 Send Emails ({validEmails})
                   </button>
                   {sendEmailsDisabledReason && (
-                    <div className="mt-2 text-xs text-yellow-300">⚠️ {sendEmailsDisabledReason}</div>
+                    <div className="mt-2 text-xs text-yellow-300">
+                      ⚠️ {sendEmailsDisabledReason}
+                    </div>
                   )}
-
 
                   {/* Debug Button */}
                   <button
@@ -6791,26 +7545,34 @@ export default function Dashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <span className="text-gray-400">CSV Loaded:</span>
-                        <span className={`ml-2 ${csvContent ? 'text-green-400' : 'text-red-400'}`}>
-                          {csvContent ? '✅' : '❌'}
+                        <span
+                          className={`ml-2 ${csvContent ? "text-green-400" : "text-red-400"}`}
+                        >
+                          {csvContent ? "✅" : "❌"}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Valid Emails:</span>
-                        <span className={`ml-2 ${validEmails > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <span
+                          className={`ml-2 ${validEmails > 0 ? "text-green-400" : "text-red-400"}`}
+                        >
                           {validEmails}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Sender Name:</span>
-                        <span className={`ml-2 ${senderName.trim() ? 'text-green-400' : 'text-red-400'}`}>
-                          {senderName.trim() ? '✅' : '❌'}
+                        <span
+                          className={`ml-2 ${senderName.trim() ? "text-green-400" : "text-red-400"}`}
+                        >
+                          {senderName.trim() ? "✅" : "❌"}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-400">Template Subject:</span>
-                        <span className={`ml-2 ${templateA.subject.trim() ? 'text-green-400' : 'text-red-400'}`}>
-                          {templateA.subject.trim() ? '✅' : '❌'}
+                        <span
+                          className={`ml-2 ${templateA.subject.trim() ? "text-green-400" : "text-red-400"}`}
+                        >
+                          {templateA.subject.trim() ? "✅" : "❌"}
                         </span>
                       </div>
                     </div>
@@ -6819,11 +7581,15 @@ export default function Dashboard() {
                   <button
                     onClick={handleSendToNewLeads}
                     disabled={Boolean(newLeadsDisabledReason)}
-                    className={`w-full py-3 rounded-lg font-bold mt-3 transition ${Boolean(newLeadsDisabledReason)
-                        ? 'bg-gray-600 cursor-not-allowed text-gray-400'
-                        : 'bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg'
-                      }`}
-                    title={newLeadsDisabledReason || `Send to ${newLeads.length} new leads`}
+                    className={`w-full py-3 rounded-lg font-bold mt-3 transition ${
+                      Boolean(newLeadsDisabledReason)
+                        ? "bg-gray-600 cursor-not-allowed text-gray-400"
+                        : "bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white shadow-lg"
+                    }`}
+                    title={
+                      newLeadsDisabledReason ||
+                      `Send to ${newLeads.length} new leads`
+                    }
                   >
                     🚀 Smart New Lead Outreach ({newLeads.length} new leads)
                     <div className="text-xs font-normal mt-1 opacity-90">
@@ -6843,7 +7609,9 @@ export default function Dashboard() {
 
             {/* WhatsApp Template */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">5. WhatsApp Template</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                5. WhatsApp Template
+              </h2>
               <textarea
                 value={whatsappTemplate}
                 onChange={(e) => setWhatsappTemplate(e.target.value)}
@@ -6855,7 +7623,9 @@ export default function Dashboard() {
 
             {/* SMS Template */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">6. SMS Template</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                6. SMS Template
+              </h2>
               <textarea
                 value={smsTemplate}
                 onChange={(e) => setSmsTemplate(e.target.value)}
@@ -6867,11 +7637,18 @@ export default function Dashboard() {
 
             {/* Follow-Up Sequences */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">7. Follow-Up Sequences</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                7. Follow-Up Sequences
+              </h2>
               {followUpTemplates.map((template, index) => (
-                <div key={template.id} className="border border-gray-700 rounded-lg p-3 mb-3 bg-gray-750">
+                <div
+                  key={template.id}
+                  className="border border-gray-700 rounded-lg p-3 mb-3 bg-gray-750"
+                >
                   <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-purple-400">{template.name}</h3>
+                    <h3 className="font-bold text-purple-400">
+                      {template.name}
+                    </h3>
                     <label className="flex items-center">
                       <input
                         type="checkbox"
@@ -6888,7 +7665,9 @@ export default function Dashboard() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                     <div>
-                      <label className="text-xs block text-gray-300">Channel</label>
+                      <label className="text-xs block text-gray-300">
+                        Channel
+                      </label>
                       <select
                         value={template.channel}
                         onChange={(e) => {
@@ -6904,25 +7683,28 @@ export default function Dashboard() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs block text-gray-300">Delay (days)</label>
+                      <label className="text-xs block text-gray-300">
+                        Delay (days)
+                      </label>
                       <input
                         type="number"
                         min="1"
                         value={template.delayDays}
                         onChange={(e) => {
                           const updated = [...followUpTemplates];
-                          updated[index].delayDays = parseInt(e.target.value) || 1;
+                          updated[index].delayDays =
+                            parseInt(e.target.value) || 1;
                           setFollowUpTemplates(updated);
                         }}
                         className="w-full text-xs bg-gray-700 text-white border border-gray-600 rounded p-1"
                       />
                     </div>
                   </div>
-                  {template.channel === 'email' && (
+                  {template.channel === "email" && (
                     <>
                       <input
                         type="text"
-                        value={template.subject || ''}
+                        value={template.subject || ""}
                         onChange={(e) => {
                           const updated = [...followUpTemplates];
                           updated[index].subject = e.target.value;
@@ -6932,7 +7714,7 @@ export default function Dashboard() {
                         placeholder="Subject"
                       />
                       <textarea
-                        value={template.body || ''}
+                        value={template.body || ""}
                         onChange={(e) => {
                           const updated = [...followUpTemplates];
                           updated[index].body = e.target.value;
@@ -6944,9 +7726,10 @@ export default function Dashboard() {
                       />
                     </>
                   )}
-                  {(template.channel === 'whatsapp' || template.channel === 'sms') && (
+                  {(template.channel === "whatsapp" ||
+                    template.channel === "sms") && (
                     <textarea
-                      value={template.body || ''}
+                      value={template.body || ""}
                       onChange={(e) => {
                         const updated = [...followUpTemplates];
                         updated[index].body = e.target.value;
@@ -6963,7 +7746,9 @@ export default function Dashboard() {
 
             {/* Instagram Template */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">8. Instagram Template</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                8. Instagram Template
+              </h2>
               <textarea
                 value={instagramTemplate}
                 onChange={(e) => setInstagramTemplate(e.target.value)}
@@ -6975,7 +7760,9 @@ export default function Dashboard() {
 
             {/* Twitter Template */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">9. Twitter Template</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                9. Twitter Template
+              </h2>
               <textarea
                 value={twitterTemplate}
                 onChange={(e) => setTwitterTemplate(e.target.value)}
@@ -6992,37 +7779,68 @@ export default function Dashboard() {
               <div className="space-y-4">
                 {/* Campaign Performance */}
                 <div className="bg-gradient-to-br from-purple-900 to-purple-800 p-4 sm:p-6 rounded-xl shadow border border-purple-700">
-                  <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">📊 Campaign Performance</h2>
+                  <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">
+                    📊 Campaign Performance
+                  </h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-purple-800/50 p-3 rounded">
-                      <div className="text-xs text-purple-300">Total Outreach</div>
-                      <div className="text-xl sm:text-2xl font-bold text-white">{whatsappLinks.length}</div>
-                      <div className="text-xs text-purple-200 mt-1">Unique contacts</div>
+                      <div className="text-xs text-purple-300">
+                        Total Outreach
+                      </div>
+                      <div className="text-xl sm:text-2xl font-bold text-white">
+                        {whatsappLinks.length}
+                      </div>
+                      <div className="text-xs text-purple-200 mt-1">
+                        Unique contacts
+                      </div>
                     </div>
                     <div className="bg-purple-800/50 p-3 rounded">
-                      <div className="text-xs text-purple-300">Engagement Rate</div>
+                      <div className="text-xs text-purple-300">
+                        Engagement Rate
+                      </div>
                       <div className="text-xl sm:text-2xl font-bold text-green-400">
-                        {Math.round((Object.values(repliedLeads).filter(Boolean).length / Math.max(whatsappLinks.length, 1)) * 100)}%
+                        {Math.round(
+                          (Object.values(repliedLeads).filter(Boolean).length /
+                            Math.max(whatsappLinks.length, 1)) *
+                            100,
+                        )}
+                        %
                       </div>
                       <div className="text-xs text-green-200 mt-1">
-                        {Object.values(repliedLeads).filter(Boolean).length} replied
+                        {Object.values(repliedLeads).filter(Boolean).length}{" "}
+                        replied
                       </div>
                     </div>
                     <div className="bg-purple-800/50 p-3 rounded">
-                      <div className="text-xs text-purple-300">Quality Score</div>
+                      <div className="text-xs text-purple-300">
+                        Quality Score
+                      </div>
                       <div className="text-xl sm:text-2xl font-bold text-yellow-400">
                         {Object.values(leadScores).length > 0
-                          ? Math.round(Object.values(leadScores).reduce((a, b) => a + b, 0) / Object.values(leadScores).length)
+                          ? Math.round(
+                              Object.values(leadScores).reduce(
+                                (a, b) => a + b,
+                                0,
+                              ) / Object.values(leadScores).length,
+                            )
                           : 0}
                         <span className="text-sm text-yellow-300">/100</span>
                       </div>
-                      <div className="text-xs text-yellow-200 mt-1">Average lead score</div>
+                      <div className="text-xs text-yellow-200 mt-1">
+                        Average lead score
+                      </div>
                     </div>
                     <div className="bg-purple-800/50 p-3 rounded">
                       <div className="text-xs text-purple-300">Hot Leads</div>
-                      <div className="text-xl sm:text-2xl font-bold text-orange-400">{validEmails}</div>
+                      <div className="text-xl sm:text-2xl font-bold text-orange-400">
+                        {validEmails}
+                      </div>
                       <div className="text-xs text-orange-200 mt-1">
-                        {Math.round((validEmails / Math.max(whatsappLinks.length, 1)) * 100)}% of pool
+                        {Math.round(
+                          (validEmails / Math.max(whatsappLinks.length, 1)) *
+                            100,
+                        )}
+                        % of pool
                       </div>
                     </div>
                   </div>
@@ -7030,81 +7848,138 @@ export default function Dashboard() {
 
                 {/* Company Tracking */}
                 <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 p-4 rounded-xl border border-indigo-700/50">
-                  <h3 className="text-sm font-bold text-indigo-300 mb-3">🏢 Company Tracking</h3>
+                  <h3 className="text-sm font-bold text-indigo-300 mb-3">
+                    🏢 Company Tracking
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <div className="text-xs text-indigo-400">Companies Contacted</div>
-                      <div className="text-lg font-bold text-indigo-300">
-                        {loadingContactedCompanies ? '...' : companyStats.totalCompanies}
+                      <div className="text-xs text-indigo-400">
+                        Companies Contacted
                       </div>
-                      <div className="text-xs text-indigo-400 mt-1">Unique organizations</div>
+                      <div className="text-lg font-bold text-indigo-300">
+                        {loadingContactedCompanies
+                          ? "..."
+                          : companyStats.totalCompanies}
+                      </div>
+                      <div className="text-xs text-indigo-400 mt-1">
+                        Unique organizations
+                      </div>
                     </div>
                     <div>
-                      <div className="text-xs text-indigo-400">Total Contacts</div>
-                      <div className="text-lg font-bold text-indigo-300">
-                        {loadingContactedCompanies ? '...' : companyStats.totalContacts}
+                      <div className="text-xs text-indigo-400">
+                        Total Contacts
                       </div>
-                      <div className="text-xs text-indigo-400 mt-1">Avg {companyStats.avgContactsPerCompany} per company</div>
+                      <div className="text-lg font-bold text-indigo-300">
+                        {loadingContactedCompanies
+                          ? "..."
+                          : companyStats.totalContacts}
+                      </div>
+                      <div className="text-xs text-indigo-400 mt-1">
+                        Avg {companyStats.avgContactsPerCompany} per company
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-indigo-400">Reply Rate</div>
                       <div className="text-lg font-bold text-green-400">
-                        {loadingContactedCompanies ? '...' : `${companyStats.replyRate}%`}
+                        {loadingContactedCompanies
+                          ? "..."
+                          : `${companyStats.replyRate}%`}
                       </div>
-                      <div className="text-xs text-green-400 mt-1">{companyStats.companiesReplied} replied</div>
+                      <div className="text-xs text-green-400 mt-1">
+                        {companyStats.companiesReplied} replied
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-indigo-400">CSV Sources</div>
                       <div className="text-lg font-bold text-purple-400">
-                        {loadingContactedCompanies ? '...' : contactedCompanies.reduce((sum, company) => sum + (company.csvCount || 0), 0)}
+                        {loadingContactedCompanies
+                          ? "..."
+                          : contactedCompanies.reduce(
+                              (sum, company) => sum + (company.csvCount || 0),
+                              0,
+                            )}
                       </div>
-                      <div className="text-xs text-purple-400 mt-1">Files processed</div>
+                      <div className="text-xs text-purple-400 mt-1">
+                        Files processed
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Revenue Potential */}
                 <div className="bg-gradient-to-br from-green-900/30 to-green-800/30 p-4 rounded-xl border border-green-700/50">
-                  <h3 className="text-sm font-bold text-green-300 mb-3">💰 Revenue Potential</h3>
+                  <h3 className="text-sm font-bold text-green-300 mb-3">
+                    💰 Revenue Potential
+                  </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <div className="text-xs text-green-400">Pipeline Value</div>
-                      <div className="text-lg font-bold text-green-300">
-                        ${Math.round((Object.values(repliedLeads).filter(Boolean).length * 5000) / 1000)}k
+                      <div className="text-xs text-green-400">
+                        Pipeline Value
                       </div>
-                      <div className="text-xs text-green-400 mt-1">@$5K avg deal</div>
+                      <div className="text-lg font-bold text-green-300">
+                        $
+                        {Math.round(
+                          (Object.values(repliedLeads).filter(Boolean).length *
+                            5000) /
+                            1000,
+                        )}
+                        k
+                      </div>
+                      <div className="text-xs text-green-400 mt-1">
+                        @$5K avg deal
+                      </div>
                     </div>
                     <div>
                       <div className="text-xs text-green-400">Next 30 Days</div>
                       <div className="text-lg font-bold text-green-300">
-                        ${Math.round((followUpStats?.readyForFollowUp || 0) * 5000 / 1000)}k
+                        $
+                        {Math.round(
+                          ((followUpStats?.readyForFollowUp || 0) * 5000) /
+                            1000,
+                        )}
+                        k
                       </div>
-                      <div className="text-xs text-green-400 mt-1">Expected from FUs</div>
+                      <div className="text-xs text-green-400 mt-1">
+                        Expected from FUs
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Outreach Funnel */}
                 <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/30 p-4 rounded-xl border border-blue-700/50">
-                  <h3 className="text-sm font-bold text-blue-300 mb-3">🎯 Outreach Funnel</h3>
+                  <h3 className="text-sm font-bold text-blue-300 mb-3">
+                    🎯 Outreach Funnel
+                  </h3>
                   <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-blue-200">📤 Sent</span>
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-2 bg-blue-900 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500" style={{ width: '100%' }}></div>
+                          <div
+                            className="h-full bg-blue-500"
+                            style={{ width: "100%" }}
+                          ></div>
                         </div>
-                        <span className="font-bold text-blue-300 w-12">{whatsappLinks.length}</span>
+                        <span className="font-bold text-blue-300 w-12">
+                          {whatsappLinks.length}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-green-200">✉️ No Reply Yet</span>
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-2 bg-blue-900 rounded-full overflow-hidden">
-                          <div className="h-full bg-yellow-500" style={{ width: `${Math.round((Math.max(0, whatsappLinks.length - Object.values(repliedLeads).filter(Boolean).length) / whatsappLinks.length) * 100)}%` }}></div>
+                          <div
+                            className="h-full bg-yellow-500"
+                            style={{
+                              width: `${Math.round((Math.max(0, whatsappLinks.length - Object.values(repliedLeads).filter(Boolean).length) / whatsappLinks.length) * 100)}%`,
+                            }}
+                          ></div>
                         </div>
                         <span className="font-bold text-yellow-300 w-12">
-                          {whatsappLinks.length - Object.values(repliedLeads).filter(Boolean).length}
+                          {whatsappLinks.length -
+                            Object.values(repliedLeads).filter(Boolean).length}
                         </span>
                       </div>
                     </div>
@@ -7112,7 +7987,12 @@ export default function Dashboard() {
                       <span className="text-green-200">✅ Replied</span>
                       <div className="flex items-center gap-2">
                         <div className="w-20 h-2 bg-blue-900 rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500" style={{ width: `${Math.round((Object.values(repliedLeads).filter(Boolean).length / Math.max(whatsappLinks.length, 1)) * 100)}%` }}></div>
+                          <div
+                            className="h-full bg-green-500"
+                            style={{
+                              width: `${Math.round((Object.values(repliedLeads).filter(Boolean).length / Math.max(whatsappLinks.length, 1)) * 100)}%`,
+                            }}
+                          ></div>
                         </div>
                         <span className="font-bold text-green-300 w-12">
                           {Object.values(repliedLeads).filter(Boolean).length}
@@ -7126,49 +8006,81 @@ export default function Dashboard() {
 
             {/* Interested Leads Section */}
             {interestedLeadsList.length > 0 && (
-              <div id="interested-leads-section" className="bg-gradient-to-br from-pink-900/20 to-rose-900/20 p-4 sm:p-6 rounded-xl border border-pink-700/50 mb-6">
+              <div
+                id="interested-leads-section"
+                className="bg-gradient-to-br from-pink-900/20 to-rose-900/20 p-4 sm:p-6 rounded-xl border border-pink-700/50 mb-6"
+              >
                 <h2 className="text-lg font-bold mb-4 text-pink-300 flex items-center gap-2">
                   🔥 Interested Leads ({interestedLeadsList.length})
-                  <span className="text-xs text-pink-400 font-normal">(Opened/Clicked but no reply yet)</span>
+                  <span className="text-xs text-pink-400 font-normal">
+                    (Opened/Clicked but no reply yet)
+                  </span>
                 </h2>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {interestedLeadsList.map((lead) => {
-                    const leadData = whatsappLinks.find(l => l.email === lead.email) || {};
+                    const leadData =
+                      whatsappLinks.find((l) => l.email === lead.email) || {};
                     return (
-                      <div key={lead.email} className="bg-gray-800/50 p-4 rounded-lg border border-pink-700/30">
+                      <div
+                        key={lead.email}
+                        className="bg-gray-800/50 p-4 rounded-lg border border-pink-700/30"
+                      >
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
-                            <div className="font-bold text-white">{leadData.business || lead.email}</div>
-                            <div className="text-sm text-gray-400">{lead.email}</div>
+                            <div className="font-bold text-white">
+                              {leadData.business || lead.email}
+                            </div>
+                            <div className="text-sm text-gray-400">
+                              {lead.email}
+                            </div>
                             <div className="flex gap-4 mt-2 text-xs flex-wrap">
                               {lead.opened && (
-                                <span className="text-blue-400">📧 Opened ({lead.openedCount}x)</span>
+                                <span className="text-blue-400">
+                                  📧 Opened ({lead.openedCount}x)
+                                </span>
                               )}
                               {lead.clicked && (
-                                <span className="text-green-400">🔗 Clicked ({lead.clickCount}x)</span>
+                                <span className="text-green-400">
+                                  🔗 Clicked ({lead.clickCount}x)
+                                </span>
                               )}
-                              <span className="text-pink-400">Score: {lead.interestScore}</span>
+                              <span className="text-pink-400">
+                                Score: {lead.interestScore}
+                              </span>
                               {predictiveScores[lead.email] && (
-                                <span className={`font-bold ${predictiveScores[lead.email].predictiveScore >= 70 ? 'text-red-400' :
-                                    predictiveScores[lead.email].predictiveScore >= 50 ? 'text-yellow-400' :
-                                      'text-blue-400'
-                                  }`}>
-                                  🎯 ML: {predictiveScores[lead.email].predictiveScore}/100
+                                <span
+                                  className={`font-bold ${
+                                    predictiveScores[lead.email]
+                                      .predictiveScore >= 70
+                                      ? "text-red-400"
+                                      : predictiveScores[lead.email]
+                                            .predictiveScore >= 50
+                                        ? "text-yellow-400"
+                                        : "text-blue-400"
+                                  }`}
+                                >
+                                  🎯 ML:{" "}
+                                  {predictiveScores[lead.email].predictiveScore}
+                                  /100
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <button
-                              onClick={() => researchCompany(
-                                leadData.business || lead.email,
-                                leadData.website || '',
-                                lead.email
-                              )}
+                              onClick={() =>
+                                researchCompany(
+                                  leadData.business || lead.email,
+                                  leadData.website || "",
+                                  lead.email,
+                                )
+                              }
                               disabled={researchingCompany === lead.email}
                               className="text-xs bg-gradient-to-r from-purple-700 to-pink-700 hover:from-purple-600 hover:to-pink-600 text-white px-3 py-1.5 rounded font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              {researchingCompany === lead.email ? '⏳ Researching...' : '🤖 AI Research'}
+                              {researchingCompany === lead.email
+                                ? "⏳ Researching..."
+                                : "🤖 AI Research"}
                             </button>
                           </div>
                         </div>
@@ -7182,40 +8094,65 @@ export default function Dashboard() {
             {/* Campaign Intelligence */}
             {whatsappLinks.length > 0 && (
               <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 p-4 sm:p-6 rounded-xl border border-indigo-700/50">
-                <h2 className="text-lg font-bold mb-4 text-indigo-300">🧠 Campaign Intelligence</h2>
+                <h2 className="text-lg font-bold mb-4 text-indigo-300">
+                  🧠 Campaign Intelligence
+                </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-gray-800/30 p-3 rounded border border-gray-700">
-                    <div className="text-xs font-semibold text-indigo-300 mb-2">📊 Lead Segments</div>
+                    <div className="text-xs font-semibold text-indigo-300 mb-2">
+                      📊 Lead Segments
+                    </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">🔥 Hot Leads (75+)</span>
-                        <span className="font-bold text-orange-400">{validEmails}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-300">🟡 Warm Leads (50-74)</span>
-                        <span className="font-bold text-yellow-400">
-                          {Object.values(leadScores).filter(s => s >= 50 && s < 75).length}
+                        <span className="text-gray-300">
+                          🔥 Hot Leads (75+)
+                        </span>
+                        <span className="font-bold text-orange-400">
+                          {validEmails}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">🔵 Cold Leads (Below 50)</span>
+                        <span className="text-gray-300">
+                          🟡 Warm Leads (50-74)
+                        </span>
+                        <span className="font-bold text-yellow-400">
+                          {
+                            Object.values(leadScores).filter(
+                              (s) => s >= 50 && s < 75,
+                            ).length
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-300">
+                          🔵 Cold Leads (Below 50)
+                        </span>
                         <span className="font-bold text-blue-400">
-                          {Object.values(leadScores).filter(s => s < 50).length}
+                          {
+                            Object.values(leadScores).filter((s) => s < 50)
+                              .length
+                          }
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="bg-gray-800/30 p-3 rounded border border-gray-700">
-                    <div className="text-xs font-semibold text-green-300 mb-2">🎯 Conversion Forecast</div>
+                    <div className="text-xs font-semibold text-green-300 mb-2">
+                      🎯 Conversion Forecast
+                    </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">Est. Replies (7 days)</span>
+                        <span className="text-gray-300">
+                          Est. Replies (7 days)
+                        </span>
                         <span className="font-bold text-green-400">
                           {Math.ceil(whatsappLinks.length * 0.25)} leads
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">Est. Conversions (30 days)</span>
+                        <span className="text-gray-300">
+                          Est. Conversions (30 days)
+                        </span>
                         <span className="font-bold text-green-400">
                           {Math.ceil(whatsappLinks.length * 0.08)} deals
                         </span>
@@ -7223,18 +8160,37 @@ export default function Dashboard() {
                       <div className="flex justify-between items-center">
                         <span className="text-gray-300">Pipeline Value</span>
                         <span className="font-bold text-yellow-400">
-                          ${Math.round((whatsappLinks.length * 0.08 * 5000) / 1000)}k
+                          $
+                          {Math.round(
+                            (whatsappLinks.length * 0.08 * 5000) / 1000,
+                          )}
+                          k
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="bg-gray-800/30 p-3 rounded border border-gray-700 sm:col-span-2">
-                    <div className="text-xs font-semibold text-purple-300 mb-2">💡 Recommended Actions</div>
+                    <div className="text-xs font-semibold text-purple-300 mb-2">
+                      💡 Recommended Actions
+                    </div>
                     <div className="space-y-1 text-xs text-gray-300">
-                      <div>✓ Focus on hot leads first (3x higher conversion rate)</div>
-                      <div>✓ {followUpStats.readyForFollowUp > 0 ? `${followUpStats.readyForFollowUp} leads need follow-up today - Send using value-first template` : 'All leads are either replied or waiting - Check back in 48h'}</div>
-                      <div>✓ Use question-based template for re-engagement (proven +40% improvement)</div>
-                      <div>✓ Send between 9-11 AM for best open rates (+35% average)</div>
+                      <div>
+                        ✓ Focus on hot leads first (3x higher conversion rate)
+                      </div>
+                      <div>
+                        ✓{" "}
+                        {followUpStats.readyForFollowUp > 0
+                          ? `${followUpStats.readyForFollowUp} leads need follow-up today - Send using value-first template`
+                          : "All leads are either replied or waiting - Check back in 48h"}
+                      </div>
+                      <div>
+                        ✓ Use question-based template for re-engagement (proven
+                        +40% improvement)
+                      </div>
+                      <div>
+                        ✓ Send between 9-11 AM for best open rates (+35%
+                        average)
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -7243,21 +8199,28 @@ export default function Dashboard() {
 
             {/* Email Preview */}
             <div className="bg-gray-800 p-4 sm:p-6 rounded-xl shadow border border-gray-700">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">10. Email Preview</h2>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
+                10. Email Preview
+              </h2>
               <div className="bg-gray-750 p-4 rounded border border-gray-600">
                 <div className="text-sm text-gray-400">
-                  To: {previewRecipient?.email || 'email@example.com'}
+                  To: {previewRecipient?.email || "email@example.com"}
                 </div>
                 <div className="mt-1 font-medium text-white">
                   {renderPreviewText(
                     abTestMode ? templateA.subject : templateB.subject,
                     previewRecipient,
                     fieldMappings,
-                    senderName
+                    senderName,
                   )}
                 </div>
                 <div className="mt-2 whitespace-pre-wrap text-sm text-gray-200">
-                  {renderPreviewText(abTestMode ? templateA.body : templateB.body, previewRecipient, fieldMappings, senderName)}
+                  {renderPreviewText(
+                    abTestMode ? templateA.body : templateB.body,
+                    previewRecipient,
+                    fieldMappings,
+                    senderName,
+                  )}
                 </div>
               </div>
             </div>
@@ -7294,30 +8257,41 @@ export default function Dashboard() {
                     return (
                       <div
                         key={link.id}
-                        className={`p-3 rounded-lg border ${isContacted
-                            ? 'bg-gray-800/50 border-gray-600 opacity-70'
-                            : 'bg-gray-750 border-gray-600'
-                          }`}
+                        className={`p-3 rounded-lg border ${
+                          isContacted
+                            ? "bg-gray-800/50 border-gray-600 opacity-70"
+                            : "bg-gray-750 border-gray-600"
+                        }`}
                       >
                         <div className="flex justify-between">
                           <div>
-                            <div className="font-medium text-white">{link.business}</div>
-                            <div className="text-sm text-gray-400">+{link.phone}</div>
+                            <div className="font-medium text-white">
+                              {link.business}
+                            </div>
+                            <div className="text-sm text-gray-400">
+                              +{link.phone}
+                            </div>
                             {link.email ? (
-                              <div className="text-xs text-blue-400">Score: {score}/100</div>
+                              <div className="text-xs text-blue-400">
+                                Score: {score}/100
+                              </div>
                             ) : (
-                              <div className="text-xs text-gray-500 italic">No email (phone-only)</div>
+                              <div className="text-xs text-gray-500 italic">
+                                No email (phone-only)
+                              </div>
                             )}
                             {/* ✅ Channel tracking badges */}
                             <div className="flex gap-1 mt-1 flex-wrap">
                               {lastEmailSent && (
                                 <span className="text-xs bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded">
-                                  📧 {new Date(lastEmailSent).toLocaleDateString()}
+                                  📧{" "}
+                                  {new Date(lastEmailSent).toLocaleDateString()}
                                 </span>
                               )}
                               {lastWhatsApp && (
                                 <span className="text-xs bg-green-900/30 text-green-300 px-1.5 py-0.5 rounded">
-                                  💬 {new Date(lastWhatsApp).toLocaleDateString()}
+                                  💬{" "}
+                                  {new Date(lastWhatsApp).toLocaleDateString()}
                                 </span>
                               )}
                               {lastSMS && (
@@ -7357,7 +8331,7 @@ export default function Dashboard() {
                                 📞
                               </button>
                               <button
-                                onClick={() => handleTwilioCall(link, 'direct')}
+                                onClick={() => handleTwilioCall(link, "direct")}
                                 className="text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded"
                                 title="Automated message"
                               >
@@ -7371,7 +8345,9 @@ export default function Dashboard() {
                                 🧠
                               </button>
                               <button
-                                onClick={() => handleOpenLinkedIn(link, 'company')}
+                                onClick={() =>
+                                  handleOpenLinkedIn(link, "company")
+                                }
                                 className="text-xs bg-blue-900 hover:bg-blue-800 text-blue-200 px-3 py-2 rounded"
                                 title="LinkedIn search"
                               >
@@ -7385,7 +8361,9 @@ export default function Dashboard() {
                                 💬
                               </button>
                               <button
-                                onClick={() => handleSmartResearchOutreach(link)}
+                                onClick={() =>
+                                  handleSmartResearchOutreach(link)
+                                }
                                 className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded"
                                 title="Smart AI Outreach"
                               >
@@ -7423,8 +8401,10 @@ export default function Dashboard() {
                             )}
                             {link.email ? (
                               <select
-                                value={dealStage[link.email] || 'new'}
-                                onChange={(e) => updateDealStage(link.email, e.target.value)}
+                                value={dealStage[link.email] || "new"}
+                                onChange={(e) =>
+                                  updateDealStage(link.email, e.target.value)
+                                }
                                 className="text-xs bg-gray-700 text-white border border-gray-600 rounded px-1 py-0.5 mt-1 w-full"
                               >
                                 <option value="new">New</option>
@@ -7432,24 +8412,39 @@ export default function Dashboard() {
                                 <option value="demo">Demo Scheduled</option>
                                 <option value="proposal">Proposal Sent</option>
                                 <option value="negotiation">Negotiation</option>
-                                <option value="closed_won">🎉 Closed Won</option>
-                                <option value="closed_lost">❌ Closed Lost</option>
+                                <option value="closed_won">
+                                  🎉 Closed Won
+                                </option>
+                                <option value="closed_lost">
+                                  ❌ Closed Lost
+                                </option>
                                 <option value="delivery">🚀 Delivery</option>
                                 <option value="retention">💎 Retention</option>
                                 <option value="expansion">📈 Expansion</option>
                               </select>
                             ) : (
-                              <div className="text-xs text-gray-500 mt-1 italic">No email → CRM not tracked</div>
+                              <div className="text-xs text-gray-500 mt-1 italic">
+                                No email → CRM not tracked
+                              </div>
                             )}
                             {/* ✅ Manual Contact Mark Button */}
                             <button
-                              onClick={() => markContactManually(link, !isContacted, 'Manual update')}
-                              className={`text-xs px-3 py-2 rounded mt-1 w-full ${isContacted
-                                  ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                                  : 'bg-green-600 hover:bg-green-500 text-white'
-                                }`}
+                              onClick={() =>
+                                markContactManually(
+                                  link,
+                                  !isContacted,
+                                  "Manual update",
+                                )
+                              }
+                              className={`text-xs px-3 py-2 rounded mt-1 w-full ${
+                                isContacted
+                                  ? "bg-gray-600 hover:bg-gray-500 text-white"
+                                  : "bg-green-600 hover:bg-green-500 text-white"
+                              }`}
                             >
-                              {isContacted ? '↩️ Mark Not Contacted' : '✅ Mark Contacted'}
+                              {isContacted
+                                ? "↩️ Mark Not Contacted"
+                                : "✅ Mark Contacted"}
                             </button>
                           </div>
                         </div>
@@ -7461,8 +8456,11 @@ export default function Dashboard() {
                   <button
                     onClick={handleSendBulkSMS}
                     disabled={!smsConsent || isSending}
-                    className={`w-full py-2 rounded font-bold ${!smsConsent ? 'bg-gray-600 cursor-not-allowed' : 'bg-orange-700 hover:bg-orange-600 text-white'
-                      }`}
+                    className={`w-full py-2 rounded font-bold ${
+                      !smsConsent
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-orange-700 hover:bg-orange-600 text-white"
+                    }`}
                   >
                     📲 Send SMS to All ({whatsappLinks.length})
                   </button>
@@ -7484,7 +8482,9 @@ export default function Dashboard() {
                   <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">
                     📬 Reply & Follow-Up Center
                   </h2>
-                  <p className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2">Intelligent campaign management with AI-powered insights</p>
+                  <p className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2">
+                    Intelligent campaign management with AI-powered insights
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowFollowUpModal(false)}
@@ -7523,45 +8523,81 @@ export default function Dashboard() {
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-blue-900/40 to-blue-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">{followUpStats.totalSent}</div>
-                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Total Sent</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📤</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">
+                      {followUpStats.totalSent}
+                    </div>
+                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">
+                      Total Sent
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      📤
+                    </div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{repliedLeadsList.length}</div>
-                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
-                      Replied ({Math.round((repliedLeadsList.length / Math.max(followUpStats.totalSent, 1)) * 100)}%)
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
+                      {repliedLeadsList.length}
                     </div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
+                      Replied (
+                      {Math.round(
+                        (repliedLeadsList.length /
+                          Math.max(followUpStats.totalSent, 1)) *
+                          100,
+                      )}
+                      %)
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      ✅
+                    </div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-indigo-900/40 to-purple-800/40 p-3 sm:p-5 rounded-xl border border-indigo-500/30 hover:border-indigo-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-indigo-400">{followUpStats.alreadyFollowedUp}</div>
-                    <div className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2 font-medium">Already Followed Up</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📬</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-indigo-400">
+                      {followUpStats.alreadyFollowedUp}
+                    </div>
+                    <div className="text-xs sm:text-sm text-indigo-200 mt-1 sm:mt-2 font-medium">
+                      Already Followed Up
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      📬
+                    </div>
                   </div>
                 </div>
                 <div className="relative group hidden sm:block">
                   <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-3 sm:p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{safeFollowUpCandidates.length}</div>
-                    <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">Ready for Follow-Up</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏰</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">
+                      {safeFollowUpCandidates.length}
+                    </div>
+                    <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">
+                      Ready for Follow-Up
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      ⏰
+                    </div>
                   </div>
                 </div>
                 <div className="relative group hidden sm:block">
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
-                      ${Math.round((repliedLeadsList.length * 0.25 * 5000) / 1000)}k
+                      $
+                      {Math.round(
+                        (repliedLeadsList.length * 0.25 * 5000) / 1000,
+                      )}
+                      k
                     </div>
-                    <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">Potential Revenue</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💰</div>
+                    <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">
+                      Potential Revenue
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      💰
+                    </div>
                   </div>
                 </div>
               </div>
@@ -7572,94 +8608,140 @@ export default function Dashboard() {
                 <div className="mb-6">
                   <div className="text-base sm:text-lg font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🎉</span>
-                    <span>{repliedLeadsList.length} New Replies - Take Action!</span>
+                    <span>
+                      {repliedLeadsList.length} New Replies - Take Action!
+                    </span>
                   </div>
                   <div className="space-y-2 sm:space-y-3">
-                    {repliedLeadsList.slice(0, showAllRepliedLeads ? repliedLeadsList.length : 5).map((lead, idx) => (
-                      <div key={idx} className="group relative">
-                        <div className={`absolute inset-0 bg-gradient-to-r ${lead.isHotLead ? 'from-green-500/20 to-emerald-500/20' : 'from-blue-500/10 to-purple-500/10'} rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all`}></div>
-                        <div className={`relative p-3 sm:p-4 rounded-xl ${lead.isHotLead ? 'bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/40' : 'bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-gray-700'} border hover:border-indigo-500/50 transition-all`}>
-                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                            <div className="flex-1 w-full">
-                              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                {lead.isHotLead && <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">🔥 HOT</span>}
-                                <div className="font-bold text-white text-sm sm:text-base break-all">{lead.email}</div>
-                              </div>
-                              <div className="text-xs text-gray-400 mb-2">{lead.businessName || 'No company'}</div>
-                              <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
-                                <span className="text-indigo-400">
-                                  📅 Replied {Math.ceil(lead.daysSinceReply)} days ago
-                                </span>
-                                <span className="text-purple-400">
-                                  📨 Sent {Math.ceil(lead.daysSinceSent)} days ago
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2 sm:ml-4 w-full sm:w-auto">
-                              <button
-                                onClick={() => handleViewConversation(lead)}
-                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
-                                title="View Conversation"
-                              >
-                                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 group-hover/btn:from-purple-500 group-hover/btn:to-pink-500 transition-all"></div>
-                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
-                                  💬 Thread
+                    {repliedLeadsList
+                      .slice(
+                        0,
+                        showAllRepliedLeads ? repliedLeadsList.length : 5,
+                      )
+                      .map((lead, idx) => (
+                        <div key={idx} className="group relative">
+                          <div
+                            className={`absolute inset-0 bg-gradient-to-r ${lead.isHotLead ? "from-green-500/20 to-emerald-500/20" : "from-blue-500/10 to-purple-500/10"} rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all`}
+                          ></div>
+                          <div
+                            className={`relative p-3 sm:p-4 rounded-xl ${lead.isHotLead ? "bg-gradient-to-br from-green-900/40 to-emerald-900/40 border-green-500/40" : "bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-gray-700"} border hover:border-indigo-500/50 transition-all`}
+                          >
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                              <div className="flex-1 w-full">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  {lead.isHotLead && (
+                                    <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                      🔥 HOT
+                                    </span>
+                                  )}
+                                  <div className="font-bold text-white text-sm sm:text-base break-all">
+                                    {lead.email}
+                                  </div>
                                 </div>
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const confirmed = confirm(`Create deal for ${lead.email}?`);
-                                  if (!confirmed) return;
-                                  try {
-                                    const res = await fetch('/api/create-deal', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        userId: user.uid,
-                                        email: lead.email,
-                                        businessName: lead.businessName,
-                                        stage: 'qualified'
-                                      })
-                                    });
-                                    if (res.ok) {
-                                      addNotification(`✅ Deal created for ${lead.email}`, 'success');
-                                      await loadDeals();
-                                    } else {
-                                      addNotification('Failed to create deal', 'error');
+                                <div className="text-xs text-gray-400 mb-2">
+                                  {lead.businessName || "No company"}
+                                </div>
+                                <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
+                                  <span className="text-indigo-400">
+                                    📅 Replied {Math.ceil(lead.daysSinceReply)}{" "}
+                                    days ago
+                                  </span>
+                                  <span className="text-purple-400">
+                                    📨 Sent {Math.ceil(lead.daysSinceSent)} days
+                                    ago
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 sm:ml-4 w-full sm:w-auto">
+                                <button
+                                  onClick={() => handleViewConversation(lead)}
+                                  className="relative group/btn overflow-hidden flex-1 sm:flex-none"
+                                  title="View Conversation"
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 group-hover/btn:from-purple-500 group-hover/btn:to-pink-500 transition-all"></div>
+                                  <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
+                                    💬 Thread
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    const confirmed = confirm(
+                                      `Create deal for ${lead.email}?`,
+                                    );
+                                    if (!confirmed) return;
+                                    try {
+                                      const res = await fetch(
+                                        "/api/create-deal",
+                                        {
+                                          method: "POST",
+                                          headers: {
+                                            "Content-Type": "application/json",
+                                          },
+                                          body: JSON.stringify({
+                                            userId: user.uid,
+                                            email: lead.email,
+                                            businessName: lead.businessName,
+                                            stage: "qualified",
+                                          }),
+                                        },
+                                      );
+                                      if (res.ok) {
+                                        addNotification(
+                                          `✅ Deal created for ${lead.email}`,
+                                          "success",
+                                        );
+                                        await loadDeals();
+                                      } else {
+                                        addNotification(
+                                          "Failed to create deal",
+                                          "error",
+                                        );
+                                      }
+                                    } catch (err) {
+                                      addNotification(
+                                        "Error creating deal",
+                                        "error",
+                                      );
                                     }
-                                  } catch (err) {
-                                    addNotification('Error creating deal', 'error');
+                                  }}
+                                  className="relative group/btn overflow-hidden flex-1 sm:flex-none"
+                                  title="Create Deal"
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 group-hover/btn:from-green-500 group-hover/btn:to-emerald-500 transition-all"></div>
+                                  <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
+                                    💼 Deal
+                                  </div>
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `mailto:${lead.email}`,
+                                      "_blank",
+                                    )
                                   }
-                                }}
-                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
-                                title="Create Deal"
-                              >
-                                <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 group-hover/btn:from-green-500 group-hover/btn:to-emerald-500 transition-all"></div>
-                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
-                                  💼 Deal
-                                </div>
-                              </button>
-                              <button
-                                onClick={() => window.open(`mailto:${lead.email}`, '_blank')}
-                                className="relative group/btn overflow-hidden flex-1 sm:flex-none"
-                                title="Send Email"
-                              >
-                                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover/btn:from-blue-500 group-hover/btn:to-indigo-500 transition-all"></div>
-                                <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
-                                  📧 Email
-                                </div>
-                              </button>
+                                  className="relative group/btn overflow-hidden flex-1 sm:flex-none"
+                                  title="Send Email"
+                                >
+                                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover/btn:from-blue-500 group-hover/btn:to-indigo-500 transition-all"></div>
+                                  <div className="relative px-3 sm:px-4 py-2 text-white font-bold text-xs sm:text-sm rounded-lg">
+                                    📧 Email
+                                  </div>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                     {repliedLeadsList.length > 5 && (
                       <button
-                        onClick={() => setShowAllRepliedLeads(!showAllRepliedLeads)}
+                        onClick={() =>
+                          setShowAllRepliedLeads(!showAllRepliedLeads)
+                        }
                         className="w-full mt-3 py-2 px-4 bg-green-600/30 hover:bg-green-600/50 text-green-300 rounded-lg text-sm font-medium transition-all"
                       >
-                        {showAllRepliedLeads ? `Show Less (5)` : `View All ${repliedLeadsList.length} Replies`}
+                        {showAllRepliedLeads
+                          ? `Show Less (5)`
+                          : `View All ${repliedLeadsList.length} Replies`}
                       </button>
                     )}
                   </div>
@@ -7671,40 +8753,76 @@ export default function Dashboard() {
                   {pendingLeads.length > 0 ? (
                     <>
                       <div className="text-4xl sm:text-6xl mb-4">⏳</div>
-                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">Pending Follow-Ups</div>
-                      <div className="text-sm sm:text-base text-gray-400 mb-4">{pendingLeads.length} leads waiting for follow-up window</div>
+                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">
+                        Pending Follow-Ups
+                      </div>
+                      <div className="text-sm sm:text-base text-gray-400 mb-4">
+                        {pendingLeads.length} leads waiting for follow-up window
+                      </div>
                       <div className="max-w-2xl mx-auto bg-gray-800/50 rounded-lg p-3 sm:p-4 text-left">
-                        <div className="text-xs sm:text-sm text-gray-300 mb-2">Next available follow-ups:</div>
-                        {pendingLeads.slice(0, showAllPendingLeads ? pendingLeads.length : 3).map((lead, idx) => {
-                          const timeUntilFollowUp = new Date(lead.followUpAt) - currentTime;
-                          const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
-                          const minutesUntil = Math.floor((timeUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
-                          const secondsUntil = Math.floor((timeUntilFollowUp % (1000 * 60)) / 1000);
-                          const isReady = timeUntilFollowUp <= 0;
-                          
-                          return (
-                          <div key={idx} className="text-xs sm:text-sm text-gray-400 py-2 border-b border-gray-700 last:border-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                            <div>
-                              <div className="font-medium text-gray-300 text-sm sm:text-base break-all">{lead.email}</div>
-                              <div className="text-xs text-gray-500">{lead.businessName || 'No company'}</div>
-                            </div>
-                            <div className="text-right sm:text-left w-full sm:w-auto">
-                              <div className={`font-bold ${isReady ? 'text-green-400 animate-pulse' : hoursUntil <= 1 ? 'text-yellow-400' : 'text-gray-400'}`}>
-                                {isReady ? '🔓 Ready Now!' : hoursUntil > 0 ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s` : `${minutesUntil}m ${secondsUntil}s`}
+                        <div className="text-xs sm:text-sm text-gray-300 mb-2">
+                          Next available follow-ups:
+                        </div>
+                        {pendingLeads
+                          .slice(
+                            0,
+                            showAllPendingLeads ? pendingLeads.length : 3,
+                          )
+                          .map((lead, idx) => {
+                            const timeUntilFollowUp =
+                              new Date(lead.followUpAt) - currentTime;
+                            const hoursUntil = Math.floor(
+                              timeUntilFollowUp / (1000 * 60 * 60),
+                            );
+                            const minutesUntil = Math.floor(
+                              (timeUntilFollowUp % (1000 * 60 * 60)) /
+                                (1000 * 60),
+                            );
+                            const secondsUntil = Math.floor(
+                              (timeUntilFollowUp % (1000 * 60)) / 1000,
+                            );
+                            const isReady = timeUntilFollowUp <= 0;
+
+                            return (
+                              <div
+                                key={idx}
+                                className="text-xs sm:text-sm text-gray-400 py-2 border-b border-gray-700 last:border-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2"
+                              >
+                                <div>
+                                  <div className="font-medium text-gray-300 text-sm sm:text-base break-all">
+                                    {lead.email}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {lead.businessName || "No company"}
+                                  </div>
+                                </div>
+                                <div className="text-right sm:text-left w-full sm:w-auto">
+                                  <div
+                                    className={`font-bold ${isReady ? "text-green-400 animate-pulse" : hoursUntil <= 1 ? "text-yellow-400" : "text-gray-400"}`}
+                                  >
+                                    {isReady
+                                      ? "🔓 Ready Now!"
+                                      : hoursUntil > 0
+                                        ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s`
+                                        : `${minutesUntil}m ${secondsUntil}s`}
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(lead.followUpAt).toLocaleString()}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(lead.followUpAt).toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                        })}
+                            );
+                          })}
                         {pendingLeads.length > 3 && (
                           <button
-                            onClick={() => setShowAllPendingLeads(!showAllPendingLeads)}
+                            onClick={() =>
+                              setShowAllPendingLeads(!showAllPendingLeads)
+                            }
                             className="w-full mt-3 py-2 px-4 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm font-medium transition-all"
                           >
-                            {showAllPendingLeads ? `Show Less` : `View All ${pendingLeads.length} Pending Leads`}
+                            {showAllPendingLeads
+                              ? `Show Less`
+                              : `View All ${pendingLeads.length} Pending Leads`}
                           </button>
                         )}
                       </div>
@@ -7715,8 +8833,12 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <div className="text-4xl sm:text-6xl mb-4">✅</div>
-                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">All Caught Up!</div>
-                      <div className="text-sm sm:text-base text-gray-400">All leads have been replied to or maxed out follow-ups</div>
+                      <div className="text-xl sm:text-2xl text-gray-200 font-bold mb-2">
+                        All Caught Up!
+                      </div>
+                      <div className="text-sm sm:text-base text-gray-400">
+                        All leads have been replied to or maxed out follow-ups
+                      </div>
                       <div className="text-xs sm:text-sm text-gray-500 mt-3 bg-gray-800/50 inline-block px-3 sm:px-4 py-2 rounded-lg">
                         Follow-ups become available 1+ day after initial send
                       </div>
@@ -7727,13 +8849,18 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <div className="text-base sm:text-lg font-bold text-indigo-300 mb-4 sm:mb-5 flex items-center gap-2 sm:gap-3">
                     <span className="text-xl sm:text-2xl">🎯</span>
-                    <span>{safeFollowUpCandidates.length} leads ready for intelligent follow-up</span>
+                    <span>
+                      {safeFollowUpCandidates.length} leads ready for
+                      intelligent follow-up
+                    </span>
                   </div>
 
                   {/* QUOTA DISPLAY */}
                   <div className="mb-4 bg-gray-900/50 border border-gray-700 rounded-lg p-3">
                     <div className="flex items-center justify-between text-xs sm:text-sm">
-                      <span className="text-gray-300">📧 Daily Email Quota:</span>
+                      <span className="text-gray-300">
+                        📧 Daily Email Quota:
+                      </span>
                       <span className="font-bold text-indigo-300">
                         {quotas.emails.used} / {quotas.emails.limit}
                       </span>
@@ -7741,7 +8868,9 @@ export default function Dashboard() {
                     <div className="mt-2 w-full bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-indigo-600 rounded-full h-2 transition-all duration-300"
-                        style={{ width: `${(quotas.emails.used / quotas.emails.limit) * 100}%` }}
+                        style={{
+                          width: `${(quotas.emails.used / quotas.emails.limit) * 100}%`,
+                        }}
                       ></div>
                     </div>
                     <div className="mt-1 text-xs text-gray-400 text-right">
@@ -7759,16 +8888,17 @@ export default function Dashboard() {
                       multiple
                       onChange={(e) => {
                         const files = Array.from(e.target.files);
-                        const fileReaders = files.map(file => {
+                        const fileReaders = files.map((file) => {
                           return new Promise((resolve, reject) => {
                             const reader = new FileReader();
                             reader.onload = () => {
-                              const base64 = reader.result.split(',')[1];
+                              const base64 = reader.result.split(",")[1];
                               resolve({
                                 filename: file.name,
-                                mimeType: file.type || 'application/octet-stream',
+                                mimeType:
+                                  file.type || "application/octet-stream",
                                 data: base64,
-                                size: file.size
+                                size: file.size,
                               });
                             };
                             reader.onerror = reject;
@@ -7776,11 +8906,16 @@ export default function Dashboard() {
                           });
                         });
 
-                        Promise.all(fileReaders).then(attachments => {
-                          setFollowUpAttachments([...followUpAttachments, ...attachments]);
-                        }).catch(error => {
-                          addNotification('Failed to load files', 'error');
-                        });
+                        Promise.all(fileReaders)
+                          .then((attachments) => {
+                            setFollowUpAttachments([
+                              ...followUpAttachments,
+                              ...attachments,
+                            ]);
+                          })
+                          .catch((error) => {
+                            addNotification("Failed to load files", "error");
+                          });
                       }}
                       disabled={isSending}
                       className="w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 disabled:opacity-50"
@@ -7788,10 +8923,17 @@ export default function Dashboard() {
                     {followUpAttachments.length > 0 && (
                       <div className="mt-2 space-y-2 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-200">
                         {followUpAttachments.map((attachment, index) => (
-                          <div key={attachment.filename + index} className="flex items-center justify-between gap-2">
+                          <div
+                            key={attachment.filename + index}
+                            className="flex items-center justify-between gap-2"
+                          >
                             <div>
-                              <div className="font-semibold">{attachment.filename}</div>
-                              <div className="text-xs text-gray-400">{Math.round(attachment.size / 1024)} KB</div>
+                              <div className="font-semibold">
+                                {attachment.filename}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                {Math.round(attachment.size / 1024)} KB
+                              </div>
                             </div>
                             <button
                               type="button"
@@ -7818,21 +8960,27 @@ export default function Dashboard() {
                           handleMassEmailFollowUps();
                         }}
                         disabled={isSending}
-                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 ${isSending
-                            ? 'bg-gray-600 cursor-not-allowed opacity-60'
-                            : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
-                          }`}
+                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 ${
+                          isSending
+                            ? "bg-gray-600 cursor-not-allowed opacity-60"
+                            : "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:via-purple-500 hover:to-pink-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                        }`}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="relative px-8 py-4 text-white font-bold text-lg">
                           <div className="flex items-center justify-center gap-3">
                             <span className="text-2xl">📧</span>
-                            <span>{isSending ? 'Sending...' : `Mass Email All Safe Leads (${safeFollowUpCandidates.length})`}</span>
+                            <span>
+                              {isSending
+                                ? "Sending..."
+                                : `Mass Email All Safe Leads (${safeFollowUpCandidates.length})`}
+                            </span>
                             {!isSending && <span className="text-lg">→</span>}
                           </div>
                           {!isSending && (
                             <div className="text-sm font-normal text-indigo-100 mt-1 text-center">
-                              Send follow-up emails to all safe leads at once with tracking
+                              Send follow-up emails to all safe leads at once
+                              with tracking
                             </div>
                           )}
                           {isSending && sendProgress.total > 0 && (
@@ -7840,11 +8988,14 @@ export default function Dashboard() {
                               <div className="w-full bg-white/20 rounded-full h-2">
                                 <div
                                   className="bg-white rounded-full h-2 transition-all duration-300"
-                                  style={{ width: `${(sendProgress.current / sendProgress.total) * 100}%` }}
+                                  style={{
+                                    width: `${(sendProgress.current / sendProgress.total) * 100}%`,
+                                  }}
                                 ></div>
                               </div>
                               <div className="text-xs text-indigo-100 mt-1 text-center">
-                                {sendProgress.current} / {sendProgress.total} sent
+                                {sendProgress.current} / {sendProgress.total}{" "}
+                                sent
                               </div>
                             </div>
                           )}
@@ -7860,30 +9011,39 @@ export default function Dashboard() {
 
                       {/* SMS QUALIFICATION BUTTON */}
                       <button
-                        onClick={() => handleSMSQualification(safeFollowUpCandidates)}
+                        onClick={() =>
+                          handleSMSQualification(safeFollowUpCandidates)
+                        }
                         disabled={isSending}
-                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 mt-4 ${isSending
-                            ? 'bg-gray-600 cursor-not-allowed opacity-60'
-                            : 'bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-500 hover:via-emerald-500 hover:to-teal-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]'
-                          }`}
+                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 mt-4 ${
+                          isSending
+                            ? "bg-gray-600 cursor-not-allowed opacity-60"
+                            : "bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-500 hover:via-emerald-500 hover:to-teal-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                        }`}
                       >
                         <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="relative px-8 py-4 text-white font-bold text-lg">
                           <div className="flex items-center justify-center gap-3">
                             <span className="text-2xl">📱</span>
-                            <span>{isSending ? 'Sending...' : `SMS Qualify All Leads (${safeFollowUpCandidates.length})`}</span>
+                            <span>
+                              {isSending
+                                ? "Sending..."
+                                : `SMS Qualify All Leads (${safeFollowUpCandidates.length})`}
+                            </span>
                             {!isSending && <span className="text-lg">→</span>}
                           </div>
                           {!isSending && (
                             <div className="text-sm font-normal text-green-100 mt-1 text-center">
-                              Send aggressive qualification SMS to filter time-wasters
+                              Send aggressive qualification SMS to filter
+                              time-wasters
                             </div>
                           )}
                         </div>
                       </button>
 
                       {/* WHATSAPP FOLLOW-UP TRACKING PANEL */}
-                      {(whatsappLinks.length > 0 || whatsappFollowUpCandidates.length > 0) && (
+                      {(whatsappLinks.length > 0 ||
+                        whatsappFollowUpCandidates.length > 0) && (
                         <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
                           <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
                             <span className="text-xl sm:text-2xl">💬</span>
@@ -7892,47 +9052,77 @@ export default function Dashboard() {
                               {whatsappFollowUpCandidates.length} Candidates
                             </span>
                           </div>
-                          
+
                           {/* WhatsApp Stats */}
                           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4">
                             <div className="relative group">
                               <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                               <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{whatsappFollowUpStats.totalSent}</div>
-                                <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">Total Sent</div>
-                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📤</div>
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
+                                  {whatsappFollowUpStats.totalSent}
+                                </div>
+                                <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
+                                  Total Sent
+                                </div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                                  📤
+                                </div>
                               </div>
                             </div>
                             <div className="relative group">
                               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                               <div className="relative bg-gradient-to-br from-blue-900/40 to-indigo-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
-                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">{whatsappFollowUpStats.readyForFollowUp}</div>
-                                <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Ready for Follow-Up</div>
-                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏰</div>
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">
+                                  {whatsappFollowUpStats.readyForFollowUp}
+                                </div>
+                                <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">
+                                  Ready for Follow-Up
+                                </div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                                  ⏰
+                                </div>
                               </div>
                             </div>
                             <div className="relative group">
                               <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                               <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
-                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">{whatsappFollowUpStats.alreadyFollowedUp}</div>
-                                <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">Already Followed Up</div>
-                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📬</div>
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
+                                  {whatsappFollowUpStats.alreadyFollowedUp}
+                                </div>
+                                <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">
+                                  Already Followed Up
+                                </div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                                  📬
+                                </div>
                               </div>
                             </div>
                             <div className="relative group hidden sm:block">
                               <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/20 to-orange-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                               <div className="relative bg-gradient-to-br from-yellow-900/40 to-orange-800/40 p-3 sm:p-5 rounded-xl border border-yellow-500/30 hover:border-yellow-400/50 transition-all">
-                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">{whatsappFollowUpStats.awaitingReply}</div>
-                                <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">Awaiting Reply</div>
-                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">⏳</div>
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-400">
+                                  {whatsappFollowUpStats.awaitingReply}
+                                </div>
+                                <div className="text-xs sm:text-sm text-yellow-200 mt-1 sm:mt-2 font-medium">
+                                  Awaiting Reply
+                                </div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                                  ⏳
+                                </div>
                               </div>
                             </div>
                             <div className="relative group hidden sm:block">
                               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 to-cyan-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                               <div className="relative bg-gradient-to-br from-teal-900/40 to-cyan-800/40 p-3 sm:p-5 rounded-xl border border-teal-500/30 hover:border-teal-400/50 transition-all">
-                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-teal-400">{whatsappFollowUpCandidates.length}</div>
-                                <div className="text-xs sm:text-sm text-teal-200 mt-1 sm:mt-2 font-medium">Candidates</div>
-                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">🎯</div>
+                                <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-teal-400">
+                                  {whatsappFollowUpCandidates.length}
+                                </div>
+                                <div className="text-xs sm:text-sm text-teal-200 mt-1 sm:mt-2 font-medium">
+                                  Candidates
+                                </div>
+                                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                                  🎯
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -7940,53 +9130,90 @@ export default function Dashboard() {
                           {/* WhatsApp Follow-Up Candidates */}
                           {whatsappFollowUpCandidates.length > 0 && (
                             <div className="space-y-3">
-                              <div className="text-sm font-semibold text-green-200">Ready for Follow-Up:</div>
-                              {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => {
-                                const timeUntilFollowUp = contact.readyForFollowUp ? 0 : (contact.daysRemaining * 24 * 60 * 60 * 1000);
-                                const hoursUntil = Math.floor(timeUntilFollowUp / (1000 * 60 * 60));
-                                const minutesUntil = Math.floor((timeUntilFollowUp % (1000 * 60 * 60)) / (1000 * 60));
-                                const secondsUntil = Math.floor((timeUntilFollowUp % (1000 * 60)) / 1000);
-                                const isReady = timeUntilFollowUp <= 0;
-                                
-                                return (
-                                <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:border-green-500/50 transition-all">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <div className="font-medium text-white">{contact.business || contact.businessName || 'Unknown'}</div>
-                                      <div className="text-xs text-gray-400">{contact.phone}</div>
-                                      <div className="text-xs text-gray-400">{contact.email}</div>
-                                    </div>
-                                    <div className="text-right ml-4">
-                                      {isReady ? (
-                                        <div className="flex flex-col gap-2">
-                                          <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold animate-pulse">
-                                            🔓 Ready Now!
-                                          </span>
-                                          <button
-                                            onClick={() => handleSendWhatsApp(contact)}
-                                            className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
-                                            title="Send WhatsApp Follow-Up"
-                                          >
-                                            💬 Send Follow-Up
-                                          </button>
+                              <div className="text-sm font-semibold text-green-200">
+                                Ready for Follow-Up:
+                              </div>
+                              {whatsappFollowUpCandidates
+                                .slice(0, 5)
+                                .map((contact, idx) => {
+                                  const timeUntilFollowUp =
+                                    contact.readyForFollowUp
+                                      ? 0
+                                      : contact.daysRemaining *
+                                        24 *
+                                        60 *
+                                        60 *
+                                        1000;
+                                  const hoursUntil = Math.floor(
+                                    timeUntilFollowUp / (1000 * 60 * 60),
+                                  );
+                                  const minutesUntil = Math.floor(
+                                    (timeUntilFollowUp % (1000 * 60 * 60)) /
+                                      (1000 * 60),
+                                  );
+                                  const secondsUntil = Math.floor(
+                                    (timeUntilFollowUp % (1000 * 60)) / 1000,
+                                  );
+                                  const isReady = timeUntilFollowUp <= 0;
+
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="bg-gray-800/50 p-3 rounded-lg border border-gray-700 hover:border-green-500/50 transition-all"
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                          <div className="font-medium text-white">
+                                            {contact.business ||
+                                              contact.businessName ||
+                                              "Unknown"}
+                                          </div>
+                                          <div className="text-xs text-gray-400">
+                                            {contact.phone}
+                                          </div>
+                                          <div className="text-xs text-gray-400">
+                                            {contact.email}
+                                          </div>
                                         </div>
-                                      ) : (
-                                        <div className="flex flex-col gap-2">
-                                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${hoursUntil <= 1 ? 'bg-yellow-500/30 text-yellow-300' : 'bg-gray-500/30 text-gray-300'}`}>
-                                            {hoursUntil > 0 ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s` : `${minutesUntil}m ${secondsUntil}s`}
-                                          </span>
-                                          <span className="text-xs text-gray-500">
-                                            @ 9 AM
-                                          </span>
+                                        <div className="text-right ml-4">
+                                          {isReady ? (
+                                            <div className="flex flex-col gap-2">
+                                              <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold animate-pulse">
+                                                🔓 Ready Now!
+                                              </span>
+                                              <button
+                                                onClick={() =>
+                                                  handleSendWhatsApp(contact)
+                                                }
+                                                className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
+                                                title="Send WhatsApp Follow-Up"
+                                              >
+                                                💬 Send Follow-Up
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="flex flex-col gap-2">
+                                              <span
+                                                className={`text-xs px-2 py-1 rounded-full font-bold ${hoursUntil <= 1 ? "bg-yellow-500/30 text-yellow-300" : "bg-gray-500/30 text-gray-300"}`}
+                                              >
+                                                {hoursUntil > 0
+                                                  ? `${hoursUntil}h ${minutesUntil}m ${secondsUntil}s`
+                                                  : `${minutesUntil}m ${secondsUntil}s`}
+                                              </span>
+                                              <span className="text-xs text-gray-500">
+                                                @ 9 AM
+                                              </span>
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+                                      </div>
                                     </div>
-                                  </div>
-                                </div>
-                              )})}
+                                  );
+                                })}
                               {whatsappFollowUpCandidates.length > 5 && (
                                 <div className="text-center text-xs text-gray-400">
-                                  +{whatsappFollowUpCandidates.length - 5} more contacts
+                                  +{whatsappFollowUpCandidates.length - 5} more
+                                  contacts
                                 </div>
                               )}
                             </div>
@@ -7999,43 +9226,64 @@ export default function Dashboard() {
                         <div className="mt-6 p-4 bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-xl border border-green-700/50">
                           <div className="text-base sm:text-lg font-bold text-green-300 mb-4 flex items-center gap-2 sm:gap-3">
                             <span className="text-xl sm:text-2xl">💬</span>
-                            <span>WhatsApp Follow-Up Reminders ({whatsappFollowUpCandidates.length})</span>
+                            <span>
+                              WhatsApp Follow-Up Reminders (
+                              {whatsappFollowUpCandidates.length})
+                            </span>
                           </div>
                           <div className="space-y-3">
-                            {whatsappFollowUpCandidates.slice(0, 5).map((contact, idx) => (
-                              <div key={idx} className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    <div className="font-medium text-white">{contact.business || contact.businessName || 'Unknown'}</div>
-                                    <div className="text-xs text-gray-400">{contact.phone}</div>
-                                    <div className="text-xs text-gray-400">{contact.email}</div>
-                                  </div>
-                                  <div className="text-right ml-4">
-                                    {contact.readyForFollowUp ? (
-                                      <div className="flex flex-col gap-2">
-                                        <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
-                                          Ready @ 9 AM
-                                        </span>
-                                        <button
-                                          onClick={() => handleSendWhatsApp(contact)}
-                                          className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
-                                          title="Send WhatsApp Follow-Up"
-                                        >
-                                          💬 Send Follow-Up
-                                        </button>
+                            {whatsappFollowUpCandidates
+                              .slice(0, 5)
+                              .map((contact, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-gray-800/50 p-3 rounded-lg border border-gray-700"
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-white">
+                                        {contact.business ||
+                                          contact.businessName ||
+                                          "Unknown"}
                                       </div>
-                                    ) : (
-                                      <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
-                                        Wait {Math.ceil(contact.daysRemaining)}d @ 9 AM
-                                      </span>
-                                    )}
+                                      <div className="text-xs text-gray-400">
+                                        {contact.phone}
+                                      </div>
+                                      <div className="text-xs text-gray-400">
+                                        {contact.email}
+                                      </div>
+                                    </div>
+                                    <div className="text-right ml-4">
+                                      {contact.readyForFollowUp ? (
+                                        <div className="flex flex-col gap-2">
+                                          <span className="text-xs bg-green-500/30 text-green-300 px-2 py-1 rounded-full font-bold">
+                                            Ready @ 9 AM
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              handleSendWhatsApp(contact)
+                                            }
+                                            className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded transition"
+                                            title="Send WhatsApp Follow-Up"
+                                          >
+                                            💬 Send Follow-Up
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-xs bg-yellow-500/30 text-yellow-300 px-2 py-1 rounded-full font-bold">
+                                          Wait{" "}
+                                          {Math.ceil(contact.daysRemaining)}d @
+                                          9 AM
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
                             {whatsappFollowUpCandidates.length > 5 && (
                               <div className="text-center text-xs text-gray-400">
-                                +{whatsappFollowUpCandidates.length - 5} more contacts
+                                +{whatsappFollowUpCandidates.length - 5} more
+                                contacts
                               </div>
                             )}
                           </div>
@@ -8055,7 +9303,9 @@ export default function Dashboard() {
                               // console.log('🔄 Follow-up History:', followUpHistory);
                               // console.log('❌ Replied Leads:', repliedLeads);
 
-                              alert(`Debug Info:\n\nSafe Candidates: ${safeFollowUpCandidates.length}\nUser ID: ${user?.uid ? '✅' : '❌'}\nSent Leads: ${sentLeads?.length || 0}\n\nCheck console for detailed info.`);
+                              alert(
+                                `Debug Info:\n\nSafe Candidates: ${safeFollowUpCandidates.length}\nUser ID: ${user?.uid ? "✅" : "❌"}\nSent Leads: ${sentLeads?.length || 0}\n\nCheck console for detailed info.`,
+                              );
                             }}
                             className="text-xs text-gray-400 hover:text-indigo-300 underline"
                           >
@@ -8097,14 +9347,17 @@ export default function Dashboard() {
                           </button>
                         </div>
                         <div className="mt-2 text-xs text-gray-300">
-                          Auto-reply status: {aiProcessorStatus} • follow-up status: {followupSchedulerStatus}
+                          Auto-reply status: {aiProcessorStatus} • follow-up
+                          status: {followupSchedulerStatus}
                         </div>
                         <div className="mt-2 flex gap-2 text-xs text-gray-400">
                           <label className="flex items-center gap-2">
                             <input
                               type="checkbox"
                               checked={autoReplyProcessorEnabled}
-                              onChange={(e) => setAutoReplyProcessorEnabled(e.target.checked)}
+                              onChange={(e) =>
+                                setAutoReplyProcessorEnabled(e.target.checked)
+                              }
                               className="form-checkbox"
                             />
                             AI Auto-Reply Enabled
@@ -8113,7 +9366,11 @@ export default function Dashboard() {
                             <input
                               type="checkbox"
                               checked={autoFollowupSchedulerEnabled}
-                              onChange={(e) => setAutoFollowupSchedulerEnabled(e.target.checked)}
+                              onChange={(e) =>
+                                setAutoFollowupSchedulerEnabled(
+                                  e.target.checked,
+                                )
+                              }
                               className="form-checkbox"
                             />
                             Smart Follow-Up Enabled
@@ -8122,93 +9379,140 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
-                  {safeFollowUpCandidates.slice(0, showAllReadyLeads ? safeFollowUpCandidates.length : 10).map((contact) => {
-                    const followUpCount = contact.followUpCount;
-                    const followUpAt = new Date(contact.followUpAt);
-                    const hoursOverdue = Math.floor((new Date() - followUpAt) / (1000 * 60 * 60));
-                    return (
-                      <div key={contact.email} className="group relative">
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all"></div>
-                        <div className="relative p-5 rounded-xl bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 hover:border-indigo-500/50 transition-all flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="font-bold text-white text-lg mb-1">{contact.email}</div>
-                            <div className="text-xs text-gray-400 mb-2">{contact.businessName || 'No company'}</div>
-                            <div className="flex gap-4 text-sm flex-wrap">
-                              <span className="text-indigo-400 font-medium">
-                                📅 {Math.ceil(contact.daysSinceSent)} days ago
-                              </span>
-                              <span className="text-purple-400 font-medium">
-                                📨 Follow-up #{followUpCount + 1}
-                              </span>
-                              <span className={`font-bold ${hoursOverdue > 24 ? 'text-red-400' : hoursOverdue > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
-                                ⏰ {hoursOverdue > 0 ? `${hoursOverdue}h overdue` : 'Ready now'}
-                              </span>
-                              <span className={`font-bold ${contact.safetyScore >= 80 ? 'text-green-400' :
-                                  contact.safetyScore >= 60 ? 'text-yellow-400' :
-                                    'text-orange-400'
-                                }`}>
-                                ✓ {Math.round(contact.safetyScore)}% safe
-                              </span>
+                  {safeFollowUpCandidates
+                    .slice(
+                      0,
+                      showAllReadyLeads ? safeFollowUpCandidates.length : 10,
+                    )
+                    .map((contact) => {
+                      const followUpCount = contact.followUpCount;
+                      const followUpAt = new Date(contact.followUpAt);
+                      const hoursOverdue = Math.floor(
+                        (new Date() - followUpAt) / (1000 * 60 * 60),
+                      );
+                      return (
+                        <div key={contact.email} className="group relative">
+                          <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-all"></div>
+                          <div className="relative p-5 rounded-xl bg-gradient-to-br from-gray-800/80 to-gray-900/80 border border-gray-700 hover:border-indigo-500/50 transition-all flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-bold text-white text-lg mb-1">
+                                {contact.email}
+                              </div>
+                              <div className="text-xs text-gray-400 mb-2">
+                                {contact.businessName || "No company"}
+                              </div>
+                              <div className="flex gap-4 text-sm flex-wrap">
+                                <span className="text-indigo-400 font-medium">
+                                  📅 {Math.ceil(contact.daysSinceSent)} days ago
+                                </span>
+                                <span className="text-purple-400 font-medium">
+                                  📨 Follow-up #{followUpCount + 1}
+                                </span>
+                                <span
+                                  className={`font-bold ${hoursOverdue > 24 ? "text-red-400" : hoursOverdue > 0 ? "text-yellow-400" : "text-green-400"}`}
+                                >
+                                  ⏰{" "}
+                                  {hoursOverdue > 0
+                                    ? `${hoursOverdue}h overdue`
+                                    : "Ready now"}
+                                </span>
+                                <span
+                                  className={`font-bold ${
+                                    contact.safetyScore >= 80
+                                      ? "text-green-400"
+                                      : contact.safetyScore >= 60
+                                        ? "text-yellow-400"
+                                        : "text-orange-400"
+                                  }`}
+                                >
+                                  ✓ {Math.round(contact.safetyScore)}% safe
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 ml-6">
+                              <button
+                                onClick={async () => {
+                                  const confirmed = confirm(
+                                    `Mark ${contact.email} as replied? This will cancel all scheduled follow-ups.`,
+                                  );
+                                  if (!confirmed) return;
+                                  try {
+                                    const res = await fetch(
+                                      "/api/mark-replied",
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          userId: user.uid,
+                                          email: contact.email,
+                                        }),
+                                      },
+                                    );
+                                    if (res.ok) {
+                                      addNotification(
+                                        `✅ Marked ${contact.email} as replied`,
+                                        "success",
+                                      );
+                                      await refreshAllData();
+                                    } else {
+                                      addNotification(
+                                        "Failed to mark as replied",
+                                        "error",
+                                      );
+                                    }
+                                  } catch (err) {
+                                    addNotification(
+                                      "Error marking as replied",
+                                      "error",
+                                    );
+                                  }
+                                }}
+                                className="relative group/btn overflow-hidden"
+                                title="Mark as Replied"
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 group-hover/btn:from-green-500 group-hover/btn:to-emerald-500 transition-all"></div>
+                                <div className="relative px-4 py-3 text-white font-bold text-sm rounded-lg">
+                                  ✓ Replied
+                                </div>
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const confirmed = confirm(
+                                    `Send follow-up #${followUpCount + 1} to ${contact.email}?`,
+                                  );
+                                  if (!confirmed) return;
+                                  try {
+                                    const token = await requestGmailToken();
+                                    await sendFollowUpWithToken(
+                                      contact.email,
+                                      token,
+                                    );
+                                  } catch (err) {
+                                    alert("Gmail access failed.");
+                                  }
+                                }}
+                                className="relative group/btn overflow-hidden"
+                              >
+                                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover/btn:from-blue-500 group-hover/btn:to-indigo-500 transition-all"></div>
+                                <div className="relative px-6 py-3 text-white font-bold text-base rounded-lg">
+                                  Send Now →
+                                </div>
+                              </button>
                             </div>
                           </div>
-                          <div className="flex gap-2 ml-6">
-                            <button
-                              onClick={async () => {
-                                const confirmed = confirm(`Mark ${contact.email} as replied? This will cancel all scheduled follow-ups.`);
-                                if (!confirmed) return;
-                                try {
-                                  const res = await fetch('/api/mark-replied', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ userId: user.uid, email: contact.email })
-                                  });
-                                   if (res.ok) {
-                                     addNotification(`✅ Marked ${contact.email} as replied`, 'success');
-                                     await refreshAllData();
-                                   } else {
-                                    addNotification('Failed to mark as replied', 'error');
-                                  }
-                                } catch (err) {
-                                  addNotification('Error marking as replied', 'error');
-                                }
-                              }}
-                              className="relative group/btn overflow-hidden"
-                              title="Mark as Replied"
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 group-hover/btn:from-green-500 group-hover/btn:to-emerald-500 transition-all"></div>
-                              <div className="relative px-4 py-3 text-white font-bold text-sm rounded-lg">
-                                ✓ Replied
-                              </div>
-                            </button>
-                            <button
-                              onClick={async () => {
-                                const confirmed = confirm(`Send follow-up #${followUpCount + 1} to ${contact.email}?`);
-                                if (!confirmed) return;
-                                try {
-                                  const token = await requestGmailToken();
-                                  await sendFollowUpWithToken(contact.email, token);
-                                } catch (err) {
-                                  alert('Gmail access failed.');
-                                }
-                              }}
-                              className="relative group/btn overflow-hidden"
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 group-hover/btn:from-blue-500 group-hover/btn:to-indigo-500 transition-all"></div>
-                              <div className="relative px-6 py-3 text-white font-bold text-base rounded-lg">
-                                Send Now →
-                              </div>
-                            </button>
-                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                   {safeFollowUpCandidates.length > 10 && (
                     <button
                       onClick={() => setShowAllReadyLeads(!showAllReadyLeads)}
                       className="w-full mt-4 py-3 px-4 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 rounded-lg text-sm font-medium transition-all"
                     >
-                      {showAllReadyLeads ? `Show Less (10)` : `View All ${safeFollowUpCandidates.length} Ready Leads`}
+                      {showAllReadyLeads
+                        ? `Show Less (10)`
+                        : `View All ${safeFollowUpCandidates.length} Ready Leads`}
                     </button>
                   )}
                 </div>
@@ -8216,7 +9520,9 @@ export default function Dashboard() {
             </div>
             <div className="p-6 border-t border-gray-700/50 bg-gradient-to-r from-gray-900/80 to-gray-800/80">
               <div className="text-sm text-gray-300 text-center space-y-1">
-                <div className="font-semibold text-indigo-300 mb-2">💡 Best Practices:</div>
+                <div className="font-semibold text-indigo-300 mb-2">
+                  💡 Best Practices:
+                </div>
                 <div className="flex justify-center gap-8 text-xs">
                   <span>✓ 2-day minimum between sends</span>
                   <span>✓ Max 3 follow-ups per contact</span>
@@ -8234,8 +9540,12 @@ export default function Dashboard() {
           <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
             <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gradient-to-r from-green-900/20 to-blue-900/20">
               <div>
-                <h2 className="text-xl font-bold text-white">📞 Call History & Analytics</h2>
-                <p className="text-sm text-gray-400">Track all your Twilio calls</p>
+                <h2 className="text-xl font-bold text-white">
+                  📞 Call History & Analytics
+                </h2>
+                <p className="text-sm text-gray-400">
+                  Track all your Twilio calls
+                </p>
               </div>
               <button
                 onClick={() => setShowCallHistoryModal(false)}
@@ -8246,30 +9556,35 @@ export default function Dashboard() {
             </div>
             <div className="p-4 bg-gray-800 border-b border-gray-700 grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-400">{callHistory.length}</div>
+                <div className="text-2xl font-bold text-blue-400">
+                  {callHistory.length}
+                </div>
                 <div className="text-xs text-gray-400">Total Calls</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-400">
-                  {callHistory.filter(c => c.status === 'completed').length}
+                  {callHistory.filter((c) => c.status === "completed").length}
                 </div>
                 <div className="text-xs text-gray-400">Completed</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-red-400">
-                  {callHistory.filter(c => c.status === 'failed').length}
+                  {callHistory.filter((c) => c.status === "failed").length}
                 </div>
                 <div className="text-xs text-gray-400">Failed</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-purple-400">
-                  {callHistory.filter(c => c.answeredBy === 'human').length}
+                  {callHistory.filter((c) => c.answeredBy === "human").length}
                 </div>
                 <div className="text-xs text-gray-400">Human Answered</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-orange-400">
-                  {callHistory.filter(c => c.answeredBy?.includes('machine')).length}
+                  {
+                    callHistory.filter((c) => c.answeredBy?.includes("machine"))
+                      .length
+                  }
                 </div>
                 <div className="text-xs text-gray-400">Voicemail</div>
               </div>
@@ -8278,54 +9593,90 @@ export default function Dashboard() {
               {loadingCallHistory ? (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-4">⏳</div>
-                  <div className="text-lg text-gray-300">Loading call history...</div>
+                  <div className="text-lg text-gray-300">
+                    Loading call history...
+                  </div>
                 </div>
               ) : callHistory.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">📞</div>
-                  <div className="text-xl font-medium mb-2 text-gray-300">No calls yet</div>
-                  <div className="text-gray-500">Start making calls to see them here</div>
+                  <div className="text-xl font-medium mb-2 text-gray-300">
+                    No calls yet
+                  </div>
+                  <div className="text-gray-500">
+                    Start making calls to see them here
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {callHistory.map((call) => {
-                    const isCompleted = call.status === 'completed';
+                    const isCompleted = call.status === "completed";
                     const hasRecording = !!call.recordingUrl;
                     return (
                       <div
                         key={call.id}
-                        className={`p-4 rounded-lg border-2 ${isCompleted
-                            ? 'border-green-700 bg-green-900/10'
-                            : call.status === 'failed'
-                              ? 'border-red-700 bg-red-900/10'
-                              : 'border-gray-700 bg-gray-800'
-                          }`}
+                        className={`p-4 rounded-lg border-2 ${
+                          isCompleted
+                            ? "border-green-700 bg-green-900/10"
+                            : call.status === "failed"
+                              ? "border-red-700 bg-red-900/10"
+                              : "border-gray-700 bg-gray-800"
+                        }`}
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center space-x-2 mb-1">
-                              <h3 className="font-bold text-white">{call.businessName}</h3>
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${call.status === 'completed'
-                                  ? 'bg-green-900/30 text-green-300'
-                                  : call.status === 'failed'
-                                    ? 'bg-red-900/30 text-red-300'
-                                    : 'bg-gray-700 text-gray-300'
-                                }`}>
-                                {call.status === 'completed' ? 'Completed' : call.status === 'failed' ? 'Failed' : 'In Progress'}
+                              <h3 className="font-bold text-white">
+                                {call.businessName}
+                              </h3>
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  call.status === "completed"
+                                    ? "bg-green-900/30 text-green-300"
+                                    : call.status === "failed"
+                                      ? "bg-red-900/30 text-red-300"
+                                      : "bg-gray-700 text-gray-300"
+                                }`}
+                              >
+                                {call.status === "completed"
+                                  ? "Completed"
+                                  : call.status === "failed"
+                                    ? "Failed"
+                                    : "In Progress"}
                               </span>
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-400 mt-2">
-                              <div><span className="font-medium">📞 Phone:</span> {call.toPhone}</div>
-                              <div><span className="font-medium">⏱️ Duration:</span> {call.duration || 0}s</div>
-                              <div><span className="font-medium">🎤 Answered by:</span>{' '}
-                                {call.answeredBy === 'human' ? '👤 Human' : call.answeredBy?.includes('machine') ? '📠 Voicemail' : '❓ Unknown'}
+                              <div>
+                                <span className="font-medium">📞 Phone:</span>{" "}
+                                {call.toPhone}
                               </div>
-                              <div><span className="font-medium">📅 Date:</span>{' '}
-                                {new Date(call.createdAt).toLocaleDateString() + ' ' + new Date(call.createdAt).toLocaleTimeString()}
+                              <div>
+                                <span className="font-medium">
+                                  ⏱️ Duration:
+                                </span>{" "}
+                                {call.duration || 0}s
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  🎤 Answered by:
+                                </span>{" "}
+                                {call.answeredBy === "human"
+                                  ? "👤 Human"
+                                  : call.answeredBy?.includes("machine")
+                                    ? "📠 Voicemail"
+                                    : "❓ Unknown"}
+                              </div>
+                              <div>
+                                <span className="font-medium">📅 Date:</span>{" "}
+                                {new Date(call.createdAt).toLocaleDateString() +
+                                  " " +
+                                  new Date(call.createdAt).toLocaleTimeString()}
                               </div>
                             </div>
                             {call.callSid && (
-                              <div className="text-xs text-gray-500 mt-2 font-mono">SID: {call.callSid}</div>
+                              <div className="text-xs text-gray-500 mt-2 font-mono">
+                                SID: {call.callSid}
+                              </div>
                             )}
                             {call.error && (
                               <div className="mt-2 p-2 bg-red-900/20 rounded text-xs text-red-300">
@@ -8352,16 +9703,24 @@ export default function Dashboard() {
                             {call.toPhone && (
                               <button
                                 onClick={() => {
-                                  let contact = whatsappLinks.find(c => c.phone === call.toPhone.replace(/\D/g, ''));
+                                  let contact = whatsappLinks.find(
+                                    (c) =>
+                                      c.phone ===
+                                      call.toPhone.replace(/\D/g, ""),
+                                  );
                                   if (!contact) {
                                     contact = {
-                                      business: call.businessName || 'Unknown Business',
+                                      business:
+                                        call.businessName || "Unknown Business",
                                       phone: call.toPhone,
                                       email: null,
-                                      address: ''
+                                      address: "",
                                     };
                                   }
-                                  handleTwilioCall(contact, call.callType || 'direct');
+                                  handleTwilioCall(
+                                    contact,
+                                    call.callType || "direct",
+                                  );
                                 }}
                                 className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded"
                               >
@@ -8393,7 +9752,8 @@ export default function Dashboard() {
                     <span>Email Conversation</span>
                   </h2>
                   <p className="text-sm text-purple-200 mt-2">
-                    {conversationThread?.leadEmail} • {conversationThread?.leadBusiness || 'No company'}
+                    {conversationThread?.leadEmail} •{" "}
+                    {conversationThread?.leadBusiness || "No company"}
                   </p>
                 </div>
                 <button
@@ -8408,24 +9768,32 @@ export default function Dashboard() {
               {loadingConversation ? (
                 <div className="text-center py-12">
                   <div className="text-4xl mb-4 animate-spin">⏳</div>
-                  <div className="text-lg text-gray-300">Loading conversation...</div>
+                  <div className="text-lg text-gray-300">
+                    Loading conversation...
+                  </div>
                 </div>
               ) : conversationThread?.messages ? (
                 <div className="space-y-4">
                   {conversationThread.messages.map((message, idx) => {
-                    const isFromUser = message.from.includes(user?.email || process.env.GMAIL_SENDER_EMAIL);
+                    const isFromUser = message.from.includes(
+                      user?.email || process.env.GMAIL_SENDER_EMAIL,
+                    );
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isFromUser ? 'justify-end' : 'justify-start'}`}
+                        className={`flex ${isFromUser ? "justify-end" : "justify-start"}`}
                       >
-                        <div className={`max-w-[80%] rounded-2xl p-4 ${
-                          isFromUser
-                            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white'
-                            : 'bg-gradient-to-br from-gray-700 to-gray-800 text-gray-100 border border-gray-600'
-                        }`}>
+                        <div
+                          className={`max-w-[80%] rounded-2xl p-4 ${
+                            isFromUser
+                              ? "bg-gradient-to-br from-blue-600 to-indigo-600 text-white"
+                              : "bg-gradient-to-br from-gray-700 to-gray-800 text-gray-100 border border-gray-600"
+                          }`}
+                        >
                           <div className="text-xs opacity-75 mb-2">
-                            {isFromUser ? '📤 You' : '📥 ' + message.from.split('<')[0].trim()}
+                            {isFromUser
+                              ? "📤 You"
+                              : "📥 " + message.from.split("<")[0].trim()}
                           </div>
                           <div className="font-medium mb-2 text-sm">
                             {message.subject}
@@ -8444,8 +9812,12 @@ export default function Dashboard() {
               ) : (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">📭</div>
-                  <div className="text-xl font-medium mb-2 text-gray-300">No conversation found</div>
-                  <div className="text-gray-500">Unable to load email thread</div>
+                  <div className="text-xl font-medium mb-2 text-gray-300">
+                    No conversation found
+                  </div>
+                  <div className="text-gray-500">
+                    Unable to load email thread
+                  </div>
                 </div>
               )}
             </div>
@@ -8453,7 +9825,12 @@ export default function Dashboard() {
               <div className="flex justify-between items-center text-sm text-gray-400">
                 <span>{conversationThread?.totalMessages || 0} messages</span>
                 <button
-                  onClick={() => window.open(`mailto:${conversationThread?.leadEmail}`, '_blank')}
+                  onClick={() =>
+                    window.open(
+                      `mailto:${conversationThread?.leadEmail}`,
+                      "_blank",
+                    )
+                  }
                   className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition"
                 >
                   📧 Reply via Email
@@ -8466,26 +9843,39 @@ export default function Dashboard() {
 
       {/* MULTI-CHANNEL OUTREACH MODAL - ✅ MOBILE RESPONSIVE */}
       {showMultiChannelModal && (
-        <div className={`fixed inset-0 bg-black/70 flex items-center justify-center z-50 ${isMultiChannelFullscreen ? '' : 'p-2 sm:p-4'
-          }`}>
-          <div className={`bg-gray-800 rounded-xl shadow-2xl ${isMultiChannelFullscreen
-              ? 'w-screen h-screen max-h-screen rounded-none'
-              : 'w-full max-w-6xl max-h-[90vh]'
-            } overflow-hidden flex flex-col border border-gray-700`}>
+        <div
+          className={`fixed inset-0 bg-black/70 flex items-center justify-center z-50 ${
+            isMultiChannelFullscreen ? "" : "p-2 sm:p-4"
+          }`}
+        >
+          <div
+            className={`bg-gray-800 rounded-xl shadow-2xl ${
+              isMultiChannelFullscreen
+                ? "w-screen h-screen max-h-screen rounded-none"
+                : "w-full max-w-6xl max-h-[90vh]"
+            } overflow-hidden flex flex-col border border-gray-700`}
+          >
             <div className="p-3 sm:p-4 border-b border-gray-700 flex justify-between items-center bg-gradient-to-r from-indigo-900/20 to-blue-900/20">
               <div className="flex-1 min-w-0">
-                <h2 className="text-base sm:text-2xl font-bold text-white truncate">🌐 Multi-Channel Outreach Manager</h2>
+                <h2 className="text-base sm:text-2xl font-bold text-white truncate">
+                  🌐 Multi-Channel Outreach Manager
+                </h2>
                 <p className="text-xs sm:text-sm text-gray-400 truncate">
-                  Manage all your communication channels ({whatsappLinks.length} contacts)
+                  Manage all your communication channels ({whatsappLinks.length}{" "}
+                  contacts)
                 </p>
               </div>
               <div className="flex gap-1 sm:gap-2 flex-shrink-0">
                 <button
-                  onClick={() => setIsMultiChannelFullscreen(!isMultiChannelFullscreen)}
+                  onClick={() =>
+                    setIsMultiChannelFullscreen(!isMultiChannelFullscreen)
+                  }
                   className="text-white hover:text-indigo-400 transition px-2 sm:px-3 py-2 rounded hover:bg-gray-700 text-xs sm:text-sm"
-                  title={isMultiChannelFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                  title={
+                    isMultiChannelFullscreen ? "Exit fullscreen" : "Fullscreen"
+                  }
                 >
-                  {isMultiChannelFullscreen ? '⛶ Exit' : '⛶ Full'}
+                  {isMultiChannelFullscreen ? "⛶ Exit" : "⛶ Full"}
                 </button>
                 <button
                   onClick={() => setShowMultiChannelModal(false)}
@@ -8499,99 +9889,148 @@ export default function Dashboard() {
             {/* Stats Row - Mobile Responsive */}
             <div className="p-2 sm:p-4 bg-gray-800 border-b border-gray-700 grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-3">
               <div className="text-center">
-                <div className="text-sm sm:text-xl font-bold text-blue-400">{whatsappLinks.length}</div>
-                <div className="text-[10px] sm:text-xs text-gray-400">Total</div>
+                <div className="text-sm sm:text-xl font-bold text-blue-400">
+                  {whatsappLinks.length}
+                </div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Total
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-green-400">
                   {(() => {
-                    const repliedKeysFiltered = Object.keys(repliedLeads).filter(k => repliedLeads[k]);
+                    const repliedKeysFiltered = Object.keys(
+                      repliedLeads,
+                    ).filter((k) => repliedLeads[k]);
                     const repliedCount = repliedKeysFiltered.length;
                     return repliedCount;
                   })()}
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-400">Replied</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Replied
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-yellow-400">
                   {(() => {
-                    const followUpKeysFiltered = Object.keys(followUpLeads).filter(k => followUpLeads[k]);
+                    const followUpKeysFiltered = Object.keys(
+                      followUpLeads,
+                    ).filter((k) => followUpLeads[k]);
                     const followUpCount = followUpKeysFiltered.length;
                     return followUpCount;
                   })()}
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-400">Follow-Up</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Follow-Up
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-purple-400">
                   {(() => {
-                    const contactedLinksFiltered = whatsappLinks.filter(l => lastSent[l.email || l.phone]);
+                    const contactedLinksFiltered = whatsappLinks.filter(
+                      (l) => lastSent[l.email || l.phone],
+                    );
                     const contactedCount = contactedLinksFiltered.length;
                     return contactedCount;
                   })()}
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-400">Contacted</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Contacted
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-orange-400">
                   {(() => {
-                    const phoneOnlyLinksFiltered = whatsappLinks.filter(l => !l.email);
+                    const phoneOnlyLinksFiltered = whatsappLinks.filter(
+                      (l) => !l.email,
+                    );
                     const phoneOnlyCount = phoneOnlyLinksFiltered.length;
                     return phoneOnlyCount;
                   })()}
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-400">Phone Only</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Phone Only
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm sm:text-xl font-bold text-cyan-400">
                   {(() => {
-                    const highQualityLinksFiltered = whatsappLinks.filter(l => l.email && (leadScores[l.email] || 0) >= 70);
+                    const highQualityLinksFiltered = whatsappLinks.filter(
+                      (l) => l.email && (leadScores[l.email] || 0) >= 70,
+                    );
                     const highQualityCount = highQualityLinksFiltered.length;
                     return highQualityCount;
                   })()}
                 </div>
-                <div className="text-[10px] sm:text-xs text-gray-400">High Quality</div>
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  High Quality
+                </div>
               </div>
             </div>
 
             {/* Contact List - Mobile Responsive Grid */}
             <div className="flex-1 overflow-y-auto p-2 sm:p-4">
               {(() => {
-                const notContactedLinksFiltered = sortedWhatsappLinks.filter(link => !isContactedOnAnyChannel(link));
-                const contactedLinksFiltered = sortedWhatsappLinks.filter(link => isContactedOnAnyChannel(link));
+                const notContactedLinksFiltered = sortedWhatsappLinks.filter(
+                  (link) => !isContactedOnAnyChannel(link),
+                );
+                const contactedLinksFiltered = sortedWhatsappLinks.filter(
+                  (link) => isContactedOnAnyChannel(link),
+                );
                 const notContactedLinks = notContactedLinksFiltered;
                 const contactedLinks = contactedLinksFiltered;
-                const formatTimestamp = (value) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : null;
+                const formatTimestamp = (value) =>
+                  value
+                    ? new Date(value).toLocaleString(undefined, {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })
+                    : null;
 
                 const renderContactCard = (link, isContacted) => {
                   const contactKey = normalizeContactKey(link);
                   const isReplied = repliedLeads[link.email];
                   const score = leadScores[link.email] || 0;
                   const contactHistory = getContactHistory(link);
-                  const lastEmail = contactHistory.email ? formatTimestamp(contactHistory.email) : null;
-                  const lastWA = contactHistory.whatsapp ? formatTimestamp(contactHistory.whatsapp) : null;
-                  const lastSMS = contactHistory.sms ? formatTimestamp(contactHistory.sms) : null;
-                  const lastCall = contactHistory.call ? formatTimestamp(contactHistory.call) : null;
-                  const lastContacted = contactHistory.lastContacted ? formatTimestamp(contactHistory.lastContacted) : 'Never contacted';
+                  const lastEmail = contactHistory.email
+                    ? formatTimestamp(contactHistory.email)
+                    : null;
+                  const lastWA = contactHistory.whatsapp
+                    ? formatTimestamp(contactHistory.whatsapp)
+                    : null;
+                  const lastSMS = contactHistory.sms
+                    ? formatTimestamp(contactHistory.sms)
+                    : null;
+                  const lastCall = contactHistory.call
+                    ? formatTimestamp(contactHistory.call)
+                    : null;
+                  const lastContacted = contactHistory.lastContacted
+                    ? formatTimestamp(contactHistory.lastContacted)
+                    : "Never contacted";
 
                   return (
                     <div
                       key={link.id}
-                      className={`p-3 rounded-xl border-2 transition-all ${isReplied
-                          ? 'border-green-700 bg-green-900/15'
+                      className={`p-3 rounded-xl border-2 transition-all ${
+                        isReplied
+                          ? "border-green-700 bg-green-900/15"
                           : isContacted
-                            ? 'border-gray-600 bg-gray-750'
-                            : 'border-gray-700 bg-gray-800'
-                        }`}
+                            ? "border-gray-600 bg-gray-750"
+                            : "border-gray-700 bg-gray-800"
+                      }`}
                     >
                       <div className="flex justify-between items-start gap-3 mb-3">
                         <div className="min-w-0">
                           <h3 className="font-semibold text-white text-sm sm:text-base truncate">
-                            {link.business || 'Unnamed'}
+                            {link.business || "Unnamed"}
                           </h3>
-                          <p className="text-xs sm:text-sm text-gray-400 truncate">📞 +{link.phone}</p>
+                          <p className="text-xs sm:text-sm text-gray-400 truncate">
+                            📞 +{link.phone}
+                          </p>
                           {link.email && (
-                            <p className="text-[10px] sm:text-xs text-blue-300 truncate">📧 {link.email}</p>
+                            <p className="text-[10px] sm:text-xs text-blue-300 truncate">
+                              📧 {link.email}
+                            </p>
                           )}
                         </div>
                         <div className="flex flex-col gap-1 shrink-0">
@@ -8611,7 +10050,9 @@ export default function Dashboard() {
                       <div className="mb-3 p-3 rounded-lg bg-gray-900/70 border border-gray-700 text-[11px] sm:text-xs text-gray-300 space-y-2">
                         <div className="flex justify-between">
                           <span className="text-gray-400">Last Contact</span>
-                          <span className="font-medium text-white">{lastContacted}</span>
+                          <span className="font-medium text-white">
+                            {lastContacted}
+                          </span>
                         </div>
                         {lastEmail && (
                           <div className="flex justify-between text-blue-200">
@@ -8639,8 +10080,17 @@ export default function Dashboard() {
                         )}
                         <div className="flex justify-between">
                           <span className="text-gray-400">Lead score</span>
-                          <span className={`font-semibold ${score >= 70 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-orange-400'
-                            }`}>{score}/100</span>
+                          <span
+                            className={`font-semibold ${
+                              score >= 70
+                                ? "text-green-400"
+                                : score >= 50
+                                  ? "text-yellow-400"
+                                  : "text-orange-400"
+                            }`}
+                          >
+                            {score}/100
+                          </span>
                         </div>
                       </div>
 
@@ -8667,8 +10117,10 @@ export default function Dashboard() {
                         </button>
                         {link.email && (
                           <select
-                            value={dealStage[link.email] || 'new'}
-                            onChange={(e) => updateDealStage(link.email, e.target.value)}
+                            value={dealStage[link.email] || "new"}
+                            onChange={(e) =>
+                              updateDealStage(link.email, e.target.value)
+                            }
                             className="w-full text-[10px] sm:text-xs bg-gray-800 text-white border border-gray-600 rounded px-2 py-1"
                           >
                             <option value="new">New</option>
@@ -8683,13 +10135,22 @@ export default function Dashboard() {
                           </select>
                         )}
                         <button
-                          onClick={() => markContactManually(link, !isContacted, 'Manual update from modal')}
-                          className={`w-full text-[10px] sm:text-xs px-2 py-1 rounded font-medium ${isContacted
-                              ? 'bg-gray-600 hover:bg-gray-500 text-white'
-                              : 'bg-green-600 hover:bg-green-500 text-white'
-                            }`}
+                          onClick={() =>
+                            markContactManually(
+                              link,
+                              !isContacted,
+                              "Manual update from modal",
+                            )
+                          }
+                          className={`w-full text-[10px] sm:text-xs px-2 py-1 rounded font-medium ${
+                            isContacted
+                              ? "bg-gray-600 hover:bg-gray-500 text-white"
+                              : "bg-green-600 hover:bg-green-500 text-white"
+                          }`}
                         >
-                          {isContacted ? '↩️ Mark Not Contacted' : '✅ Mark Contacted'}
+                          {isContacted
+                            ? "↩️ Mark Not Contacted"
+                            : "✅ Mark Contacted"}
                         </button>
                       </div>
                     </div>
@@ -8700,37 +10161,51 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => setMultiChannelPanel('not-contacted')}
-                        className={`px-3 py-2 rounded-full text-sm font-semibold transition ${multiChannelPanel === 'not-contacted'
-                            ? 'bg-blue-600 text-white shadow-lg'
-                            : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700'
-                          }`}
+                        onClick={() => setMultiChannelPanel("not-contacted")}
+                        className={`px-3 py-2 rounded-full text-sm font-semibold transition ${
+                          multiChannelPanel === "not-contacted"
+                            ? "bg-blue-600 text-white shadow-lg"
+                            : "bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700"
+                        }`}
                       >
                         🆕 Not Contacted ({notContactedLinks.length})
                       </button>
                       <button
-                        onClick={() => setMultiChannelPanel('contacted')}
-                        className={`px-3 py-2 rounded-full text-sm font-semibold transition ${multiChannelPanel === 'contacted'
-                            ? 'bg-green-600 text-white shadow-lg'
-                            : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700'
-                          }`}
+                        onClick={() => setMultiChannelPanel("contacted")}
+                        className={`px-3 py-2 rounded-full text-sm font-semibold transition ${
+                          multiChannelPanel === "contacted"
+                            ? "bg-green-600 text-white shadow-lg"
+                            : "bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700"
+                        }`}
                       >
                         ✅ Contacted ({contactedLinks.length})
                       </button>
                     </div>
 
-                    {multiChannelPanel === 'not-contacted' ? (
+                    {multiChannelPanel === "not-contacted" ? (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700">
                           <div>
-                            <div className="text-sm font-semibold text-white">🆕 Not Contacted</div>
-                            <div className="text-[11px] text-gray-400">{notContactedLinks.length} leads not yet marked as contacted</div>
+                            <div className="text-sm font-semibold text-white">
+                              🆕 Not Contacted
+                            </div>
+                            <div className="text-[11px] text-gray-400">
+                              {notContactedLinks.length} leads not yet marked as
+                              contacted
+                            </div>
                           </div>
-                          <span className="text-sm font-bold text-cyan-300">{notContactedLinks.length}</span>
+                          <span className="text-sm font-bold text-cyan-300">
+                            {notContactedLinks.length}
+                          </span>
                         </div>
-                        {notContactedLinks.length > 0 ? notContactedLinks.map(link => renderContactCard(link, false)) : (
+                        {notContactedLinks.length > 0 ? (
+                          notContactedLinks.map((link) =>
+                            renderContactCard(link, false),
+                          )
+                        ) : (
                           <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/60 p-4 text-sm text-gray-400">
-                            No not-contacted leads found. Use the button to switch to Contacted and move leads back.
+                            No not-contacted leads found. Use the button to
+                            switch to Contacted and move leads back.
                           </div>
                         )}
                       </div>
@@ -8738,14 +10213,26 @@ export default function Dashboard() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-700">
                           <div>
-                            <div className="text-sm font-semibold text-white">✅ Contacted</div>
-                            <div className="text-[11px] text-gray-400">{contactedLinks.length} contacts tracked with time stamps</div>
+                            <div className="text-sm font-semibold text-white">
+                              ✅ Contacted
+                            </div>
+                            <div className="text-[11px] text-gray-400">
+                              {contactedLinks.length} contacts tracked with time
+                              stamps
+                            </div>
                           </div>
-                          <span className="text-sm font-bold text-green-300">{contactedLinks.length}</span>
+                          <span className="text-sm font-bold text-green-300">
+                            {contactedLinks.length}
+                          </span>
                         </div>
-                        {contactedLinks.length > 0 ? contactedLinks.map(link => renderContactCard(link, true)) : (
+                        {contactedLinks.length > 0 ? (
+                          contactedLinks.map((link) =>
+                            renderContactCard(link, true),
+                          )
+                        ) : (
                           <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/60 p-4 text-sm text-gray-400">
-                            No contacted leads yet. Mark contacts as contacted to move them here.
+                            No contacted leads yet. Mark contacts as contacted
+                            to move them here.
                           </div>
                         )}
                       </div>
@@ -8772,94 +10259,128 @@ export default function Dashboard() {
       )}
 
       {/* AI RESEARCH MODAL */}
-      {showResearchModal && researchingCompany && researchResults[researchingCompany] && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border-2 border-purple-500/30">
-            <div className="relative p-6 border-b border-gray-700/50 bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-purple-900/40">
-              <div className="relative flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400">
-                    🤖 AI Research Results
-                  </h2>
-                  <p className="text-sm text-purple-200 mt-1">
-                    {researchResults[researchingCompany].companyName}
-                  </p>
+      {showResearchModal &&
+        researchingCompany &&
+        researchResults[researchingCompany] && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border-2 border-purple-500/30">
+              <div className="relative p-6 border-b border-gray-700/50 bg-gradient-to-r from-purple-900/40 via-pink-900/40 to-purple-900/40">
+                <div className="relative flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400">
+                      🤖 AI Research Results
+                    </h2>
+                    <p className="text-sm text-purple-200 mt-1">
+                      {researchResults[researchingCompany].companyName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowResearchModal(false);
+                      setResearchingCompany(null);
+                    }}
+                    className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-3xl w-12 h-12 rounded-full flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
                 </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
+                <div className="space-y-4">
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <h3 className="text-sm font-bold text-blue-300 mb-2">
+                      📋 General Value Proposition
+                    </h3>
+                    <div className="text-sm text-gray-300 space-y-2">
+                      <div>
+                        <span className="font-semibold">Service:</span>{" "}
+                        {researchResults[researchingCompany].generalIdea
+                          ?.service || "N/A"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Value:</span>{" "}
+                        {researchResults[researchingCompany].generalIdea
+                          ?.valueProposition || "N/A"}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Target:</span>{" "}
+                        {researchResults[researchingCompany].generalIdea
+                          ?.targetAudience || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                  {researchResults[researchingCompany].personalizedEmail
+                    ?.researchNotes && (
+                    <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                      <h3 className="text-sm font-bold text-yellow-300 mb-2">
+                        🔍 Research Notes
+                      </h3>
+                      <p className="text-sm text-gray-300">
+                        {
+                          researchResults[researchingCompany].personalizedEmail
+                            .researchNotes
+                        }
+                      </p>
+                    </div>
+                  )}
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700">
+                    <h3 className="text-sm font-bold text-purple-300 mb-3">
+                      ✉️ Personalized Email
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">
+                          Subject:
+                        </label>
+                        <div className="bg-gray-900/50 p-3 rounded border border-gray-600 text-sm text-white font-medium">
+                          {researchResults[researchingCompany].personalizedEmail
+                            ?.subject || "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">
+                          Body:
+                        </label>
+                        <div className="bg-gray-900/50 p-3 rounded border border-gray-600 text-sm text-white whitespace-pre-wrap">
+                          {researchResults[researchingCompany].personalizedEmail
+                            ?.body || "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-700/50 bg-gradient-to-r from-gray-800/30 to-gray-900/30 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    const emailText = `Subject: ${researchResults[researchingCompany].personalizedEmail?.subject || ""}\n${researchResults[researchingCompany].personalizedEmail?.body || ""}`;
+                    navigator.clipboard.writeText(emailText);
+                    alert("Email copied to clipboard!");
+                  }}
+                  className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
+                >
+                  📋 Copy Email
+                </button>
                 <button
                   onClick={() => {
                     setShowResearchModal(false);
                     setResearchingCompany(null);
                   }}
-                  className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-3xl w-12 h-12 rounded-full flex items-center justify-center"
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium"
                 >
-                  ✕
+                  Close
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
-              <div className="space-y-4">
-                <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                  <h3 className="text-sm font-bold text-blue-300 mb-2">📋 General Value Proposition</h3>
-                  <div className="text-sm text-gray-300 space-y-2">
-                    <div><span className="font-semibold">Service:</span> {researchResults[researchingCompany].generalIdea?.service || 'N/A'}</div>
-                    <div><span className="font-semibold">Value:</span> {researchResults[researchingCompany].generalIdea?.valueProposition || 'N/A'}</div>
-                    <div><span className="font-semibold">Target:</span> {researchResults[researchingCompany].generalIdea?.targetAudience || 'N/A'}</div>
-                  </div>
-                </div>
-                {researchResults[researchingCompany].personalizedEmail?.researchNotes && (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                    <h3 className="text-sm font-bold text-yellow-300 mb-2">🔍 Research Notes</h3>
-                    <p className="text-sm text-gray-300">{researchResults[researchingCompany].personalizedEmail.researchNotes}</p>
-                  </div>
-                )}
-                <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700">
-                  <h3 className="text-sm font-bold text-purple-300 mb-3">✉️ Personalized Email</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Subject:</label>
-                      <div className="bg-gray-900/50 p-3 rounded border border-gray-600 text-sm text-white font-medium">
-                        {researchResults[researchingCompany].personalizedEmail?.subject || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-400 mb-1 block">Body:</label>
-                      <div className="bg-gray-900/50 p-3 rounded border border-gray-600 text-sm text-white whitespace-pre-wrap">
-                        {researchResults[researchingCompany].personalizedEmail?.body || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="p-6 border-t border-gray-700/50 bg-gradient-to-r from-gray-800/30 to-gray-900/30 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  const emailText = `Subject: ${researchResults[researchingCompany].personalizedEmail?.subject || ''}\n${researchResults[researchingCompany].personalizedEmail?.body || ''}`;
-                  navigator.clipboard.writeText(emailText);
-                  alert('Email copied to clipboard!');
-                }}
-                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded font-medium"
-              >
-                📋 Copy Email
-              </button>
-              <button
-                onClick={() => {
-                  setShowResearchModal(false);
-                  setResearchingCompany(null);
-                }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium"
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* BUSINESS INTELLIGENCE DASHBOARD */}
       <div className="fixed bottom-4 right-4 z-40">
         <button
-          onClick={() => setAnalyticsTab(analyticsTab === 'hidden' ? 'overview' : 'hidden')}
+          onClick={() =>
+            setAnalyticsTab(analyticsTab === "hidden" ? "overview" : "hidden")
+          }
           className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg font-bold text-lg transition-all"
           title="Business Intelligence"
         >
@@ -8867,12 +10388,14 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {analyticsTab !== 'hidden' && (
+      {analyticsTab !== "hidden" && (
         <div className="fixed bottom-24 right-4 z-40 bg-gray-900 border-2 border-cyan-500/50 rounded-2xl shadow-2xl w-80 sm:w-96 max-h-96 overflow-hidden">
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 border-b border-cyan-500/30 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-cyan-200">📊 Business Intelligence</h3>
+            <h3 className="text-lg font-bold text-cyan-200">
+              📊 Business Intelligence
+            </h3>
             <button
-              onClick={() => setAnalyticsTab('hidden')}
+              onClick={() => setAnalyticsTab("hidden")}
               className="text-gray-400 hover:text-white"
             >
               ✕
@@ -8882,129 +10405,265 @@ export default function Dashboard() {
           <div className="p-4 space-y-3 overflow-y-auto max-h-80">
             <div className="flex gap-2">
               <button
-                onClick={() => { setAnalyticsTab('overview'); loadAnalytics('comprehensive'); }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === 'overview' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => {
+                  setAnalyticsTab("overview");
+                  loadAnalytics("comprehensive");
+                }}
+                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "overview" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
               >
                 📈 ROI & Analytics
               </button>
               <button
-                onClick={() => { setAnalyticsTab('pipeline'); loadPipeline('comprehensive'); }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === 'pipeline' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => {
+                  setAnalyticsTab("pipeline");
+                  loadPipeline("comprehensive");
+                }}
+                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "pipeline" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
               >
                 🎯 Pipeline
               </button>
               <button
-                onClick={() => { setAnalyticsTab('predict'); loadPredictiveAnalysis('comprehensive'); }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === 'predict' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                onClick={() => {
+                  setAnalyticsTab("predict");
+                  loadPredictiveAnalysis("comprehensive");
+                }}
+                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "predict" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
               >
                 🔮 AI Predict
               </button>
             </div>
 
-            {analyticsTab === 'overview' && analyticsData && (
+            {analyticsTab === "overview" && analyticsData && (
               <div className="space-y-3">
                 {analyticsData.roi && (
                   <div className="bg-green-900/30 border border-green-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-green-400 mb-2">💹 ROI Analysis</div>
+                    <div className="text-xs font-bold text-green-400 mb-2">
+                      💹 ROI Analysis
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div><span className="text-gray-400">ROI:</span> <span className="font-bold text-green-400">{analyticsData.roi.roi}%</span></div>
-                      <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">${analyticsData.roi.revenue}</span></div>
-                      <div><span className="text-gray-400">Cost:</span> <span className="font-bold text-red-400">${analyticsData.roi.totalCost}</span></div>
-                      <div><span className="text-gray-400">Margin:</span> <span className="font-bold text-blue-400">{(analyticsData.roi.profitMargin || 0).toFixed(1)}%</span></div>
+                      <div>
+                        <span className="text-gray-400">ROI:</span>{" "}
+                        <span className="font-bold text-green-400">
+                          {analyticsData.roi.roi}%
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Revenue:</span>{" "}
+                        <span className="font-bold text-green-400">
+                          ${analyticsData.roi.revenue}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Cost:</span>{" "}
+                        <span className="font-bold text-red-400">
+                          ${analyticsData.roi.totalCost}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Margin:</span>{" "}
+                        <span className="font-bold text-blue-400">
+                          {(analyticsData.roi.profitMargin || 0).toFixed(1)}%
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {analyticsData.funnel && analyticsData.funnel.conversionRates && (
-                  <div className="bg-purple-900/30 border border-purple-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-purple-400 mb-2">📊 Conversion Funnel</div>
-                    <div className="space-y-1 text-xs">
-                      <div><span className="text-gray-400">Overall:</span> <span className="font-bold text-purple-400">{(analyticsData.funnel.conversionRates.overall * 100).toFixed(1)}%</span></div>
-                      <div><span className="text-gray-400">Open Rate:</span> <span className="font-bold text-purple-400">{(analyticsData.funnel.conversionRates.sent_to_open * 100).toFixed(1)}%</span></div>
-                      <div><span className="text-gray-400">Click Rate:</span> <span className="font-bold text-purple-400">{(analyticsData.funnel.conversionRates.open_to_click * 100).toFixed(1)}%</span></div>
+                {analyticsData.funnel &&
+                  analyticsData.funnel.conversionRates && (
+                    <div className="bg-purple-900/30 border border-purple-700/50 p-3 rounded">
+                      <div className="text-xs font-bold text-purple-400 mb-2">
+                        📊 Conversion Funnel
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <div>
+                          <span className="text-gray-400">Overall:</span>{" "}
+                          <span className="font-bold text-purple-400">
+                            {(
+                              analyticsData.funnel.conversionRates.overall * 100
+                            ).toFixed(1)}
+                            %
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Open Rate:</span>{" "}
+                          <span className="font-bold text-purple-400">
+                            {(
+                              analyticsData.funnel.conversionRates
+                                .sent_to_open * 100
+                            ).toFixed(1)}
+                            %
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Click Rate:</span>{" "}
+                          <span className="font-bold text-purple-400">
+                            {(
+                              analyticsData.funnel.conversionRates
+                                .open_to_click * 100
+                            ).toFixed(1)}
+                            %
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {analyticsData.channelPerformance && (
                   <div className="bg-orange-900/30 border border-orange-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-orange-400 mb-2">📱 Best Channel</div>
-                    {Object.entries(analyticsData.channelPerformance).map(([channel, data]) => (
-                      data.conversionRate > 0 && (
-                        <div key={channel} className="text-xs">
-                          <span className="text-gray-400 capitalize">{channel}:</span> <span className="font-bold text-orange-400">{(data.conversionRate * 100).toFixed(1)}%</span>
-                        </div>
-                      )
-                    ))}
+                    <div className="text-xs font-bold text-orange-400 mb-2">
+                      📱 Best Channel
+                    </div>
+                    {Object.entries(analyticsData.channelPerformance).map(
+                      ([channel, data]) =>
+                        data.conversionRate > 0 && (
+                          <div key={channel} className="text-xs">
+                            <span className="text-gray-400 capitalize">
+                              {channel}:
+                            </span>{" "}
+                            <span className="font-bold text-orange-400">
+                              {(data.conversionRate * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        ),
+                    )}
                   </div>
                 )}
 
-                {loadingAnalytics && <div className="text-center text-sm text-gray-400">Loading analytics...</div>}
+                {loadingAnalytics && (
+                  <div className="text-center text-sm text-gray-400">
+                    Loading analytics...
+                  </div>
+                )}
               </div>
             )}
 
-            {analyticsTab === 'pipeline' && pipelineData && (
+            {analyticsTab === "pipeline" && pipelineData && (
               <div className="space-y-3">
                 {pipelineData.expectedRevenue && (
                   <div className="bg-cyan-900/30 border border-cyan-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-cyan-400 mb-2">💰 Pipeline Value</div>
-                    <div className="text-lg font-bold text-cyan-300">${(pipelineData.expectedRevenue.totalExpected / 1000).toFixed(0)}k</div>
-                    <div className="text-xs text-cyan-400 mt-1">Expected Revenue</div>
+                    <div className="text-xs font-bold text-cyan-400 mb-2">
+                      💰 Pipeline Value
+                    </div>
+                    <div className="text-lg font-bold text-cyan-300">
+                      $
+                      {(
+                        pipelineData.expectedRevenue.totalExpected / 1000
+                      ).toFixed(0)}
+                      k
+                    </div>
+                    <div className="text-xs text-cyan-400 mt-1">
+                      Expected Revenue
+                    </div>
                   </div>
                 )}
 
                 {pipelineData.forecast && (
                   <div className="bg-blue-900/30 border border-blue-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-blue-400 mb-2">📈 Forecast (90d)</div>
+                    <div className="text-xs font-bold text-blue-400 mb-2">
+                      📈 Forecast (90d)
+                    </div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div><span className="text-gray-400">Forecasted:</span> <span className="font-bold text-blue-400">${(pipelineData.forecast.forecastedRevenue / 1000).toFixed(0)}k</span></div>
-                      <div><span className="text-gray-400">Cycle:</span> <span className="font-bold text-blue-400">{pipelineData.forecast.avgSalesCycleDays}d</span></div>
+                      <div>
+                        <span className="text-gray-400">Forecasted:</span>{" "}
+                        <span className="font-bold text-blue-400">
+                          $
+                          {(
+                            pipelineData.forecast.forecastedRevenue / 1000
+                          ).toFixed(0)}
+                          k
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Cycle:</span>{" "}
+                        <span className="font-bold text-blue-400">
+                          {pipelineData.forecast.avgSalesCycleDays}d
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {pipelineData.suggestions && pipelineData.suggestions.length > 0 && (
-                  <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-yellow-400 mb-2">💡 Next Steps</div>
-                    {pipelineData.suggestions.slice(0, 2).map((suggestion, idx) => (
-                      <div key={idx} className="text-xs text-yellow-300 mb-1">
-                        🎯 {suggestion.action}
+                {pipelineData.suggestions &&
+                  pipelineData.suggestions.length > 0 && (
+                    <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded">
+                      <div className="text-xs font-bold text-yellow-400 mb-2">
+                        💡 Next Steps
                       </div>
-                    ))}
+                      {pipelineData.suggestions
+                        .slice(0, 2)
+                        .map((suggestion, idx) => (
+                          <div
+                            key={idx}
+                            className="text-xs text-yellow-300 mb-1"
+                          >
+                            🎯 {suggestion.action}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                {loadingPipeline && (
+                  <div className="text-center text-sm text-gray-400">
+                    Loading pipeline...
                   </div>
                 )}
-
-                {loadingPipeline && <div className="text-center text-sm text-gray-400">Loading pipeline...</div>}
               </div>
             )}
 
-            {analyticsTab === 'predict' && predictiveData && (
+            {analyticsTab === "predict" && predictiveData && (
               <div className="space-y-3">
                 {predictiveData.closureProbability && (
                   <div className="bg-teal-900/30 border border-teal-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-teal-400 mb-2">🎯 Close Probability</div>
-                    <div className="text-lg font-bold text-teal-300">{(predictiveData.closureProbability * 100).toFixed(0)}%</div>
-                    <div className="text-xs text-teal-400 mt-1">Likelihood to win</div>
+                    <div className="text-xs font-bold text-teal-400 mb-2">
+                      🎯 Close Probability
+                    </div>
+                    <div className="text-lg font-bold text-teal-300">
+                      {(predictiveData.closureProbability * 100).toFixed(0)}%
+                    </div>
+                    <div className="text-xs text-teal-400 mt-1">
+                      Likelihood to win
+                    </div>
                   </div>
                 )}
 
                 {predictiveData.bestContactTime && (
                   <div className="bg-pink-900/30 border border-pink-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-pink-400 mb-2">⏰ Best Contact Time</div>
-                    <div className="text-sm text-pink-300 capitalize">{predictiveData.bestContactTime.recommendedDay}</div>
-                    <div className="text-xs text-pink-400 mt-1 capitalize">{predictiveData.bestContactTime.recommendedTime}</div>
+                    <div className="text-xs font-bold text-pink-400 mb-2">
+                      ⏰ Best Contact Time
+                    </div>
+                    <div className="text-sm text-pink-300 capitalize">
+                      {predictiveData.bestContactTime.recommendedDay}
+                    </div>
+                    <div className="text-xs text-pink-400 mt-1 capitalize">
+                      {predictiveData.bestContactTime.recommendedTime}
+                    </div>
                   </div>
                 )}
 
                 {predictiveData.priceSensitivity && (
                   <div className="bg-indigo-900/30 border border-indigo-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-indigo-400 mb-2">💵 Price Sensitivity</div>
-                    <div className="text-sm text-indigo-300">{predictiveData.priceSensitivity.sensitivityTier}</div>
-                    <div className="text-xs text-indigo-400 mt-1">{predictiveData.priceSensitivity.recommendedStrategy.substring(0, 40)}...</div>
+                    <div className="text-xs font-bold text-indigo-400 mb-2">
+                      💵 Price Sensitivity
+                    </div>
+                    <div className="text-sm text-indigo-300">
+                      {predictiveData.priceSensitivity.sensitivityTier}
+                    </div>
+                    <div className="text-xs text-indigo-400 mt-1">
+                      {predictiveData.priceSensitivity.recommendedStrategy.substring(
+                        0,
+                        40,
+                      )}
+                      ...
+                    </div>
                   </div>
                 )}
 
-                {loadingPredictive && <div className="text-center text-sm text-gray-400">Loading predictions...</div>}
+                {loadingPredictive && (
+                  <div className="text-center text-sm text-gray-400">
+                    Loading predictions...
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -9033,13 +10692,15 @@ export default function Dashboard() {
                   <h2 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-indigo-400 to-blue-400">
                     📝 Lead Notes & State
                   </h2>
-                  <p className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2">{selectedLeadForNotes.email}</p>
+                  <p className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2">
+                    {selectedLeadForNotes.email}
+                  </p>
                 </div>
                 <button
                   onClick={() => {
                     setShowLeadNotesModal(false);
                     setSelectedLeadForNotes(null);
-                    setCurrentLeadNote('');
+                    setCurrentLeadNote("");
                   }}
                   className="text-gray-400 hover:text-white hover:bg-red-500/20 transition-all duration-200 text-2xl sm:text-3xl w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center"
                 >
@@ -9050,13 +10711,23 @@ export default function Dashboard() {
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gradient-to-b from-gray-900/30 to-gray-800/30">
               {/* Lead State */}
               <div className="mb-6">
-                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Lead Status</h3>
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">
+                  Lead Status
+                </h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
-                    <div className="text-xs text-gray-400 mb-1">Current Status</div>
+                    <div className="text-xs text-gray-400 mb-1">
+                      Current Status
+                    </div>
                     <select
-                      value={leadStates[selectedLeadForNotes.email]?.status || 'new'}
-                      onChange={(e) => updateLeadState(user?.uid, selectedLeadForNotes.email, { status: e.target.value })}
+                      value={
+                        leadStates[selectedLeadForNotes.email]?.status || "new"
+                      }
+                      onChange={(e) =>
+                        updateLeadState(user?.uid, selectedLeadForNotes.email, {
+                          status: e.target.value,
+                        })
+                      }
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:border-purple-500 focus:outline-none"
                     >
                       <option value="new">New</option>
@@ -9068,11 +10739,16 @@ export default function Dashboard() {
                     </select>
                   </div>
                   <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
-                    <div className="text-xs text-gray-400 mb-1">Last Contact</div>
+                    <div className="text-xs text-gray-400 mb-1">
+                      Last Contact
+                    </div>
                     <div className="text-sm text-white">
                       {leadStates[selectedLeadForNotes.email]?.lastContactDate
-                        ? new Date(leadStates[selectedLeadForNotes.email].lastContactDate).toLocaleDateString()
-                        : 'Never'}
+                        ? new Date(
+                            leadStates[selectedLeadForNotes.email]
+                              .lastContactDate,
+                          ).toLocaleDateString()
+                        : "Never"}
                     </div>
                   </div>
                 </div>
@@ -9080,7 +10756,9 @@ export default function Dashboard() {
 
               {/* Lead Notes */}
               <div className="mb-6">
-                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Internal Notes</h3>
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">
+                  Internal Notes
+                </h3>
                 <textarea
                   value={currentLeadNote}
                   onChange={(e) => setCurrentLeadNote(e.target.value)}
@@ -9091,23 +10769,35 @@ export default function Dashboard() {
 
               {/* Contact History Summary */}
               <div>
-                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">Contact Summary</h3>
+                <h3 className="text-base sm:text-lg font-bold text-purple-300 mb-3">
+                  Contact Summary
+                </h3>
                 <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Emails Sent:</span>
-                    <span className="text-white">{lastSent[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                    <span className="text-white">
+                      {lastSent[selectedLeadForNotes.email] ? "Yes" : "No"}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">WhatsApp Sent:</span>
-                    <span className="text-white">{lastWhatsAppSent[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                    <span className="text-white">
+                      {lastWhatsAppSent[selectedLeadForNotes.email]
+                        ? "Yes"
+                        : "No"}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Replied:</span>
-                    <span className="text-white">{repliedLeads[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                    <span className="text-white">
+                      {repliedLeads[selectedLeadForNotes.email] ? "Yes" : "No"}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Follow-Ups:</span>
-                    <span className="text-white">{followUpLeads[selectedLeadForNotes.email] ? 'Yes' : 'No'}</span>
+                    <span className="text-white">
+                      {followUpLeads[selectedLeadForNotes.email] ? "Yes" : "No"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -9115,7 +10805,12 @@ export default function Dashboard() {
             <div className="p-4 sm:p-6 border-t border-gray-700/50 bg-gradient-to-br from-gray-800/50 to-gray-900/50">
               <div className="flex gap-3">
                 <button
-                  onClick={() => handleSaveLeadNotes(selectedLeadForNotes.email, currentLeadNote)}
+                  onClick={() =>
+                    handleSaveLeadNotes(
+                      selectedLeadForNotes.email,
+                      currentLeadNote,
+                    )
+                  }
                   className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-4 py-3 rounded-xl font-medium transition"
                 >
                   Save Notes
@@ -9124,7 +10819,7 @@ export default function Dashboard() {
                   onClick={() => {
                     setShowLeadNotesModal(false);
                     setSelectedLeadForNotes(null);
-                    setCurrentLeadNote('');
+                    setCurrentLeadNote("");
                   }}
                   className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-xl font-medium transition"
                 >
@@ -9147,7 +10842,10 @@ export default function Dashboard() {
                   <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-red-400 to-pink-400">
                     📅 Upcoming Follow-Up Queue
                   </h2>
-                  <p className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2">Daily follow-up dashboard for Email, WhatsApp, and Phone tasks</p>
+                  <p className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2">
+                    Daily follow-up dashboard for Email, WhatsApp, and Phone
+                    tasks
+                  </p>
                 </div>
                 <button
                   onClick={() => setShowFollowUpQueue(false)}
@@ -9162,37 +10860,65 @@ export default function Dashboard() {
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-orange-900/40 to-red-800/40 p-3 sm:p-5 rounded-xl border border-orange-500/30 hover:border-orange-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-400">{followUpTasks.pending?.length || 0}</div>
-                    <div className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2 font-medium">Pending Tasks</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📅</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-400">
+                      {followUpTasks.pending?.length || 0}
+                    </div>
+                    <div className="text-xs sm:text-sm text-orange-200 mt-1 sm:mt-2 font-medium">
+                      Pending Tasks
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      📅
+                    </div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-emerald-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
-                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">{followUpTasks.completed?.length || 0}</div>
-                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">Completed</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">✅</div>
+                    <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
+                      {followUpTasks.completed?.length || 0}
+                    </div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
+                      Completed
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      ✅
+                    </div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-blue-900/40 to-indigo-800/40 p-3 sm:p-5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-400">
-                      {(followUpTasks.pending || []).filter(t => t.channel === 'email').length}
+                      {
+                        (followUpTasks.pending || []).filter(
+                          (t) => t.channel === "email",
+                        ).length
+                      }
                     </div>
-                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">Email</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">📧</div>
+                    <div className="text-xs sm:text-sm text-blue-200 mt-1 sm:mt-2 font-medium">
+                      Email
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      📧
+                    </div>
                   </div>
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-teal-500/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-green-900/40 to-teal-800/40 p-3 sm:p-5 rounded-xl border border-green-500/30 hover:border-green-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-400">
-                      {(followUpTasks.pending || []).filter(t => t.channel === 'whatsapp').length}
+                      {
+                        (followUpTasks.pending || []).filter(
+                          (t) => t.channel === "whatsapp",
+                        ).length
+                      }
                     </div>
-                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">WhatsApp</div>
-                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">💬</div>
+                    <div className="text-xs sm:text-sm text-green-200 mt-1 sm:mt-2 font-medium">
+                      WhatsApp
+                    </div>
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
+                      💬
+                    </div>
                   </div>
                 </div>
               </div>
@@ -9233,17 +10959,27 @@ export default function Dashboard() {
               <div className="mb-6">
                 <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
                   <span>📋</span>
-                  <span>Pending Follow-Ups ({followUpTasks.pending?.length || 0})</span>
+                  <span>
+                    Pending Follow-Ups ({followUpTasks.pending?.length || 0})
+                  </span>
                 </h3>
-                {(followUpTasks.pending || []).filter(task => {
-                  if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
-                  const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
+                {(followUpTasks.pending || []).filter((task) => {
+                  if (
+                    followUpQueueChannel !== "all" &&
+                    task.channel !== followUpQueueChannel
+                  )
+                    return false;
+                  const scheduledDate = task.scheduledFor
+                    ? new Date(task.scheduledFor)
+                    : new Date();
                   const isOverdue = scheduledDate < new Date();
-                  if (followUpQueueFilter === 'completed') return false;
-                  if (followUpQueueFilter === 'overdue' && !isOverdue) return false;
+                  if (followUpQueueFilter === "completed") return false;
+                  if (followUpQueueFilter === "overdue" && !isOverdue)
+                    return false;
                   if (followUpQueueSearch) {
                     const q = followUpQueueSearch.toLowerCase();
-                    const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                    const s =
+                      `${task.leadName || ""} ${task.leadEmail || ""} ${task.companyName || ""} ${task.followUpStage || ""}`.toLowerCase();
                     if (!s.includes(q)) return false;
                   }
                   return true;
@@ -9251,84 +10987,167 @@ export default function Dashboard() {
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">🎉</div>
                     <div className="text-gray-300">No pending follow-ups</div>
-                    <div className="text-sm text-gray-500 mt-1">You're all caught up!</div>
+                    <div className="text-sm text-gray-500 mt-1">
+                      You're all caught up!
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {(followUpTasks.pending || [])
-                      .filter(task => {
-                        if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
-                        const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
+                      .filter((task) => {
+                        if (
+                          followUpQueueChannel !== "all" &&
+                          task.channel !== followUpQueueChannel
+                        )
+                          return false;
+                        const scheduledDate = task.scheduledFor
+                          ? new Date(task.scheduledFor)
+                          : new Date();
                         const isOverdue = scheduledDate < new Date();
-                        if (followUpQueueFilter === 'completed') return false;
-                        if (followUpQueueFilter === 'overdue' && !isOverdue) return false;
+                        if (followUpQueueFilter === "completed") return false;
+                        if (followUpQueueFilter === "overdue" && !isOverdue)
+                          return false;
                         if (followUpQueueSearch) {
                           const q = followUpQueueSearch.toLowerCase();
-                          const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
+                          const s =
+                            `${task.leadName || ""} ${task.leadEmail || ""} ${task.companyName || ""} ${task.followUpStage || ""}`.toLowerCase();
                           if (!s.includes(q)) return false;
                         }
                         return true;
                       })
-                      .sort((a, b) => new Date(a.scheduledFor || 0) - new Date(b.scheduledFor || 0))
-                      .slice((pendingTasksPage - 1) * TASKS_PER_PAGE, pendingTasksPage * TASKS_PER_PAGE)
+                      .sort(
+                        (a, b) =>
+                          new Date(a.scheduledFor || 0) -
+                          new Date(b.scheduledFor || 0),
+                      )
+                      .slice(
+                        (pendingTasksPage - 1) * TASKS_PER_PAGE,
+                        pendingTasksPage * TASKS_PER_PAGE,
+                      )
                       .map((task) => {
-                        const scheduledDate = task.scheduledFor ? new Date(task.scheduledFor) : new Date();
+                        const scheduledDate = task.scheduledFor
+                          ? new Date(task.scheduledFor)
+                          : new Date();
                         const isOverdue = scheduledDate < new Date();
-                        const isToday = scheduledDate.toDateString() === new Date().toDateString();
-                        const isTomorrow = scheduledDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
+                        const isToday =
+                          scheduledDate.toDateString() ===
+                          new Date().toDateString();
+                        const isTomorrow =
+                          scheduledDate.toDateString() ===
+                          new Date(Date.now() + 86400000).toDateString();
 
-                        let timeDisplay = '';
+                        let timeDisplay = "";
                         if (isToday) {
-                          timeDisplay = `Today at ${scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                          timeDisplay = `Today at ${scheduledDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
                         } else if (isTomorrow) {
-                          timeDisplay = `Tomorrow at ${scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                          timeDisplay = `Tomorrow at ${scheduledDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
                         } else {
-                          timeDisplay = scheduledDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          timeDisplay =
+                            scheduledDate.toLocaleDateString([], {
+                              month: "short",
+                              day: "numeric",
+                            }) +
+                            " at " +
+                            scheduledDate.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            });
                         }
 
-                        const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
-                        const channelColor = task.channel === 'email' ? 'blue' : task.channel === 'whatsapp' ? 'green' : task.channel === 'phone' ? 'orange' : 'gray';
+                        const channelIcon =
+                          task.channel === "email"
+                            ? "📧"
+                            : task.channel === "whatsapp"
+                              ? "💬"
+                              : task.channel === "phone"
+                                ? "📞"
+                                : "📋";
+                        const channelColor =
+                          task.channel === "email"
+                            ? "blue"
+                            : task.channel === "whatsapp"
+                              ? "green"
+                              : task.channel === "phone"
+                                ? "orange"
+                                : "gray";
 
                         return (
-                          <div key={task.id || `${task.leadEmail}-${task.channel}-${task.followUpStage}`} className={`group relative p-4 rounded-xl border-2 ${isOverdue ? 'bg-red-900/20 border-red-500/50' : 'bg-gray-800/80 border-gray-700 hover:border-orange-500/50'} transition-all`}>
+                          <div
+                            key={
+                              task.id ||
+                              `${task.leadEmail}-${task.channel}-${task.followUpStage}`
+                            }
+                            className={`group relative p-4 rounded-xl border-2 ${isOverdue ? "bg-red-900/20 border-red-500/50" : "bg-gray-800/80 border-gray-700 hover:border-orange-500/50"} transition-all`}
+                          >
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                  <span className="text-2xl">{channelIcon}</span>
-                                  <span className={`text-xs sm:text-sm font-bold text-${channelColor}-400 uppercase`}>{task.channel || 'unknown'}</span>
-                                  {isOverdue && <span className="text-xs bg-red-500/30 text-red-300 px-2 py-1 rounded-full font-bold">OVERDUE</span>}
+                                  <span className="text-2xl">
+                                    {channelIcon}
+                                  </span>
+                                  <span
+                                    className={`text-xs sm:text-sm font-bold text-${channelColor}-400 uppercase`}
+                                  >
+                                    {task.channel || "unknown"}
+                                  </span>
+                                  {isOverdue && (
+                                    <span className="text-xs bg-red-500/30 text-red-300 px-2 py-1 rounded-full font-bold">
+                                      OVERDUE
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="font-bold text-white text-sm sm:text-base">{task.leadName || task.leadEmail || 'Unknown Lead'}</div>
-                                {task.companyName && <div className="text-xs text-gray-400">{task.companyName}</div>}
-                                {task.channel === 'whatsapp' && task.leadPhone ? (
-                                  <div className="text-xs text-gray-500 mt-1">{task.leadPhone}</div>
+                                <div className="font-bold text-white text-sm sm:text-base">
+                                  {task.leadName ||
+                                    task.leadEmail ||
+                                    "Unknown Lead"}
+                                </div>
+                                {task.companyName && (
+                                  <div className="text-xs text-gray-400">
+                                    {task.companyName}
+                                  </div>
+                                )}
+                                {task.channel === "whatsapp" &&
+                                task.leadPhone ? (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {task.leadPhone}
+                                  </div>
                                 ) : (
-                                  <div className="text-xs text-gray-500 mt-1">{task.leadEmail || 'No email'}</div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {task.leadEmail || "No email"}
+                                  </div>
                                 )}
                               </div>
                               <div className="flex flex-col items-end gap-2">
-                                <div className={`text-sm font-bold ${isOverdue ? 'text-red-400' : 'text-orange-400'}`}>
+                                <div
+                                  className={`text-sm font-bold ${isOverdue ? "text-red-400" : "text-orange-400"}`}
+                                >
                                   {timeDisplay}
                                 </div>
-                                <div className="text-xs text-gray-400">{task.followUpStage || 'Follow-up'}</div>
+                                <div className="text-xs text-gray-400">
+                                  {task.followUpStage || "Follow-up"}
+                                </div>
                                 <div className="flex gap-2 mt-2">
-                                  {task.channel === 'email' && (
+                                  {task.channel === "email" && (
                                     <button
-                                      onClick={() => handleSendEmailFollowUp(task)}
+                                      onClick={() =>
+                                        handleSendEmailFollowUp(task)
+                                      }
                                       className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition"
                                     >
                                       Send Email
                                     </button>
                                   )}
-                                  {task.channel === 'whatsapp' && (
+                                  {task.channel === "whatsapp" && (
                                     <button
-                                      onClick={() => handleSendWhatsAppFollowUp(task)}
+                                      onClick={() =>
+                                        handleSendWhatsAppFollowUp(task)
+                                      }
                                       className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded transition"
                                     >
                                       Send WhatsApp
                                     </button>
                                   )}
-                                  {task.channel === 'phone' && (
+                                  {task.channel === "phone" && (
                                     <button
                                       onClick={() => handlePhoneCall(task)}
                                       className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded transition"
@@ -9348,28 +11167,38 @@ export default function Dashboard() {
                           </div>
                         );
                       })}
-                  {/* Pagination Controls for Pending Tasks */}
-                  {(followUpTasks.pending?.length || 0) > TASKS_PER_PAGE && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                      <button
-                        onClick={handlePreviousPendingPage}
-                        disabled={pendingTasksPage === 1}
-                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
-                      >
-                        ← Previous
-                      </button>
-                      <span className="text-xs text-gray-400">
-                        Page {pendingTasksPage} of {Math.ceil((followUpTasks.pending?.length || 0) / TASKS_PER_PAGE)}
-                      </span>
-                      <button
-                        onClick={handleNextPendingPage}
-                        disabled={pendingTasksPage >= Math.ceil((followUpTasks.pending?.length || 0) / TASKS_PER_PAGE)}
-                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
-                      >
-                        Next →
-                      </button>
-                    </div>
-                  )}
+                    {/* Pagination Controls for Pending Tasks */}
+                    {(followUpTasks.pending?.length || 0) > TASKS_PER_PAGE && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+                        <button
+                          onClick={handlePreviousPendingPage}
+                          disabled={pendingTasksPage === 1}
+                          className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                        >
+                          ← Previous
+                        </button>
+                        <span className="text-xs text-gray-400">
+                          Page {pendingTasksPage} of{" "}
+                          {Math.ceil(
+                            (followUpTasks.pending?.length || 0) /
+                              TASKS_PER_PAGE,
+                          )}
+                        </span>
+                        <button
+                          onClick={handleNextPendingPage}
+                          disabled={
+                            pendingTasksPage >=
+                            Math.ceil(
+                              (followUpTasks.pending?.length || 0) /
+                                TASKS_PER_PAGE,
+                            )
+                          }
+                          className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -9378,82 +11207,139 @@ export default function Dashboard() {
               <div>
                 <h3 className="text-lg sm:text-xl font-bold text-green-300 mb-3 sm:mb-4 flex items-center gap-2">
                   <span>✅</span>
-                  <span>Completed History ({followUpTasks.completed?.length || 0})</span>
+                  <span>
+                    Completed History ({followUpTasks.completed?.length || 0})
+                  </span>
                 </h3>
-                 {(followUpTasks.completed || []).filter(task => {
-                   if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
-                   if (followUpQueueFilter === 'pending') return false;
-                   if (followUpQueueFilter === 'overdue') return false;
-                   if (followUpQueueSearch) {
-                     const q = followUpQueueSearch.toLowerCase();
-                     const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
-                     if (!s.includes(q)) return false;
-                   }
-                   return true;
-                 }).length === 0 ? (
+                {(followUpTasks.completed || []).filter((task) => {
+                  if (
+                    followUpQueueChannel !== "all" &&
+                    task.channel !== followUpQueueChannel
+                  )
+                    return false;
+                  if (followUpQueueFilter === "pending") return false;
+                  if (followUpQueueFilter === "overdue") return false;
+                  if (followUpQueueSearch) {
+                    const q = followUpQueueSearch.toLowerCase();
+                    const s =
+                      `${task.leadName || ""} ${task.leadEmail || ""} ${task.companyName || ""} ${task.followUpStage || ""}`.toLowerCase();
+                    if (!s.includes(q)) return false;
+                  }
+                  return true;
+                }).length === 0 ? (
                   <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700 text-center">
                     <div className="text-4xl mb-3">📝</div>
-                    <div className="text-gray-300">No completed follow-ups yet</div>
+                    <div className="text-gray-300">
+                      No completed follow-ups yet
+                    </div>
                   </div>
-                 ) : (
-                   <div className="space-y-2">
-                     {(followUpTasks.completed || [])
-                       .filter(task => {
-                         if (followUpQueueChannel !== 'all' && task.channel !== followUpQueueChannel) return false;
-                         if (followUpQueueFilter === 'pending') return false;
-                         if (followUpQueueFilter === 'overdue') return false;
-                         if (followUpQueueSearch) {
-                           const q = followUpQueueSearch.toLowerCase();
-                           const s = `${task.leadName || ''} ${task.leadEmail || ''} ${task.companyName || ''} ${task.followUpStage || ''}`.toLowerCase();
-                           if (!s.includes(q)) return false;
-                         }
-                         return true;
-                       })
-                       .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
-                      .slice((completedTasksPage - 1) * TASKS_PER_PAGE, completedTasksPage * TASKS_PER_PAGE)
+                ) : (
+                  <div className="space-y-2">
+                    {(followUpTasks.completed || [])
+                      .filter((task) => {
+                        if (
+                          followUpQueueChannel !== "all" &&
+                          task.channel !== followUpQueueChannel
+                        )
+                          return false;
+                        if (followUpQueueFilter === "pending") return false;
+                        if (followUpQueueFilter === "overdue") return false;
+                        if (followUpQueueSearch) {
+                          const q = followUpQueueSearch.toLowerCase();
+                          const s =
+                            `${task.leadName || ""} ${task.leadEmail || ""} ${task.companyName || ""} ${task.followUpStage || ""}`.toLowerCase();
+                          if (!s.includes(q)) return false;
+                        }
+                        return true;
+                      })
+                      .sort(
+                        (a, b) =>
+                          new Date(b.completedAt || 0) -
+                          new Date(a.completedAt || 0),
+                      )
+                      .slice(
+                        (completedTasksPage - 1) * TASKS_PER_PAGE,
+                        completedTasksPage * TASKS_PER_PAGE,
+                      )
                       .map((task) => {
-                        const completedDate = task.completedAt ? new Date(task.completedAt) : new Date();
-                        const channelIcon = task.channel === 'email' ? '📧' : task.channel === 'whatsapp' ? '💬' : task.channel === 'phone' ? '📞' : '📋';
-                        
+                        const completedDate = task.completedAt
+                          ? new Date(task.completedAt)
+                          : new Date();
+                        const channelIcon =
+                          task.channel === "email"
+                            ? "📧"
+                            : task.channel === "whatsapp"
+                              ? "💬"
+                              : task.channel === "phone"
+                                ? "📞"
+                                : "📋";
+
                         return (
-                          <div key={task.id || `${task.leadEmail}-${task.channel}-${task.followUpStage}-completed`} className="p-3 rounded-xl bg-gray-800/50 border border-gray-700">
+                          <div
+                            key={
+                              task.id ||
+                              `${task.leadEmail}-${task.channel}-${task.followUpStage}-completed`
+                            }
+                            className="p-3 rounded-xl bg-gray-800/50 border border-gray-700"
+                          >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <span>{channelIcon}</span>
                                 <div>
-                                  <div className="font-medium text-white text-sm">{task.leadName || task.leadEmail || 'Unknown Lead'}</div>
-                                  <div className="text-xs text-gray-400">{task.followUpStage || 'Completed'}</div>
+                                  <div className="font-medium text-white text-sm">
+                                    {task.leadName ||
+                                      task.leadEmail ||
+                                      "Unknown Lead"}
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    {task.followUpStage || "Completed"}
+                                  </div>
                                 </div>
                               </div>
                               <div className="text-xs text-gray-500">
-                                {completedDate.toLocaleDateString()} {completedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {completedDate.toLocaleDateString()}{" "}
+                                {completedDate.toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
                               </div>
                             </div>
                           </div>
                         );
                       })}
-                  {/* Pagination Controls for Completed Tasks */}
-                  {(followUpTasks.completed?.length || 0) > TASKS_PER_PAGE && (
-                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                      <button
-                        onClick={handlePreviousCompletedPage}
-                        disabled={completedTasksPage === 1}
-                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
-                      >
-                        ← Previous
-                      </button>
-                      <span className="text-xs text-gray-400">
-                        Page {completedTasksPage} of {Math.ceil((followUpTasks.completed?.length || 0) / TASKS_PER_PAGE)}
-                      </span>
-                      <button
-                        onClick={handleNextCompletedPage}
-                        disabled={completedTasksPage >= Math.ceil((followUpTasks.completed?.length || 0) / TASKS_PER_PAGE)}
-                        className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
-                      >
-                        Next →
-                      </button>
-                    </div>
-                  )}
+                    {/* Pagination Controls for Completed Tasks */}
+                    {(followUpTasks.completed?.length || 0) >
+                      TASKS_PER_PAGE && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+                        <button
+                          onClick={handlePreviousCompletedPage}
+                          disabled={completedTasksPage === 1}
+                          className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                        >
+                          ← Previous
+                        </button>
+                        <span className="text-xs text-gray-400">
+                          Page {completedTasksPage} of{" "}
+                          {Math.ceil(
+                            (followUpTasks.completed?.length || 0) /
+                              TASKS_PER_PAGE,
+                          )}
+                        </span>
+                        <button
+                          onClick={handleNextCompletedPage}
+                          disabled={
+                            completedTasksPage >=
+                            Math.ceil(
+                              (followUpTasks.completed?.length || 0) /
+                                TASKS_PER_PAGE,
+                            )
+                          }
+                          className="text-xs bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded transition"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -9464,4 +11350,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
