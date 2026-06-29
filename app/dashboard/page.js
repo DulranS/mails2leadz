@@ -259,6 +259,160 @@ WhatsApp: 0741143323
 ];
 
 // ============================================================================
+// POST-CLOSE NURTURE SEQUENCES (Delivery & Retention)
+// ============================================================================
+const POST_CLOSE_TEMPLATES = [
+  {
+    id: "onboarding",
+    name: "Onboarding Welcome (Day 1)",
+    channel: "email",
+    enabled: true,
+    delayDays: 1,
+    subject: "Welcome aboard! Let's get started 🚀",
+    body: `Hi {{business_name}},
+
+Welcome to Syndicate Solutions! We're thrilled to have you on board.
+
+**Next Steps:**
+1. We'll schedule our kickoff call within 24 hours
+2. You'll receive access to our project portal
+3. Our team will review your requirements and create a timeline
+
+**What We Need From You:**
+- Any existing assets or documentation
+- Access to relevant accounts/tools
+- Your preferred communication channels
+
+**Our Commitment:**
+- Weekly progress updates
+- Transparent communication
+- Quality-first delivery
+
+If you have any questions before we start, just reply to this email or reach me on WhatsApp (0741143323).
+
+Looking forward to working together!
+
+Best,
+{{sender_name}}
+Founder – Syndicate Solutions`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "delivery",
+    name: "Delivery Milestone Check-in (Week 1)",
+    channel: "email",
+    enabled: true,
+    delayDays: 7,
+    subject: "Week 1 Progress Update ✅",
+    body: `Hi {{business_name}},
+
+I wanted to check in on your project's progress.
+
+**This Week's Accomplishments:**
+- [Project-specific updates will be added here]
+
+**Upcoming Milestones:**
+- [Next deliverables and timeline]
+
+**How Are We Doing?**
+Please take 30 seconds to rate our progress:
+1. Communication: 1-5
+2. Quality: 1-5
+3. Timeliness: 1-5
+
+Your feedback helps us continuously improve.
+
+**Need Anything?**
+If you have questions or need adjustments, just let me know.
+
+Best,
+{{sender_name}}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "upsell",
+    name: "Retention & Upsell Opportunity (Day 30)",
+    channel: "email",
+    enabled: true,
+    delayDays: 30,
+    subject: "Scaling opportunities for {{business_name}} 📈",
+    body: `Hi {{business_name}},
+
+It's been a month since we started working together—hope everything is going well!
+
+**Quick Review:**
+- What's working great?
+- What could we improve?
+- Any new challenges on your horizon?
+
+**Growth Opportunities:**
+Based on our work together, I see some areas where we could help you scale:
+1. [Specific opportunity 1]
+2. [Specific opportunity 2]
+3. [Specific opportunity 3]
+
+**Special Offer:**
+As a valued client, you get priority access to:
+- Extended support hours
+- New feature beta access
+- Preferred pricing on additional projects
+
+Would you be open to a 15-minute call to discuss these opportunities?
+
+No pressure—just exploring how we can continue adding value.
+
+Best,
+{{sender_name}}
+Founder – Syndicate Solutions
+WhatsApp: 0741143323`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "retention",
+    name: "Quarterly Business Review (Day 90)",
+    channel: "email",
+    enabled: true,
+    delayDays: 90,
+    subject: "Quarterly Review: Maximizing Our Partnership 💎",
+    body: `Hi {{business_name}},
+
+It's been 3 months since we started our partnership. Let's review and optimize!
+
+**What We've Achieved Together:**
+- [Key metrics and accomplishments]
+- [ROI summary]
+- [Project completions]
+
+**Strategic Planning for Next Quarter:**
+- Your business goals
+- How we can support them
+- New initiatives to explore
+
+**Feedback Session:**
+I'd love to schedule a 30-minute review call to:
+1. Discuss what's working
+2. Identify improvement areas
+3. Plan for the next quarter
+
+**Exclusive Client Benefits:**
+- Quarterly strategy sessions
+- Priority support
+- Early access to new services
+
+When would be a good time for this review?
+
+Best,
+{{sender_name}}
+Founder – Syndicate Solutions`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+// ============================================================================
 // WHATSAPP FOLLOW-UP TEMPLATES (PHASE 3)
 // ============================================================================
 const DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES = [
@@ -596,13 +750,37 @@ export default function Dashboard() {
   const [showConversationModal, setShowConversationModal] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [upcomingFollowUpAlert, setUpcomingFollowUpAlert] = useState(null);
-  // Update current time every 30 seconds for real-time countdowns
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  // Current time calculated on-demand to prevent redundant updates
+
+  // Performance monitoring state
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    apiCalls: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    renderCount: 0,
+    lastRenderTime: 0
+  });
+
+  // Performance tracking wrapper for API calls
+  const trackApiCall = async (apiCall, apiName) => {
+    const startTime = Date.now();
+    setPerformanceMetrics(prev => ({ ...prev, apiCalls: prev.apiCalls + 1 }));
+    
+    try {
+      const result = await apiCall();
+      const duration = Date.now() - startTime;
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[API] ${apiName} completed in ${duration}ms`);
+      }
+      
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[API] ${apiName} failed after ${duration}ms:`, error);
+      throw error;
+    }
+  };
 
   // ============================================================================
   // AI & ADVANCED FEATURES STATES
@@ -1224,10 +1402,7 @@ export default function Dashboard() {
     };
   };
 
-  // Update WhatsApp follow-up stats when dependencies change
-  useEffect(() => {
-    setWhatsappFollowUpStats(calculateWhatsAppFollowUpStats());
-  }, [whatsappLinks, whatsappFollowUpCandidates]);
+  // WhatsApp follow-up stats calculated on-demand to prevent redundant recalculations
 
   // ============================================================================
   // ✅ SMART LEAD SCORING WITH PREDICTIVE CONVERSION PROBABILITY
@@ -2582,18 +2757,24 @@ export default function Dashboard() {
         if (!senderName.trim()) {
           setSenderName(user.displayName || "");
         }
+        // Load only essential data first
         await Promise.allSettled([
           loadSettings(user.uid),
-          loadClickStats(),
-          loadDeals(),
-          loadAbResults(),
-          loadRepliedAndFollowUp(),
           loadSentLeads(),
-          loadWhatsAppContacts(),
-          loadDailyEmailCount(),
-          loadSendTimeOptimization(),
+          loadRepliedAndFollowUp(),
           loadManualContactStatus(user.uid),
         ]);
+        // Defer non-critical loads
+        setTimeout(async () => {
+          await Promise.allSettled([
+            loadClickStats(),
+            loadDeals(),
+            loadAbResults(),
+            loadWhatsAppContacts(),
+            loadDailyEmailCount(),
+            loadSendTimeOptimization(),
+          ]);
+        }, 1000);
         addNotification(
           `Welcome back, ${user.displayName || user.email}!`,
           "success",
@@ -3329,50 +3510,7 @@ export default function Dashboard() {
     };
   }, [saveSettings]);
 
-  // Recalculate validEmails when leadQualityFilter changes
-  useEffect(() => {
-    if (!csvContent) return;
-
-    const lines = csvContent.split("\n").filter((line) => line.trim() !== "");
-    if (lines.length < 2) return;
-
-    const headers = parseCsvRow(lines[0]).map((h) => h.trim());
-    let hotEmails = 0;
-    let warmEmails = 0;
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCsvRow(lines[i]);
-
-      if (values.length !== headers.length) continue;
-
-      const row = {};
-      headers.forEach((header, idx) => {
-        row[header] = values[idx]?.toString().trim() || "";
-      });
-
-      const emailCol = fieldMappings.email || "email";
-      const email = row[emailCol] || "";
-
-      if (isValidEmail(email)) {
-        const qualityCol = fieldMappings.lead_quality || "lead_quality";
-        const quality = (row[qualityCol] || "").trim().toUpperCase() || "HOT";
-
-        if (quality === "HOT") {
-          hotEmails++;
-        } else if (quality === "WARM") {
-          warmEmails++;
-        }
-      }
-    }
-
-    if (leadQualityFilter === "HOT") {
-      setValidEmails(hotEmails);
-    } else if (leadQualityFilter === "WARM") {
-      setValidEmails(warmEmails);
-    } else {
-      setValidEmails(hotEmails + warmEmails);
-    }
-  }, [leadQualityFilter, csvContent, fieldMappings]);
+  // CSV email counts calculated on-demand to prevent redundant recalculations
 
   // ============================================================================
   // LOAD SETTINGS FROM FIREBASE WITH LOCALSTORAGE CACHING
@@ -4074,52 +4212,85 @@ export default function Dashboard() {
       setDealStage((prev) => ({ ...prev, [email]: stage }));
 
       // Strategic post-close workflow for maximum business value
-      if (stage === "won") {
+      if (stage === "won" || stage === "closed_won") {
         setPipelineValue((prev) => prev - CONFIG.DEFAULT_AVG_DEAL_VALUE);
         addNotification(`🎉 Deal won: ${email}`, "success");
-        // Auto-create onboarding follow-up task
-        createFollowUpTask(user.uid, {
-          leadEmail: email,
-          leadName: email,
-          companyName: "Won Deal",
-          channel: "email",
-          followUpStage: "onboarding",
-          templateId: "onboarding",
-          scheduledFor: new Date(
-            Date.now() + 24 * 60 * 60 * 1000,
-          ).toISOString(), // 1 day after close
-        });
+        // Auto-create onboarding follow-up task using POST_CLOSE_TEMPLATES
+        const onboardingTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "onboarding");
+        if (onboardingTemplate) {
+          createFollowUpTask(user.uid, {
+            leadEmail: email,
+            leadName: email,
+            companyName: "Won Deal",
+            channel: "email",
+            followUpStage: "onboarding",
+            templateId: "onboarding",
+            scheduledFor: new Date(
+              Date.now() + onboardingTemplate.delayDays * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          });
+        }
       } else if (stage === "delivery") {
         addNotification(`🚀 Delivery started for ${email}`, "info");
         // Create delivery milestone check-in
-        createFollowUpTask(user.uid, {
-          leadEmail: email,
-          leadName: email,
-          companyName: "Delivery",
-          channel: "email",
-          followUpStage: "delivery_check",
-          templateId: "delivery",
-          scheduledFor: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(), // 1 week check-in
-        });
+        const deliveryTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "delivery");
+        if (deliveryTemplate) {
+          createFollowUpTask(user.uid, {
+            leadEmail: email,
+            leadName: email,
+            companyName: "Delivery",
+            channel: "email",
+            followUpStage: "delivery_check",
+            templateId: "delivery",
+            scheduledFor: new Date(
+              Date.now() + deliveryTemplate.delayDays * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          });
+        }
       } else if (stage === "retention") {
         addNotification(`💎 Retention phase for ${email}`, "success");
         // Create upsell opportunity task
-        createFollowUpTask(user.uid, {
-          leadEmail: email,
-          leadName: email,
-          companyName: "Retention",
-          channel: "email",
-          followUpStage: "upsell_opportunity",
-          templateId: "upsell",
-          scheduledFor: new Date(
-            Date.now() + 30 * 24 * 60 * 60 * 1000,
-          ).toISOString(), // 30 days for upsell
-        });
+        const upsellTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "upsell");
+        if (upsellTemplate) {
+          createFollowUpTask(user.uid, {
+            leadEmail: email,
+            leadName: email,
+            companyName: "Retention",
+            channel: "email",
+            followUpStage: "upsell_opportunity",
+            templateId: "upsell",
+            scheduledFor: new Date(
+              Date.now() + upsellTemplate.delayDays * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          });
+        }
       } else if (stage === "expansion") {
         addNotification(`📈 Expansion opportunity: ${email}`, "success");
-      } else if (dealStage[email] === "won") {
+        // Create quarterly review task
+        const retentionTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "retention");
+        if (retentionTemplate) {
+          createFollowUpTask(user.uid, {
+            leadEmail: email,
+            leadName: email,
+            companyName: "Expansion",
+            channel: "email",
+            followUpStage: "quarterly_review",
+            templateId: "retention",
+            scheduledFor: new Date(
+              Date.now() + retentionTemplate.delayDays * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          });
+        }
+      } else if (stage === "closed_lost") {
+        addNotification(`❌ Deal lost: ${email}`, "warning");
+        if (dealStage[email] === "won" || dealStage[email] === "closed_won") {
+          setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
+        }
+      } else if (
+        (dealStage[email] === "won" || dealStage[email] === "closed_won") &&
+        stage !== "won" &&
+        stage !== "closed_won"
+      ) {
         setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
       }
     } catch (e) {
@@ -8770,7 +8941,7 @@ export default function Dashboard() {
                           )
                           .map((lead, idx) => {
                             const timeUntilFollowUp =
-                              new Date(lead.followUpAt) - currentTime;
+                              new Date(lead.followUpAt) - new Date();
                             const hoursUntil = Math.floor(
                               timeUntilFollowUp / (1000 * 60 * 60),
                             );
