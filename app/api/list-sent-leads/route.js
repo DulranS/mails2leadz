@@ -75,7 +75,7 @@ export async function POST(request) {
       );
     }
 
-    const { userId, limit: limitParam = 100 } = await request.json();
+    const { userId, limit: limitParam = 50, skipCleanup = false } = await request.json();
 
     if (!userId) {
       return NextResponse.json(
@@ -85,8 +85,8 @@ export async function POST(request) {
     }
 
     // Validate limit to prevent excessive reads
-    const maxLimit = Math.min(limitParam, 500); // Cap at 500 records per request
-    console.log(`📧 Querying sent_emails for userId: ${userId} (limit: ${maxLimit})`);
+    const maxLimit = Math.min(limitParam, 200); // Cap at 200 records per request (reduced from 500 for Spark limits)
+    console.log(`📧 Querying sent_emails for userId: ${userId} (limit: ${maxLimit}, skipCleanup: ${skipCleanup})`);
 
     // Build query with pagination support
     let q = query(
@@ -266,44 +266,50 @@ export async function POST(request) {
     }
     
     // ============================================================================
-    // AUTOMATIC CLEANUP OF OLD RECORDS
+    // AUTOMATIC CLEANUP OF OLD RECORDS (Skip if requested to reduce writes)
     // ============================================================================
-    const cutoffDate = new Date(now);
-    cutoffDate.setDate(cutoffDate.getDate() - AUTO_CLEANUP_DAYS);
-    
-    const oldRecords = leads.filter(lead => {
-      const sentAt = new Date(lead.sentAt);
-      return sentAt < cutoffDate && lead.loopClosed;
-    });
-    
-    if (oldRecords.length > 0) {
-      console.log(`🧹 Found ${oldRecords.length} old records to clean up (older than ${AUTO_CLEANUP_DAYS} days)`);
+    if (!skipCleanup) {
+      const cutoffDate = new Date(now);
+      cutoffDate.setDate(cutoffDate.getDate() - AUTO_CLEANUP_DAYS);
       
-      // Delete old records in batches to avoid overwhelming the database
-      const deletePromises = oldRecords.map(async (lead) => {
-        try {
-          await deleteDoc(doc(db, 'sent_emails', lead.id));
-          console.log(`🗑️ Deleted old record: ${lead.email} (${lead.id})`);
-          deletedCount++;
-          return { success: true, id: lead.id };
-        } catch (deleteError) {
-          console.error(`❌ Failed to delete record ${lead.id}:`, deleteError);
-          return { success: false, id: lead.id, error: deleteError.message };
-        }
+      const oldRecords = leads.filter(lead => {
+        const sentAt = new Date(lead.sentAt);
+        return sentAt < cutoffDate && lead.loopClosed;
       });
       
-      await Promise.allSettled(deletePromises);
-      console.log(`✅ Cleanup complete: ${deletedCount} records deleted`);
+      if (oldRecords.length > 0) {
+        console.log(`🧹 Found ${oldRecords.length} old records to clean up (older than ${AUTO_CLEANUP_DAYS} days)`);
+        
+        // Delete old records in batches to avoid overwhelming the database
+        const deletePromises = oldRecords.map(async (lead) => {
+          try {
+            await deleteDoc(doc(db, 'sent_emails', lead.id));
+            console.log(`🗑️ Deleted old record: ${lead.email} (${lead.id})`);
+            deletedCount++;
+            return { success: true, id: lead.id };
+          } catch (deleteError) {
+            console.error(`❌ Failed to delete record ${lead.id}:`, deleteError);
+            return { success: false, id: lead.id, error: deleteError.message };
+          }
+        });
+        
+        await Promise.allSettled(deletePromises);
+        console.log(`✅ Cleanup complete: ${deletedCount} records deleted`);
+      }
+      
+      // Remove deleted records from the returned leads
+      const activeLeads = leads.filter(lead => {
+        const sentAt = new Date(lead.sentAt);
+        return !(sentAt < cutoffDate && lead.loopClosed);
+      });
+      
+      // Sort by sentAt (newest first)
+      activeLeads.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+    } else {
+      // Skip cleanup, return all leads sorted
+      leads.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+      var activeLeads = leads;
     }
-    
-    // Remove deleted records from the returned leads
-    const activeLeads = leads.filter(lead => {
-      const sentAt = new Date(lead.sentAt);
-      return !(sentAt < cutoffDate && lead.loopClosed);
-    });
-    
-    // Sort by sentAt (newest first)
-    activeLeads.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
 
     // Pagination metadata
     const hasMore = snapshot.docs.length >= maxLimit;

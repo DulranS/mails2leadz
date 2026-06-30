@@ -2764,7 +2764,7 @@ export default function Dashboard() {
           loadRepliedAndFollowUp(),
           loadManualContactStatus(user.uid),
         ]);
-        // Defer non-critical loads
+        // Defer non-critical loads with longer delay to reduce Firestore pressure
         setTimeout(async () => {
           await Promise.allSettled([
             loadClickStats(),
@@ -2774,7 +2774,7 @@ export default function Dashboard() {
             loadDailyEmailCount(),
             loadSendTimeOptimization(),
           ]);
-        }, 1000);
+        }, 3000);
         addNotification(
           `Welcome back, ${user.displayName || user.email}!`,
           "success",
@@ -3901,7 +3901,7 @@ export default function Dashboard() {
       const res = await fetch("/api/list-sent-leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid }),
+        body: JSON.stringify({ userId: user.uid, limit: 50, skipCleanup: true }),
       });
 
       // Handle 404 gracefully
