@@ -43,22 +43,30 @@ try {
 }
 
 // ============================================================================
+// RESPONSE HEADERS
+// ============================================================================
+const getResponseHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Cache-Control': 'private, max-age=60', // Cache for 1 minute client-side
+  'X-Content-Type-Options': 'nosniff'
+});
+
+// ============================================================================
 // POST HANDLER
 // ============================================================================
 export async function POST(request) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate'
-  };
-
-  if (request.method !== 'POST') {
-    return NextResponse.json(
-      { error: 'Method not allowed' },
-      { status: 405, headers }
-    );
-  }
+  const headers = getResponseHeaders();
 
   try {
+    // Validate request method
+    if (request.method !== 'POST') {
+      return NextResponse.json(
+        { error: 'Method not allowed' },
+        { status: 405, headers }
+      );
+    }
+
+    // Parse and validate request body
     const body = await request.json().catch((err) => {
       throw new Error(`Invalid JSON body: ${err?.message || 'unknown error'}`);
     });
@@ -102,23 +110,29 @@ export async function POST(request) {
       snapshot = await getDocs(q);
     } catch (queryError) {
       console.warn(
-        'WhatsApp contact query failed, falling back to client-side phone filter',
-        queryError,
+        'WhatsApp contact query with inequality filter failed, falling back to safe query',
+        queryError.code,
       );
-      const fallbackQuery = query(
-        collection(db, 'sent_emails'),
-        where('userId', '==', userId),
-        limit(maxLimit),
-      );
-      const fallbackSnapshot = await getDocs(fallbackQuery);
-      const filteredDocs = fallbackSnapshot.docs.filter((doc) => {
-        const data = doc.data();
-        return data?.phone !== undefined && data?.phone !== null && data?.phone !== '';
-      });
-      snapshot = {
-        docs: filteredDocs,
-        forEach: (fn) => filteredDocs.forEach((doc) => fn(doc)),
-      };
+      // Fallback: use safe query without inequality filter, then filter client-side
+      try {
+        const fallbackQuery = query(
+          collection(db, 'sent_emails'),
+          where('userId', '==', userId),
+          limit(maxLimit),
+        );
+        const fallbackSnapshot = await getDocs(fallbackQuery);
+        const filteredDocs = fallbackSnapshot.docs.filter((doc) => {
+          const data = doc.data();
+          return data?.phone !== undefined && data?.phone !== null && String(data.phone).trim() !== '';
+        });
+        snapshot = {
+          docs: filteredDocs,
+          forEach: (fn) => filteredDocs.forEach((doc) => fn(doc)),
+        };
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        throw fallbackError;
+      }
     }
 
     const contacts = [];
@@ -127,12 +141,12 @@ export async function POST(request) {
       if (data?.phone) {
         contacts.push({
           id: doc.id,
-          phone: data.phone,
-          email: data.to || data.email,
-          business: data.businessName || data.company || 'Unknown',
-          businessName: data.businessName || data.company || 'Unknown',
-          sentAt: data.sentAt,
-          createdAt: data.createdAt
+          phone: String(data.phone).trim(),
+          email: String(data.to || data.email || '').trim().toLowerCase(),
+          business: String(data.businessName || data.company || 'Unknown').trim(),
+          businessName: String(data.businessName || data.company || 'Unknown').trim(),
+          sentAt: data.sentAt?.toDate?.() || data.sentAt || new Date().toISOString(),
+          createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date().toISOString()
         });
       }
     });
@@ -143,18 +157,36 @@ export async function POST(request) {
       success: true,
       contacts,
       count: contacts.length,
-      limit: maxLimit
+      limit: maxLimit,
+      timestamp: new Date().toISOString()
     }, { headers });
 
   } catch (error) {
     console.error('List WhatsApp contacts error:', error);
+    
+    // Classify error for appropriate response
+    let statusCode = 500;
+    let errorCode = 'INTERNAL_ERROR';
+
+    if (error.code === 'failed-precondition') {
+      statusCode = 503;
+      errorCode = 'SERVICE_TEMPORARILY_UNAVAILABLE';
+    } else if (error.code === 'permission-denied') {
+      statusCode = 403;
+      errorCode = 'PERMISSION_DENIED';
+    } else if (error.message?.includes('Invalid JSON')) {
+      statusCode = 400;
+      errorCode = 'INVALID_REQUEST';
+    }
+
     return NextResponse.json(
       { 
         error: 'Failed to list WhatsApp contacts',
+        code: errorCode,
         details: error?.message || 'Unknown server error',
         contacts: []
       },
-      { status: 500, headers }
+      { status: statusCode, headers }
     );
   }
 }

@@ -81,6 +81,8 @@ import {
 import { useContactTracking } from "../../hooks/useContactTracking.js";
 import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
 import { useLeadScoring } from "../../hooks/useLeadScoring.js";
+import { retryFetch, getRetryStats } from "../../lib/api-retry.js";
+import { errorHandler, withErrorHandling } from "../../lib/error-handler.js";
 import {
   loadSettingsFromFirebase,
   saveSettingsToFirebase,
@@ -3892,8 +3894,21 @@ export default function Dashboard() {
   // ============================================================================
   // LOAD SENT LEADS FROM API WITH ERROR HANDLING
   // ============================================================================
+  // ============================================================================
+  // OPTIMIZE: Consolidated data loading with request deduplication
+  // ============================================================================
+  const isLoadingRef = useRef({
+    sentLeads: false,
+    repliedFollowUp: false,
+    deals: false,
+    whatsappContacts: false,
+    contactedCompanies: false,
+    dailyCount: false,
+  });
+
   const loadSentLeads = async () => {
-    if (!user?.uid) return;
+    if (isLoadingRef.current.sentLeads || !user?.uid) return;
+    isLoadingRef.current.sentLeads = true;
 
     setLoadingSentLeads(true);
 
@@ -3904,7 +3919,6 @@ export default function Dashboard() {
         body: JSON.stringify({ userId: user.uid, limit: 50, skipCleanup: true }),
       });
 
-      // Handle 404 gracefully
       if (res.status === 404) {
         setSentLeads([]);
         setFollowUpStats({
@@ -3919,7 +3933,6 @@ export default function Dashboard() {
         return;
       }
 
-      // Check if response is JSON
       const contentType = res.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Response is not JSON");
@@ -3990,6 +4003,7 @@ export default function Dashboard() {
       addNotification("Error loading sent leads", "error");
     } finally {
       setLoadingSentLeads(false);
+      isLoadingRef.current.sentLeads = false;
     }
   };
 
@@ -3997,7 +4011,8 @@ export default function Dashboard() {
   // LOAD WHATSAPP CONTACTS FROM DATABASE (ENSURE THEY SHOW REGARDLESS OF CSV)
   // ============================================================================
   const loadWhatsAppContacts = async () => {
-    if (!user?.uid) return;
+    if (isLoadingRef.current.whatsappContacts || !user?.uid) return;
+    isLoadingRef.current.whatsappContacts = true;
 
     try {
       const res = await fetch("/api/list-whatsapp-contacts", {
@@ -4024,6 +4039,8 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Load WhatsApp contacts error:", err);
       setWhatsappLinks([]);
+    } finally {
+      isLoadingRef.current.whatsappContacts = false;
     }
   };
 
@@ -4031,7 +4048,8 @@ export default function Dashboard() {
   // LOAD CONTACTED COMPANIES FROM API
   // ============================================================================
   const loadContactedCompanies = async () => {
-    if (!user?.uid) return;
+    if (isLoadingRef.current.contactedCompanies || !user?.uid) return;
+    isLoadingRef.current.contactedCompanies = true;
 
     setLoadingContactedCompanies(true);
 
@@ -4090,6 +4108,7 @@ export default function Dashboard() {
       addNotification("Error loading contacted companies", "error");
     } finally {
       setLoadingContactedCompanies(false);
+      isLoadingRef.current.contactedCompanies = false;
     }
   };
 
