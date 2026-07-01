@@ -4003,17 +4003,27 @@ export default function Dashboard() {
       const res = await fetch("/api/list-whatsapp-contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid }),
+        credentials: "same-origin",
+        body: JSON.stringify({ userId: user.uid, limit: 50 }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        const contacts = data.contacts || [];
+        const contacts = Array.isArray(data?.contacts) ? data.contacts : [];
         setWhatsappLinks(contacts);
+        return;
       }
+
+      const errorBody = await res.json().catch(() => null);
+      console.warn(
+        "WhatsApp contacts API returned non-OK status:",
+        res.status,
+        errorBody,
+      );
+      setWhatsappLinks([]);
     } catch (err) {
       console.error("Load WhatsApp contacts error:", err);
-      // Don't show notification, just log error
+      setWhatsappLinks([]);
     }
   };
 
@@ -4195,6 +4205,12 @@ export default function Dashboard() {
   const updateDealStage = async (email, stage) => {
     if (!user?.uid || !email || !db) return;
 
+    const normalizedStage = stage === "won" ? "closed_won" : stage;
+    const previousStage = dealStage[email] || "new";
+    const normalizedPreviousStage = previousStage === "won" ? "closed_won" : previousStage;
+    const wasClosed = ["closed_won", "closed_lost"].includes(normalizedPreviousStage);
+    const isClosed = ["closed_won", "closed_lost"].includes(normalizedStage);
+
     try {
       const dealRef = doc(db, "deals", email);
       await setDoc(
@@ -4202,23 +4218,26 @@ export default function Dashboard() {
         {
           userId: user.uid,
           email,
-          stage,
+          stage: normalizedStage,
           lastUpdate: new Date().toISOString(),
           value: CONFIG.DEFAULT_AVG_DEAL_VALUE,
         },
         { merge: true },
       );
 
-      setDealStage((prev) => ({ ...prev, [email]: stage }));
+      setDealStage((prev) => ({ ...prev, [email]: normalizedStage }));
 
-      // Strategic post-close workflow for maximum business value
-      if (stage === "won" || stage === "closed_won") {
+      if (!wasClosed && isClosed) {
         setPipelineValue((prev) => prev - CONFIG.DEFAULT_AVG_DEAL_VALUE);
+      } else if (wasClosed && !isClosed) {
+        setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
+      }
+
+      if (normalizedStage === "closed_won") {
         addNotification(`🎉 Deal won: ${email}`, "success");
-        // Auto-create onboarding follow-up task using POST_CLOSE_TEMPLATES
         const onboardingTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "onboarding");
         if (onboardingTemplate) {
-          createFollowUpTask(user.uid, {
+          await createFollowUpTask(user.uid, {
             leadEmail: email,
             leadName: email,
             companyName: "Won Deal",
@@ -4230,12 +4249,11 @@ export default function Dashboard() {
             ).toISOString(),
           });
         }
-      } else if (stage === "delivery") {
+      } else if (normalizedStage === "delivery") {
         addNotification(`🚀 Delivery started for ${email}`, "info");
-        // Create delivery milestone check-in
         const deliveryTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "delivery");
         if (deliveryTemplate) {
-          createFollowUpTask(user.uid, {
+          await createFollowUpTask(user.uid, {
             leadEmail: email,
             leadName: email,
             companyName: "Delivery",
@@ -4247,12 +4265,11 @@ export default function Dashboard() {
             ).toISOString(),
           });
         }
-      } else if (stage === "retention") {
+      } else if (normalizedStage === "retention") {
         addNotification(`💎 Retention phase for ${email}`, "success");
-        // Create upsell opportunity task
         const upsellTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "upsell");
         if (upsellTemplate) {
-          createFollowUpTask(user.uid, {
+          await createFollowUpTask(user.uid, {
             leadEmail: email,
             leadName: email,
             companyName: "Retention",
@@ -4264,12 +4281,11 @@ export default function Dashboard() {
             ).toISOString(),
           });
         }
-      } else if (stage === "expansion") {
+      } else if (normalizedStage === "expansion") {
         addNotification(`📈 Expansion opportunity: ${email}`, "success");
-        // Create quarterly review task
         const retentionTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "retention");
         if (retentionTemplate) {
-          createFollowUpTask(user.uid, {
+          await createFollowUpTask(user.uid, {
             leadEmail: email,
             leadName: email,
             companyName: "Expansion",
@@ -4281,17 +4297,8 @@ export default function Dashboard() {
             ).toISOString(),
           });
         }
-      } else if (stage === "closed_lost") {
+      } else if (normalizedStage === "closed_lost") {
         addNotification(`❌ Deal lost: ${email}`, "warning");
-        if (dealStage[email] === "won" || dealStage[email] === "closed_won") {
-          setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
-        }
-      } else if (
-        (dealStage[email] === "won" || dealStage[email] === "closed_won") &&
-        stage !== "won" &&
-        stage !== "closed_won"
-      ) {
-        setPipelineValue((prev) => prev + CONFIG.DEFAULT_AVG_DEAL_VALUE);
       }
     } catch (e) {
       console.error("Update deal error:", e);
