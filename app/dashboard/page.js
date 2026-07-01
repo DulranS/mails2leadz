@@ -83,6 +83,10 @@ import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
 import { useLeadScoring } from "../../hooks/useLeadScoring.js";
 import { retryFetch, getRetryStats } from "../../lib/api-retry.js";
 import { errorHandler, withErrorHandling } from "../../lib/error-handler.js";
+import { leadScoringEngine } from "../../lib/lead-scoring-engine.js";
+import { smartFollowupEngine } from "../../lib/smart-followup-engine.js";
+import { revenueAnalyticsEngine } from "../../lib/revenue-analytics-engine.js";
+import PerformanceMonitor from "../../components/PerformanceMonitor.jsx";
 import {
   loadSettingsFromFirebase,
   saveSettingsToFirebase,
@@ -3795,7 +3799,7 @@ export default function Dashboard() {
       const accessToken = await requestGmailToken();
       if (!accessToken) return;
 
-      const res = await fetch("/api/check-replies", {
+      const res = await retryFetch("/api/check-replies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3803,7 +3807,7 @@ export default function Dashboard() {
           accessToken,
           senderEmail,
         }),
-      });
+      }, 2);
 
       if (res.ok) {
         const responseData = await res.json();
@@ -3831,15 +3835,15 @@ export default function Dashboard() {
     setLoadingDailyCount(true);
 
     try {
-      const res = await fetch("/api/get-daily-count", {
+      const res = await retryFetch("/api/get-daily-count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.uid }),
-      });
+      }, 3);
 
       // Handle 404 gracefully
       if (res.status === 404) {
-        console.warn("Daily count API not found, using local state");
+        errorHandler.logError(new Error("Daily count API not found"), { function: 'loadDailyEmailCount', userId: user?.uid, severity: 'LOW' });
         setDailyEmailCount(0);
         setDailyWhatsAppCount(0);
         setDailySMSCount(0);
@@ -3857,7 +3861,7 @@ export default function Dashboard() {
         setDailyCallCount(data.callCount || 0);
       }
     } catch (err) {
-      console.error("Load daily count error:", err);
+      errorHandler.logError(err, { function: 'loadDailyEmailCount', userId: user?.uid, context: 'daily-count-fetch' });
       // Fallback to 0
       setDailyEmailCount(0);
       setDailyWhatsAppCount(0);
@@ -3875,11 +3879,11 @@ export default function Dashboard() {
     if (!user?.uid) return;
 
     try {
-      const res = await fetch("/api/ai-send-time-optimizer", {
+      const res = await retryFetch("/api/ai-send-time-optimizer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.uid }),
-      });
+      }, 2);
 
       const data = await res.json();
 
@@ -3887,7 +3891,7 @@ export default function Dashboard() {
         setSendTimeOptimization(data);
       }
     } catch (err) {
-      console.error("Send time optimization error:", err);
+      errorHandler.logError(err, { function: 'loadSendTimeOptimization', userId: user?.uid, context: 'send-time-fetch' });
     }
   };
 
@@ -3913,11 +3917,11 @@ export default function Dashboard() {
     setLoadingSentLeads(true);
 
     try {
-      const res = await fetch("/api/list-sent-leads", {
+      const res = await retryFetch("/api/list-sent-leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.uid, limit: 50, skipCleanup: true }),
-      });
+      }, 3);
 
       if (res.status === 404) {
         setSentLeads([]);
@@ -3995,12 +3999,14 @@ export default function Dashboard() {
           interestedLeads: interested.length,
         });
       } else {
-        addNotification("Failed to load sent leads", "error");
+        const userMsg = errorHandler.getUserMessage(res.status >= 500 ? { type: 'SERVER_ERROR' } : { type: 'NETWORK_ERROR' });
+        addNotification(userMsg.message, "error");
       }
     } catch (err) {
-      console.error("Load sent leads error:", err);
+      errorHandler.logError(err, { function: 'loadSentLeads', userId: user?.uid, context: 'sent-leads-fetch' });
       setSentLeads([]);
-      addNotification("Error loading sent leads", "error");
+      const userMsg = errorHandler.getUserMessage(err);
+      addNotification(userMsg.message, "error");
     } finally {
       setLoadingSentLeads(false);
       isLoadingRef.current.sentLeads = false;
@@ -4015,12 +4021,12 @@ export default function Dashboard() {
     isLoadingRef.current.whatsappContacts = true;
 
     try {
-      const res = await fetch("/api/list-whatsapp-contacts", {
+      const res = await retryFetch("/api/list-whatsapp-contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ userId: user.uid, limit: 50 }),
-      });
+      }, 3);
 
       if (res.ok) {
         const data = await res.json();
@@ -4030,14 +4036,10 @@ export default function Dashboard() {
       }
 
       const errorBody = await res.json().catch(() => null);
-      console.warn(
-        "WhatsApp contacts API returned non-OK status:",
-        res.status,
-        errorBody,
-      );
+      errorHandler.logError(new Error(`WhatsApp API returned ${res.status}`), { function: 'loadWhatsAppContacts', userId: user?.uid, statusCode: res.status, errorBody });
       setWhatsappLinks([]);
     } catch (err) {
-      console.error("Load WhatsApp contacts error:", err);
+      errorHandler.logError(err, { function: 'loadWhatsAppContacts', userId: user?.uid, context: 'whatsapp-fetch' });
       setWhatsappLinks([]);
     } finally {
       isLoadingRef.current.whatsappContacts = false;
@@ -4054,10 +4056,10 @@ export default function Dashboard() {
     setLoadingContactedCompanies(true);
 
     try {
-      const res = await fetch(`/api/track-company?userId=${user.uid}`);
+      const res = await retryFetch(`/api/track-company?userId=${user.uid}`, {}, 3);
 
       if (res.status === 404) {
-        console.warn("Company tracking API not found, using empty state");
+        errorHandler.logError(new Error("Company tracking API not found"), { function: 'loadContactedCompanies', userId: user?.uid, severity: 'LOW' });
         setContactedCompanies([]);
         setCompanyStats({
           totalCompanies: 0,
