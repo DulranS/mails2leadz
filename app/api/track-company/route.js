@@ -49,7 +49,7 @@ try {
 export async function POST(request) {
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate'
+    'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=240' // Cache for 2min, serve stale for 4min
   };
 
   try {
@@ -245,7 +245,7 @@ export async function POST(request) {
 export async function GET(request) {
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate'
+    'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=240' // Cache for 2min, serve stale for 4min
   };
 
   try {

@@ -15,7 +15,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getFirestore,
@@ -1198,9 +1198,9 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // FILTER SENT LEADS (Exclude leads too soon to follow up)
+  // FILTER SENT LEADS (Exclude leads too soon to follow up) - OPTIMIZED WITH useMemo
   // ============================================================================
-  const filteredSentLeads = (() => {
+  const filteredSentLeads = useMemo(() => {
     if (!sentLeads || sentLeads.length === 0) return [];
 
     const now = new Date();
@@ -1227,12 +1227,12 @@ export default function Dashboard() {
       return daysSinceLastContact >= MIN_DAYS_BETWEEN_FOLLOWUP;
     });
     return sentLeadsFiltered;
-  })();
+  }, [sentLeads]);
 
   // ============================================================================
-  // ✅ SAFE FOLLOW-UP CANDIDATES (DEFINED BEFORE JSX)
+  // ✅ SAFE FOLLOW-UP CANDIDATES (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const safeFollowUpCandidates = (() => {
+  const safeFollowUpCandidates = useMemo(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -1304,12 +1304,12 @@ export default function Dashboard() {
       });
 
     return candidates;
-  })();
+  }, [filteredSentLeads]);
 
   // ============================================================================
-  // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS
+  // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const whatsappFollowUpCandidates = (() => {
+  const whatsappFollowUpCandidates = useMemo(() => {
     // Only use whatsappLinks initially to avoid circular dependency
     const csvWhatsAppContacts = whatsappLinks || [];
 
@@ -1370,7 +1370,7 @@ export default function Dashboard() {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
 
     return candidates;
-  })();
+  }, [whatsappLinks, lastWhatsAppSent]);
 
   // ============================================================================
   // CALCULATE WHATSAPP FOLLOW-UP STATS
@@ -1517,8 +1517,8 @@ export default function Dashboard() {
     };
   };
 
-  // Apply predictive scoring to all leads
-  const scoredLeads = (() => {
+  // Apply predictive scoring to all leads (OPTIMIZED WITH useMemo)
+  const scoredLeads = useMemo(() => {
     if (!sentLeads || sentLeads.length === 0) return [];
 
     return sentLeads
@@ -1527,13 +1527,13 @@ export default function Dashboard() {
         predictive: calculatePredictiveScore(lead),
       }))
       .sort((a, b) => b.predictive.score - a.predictive.score);
-  })();
+  }, [sentLeads]);
 
-  // Get high-value leads (hot tier)
-  const hotLeads = (() =>
+  // Get high-value leads (hot tier) (OPTIMIZED WITH useMemo)
+  const hotLeads = useMemo(() =>
     scoredLeads.filter(
       (lead) => lead.predictive.tier === "hot" && !lead.replied,
-    ))();
+    ), [scoredLeads]);
 
   // ============================================================================
   // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING
@@ -1758,18 +1758,18 @@ export default function Dashboard() {
     return behavior;
   };
 
-  // Apply behavioral analysis to all leads
-  const leadsWithBehavior = (() => {
+  // Apply behavioral analysis to all leads (OPTIMIZED WITH useMemo)
+  const leadsWithBehavior = useMemo(() => {
     if (!scoredLeads || scoredLeads.length === 0) return [];
 
     return scoredLeads.map((lead) => ({
       ...lead,
       behavior: analyzeLeadBehavior(lead),
     }));
-  })();
+  }, [scoredLeads]);
 
-  // Get leads by engagement pattern
-  const leadsByEngagementPattern = (() => {
+  // Get leads by engagement pattern (OPTIMIZED WITH useMemo)
+  const leadsByEngagementPattern = useMemo(() => {
     const engagementPatterns = {};
     leadsWithBehavior.forEach((lead) => {
       const pattern = lead.behavior?.engagementPattern || "unknown";
@@ -1779,13 +1779,13 @@ export default function Dashboard() {
       engagementPatterns[pattern].push(lead);
     });
     return engagementPatterns;
-  })();
+  }, [leadsWithBehavior]);
 
-  // Get high-risk leads (high churn risk)
-  const highRiskLeads = (() =>
+  // Get high-risk leads (high churn risk) (OPTIMIZED WITH useMemo)
+  const highRiskLeads = useMemo(() =>
     leadsWithBehavior.filter(
       (lead) => lead.behavior?.riskOfChurn === "high",
-    ))();
+    ), [leadsWithBehavior]);
 
   // ============================================================================
   // ✅ CAMPAIGN PERFORMANCE INSIGHTS AND RECOMMENDATIONS
@@ -2119,10 +2119,10 @@ export default function Dashboard() {
     };
   };
 
-  const funnelMetrics = calculateFunnelMetrics();
+  const funnelMetrics = useMemo(() => calculateFunnelMetrics(), [sentLeads]);
 
-  // Get leads by stage
-  const leadsByStage = (() => {
+  // Get leads by stage (OPTIMIZED WITH useMemo)
+  const leadsByStage = useMemo(() => {
     const leadStages = {
       new: [],
       nurturing: [],
@@ -2137,7 +2137,7 @@ export default function Dashboard() {
     });
 
     return leadStages;
-  })();
+  }, [leadsWithBehavior]);
 
   // Calculate pipeline value (estimated revenue potential)
   const calculatePipelineValue = () => {
@@ -2157,10 +2157,10 @@ export default function Dashboard() {
     return totalValue;
   };
 
-  const estimatedPipelineValue = calculatePipelineValue();
+  const estimatedPipelineValue = useMemo(() => calculatePipelineValue(), [leadsByStage]);
 
-  // Get pending leads (un-replied but not yet ready for follow-up)
-  const getPendingLeads = () => {
+  // Get pending leads (un-replied but not yet ready for follow-up) (OPTIMIZED WITH useMemo)
+  const pendingLeads = useMemo(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -2215,12 +2215,10 @@ export default function Dashboard() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  };
+  }, [filteredSentLeads]);
 
-  const pendingLeads = getPendingLeads();
-
-  // Get replied leads with details
-  const getRepliedLeads = () => {
+  // Get replied leads with details (OPTIMIZED WITH useMemo)
+  const repliedLeadsList = useMemo(() => {
     if (!filteredSentLeads || filteredSentLeads.length === 0) {
       return [];
     }
@@ -2267,9 +2265,7 @@ export default function Dashboard() {
       });
 
     return replied;
-  };
-
-  const repliedLeadsList = getRepliedLeads();
+  }, [filteredSentLeads]);
 
   // ============================================================================
   // ✅ HANDLE SEND BULK SMS (DEFINED BEFORE JSX - FIXES REFERENCE ERROR)
@@ -2389,9 +2385,9 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY
+  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const getFilteredAndSortedContacts = () => {
+  const filteredAndSortedContacts = useMemo(() => {
     let filteredContacts = [...whatsappLinks];
 
     // Apply search
@@ -2474,28 +2470,27 @@ export default function Dashboard() {
     });
 
     return filteredContacts;
-  };
+  }, [whatsappLinks, debouncedSearchQuery, contactFilter, sortBy, sortOrder, repliedLeads, leadScores, lastSent, lastWhatsAppSent]);
 
   // ============================================================================
-  // PAGINATED CONTACTS
+  // PAGINATED CONTACTS (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const paginatedContacts = (() => {
-    const filteredContacts = getFilteredAndSortedContacts();
+  const paginatedContacts = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return {
-      contacts: filteredContacts.slice(startIndex, endIndex),
-      total: filteredContacts.length,
-      totalPages: Math.ceil(filteredContacts.length / itemsPerPage),
+      contacts: filteredAndSortedContacts.slice(startIndex, endIndex),
+      total: filteredAndSortedContacts.length,
+      totalPages: Math.ceil(filteredAndSortedContacts.length / itemsPerPage),
       currentPage,
       itemsPerPage,
     };
-  })();
+  }, [filteredAndSortedContacts, currentPage, itemsPerPage]);
 
   // ============================================================================
-  // PREPARE SORTED CONTACTS FOR MAIN OUTREACH LIST
+  // PREPARE SORTED CONTACTS FOR MAIN OUTREACH LIST (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const sortedWhatsappLinks = (() => {
+  const sortedWhatsappLinks = useMemo(() => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
     const sortedContacts = [...whatsappLinks].sort((a, b) => {
@@ -2521,12 +2516,12 @@ export default function Dashboard() {
       return bScore - aScore;
     });
     return sortedContacts;
-  })();
+  }, [whatsappLinks, repliedLeads, leadScores]);
 
   // ============================================================================
-  // CALCULATE CONVERSION FUNNEL
+  // CALCULATE CONVERSION FUNNEL (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const calculateConversionFunnel = () => {
+  const conversionFunnel = useMemo(() => {
     const total = whatsappLinks.length;
     const replied = Object.values(repliedLeads).filter(Boolean).length;
     const contacted = whatsappLinks.filter((c) =>
@@ -2551,12 +2546,12 @@ export default function Dashboard() {
           stages.demo > 0 ? Math.round((stages.closed / stages.demo) * 100) : 0,
       },
     };
-  };
+  }, [whatsappLinks, repliedLeads]);
 
   // ============================================================================
-  // CALCULATE REVENUE FORECASTS
+  // CALCULATE REVENUE FORECASTS (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const calculateRevenueForecasts = () => {
+  const revenueForecasts = useMemo(() => {
     const avgDealValue = CONFIG.DEFAULT_AVG_DEAL_VALUE;
     const replies = Object.values(repliedLeads).filter(Boolean).length;
     const demoOpportunities = Math.ceil(replies * CONFIG.DEFAULT_DEMO_RATE);
@@ -2576,12 +2571,12 @@ export default function Dashboard() {
         expectedAnnualRunRate: expectedClosures * avgDealValue * 12,
       },
     };
-  };
+  }, [repliedLeads]);
 
   // ============================================================================
-  // SEGMENT LEADS
+  // SEGMENT LEADS (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const segmentLeads = () => {
+  const leadSegments = useMemo(() => {
     const leadSegments = {
       veryHot: [],
       hot: [],
@@ -2613,12 +2608,12 @@ export default function Dashboard() {
     });
 
     return leadSegments;
-  };
+  }, [whatsappLinks, leadScores, repliedLeads]);
 
   // ============================================================================
-  // GET NEW LEADS (NOT YET EMAILED)
+  // GET NEW LEADS (NOT YET EMAILED) (OPTIMIZED WITH useMemo)
   // ============================================================================
-  const getNewLeads = () => {
+  const newLeads = useMemo(() => {
     if (!whatsappLinks || whatsappLinks.length === 0) return [];
 
     const sentLeadsData = sentLeads;
@@ -2681,7 +2676,7 @@ export default function Dashboard() {
       return scoreB - scoreA;
     });
     return sortedGroupedLeads;
-  };
+  }, [whatsappLinks, sentLeads, leadScores]);
 
   const getNewLeadsDisabledReason = () => {
     if (!csvContent) return "Upload a CSV to start outreach.";
@@ -2711,13 +2706,9 @@ export default function Dashboard() {
     return "";
   };
 
-  const newLeads = (() => {
-    const leads = getNewLeads();
-    return leads;
-  })();
-  const newLeadsDisabledReason = (() => getNewLeadsDisabledReason())();
-  const sendEmailsDisabledReason = (() => getSendEmailsDisabledReason())();
-  const safeFollowUpDisabledReason = (() => getSafeFollowUpDisabledReason())();
+  const newLeadsDisabledReason = useMemo(() => getNewLeadsDisabledReason(), [csvContent, dailyEmailCount, isSending]);
+  const sendEmailsDisabledReason = useMemo(() => getSendEmailsDisabledReason(), [csvContent, validEmails, dailyEmailCount, isSending]);
+  const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [isSending, safeFollowUpCandidates]);
 
   // ============================================================================
   // GOOGLE OAUTH SCRIPT LOADER
@@ -2770,7 +2761,7 @@ export default function Dashboard() {
           loadRepliedAndFollowUp(),
           loadManualContactStatus(user.uid),
         ]);
-        // Defer non-critical loads with longer delay to reduce Firestore pressure
+        // Defer non-critical loads with much longer delay to reduce CPU usage
         setTimeout(async () => {
           await Promise.allSettled([
             loadClickStats(),
@@ -2780,7 +2771,7 @@ export default function Dashboard() {
             loadDailyEmailCount(),
             loadSendTimeOptimization(),
           ]);
-        }, 3000);
+        }, 10000); // Increased to 10s to reduce concurrent CPU usage
         addNotification(
           `Welcome back, ${user.displayName || user.email}!`,
           "success",
@@ -4047,74 +4038,6 @@ export default function Dashboard() {
   };
 
   // ============================================================================
-  // LOAD CONTACTED COMPANIES FROM API
-  // ============================================================================
-  const loadContactedCompanies = async () => {
-    if (isLoadingRef.current.contactedCompanies || !user?.uid) return;
-    isLoadingRef.current.contactedCompanies = true;
-
-    setLoadingContactedCompanies(true);
-
-    try {
-      const res = await retryFetch(`/api/track-company?userId=${user.uid}`, {}, 3);
-
-      if (res.status === 404) {
-        errorHandler.logError(new Error("Company tracking API not found"), { function: 'loadContactedCompanies', userId: user?.uid, severity: 'LOW' });
-        setContactedCompanies([]);
-        setCompanyStats({
-          totalCompanies: 0,
-          totalContacts: 0,
-          avgContactsPerCompany: 0,
-          companiesReplied: 0,
-          replyRate: 0,
-        });
-        setLoadingContactedCompanies(false);
-        return;
-      }
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setContactedCompanies(data.companies || []);
-
-        // Calculate stats
-        const companies = data.companies || [];
-        const totalCompanies = companies.length;
-        const totalContacts = companies.reduce(
-          (sum, company) => sum + (company.totalContacts || 0),
-          0,
-        );
-        const avgContactsPerCompany =
-          totalCompanies > 0 ? (totalContacts / totalCompanies).toFixed(1) : 0;
-        const companiesReplied = companies.filter(
-          (company) => company.hasReplied,
-        ).length;
-        const replyRate =
-          totalCompanies > 0
-            ? ((companiesReplied / totalCompanies) * 100).toFixed(1)
-            : 0;
-
-        setCompanyStats({
-          totalCompanies,
-          totalContacts,
-          avgContactsPerCompany,
-          companiesReplied,
-          replyRate,
-        });
-      } else {
-        addNotification("Failed to load contacted companies", "error");
-      }
-    } catch (err) {
-      console.error("Load contacted companies error:", err);
-      setContactedCompanies([]);
-      addNotification("Error loading contacted companies", "error");
-    } finally {
-      setLoadingContactedCompanies(false);
-      isLoadingRef.current.contactedCompanies = false;
-    }
-  };
-
-  // ============================================================================
   // REQUEST GMAIL OAUTH TOKEN
   // ============================================================================
   const requestGmailToken = () => {
@@ -4164,11 +4087,11 @@ export default function Dashboard() {
     try {
       addNotification("🔍 Running system diagnostics...", "info");
 
-      const response = await fetch("/api/email-debug", {
+      const response = await retryFetch("/api/email-debug", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
-      });
+      }, 2);
 
       const data = await response.json();
 
@@ -4379,7 +4302,7 @@ export default function Dashboard() {
 
     try {
       // Use the dedicated follow-up API for proper tracking
-      const res = await fetch("/api/send-followup", {
+      const res = await retryFetch("/api/send-followup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -4388,7 +4311,7 @@ export default function Dashboard() {
           userId: user.uid,
           senderName,
         }),
-      });
+      }, 2);
 
       const data = await res.json();
 
@@ -4432,7 +4355,7 @@ export default function Dashboard() {
     setAiProcessorStatus("Running...");
 
     try {
-      const res = await fetch("/api/auto-reply-processor", { method: "POST" });
+      const res = await retryFetch("/api/auto-reply-processor", { method: "POST" }, 2);
       const data = await res.json();
 
       if (!res.ok) {
@@ -4471,7 +4394,7 @@ export default function Dashboard() {
     setFollowupSchedulerStatus("Running...");
 
     try {
-      const res = await fetch("/api/followup-scheduler", { method: "POST" });
+      const res = await retryFetch("/api/followup-scheduler", { method: "POST" }, 2);
       const data = await res.json();
 
       if (!res.ok) {
@@ -4606,7 +4529,7 @@ export default function Dashboard() {
             }
 
             // Send follow-up using the dedicated follow-up API
-            const res = await fetch("/api/send-followup", {
+            const res = await retryFetch("/api/send-followup", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -4617,7 +4540,7 @@ export default function Dashboard() {
                 attachments: followUpAttachments,
                 customTemplates: followUpTemplates,
               }),
-            });
+            }, 2);
 
             const data = await res.json();
 
@@ -5192,7 +5115,7 @@ export default function Dashboard() {
     setShowConversationModal(true);
 
     try {
-      const response = await fetch("/api/get-thread", {
+      const response = await retryFetch("/api/get-thread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -5201,7 +5124,7 @@ export default function Dashboard() {
           messageId: lead.messageId,
           threadId: lead.threadId,
         }),
-      });
+      }, 2);
 
       const data = await response.json();
 

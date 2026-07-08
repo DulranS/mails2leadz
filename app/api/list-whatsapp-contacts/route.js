@@ -47,7 +47,7 @@ try {
 // ============================================================================
 const getResponseHeaders = () => ({
   'Content-Type': 'application/json',
-  'Cache-Control': 'private, max-age=60', // Cache for 1 minute client-side
+  'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120', // Aggressive caching for Hobby plan
   'X-Content-Type-Options': 'nosniff'
 });
 

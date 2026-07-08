@@ -43,13 +43,19 @@ const getTodayRange = () => {
 // POST HANDLER
 // ============================================================================
 export async function POST(request) {
+  // Add aggressive caching headers for Hobby plan
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' // Cache for 60s, serve stale for 120s
+  };
+  
   try {
     const { userId } = await request.json();
     
     if (!userId) {
       return NextResponse.json(
         { error: 'userId is required' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
     
@@ -257,7 +263,7 @@ export async function POST(request) {
         sms: Math.max(0, CONFIG.MAX_DAILY_SMS - smsSnapshot.size),
         calls: Math.max(0, CONFIG.MAX_DAILY_CALLS - callSnapshot.size)
       }
-    });
+    }, { headers });
     
   } catch (error) {
     console.error('Get daily count error:', error);
@@ -270,7 +276,7 @@ export async function POST(request) {
         smsCount: 0,
         callCount: 0
       },
-      { status: 200 }
+      { status: 200, headers }
     );
   }
 }

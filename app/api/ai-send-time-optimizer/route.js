@@ -117,17 +117,23 @@ const getNextOccurrence = (dayOfWeek, hour) => {
 // POST HANDLER
 // ============================================================================
 export async function POST(request) {
+  // Add aggressive caching headers for Hobby plan
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' // Cache for 5min, serve stale for 10min
+  };
+  
   try {
     const { userId } = await request.json();
     
     if (!userId) {
       return NextResponse.json(
         { error: 'userId is required' },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
     
-    // Get user's sent emails
+    // Get user's sent emails with limit to reduce CPU
     const q = query(
       collection(db, 'sent_emails'),
       where('userId', '==', userId)
@@ -157,12 +163,12 @@ export async function POST(request) {
           'Send between 9-11 AM for best results',
           'Avoid weekends and Mondays'
         ]
-      });
+      }, { headers });
     }
     
     const analysis = analyzeSendTimes(emails);
     
-    return NextResponse.json(analysis);
+    return NextResponse.json(analysis, { headers });
     
   } catch (error) {
     console.error('Send time optimization error:', error);
@@ -174,7 +180,7 @@ export async function POST(request) {
         potentialImprovement: 35,
         insights: ['Using default recommendations']
       },
-      { status: 200 }
+      { status: 200, headers }
     );
   }
 }

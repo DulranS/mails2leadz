@@ -54,10 +54,10 @@ const AUTO_CLEANUP_DAYS = 30; // Auto-delete records older than this
 // POST HANDLER
 // ============================================================================
 export async function POST(request) {
-  // Set response headers to ensure JSON response
+  // Set response headers with aggressive caching for Hobby plan
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache, no-store, must-revalidate'
+    'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' // Cache for 30s, serve stale for 60s
   };
   
   try {
