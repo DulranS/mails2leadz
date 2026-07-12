@@ -914,7 +914,7 @@ export default function Dashboard() {
   // ============================================================================
   // NOTIFICATION HELPER
   // ============================================================================
-  const addNotification = (
+  const addNotification = useCallback((
     message,
     type = "info",
     duration = CONFIG.NOTIFICATION_DURATION_MS,
@@ -939,7 +939,7 @@ export default function Dashboard() {
     }
 
     return id;
-  };
+  }, []);
 
   const markNotificationRead = (id) => {
     setNotifications((prev) =>
@@ -2736,7 +2736,7 @@ export default function Dashboard() {
         document.head.removeChild(script);
       }
     };
-  }, [addNotification]);
+  }, []);
 
   // ============================================================================
   // AUTH STATE LISTENER
@@ -2785,7 +2785,7 @@ export default function Dashboard() {
     });
 
     return () => unsubscribe();
-  }, [auth, addNotification]);
+  }, [auth, senderName]);
 
   // ============================================================================
   // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED: LAZY LOAD
@@ -3433,7 +3433,7 @@ export default function Dashboard() {
   // ============================================================================
   // AUTO-SAVE SETTINGS WITH LOCALSTORAGE CACHING
   // ============================================================================
-  const saveSettings = async () => {
+  const saveSettings = useCallback(async () => {
     if (!user?.uid || !db || !userPreferences.autoSaveEnabled) return;
 
     try {
@@ -3488,10 +3488,12 @@ export default function Dashboard() {
       console.warn("Failed to save settings:", error);
       addNotification("Failed to auto-save settings", "warning");
     }
-  };
+  }, [user?.uid, db, userPreferences.autoSaveEnabled, senderName, senderEmail, templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, fieldMappings, abTestMode, smsConsent, userPreferences]);
 
-  // Debounced auto-save
+  // Debounced auto-save - only trigger on specific state changes
   useEffect(() => {
+    if (!userPreferences.autoSaveEnabled) return;
+
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current);
     }
@@ -3505,7 +3507,7 @@ export default function Dashboard() {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [saveSettings]);
+  }, [senderName, senderEmail, templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, fieldMappings, abTestMode, smsConsent, userPreferences.autoSaveEnabled]);
 
   // CSV email counts calculated on-demand to prevent redundant recalculations
 
@@ -3545,6 +3547,7 @@ export default function Dashboard() {
         );
         setUserPreferences(cached.userPreferences || userPreferences);
         // console.log('✅ Settings loaded from localStorage cache');
+        addNotification("Settings loaded from cache", "success", 1500);
       } catch (e) {
         console.warn("Failed to parse cached settings:", e);
       }
@@ -3603,7 +3606,10 @@ export default function Dashboard() {
           JSON.stringify(settingsToCache),
         );
 
-        addNotification("Settings loaded successfully", "success", 2000);
+        // Only show notification if this is initial load (not from cache)
+        if (!cachedSettings) {
+          addNotification("Settings loaded successfully", "success", 2000);
+        }
       }
     } catch (error) {
       console.warn("Failed to load settings from Firebase:", error);
@@ -5458,7 +5464,7 @@ export default function Dashboard() {
     }
   };
 
-  const processCsvContent = (rawContent, sourceFileName = "") => {
+  const processCsvContent = useCallback((rawContent, sourceFileName = "") => {
     setValidEmails(0);
     setValidWhatsApp(0);
     setWhatsappLinks([]);
@@ -5723,7 +5729,7 @@ export default function Dashboard() {
       console.error("CSV upload error:", error);
       addNotification(`❌ CSV upload failed: ${error.message}`, "error");
     }
-  };
+  }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
 
   const getDownloadFilenameFromResponse = (res) => {
     const disposition = res.headers.get("content-disposition") || "";
