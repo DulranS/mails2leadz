@@ -7198,7 +7198,7 @@ export default function Dashboard() {
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
                   $
                   {Math.round(
-                    calculateRevenueForecasts().expectedMonthlyRevenue / 1000,
+                    revenueForecasts.expectedMonthlyRevenue / 1000,
                   )}
                   k
                 </div>
