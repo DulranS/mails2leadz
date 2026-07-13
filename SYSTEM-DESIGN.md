@@ -77,6 +77,15 @@
 │  │  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘ │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐ │
+│  │                                           FAULT TOLERANCE & RESILIENCE LAYER                                 │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │ │
+│  │  │  Service Health│  │  Graceful      │  │  Request       │  │  Retry Queue   │  │  Error         │ │ │
+│  │  │  Monitor       │  │  Degradation   │  │  Deduplication │  │  (Failed Ops)  │  │  Boundaries    │ │ │
+│  │  │  (Health Checks)│  │  (Fallbacks)   │  │  (Idempotency) │  │  (Backoff)     │  │  (React)       │ │ │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────────┘ │ │
+│  └─────────────────────────────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -535,7 +544,103 @@ flowchart TB
     class AH,AJ,AL,AN external;
 ```
 
-## 📊 Key Metrics & Quotas
+## �️ Fault Tolerance & Resilience
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                        FAULT TOLERANCE ARCHITECTURE                                          │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    SERVICE HEALTH MONITORING                  │                                              │
+│  │  • Automatic health checks every 30 seconds                   │                                              │
+│  │  • Monitors Gmail, Twilio, OpenAI, Firestore services        │                                              │
+│  │  • Circuit breaker pattern (5 failures = service down)       │                                              │
+│  │  • Automatic recovery after 1 minute                          │                                              │
+│  │  • Health status API for monitoring dashboards               │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    GRACEFUL DEGRADATION                       │                                              │
+│  │  • Feature-level fallbacks for non-critical services         │                                              │
+│  │  • Cached data serving when services are unavailable          │                                              │
+│  │  • Degraded UI placeholders for failed features              │                                              │
+│  │  • Automatic service restoration on recovery                 │                                              │
+│  │  • Critical services (email sending) fail fast               │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    REQUEST DEDUPLICATION                      │                                              │
+│  │  • Prevents duplicate API calls and submissions               │                                              │
+│  │  • Request coalescing for identical pending requests          │                                              │
+│  │  • Result caching for 1 minute (configurable)                │                                              │
+│  │  • Automatic cleanup of expired requests                      │                                              │
+│  │  • Idempotency guarantees for all operations                   │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    RETRY QUEUE SYSTEM                         │                                              │
+│  │  • Automatic retry for failed operations (5 attempts)         │                                              │
+│  │  • Exponential backoff with jitter (1s to 60s)               │                                              │
+│  │  • Priority-based queue processing (high/normal/low)          │                                              │
+│  │  • Category-based organization (email, sms, analytics)        │                                              │
+│  │  • Failed operation inspection and manual retry               │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    REACT ERROR BOUNDARIES                     │                                              │
+│  │  • Component-level error catching                           │                                              │
+│  │  • Prevents entire app crash from component errors          │                                              │
+│  │  • Custom fallback UI for each component                     │                                              │
+│  │  • Error logging and reporting integration                   │                                              │
+│  │  • Development mode error details display                     │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐                                              │
+│  │                    CIRCUIT BREAKER PATTERN                    │                                              │
+│  │  • Per-endpoint failure tracking                            │                                              │
+│  │  • Automatic circuit opening after threshold                 │                                              │
+│  │  • Prevents cascading failures across services               │                                              │
+│  │  • Automatic circuit reset after timeout                     │                                              │
+│  │  • Real-time circuit status monitoring                       │                                              │
+│  └─────────────────────────────────────────────────────────────┘                                              │
+│                                                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Fault Tolerance Features
+
+**Service Health Monitoring**
+- Real-time health checks for all external services
+- Automatic service degradation detection
+- Health-based routing and fallback activation
+- Comprehensive health dashboard
+
+**Graceful Degradation**
+- Non-critical features continue during outages
+- Cached data serves as fallback when available
+- Degraded UI provides user feedback
+- Automatic restoration when services recover
+
+**Request Deduplication**
+- Prevents duplicate submissions and API calls
+- Coalesces identical pending requests
+- Reduces unnecessary load on services
+- Improves response times for repeated requests
+
+**Retry Queue**
+- Failed operations automatically retried
+- Exponential backoff prevents overwhelming services
+- Priority queue ensures critical operations first
+- Failed operation inspection and manual retry
+
+**Error Boundaries**
+- Component-level error isolation
+- Prevents app-wide crashes
+- Custom fallback UI per component
+- Development-friendly error details
+
+## �📊 Key Metrics & Quotas
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
