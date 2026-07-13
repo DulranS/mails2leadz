@@ -5465,12 +5465,15 @@ export default function Dashboard() {
   };
 
   const processCsvContent = useCallback((rawContent, sourceFileName = "") => {
+    // Reset all CSV-related state first
     setValidEmails(0);
     setValidWhatsApp(0);
     setWhatsappLinks([]);
     setLeadScores({});
     setCsvFileName(sourceFileName);
     setCsvUploadDate(new Date().toISOString());
+    setPreviewRecipient(null);
+
     try {
       const normalizedContent = rawContent
         .replace(/\r\n/g, "\n")
@@ -5487,27 +5490,26 @@ export default function Dashboard() {
       const headers = parseCsvRow(lines[0]).map((h) => h.trim());
       setCsvHeaders(headers);
       setAvailableCsvVariables(headers);
-      setPreviewRecipient(null);
 
       // Extract all template variables
       const allTemplateTexts = [
-        templateA.subject,
-        templateA.body,
-        templateB.subject,
-        templateB.body,
-        whatsappTemplate,
-        smsTemplate,
-        instagramTemplate,
-        twitterTemplate,
-        linkedinTemplate,
-        ...followUpTemplates.flatMap((t) => [t.subject || "", t.body || ""]),
+        templateA?.subject || "",
+        templateA?.body || "",
+        templateB?.subject || "",
+        templateB?.body || "",
+        whatsappTemplate || "",
+        smsTemplate || "",
+        instagramTemplate || "",
+        twitterTemplate || "",
+        linkedinTemplate || "",
+        ...followUpTemplates?.flatMap((t) => [t.subject || "", t.body || ""]) || [],
       ];
 
       const allVars = [
         ...new Set([
           ...allTemplateTexts.flatMap((text) => extractTemplateVariables(text)),
           "sender_name",
-          ...emailImages.map((img) => img.placeholder.replace(/{{|}}/g, "")),
+          ...(emailImages || []).map((img) => img.placeholder.replace(/{{|}}/g, "")),
           ...headers,
         ]),
       ];
@@ -5830,10 +5832,18 @@ export default function Dashboard() {
       return;
     }
 
+    // Reset file input to allow re-uploading the same file
+    e.target.value = "";
+
     const reader = new FileReader();
 
     reader.onload = (event) => {
-      processCsvContent(event.target.result, file.name);
+      try {
+        processCsvContent(event.target.result, file.name);
+      } catch (error) {
+        console.error("CSV processing error:", error);
+        addNotification(`❌ CSV processing failed: ${error.message}`, "error");
+      }
     };
 
     reader.onerror = () => {
