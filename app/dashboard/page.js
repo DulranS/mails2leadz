@@ -5550,6 +5550,15 @@ function DashboardComponent() {
   };
 
   const processCsvContent = useCallback((rawContent, sourceFileName = "") => {
+    // Ensure templates are initialized before processing
+    if (!templateA || !templateB) {
+      console.warn("Templates not yet initialized, waiting...");
+      addNotification("⏳ Initializing templates, please try again in a moment", "info");
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
+      return;
+    }
+
     // Reset all CSV-related state first
     setValidEmails(0);
     setValidWhatsApp(0);
@@ -5812,9 +5821,16 @@ function DashboardComponent() {
         `✅ CSV loaded successfully!\n${validPhoneContacts.length} contacts\n${hotEmails + warmEmails} valid emails`,
         "success",
       );
+      
+      // Clear loading state after successful processing
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
     } catch (error) {
       console.error("CSV upload error:", error);
       addNotification(`❌ CSV upload failed: ${error.message}`, "error");
+      // Clear loading state on error
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
     }
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
 
@@ -5920,6 +5936,10 @@ function DashboardComponent() {
     // Reset file input to allow re-uploading the same file
     e.target.value = "";
 
+    // Add loading state to prevent multiple simultaneous uploads
+    setIsEnrichingCsv(true);
+    setEnrichStatusMessage("Processing CSV file...");
+
     const reader = new FileReader();
 
     reader.onload = (event) => {
@@ -5928,14 +5948,33 @@ function DashboardComponent() {
       } catch (error) {
         console.error("CSV processing error:", error);
         addNotification(`❌ CSV processing failed: ${error.message}`, "error");
+        setIsEnrichingCsv(false);
+        setEnrichStatusMessage("");
       }
     };
 
-    reader.onerror = () => {
+    reader.onerror = (error) => {
+      console.error("File reading error:", error);
       addNotification("Failed to read file", "error");
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
     };
 
-    reader.readAsText(file);
+    reader.onabort = () => {
+      console.warn("File reading aborted");
+      addNotification("File upload was cancelled", "warning");
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
+    };
+
+    try {
+      reader.readAsText(file);
+    } catch (error) {
+      console.error("Failed to start file reading:", error);
+      addNotification(`❌ Failed to read file: ${error.message}`, "error");
+      setIsEnrichingCsv(false);
+      setEnrichStatusMessage("");
+    }
   };
 
   // ============================================================================
