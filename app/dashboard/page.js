@@ -17,6 +17,11 @@ if (typeof window !== "undefined") {
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { initializeApp, getApps, getApp } from "firebase/app";
+import serviceHealthMonitor from "../../lib/service-health";
+import gracefulDegradationManager from "../../lib/graceful-degradation";
+import requestDeduplicator from "../../lib/request-deduplication";
+import retryQueue from "../../lib/retry-queue";
+import ErrorBoundary from "../../components/ErrorBoundary";
 import {
   getFirestore,
   doc,
@@ -487,7 +492,7 @@ Best,
 // ============================================================================
 // MAIN DASHBOARD COMPONENT
 // ============================================================================
-export default function Dashboard() {
+function DashboardComponent() {
   // ============================================================================
   // AUTH & LOADING STATES
   // ============================================================================
@@ -496,6 +501,12 @@ export default function Dashboard() {
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [authError, setAuthError] = useState(null);
   const router = useRouter();
+
+  // ============================================================================
+  // SERVICE HEALTH MONITORING STATE
+  // ============================================================================
+  const [serviceHealth, setServiceHealth] = useState(null);
+  const [showHealthStatus, setShowHealthStatus] = useState(false);
 
   // ============================================================================
   // CSV & LEAD DATA STATES
@@ -2327,7 +2338,8 @@ export default function Dashboard() {
           senderName,
         );
 
-        const response = await fetch("/api/send-sms", {
+        // Use request deduplication to prevent duplicate SMS sends
+        const response = await requestDeduplicator.fetch("/api/send-sms", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2786,6 +2798,30 @@ export default function Dashboard() {
 
     return () => unsubscribe();
   }, [auth, senderName]);
+
+  // ============================================================================
+  // SERVICE HEALTH MONITORING
+  // ============================================================================
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Start service health monitoring
+    serviceHealthMonitor.startMonitoring();
+
+    // Update health status every 30 seconds
+    const healthInterval = setInterval(() => {
+      const healthSummary = serviceHealthMonitor.getHealthSummary();
+      setServiceHealth(healthSummary);
+    }, 30000);
+
+    // Initial health check
+    setServiceHealth(serviceHealthMonitor.getHealthSummary());
+
+    return () => {
+      clearInterval(healthInterval);
+      serviceHealthMonitor.stopMonitoring();
+    };
+  }, []);
 
   // ============================================================================
   // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED: LAZY LOAD
@@ -4331,15 +4367,63 @@ export default function Dashboard() {
 
         // Invalidate cache to ensure fresh data
         invalidateCache("sent_emails");
-        invalidateCache("replied_followup");
-
-        await refreshAllData();
       } else {
-        addNotification(`❌ Follow-up failed: ${data.error}`, "error");
+        // Add to retry queue if follow-up fails
+        await retryQueue.add(
+          async () => {
+            const retryRes = await retryFetch("/api/send-followup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email,
+                accessToken,
+                userId: user.uid,
+                senderName,
+              }),
+            }, 2);
+            return retryRes.json();
+          },
+          {
+            priority: 'high',
+            category: 'followup',
+            context: { email, userId: user.uid },
+          }
+        );
+        
+        addNotification(
+          `⚠️ Follow-up failed for ${email}. Added to retry queue.`,
+          "warning",
+        );
       }
+
+      invalidateCache("replied_followup");
+      await refreshAllData();
     } catch (err) {
       console.error("Follow-up send error:", err);
-      addNotification(`❌ Error: ${err.message}`, "error");
+      
+      // Add to retry queue on error
+      await retryQueue.add(
+        async () => {
+          const retryRes = await retryFetch("/api/send-followup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              accessToken,
+              userId: user.uid,
+              senderName,
+            }),
+          }, 2);
+          return retryRes.json();
+        },
+        {
+          priority: 'high',
+          category: 'followup',
+          context: { email, userId: user.uid },
+        }
+      );
+      
+      addNotification(`❌ Error: ${err.message}. Added to retry queue.`, "error");
     }
   };
 
@@ -5002,7 +5086,8 @@ export default function Dashboard() {
         senderName,
       );
 
-      const response = await fetch("/api/send-sms", {
+      // Use request deduplication to prevent duplicate SMS sends
+      const response = await requestDeduplicator.fetch("/api/send-sms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -6324,7 +6409,18 @@ export default function Dashboard() {
       }
       const reconstructedCsv = csvLines.join("\n");
 
-      const res = await fetch("/api/send-email", {
+      // Use request deduplication to prevent duplicate email sends
+      const dedupKey = requestDeduplicator.generateKey("/api/send-email", {
+        method: "POST",
+        body: JSON.stringify({
+          csvContent: reconstructedCsv,
+          senderName,
+          senderEmail,
+          userId: user.uid,
+        }),
+      });
+
+      const res = await requestDeduplicator.fetch("/api/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -11486,5 +11582,14 @@ export default function Dashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+// Wrap dashboard with Error Boundary for fault tolerance
+export default function Dashboard() {
+  return (
+    <ErrorBoundary>
+      <DashboardComponent />
+    </ErrorBoundary>
   );
 }
