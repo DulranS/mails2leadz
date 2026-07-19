@@ -9586,14 +9586,20 @@ function DashboardComponent() {
                           </button>
 
                           <button
-                            onClick={testFollowUpSend}
+                            onClick={() => {
+                              console.log('🧪 Test Single Follow-Up - Function disabled');
+                              addNotification('Test follow-up function is currently disabled', 'info');
+                            }}
                             className="text-xs text-orange-400 hover:text-orange-300 underline block w-full"
                           >
                             🧪 Test Single Follow-Up
                           </button>
 
                           <button
-                            onClick={testFollowUpBypassQuota}
+                            onClick={() => {
+                              console.log('⚡ Bypass Quota Test - Function disabled');
+                              addNotification('Bypass quota test function is currently disabled', 'info');
+                            }}
                             className="text-xs text-red-400 hover:text-red-300 underline block w-full"
                           >
                             ⚡ Bypass Quota Test
