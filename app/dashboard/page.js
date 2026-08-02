@@ -1567,10 +1567,16 @@ function DashboardComponent() {
     ), [scoredLeads]);
 
   // ============================================================================
-  // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING
+  // ✅ AUTOMATED FOLLOW-UP SCHEDULING WITH OPTIMAL TIMING (INTEGRATED WITH SMART FOLLOW-UP ENGINE)
   // ============================================================================
   const calculateOptimalSendTime = (lead, historicalData = {}) => {
-    // Default optimal times based on industry research
+    // Use smart follow-up engine for ML-based optimal timing
+    if (lead.email && optimalFollowUpTimes[lead.email]) {
+      const engineResult = optimalFollowUpTimes[lead.email];
+      return new Date(engineResult.nextFollowupAt);
+    }
+
+    // Fallback to default optimal times based on industry research
     const defaultOptimalHours = [10, 11, 14, 15]; // 10am, 11am, 2pm, 3pm
     const defaultOptimalDays = [2, 3, 4]; // Tuesday, Wednesday, Thursday
 
@@ -1660,10 +1666,27 @@ function DashboardComponent() {
       errors: [],
     };
 
+    // Sort leads by priority using advanced lead scoring
+    const sortedLeads = [...leads].sort((a, b) => {
+      const aScore = advancedLeadScores[a.email] || leadScores[a.email] || 0;
+      const bScore = advancedLeadScores[b.email] || leadScores[b.email] || 0;
+      const aCategory = leadCategories[a.email] || 'COLD';
+      const bCategory = leadCategories[b.email] || 'COLD';
+      
+      const categoryPriority = { 'HOT': 3, 'WARM': 2, 'COOL': 1, 'COLD': 0 };
+      const aCategoryPriority = categoryPriority[aCategory] || 0;
+      const bCategoryPriority = categoryPriority[bCategory] || 0;
+      
+      if (aCategoryPriority !== bCategoryPriority) {
+        return bCategoryPriority - aCategoryPriority;
+      }
+      return bScore - aScore;
+    });
+
     // Schedule leads in batches to avoid overwhelming
     const batchSize = 10;
-    for (let i = 0; i < leads.length; i += batchSize) {
-      const batch = leads.slice(i, i + batchSize);
+    for (let i = 0; i < sortedLeads.length; i += batchSize) {
+      const batch = sortedLeads.slice(i, i + batchSize);
 
       for (const lead of batch) {
         const optimalTime = calculateOptimalSendTime(lead);
@@ -2533,22 +2556,37 @@ function DashboardComponent() {
       const bIsContacted = isContactedOnAnyChannel(b);
       const aIsPriority = isPriorityPhone(a.phone);
       const bIsPriority = isPriorityPhone(b.phone);
-      const aScore = leadScores[aKey] || 0;
-      const bScore = leadScores[bKey] || 0;
+      
+      // Use advanced lead scores from engine for better prioritization
+      const aScore = advancedLeadScores[aKey] || leadScores[aKey] || 0;
+      const bScore = advancedLeadScores[bKey] || leadScores[bKey] || 0;
+      
+      // Use lead categories for prioritization
+      const aCategory = leadCategories[aKey] || 'COLD';
+      const bCategory = leadCategories[bKey] || 'COLD';
+      
+      const categoryPriority = { 'HOT': 3, 'WARM': 2, 'COOL': 1, 'COLD': 0 };
+      const aCategoryPriority = categoryPriority[aCategory] || 0;
+      const bCategoryPriority = categoryPriority[bCategory] || 0;
 
       // 1. Non-contacted first, contacted last
       if (!aIsContacted && bIsContacted) return -1;
       if (aIsContacted && !bIsContacted) return 1;
 
-      // 2. Then 077/076/075 priority
+      // 2. Then by category (HOT > WARM > COOL > COLD)
+      if (aCategoryPriority !== bCategoryPriority) {
+        return bCategoryPriority - aCategoryPriority;
+      }
+
+      // 3. Then 077/076/075 priority
       if (aIsPriority && !bIsPriority) return -1;
       if (!aIsPriority && bIsPriority) return 1;
 
-      // 3. Fallback to score ranking
+      // 4. Fallback to advanced score ranking
       return bScore - aScore;
     });
     return sortedContacts;
-  }, [whatsappLinks, repliedLeads, leadScores]);
+  }, [whatsappLinks, repliedLeads, leadScores, advancedLeadScores, leadCategories]);
 
   // ============================================================================
   // CALCULATE CONVERSION FUNNEL (OPTIMIZED WITH useMemo)
@@ -4439,6 +4477,16 @@ function DashboardComponent() {
     if (followUpCount >= 3) {
       addNotification(`❌ Max follow-ups reached for ${email}`, "error");
       return;
+    }
+
+    // Use smart follow-up engine recommendations if available
+    if (nextBestActions[email]) {
+      const recommendation = nextBestActions[email].recommendation;
+      addNotification(
+        `🎯 Following smart recommendation: ${recommendation.action}`,
+        "info",
+        3000,
+      );
     }
 
     try {
@@ -6453,6 +6501,13 @@ function DashboardComponent() {
         emails.forEach((email, index) => {
           const normalizedEmail = email.trim().toLowerCase();
           const normalizedRow = { ...row, email: normalizedEmail };
+          
+          // Add advanced lead scoring metadata for prioritization
+          const leadScore = advancedLeadScores[normalizedEmail] || leadScores[normalizedEmail] || 0;
+          const leadCategory = leadCategories[normalizedEmail] || 'COLD';
+          normalizedRow.leadScore = leadScore;
+          normalizedRow.leadCategory = leadCategory;
+          
           // Add metadata for delay handling
           if (emails.length > 1) {
             normalizedRow.isFromMultiEmailRow = true;
@@ -6473,7 +6528,7 @@ function DashboardComponent() {
         }
       }
 
-      // Sort recipients to group emails from same row together
+      // Sort recipients to group emails from same row together AND prioritize by lead score
       validRecipients.sort((a, b) => {
         // If both are from multi-email rows, sort by rowGroupId then by emailIndex
         if (a.rowGroupId && b.rowGroupId) {
@@ -6485,7 +6540,18 @@ function DashboardComponent() {
         // Multi-email rows come first
         if (a.rowGroupId) return -1;
         if (b.rowGroupId) return 1;
-        return 0;
+        
+        // Prioritize by lead category (HOT > WARM > COOL > COLD)
+        const categoryPriority = { 'HOT': 3, 'WARM': 2, 'COOL': 1, 'COLD': 0 };
+        const aCategoryPriority = categoryPriority[a.leadCategory] || 0;
+        const bCategoryPriority = categoryPriority[b.leadCategory] || 0;
+        
+        if (aCategoryPriority !== bCategoryPriority) {
+          return bCategoryPriority - aCategoryPriority;
+        }
+        
+        // Then by lead score (higher score first)
+        return (b.leadScore || 0) - (a.leadScore || 0);
       });
 
       // Check for multi-email rows and notify user
@@ -8810,6 +8876,16 @@ function DashboardComponent() {
                             {recommendation && !isContacted && (
                               <div className="text-xs text-green-400 mt-1">
                                 💡 {recommendation.action}
+                              </div>
+                            )}
+                            {optimalFollowUpTimes[link.email] && !isContacted && !isReplied && (
+                              <div className="text-xs text-blue-400 mt-1">
+                                ⏰ Best time: {new Date(optimalFollowUpTimes[link.email].nextFollowupAt).toLocaleDateString()} {new Date(optimalFollowUpTimes[link.email].nextFollowupAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </div>
+                            )}
+                            {nextBestActions[link.email] && !isContacted && !isReplied && (
+                              <div className="text-xs text-purple-400 mt-1">
+                                🎯 {nextBestActions[link.email].recommendation.action}
                               </div>
                             )}
                             {/* ✅ Channel tracking badges */}
