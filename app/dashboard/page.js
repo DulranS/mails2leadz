@@ -617,7 +617,7 @@ function DashboardComponent() {
   const [loadingDailyCount, setLoadingDailyCount] = useState(false);
 
   // ============================================================================
-  // LEAD SCORING (Using custom hook)
+  // LEAD SCORING (Using custom hook + advanced engine)
   // ============================================================================
   const {
     scores: leadScores,
@@ -625,6 +625,26 @@ function DashboardComponent() {
     updateScore,
     setScores: setLeadScores,
   } = useLeadScoring();
+
+  // Advanced lead scoring engine integration
+  const [advancedLeadScores, setAdvancedLeadScores] = useState({});
+  const [leadCategories, setLeadCategories] = useState({});
+  const [leadRecommendations, setLeadRecommendations] = useState({});
+
+  // Smart follow-up engine integration
+  const [followUpRecommendations, setFollowUpRecommendations] = useState({});
+  const [optimalFollowUpTimes, setOptimalFollowUpTimes] = useState({});
+  const [nextBestActions, setNextBestActions] = useState({});
+
+  // Revenue analytics engine integration
+  const [pipelineHealth, setPipelineHealth] = useState(0);
+  const [revenueForecast, setRevenueForecast] = useState({ forecast: 0, conservative: 0, optimistic: 0 });
+  const [atRiskDeals, setAtRiskDeals] = useState([]);
+  const [winLossAnalysis, setWinLossAnalysis] = useState({});
+  const [actionItems, setActionItems] = useState([]);
+
+  // Performance monitor integration
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
 
   // ============================================================================
   // ANALYTICS & METRICS STATES
@@ -2822,6 +2842,85 @@ function DashboardComponent() {
       serviceHealthMonitor.stopMonitoring();
     };
   }, []);
+
+  // ============================================================================
+  // ADVANCED LEAD SCORING ENGINE INTEGRATION
+  // ============================================================================
+  useEffect(() => {
+    if (!sentLeads || sentLeads.length === 0) return;
+
+    // Apply advanced lead scoring to all sent leads
+    const scoredLeads = leadScoringEngine.scoreLeads(sentLeads);
+    
+    const newAdvancedScores = {};
+    const newCategories = {};
+    const newRecommendations = {};
+
+    scoredLeads.forEach(lead => {
+      if (lead.email) {
+        newAdvancedScores[lead.email] = lead.leadScore;
+        newCategories[lead.email] = lead.category;
+        newRecommendations[lead.email] = lead.recommendedAction;
+      }
+    });
+
+    setAdvancedLeadScores(newAdvancedScores);
+    setLeadCategories(newCategories);
+    setLeadRecommendations(newRecommendations);
+  }, [sentLeads]);
+
+  // ============================================================================
+  // SMART FOLLOW-UP ENGINE INTEGRATION
+  // ============================================================================
+  useEffect(() => {
+    if (!sentLeads || sentLeads.length === 0) return;
+
+    const newFollowUpRecs = {};
+    const newOptimalTimes = {};
+    const newNextActions = {};
+
+    sentLeads.forEach(lead => {
+      if (lead.email && !lead.replied) {
+        const optimalTime = smartFollowupEngine.calculateOptimalFollowupTime(lead);
+        const nextAction = smartFollowupEngine.getNextBestAction(lead);
+        
+        newOptimalTimes[lead.email] = optimalTime;
+        newNextActions[lead.email] = nextAction;
+        newFollowUpRecs[lead.email] = nextAction.recommendation;
+      }
+    });
+
+    setOptimalFollowUpTimes(newOptimalTimes);
+    setNextBestActions(newNextActions);
+    setFollowUpRecommendations(newFollowUpRecs);
+  }, [sentLeads]);
+
+  // ============================================================================
+  // REVENUE ANALYTICS ENGINE INTEGRATION
+  // ============================================================================
+  useEffect(() => {
+    if (!sentLeads || sentLeads.length === 0) return;
+
+    // Calculate pipeline health
+    const health = revenueAnalyticsEngine.calculatePipelineHealth(sentLeads);
+    setPipelineHealth(health);
+
+    // Forecast revenue
+    const forecast = revenueAnalyticsEngine.forecastRevenue(sentLeads, 12);
+    setRevenueForecast(forecast);
+
+    // Identify at-risk deals
+    const atRisk = revenueAnalyticsEngine.identifyAtRiskDeals(sentLeads);
+    setAtRiskDeals(atRisk);
+
+    // Analyze win/loss
+    const winLoss = revenueAnalyticsEngine.analyzeWinLoss(sentLeads);
+    setWinLossAnalysis(winLoss);
+
+    // Get action items
+    const actions = revenueAnalyticsEngine.getActionItems(sentLeads);
+    setActionItems(actions);
+  }, [sentLeads]);
 
   // ============================================================================
   // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED: LAZY LOAD
@@ -7367,6 +7466,134 @@ function DashboardComponent() {
                   </button>
                 </div>
 
+                {/* Pipeline Health */}
+                <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">
+                    📊 Pipeline Health
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Health Score:</span>
+                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {pipelineHealth.toFixed(0)}/100
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Status:</span>
+                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {pipelineHealth >= 70 ? 'Healthy' : pipelineHealth >= 40 ? 'Needs Attention' : 'Critical'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenue Forecast */}
+                <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">
+                    💰 Revenue Forecast (12 weeks)
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Expected:</span>
+                      <span className="font-bold text-green-400">
+                        ${revenueForecast.forecast.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Conservative:</span>
+                      <span className="font-bold text-blue-400">
+                        ${revenueForecast.conservative.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Optimistic:</span>
+                      <span className="font-bold text-purple-400">
+                        ${revenueForecast.optimistic.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Confidence:</span>
+                      <span className="font-bold text-yellow-400">
+                        {revenueForecast.confidence}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* At-Risk Deals */}
+                {atRiskDeals.length > 0 && (
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-red-700 mb-4">
+                    <h3 className="text-sm font-bold text-red-300 mb-2">
+                      ⚠️ At-Risk Deals ({atRiskDeals.length})
+                    </h3>
+                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
+                      {atRiskDeals.slice(0, 5).map((deal, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-gray-900/50 p-2 rounded">
+                          <span className="text-gray-400 truncate">{deal.email || 'Unknown'}</span>
+                          <span className={`font-bold ${deal.riskLevel === 'Critical' ? 'text-red-400' : deal.riskLevel === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                            {deal.riskLevel}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Items */}
+                {actionItems.length > 0 && (
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
+                    <h3 className="text-sm font-bold text-purple-300 mb-2">
+                      🎯 Recommended Actions
+                    </h3>
+                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
+                      {actionItems.slice(0, 3).map((action, idx) => (
+                        <div key={idx} className="bg-gray-900/50 p-2 rounded">
+                          <div className={`font-bold ${action.priority === 'CRITICAL' ? 'text-red-400' : action.priority === 'HIGH' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                            {action.priority}
+                          </div>
+                          <div className="text-gray-400 mt-1">{action.action}</div>
+                          <div className="text-green-400 mt-1">{action.impact}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Win/Loss Analysis */}
+                {winLossAnalysis.wonCount > 0 || winLossAnalysis.lostCount > 0 ? (
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
+                    <h3 className="text-sm font-bold text-purple-300 mb-2">
+                      📈 Win/Loss Analysis
+                    </h3>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Win Rate:</span>
+                        <span className="font-bold text-green-400">
+                          {winLossAnalysis.winRate}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Won Deals:</span>
+                        <span className="font-bold text-green-400">
+                          {winLossAnalysis.wonCount}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Lost Deals:</span>
+                        <span className="font-bold text-red-400">
+                          {winLossAnalysis.lostCount}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Avg Won Deal:</span>
+                        <span className="font-bold text-green-400">
+                          ${winLossAnalysis.avgWonDealSize.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
                 {sendTimeOptimization && (
                   <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
                     <h3 className="text-sm font-bold text-purple-300 mb-2">
@@ -7388,6 +7615,20 @@ function DashboardComponent() {
                         </span>
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Performance Monitor Toggle */}
+                <button
+                  onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+                  className="w-full mt-4 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition"
+                >
+                  {showPerformanceMonitor ? '🔼 Hide Performance Monitor' : '🔽 Show Performance Monitor'}
+                </button>
+
+                {showPerformanceMonitor && (
+                  <div className="mt-4">
+                    <PerformanceMonitor />
                   </div>
                 )}
               </div>
@@ -8523,6 +8764,9 @@ function DashboardComponent() {
                     const lastCall = lastCallMade[contactKey];
                     const contactChannels = contactedChannels[contactKey] || [];
                     const score = leadScores[link.email] || 0;
+                    const advancedScore = advancedLeadScores[link.email] || 0;
+                    const category = leadCategories[link.email] || 'UNKNOWN';
+                    const recommendation = leadRecommendations[link.email] || null;
                     const isReplied = repliedLeads[link.email];
                     const isFollowUp = followUpLeads[link.email];
                     const isContacted = isContactedOnAnyChannel(link);
@@ -8545,12 +8789,27 @@ function DashboardComponent() {
                               +{link.phone}
                             </div>
                             {link.email ? (
-                              <div className="text-xs text-blue-400">
-                                Score: {score}/100
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+                                  category === 'HOT' ? 'bg-red-900/30 text-red-400' :
+                                  category === 'WARM' ? 'bg-orange-900/30 text-orange-400' :
+                                  category === 'COOL' ? 'bg-blue-900/30 text-blue-400' :
+                                  'bg-gray-700 text-gray-400'
+                                }`}>
+                                  {category}
+                                </span>
+                                <span className="text-xs text-purple-300">
+                                  Score: {advancedScore}/100
+                                </span>
                               </div>
                             ) : (
                               <div className="text-xs text-gray-500 italic">
                                 No email (phone-only)
+                              </div>
+                            )}
+                            {recommendation && !isContacted && (
+                              <div className="text-xs text-green-400 mt-1">
+                                💡 {recommendation.action}
                               </div>
                             )}
                             {/* ✅ Channel tracking badges */}
