@@ -2887,24 +2887,39 @@ function DashboardComponent() {
   useEffect(() => {
     if (!sentLeads || sentLeads.length === 0) return;
 
-    // Apply advanced lead scoring to all sent leads
-    const scoredLeads = leadScoringEngine.scoreLeads(sentLeads);
-    
-    const newAdvancedScores = {};
-    const newCategories = {};
-    const newRecommendations = {};
+    try {
+      // Apply advanced lead scoring to all sent leads
+      const scoredLeads = leadScoringEngine.scoreLeads(sentLeads);
+      
+      const newAdvancedScores = {};
+      const newCategories = {};
+      const newRecommendations = {};
 
-    scoredLeads.forEach(lead => {
-      if (lead.email) {
-        newAdvancedScores[lead.email] = lead.leadScore;
-        newCategories[lead.email] = lead.category;
-        newRecommendations[lead.email] = lead.recommendedAction;
-      }
-    });
+      scoredLeads.forEach(lead => {
+        if (lead.email) {
+          newAdvancedScores[lead.email] = lead.leadScore;
+          newCategories[lead.email] = lead.category;
+          newRecommendations[lead.email] = lead.recommendedAction;
+        }
+      });
 
-    setAdvancedLeadScores(newAdvancedScores);
-    setLeadCategories(newCategories);
-    setLeadRecommendations(newRecommendations);
+      setAdvancedLeadScores(newAdvancedScores);
+      setLeadCategories(newCategories);
+      setLeadRecommendations(newRecommendations);
+    } catch (error) {
+      console.error('Error in advanced lead scoring engine:', error);
+      // Set fallback values to prevent UI errors
+      sentLeads.forEach(lead => {
+        if (lead.email) {
+          setAdvancedLeadScores(prev => ({ ...prev, [lead.email]: 50 }));
+          setLeadCategories(prev => ({ ...prev, [lead.email]: 'COOL' }));
+          setLeadRecommendations(prev => ({ 
+            ...prev, 
+            [lead.email]: { action: 'Send initial outreach', priority: 'medium' }
+          }));
+        }
+      });
+    }
   }, [sentLeads]);
 
   // ============================================================================
@@ -2918,13 +2933,36 @@ function DashboardComponent() {
     const newNextActions = {};
 
     sentLeads.forEach(lead => {
-      if (lead.email && !lead.replied) {
-        const optimalTime = smartFollowupEngine.calculateOptimalFollowupTime(lead);
-        const nextAction = smartFollowupEngine.getNextBestAction(lead);
-        
-        newOptimalTimes[lead.email] = optimalTime;
-        newNextActions[lead.email] = nextAction;
-        newFollowUpRecs[lead.email] = nextAction.recommendation;
+      try {
+        if (lead.email && !lead.replied) {
+          const optimalTime = smartFollowupEngine.calculateOptimalFollowupTime(lead, []);
+          const nextAction = smartFollowupEngine.getNextBestAction(lead, []);
+          
+          newOptimalTimes[lead.email] = optimalTime;
+          newNextActions[lead.email] = nextAction;
+          newFollowUpRecs[lead.email] = nextAction.recommendation;
+        }
+      } catch (error) {
+        console.error(`Error calculating follow-up for ${lead.email}:`, error);
+        // Set fallback values to prevent UI errors
+        newOptimalTimes[lead.email] = {
+          nextFollowupAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          channel: 'email',
+          suggestedSubject: 'Following up...',
+          dayOfWeek: 'Tomorrow',
+          timeOfDay: 10,
+          reasoning: 'Fallback timing'
+        };
+        newNextActions[lead.email] = {
+          recommendation: {
+            action: 'Send follow-up email',
+            reason: 'Standard follow-up',
+            channel: 'email',
+            timing: 'Tomorrow 10am',
+            template: 'standard'
+          }
+        };
+        newFollowUpRecs[lead.email] = newNextActions[lead.email].recommendation;
       }
     });
 
@@ -2939,25 +2977,35 @@ function DashboardComponent() {
   useEffect(() => {
     if (!sentLeads || sentLeads.length === 0) return;
 
-    // Calculate pipeline health
-    const health = revenueAnalyticsEngine.calculatePipelineHealth(sentLeads);
-    setPipelineHealth(health);
+    try {
+      // Calculate pipeline health
+      const health = revenueAnalyticsEngine.calculatePipelineHealth(sentLeads);
+      setPipelineHealth(health);
 
-    // Forecast revenue
-    const forecast = revenueAnalyticsEngine.forecastRevenue(sentLeads, 12);
-    setRevenueForecast(forecast);
+      // Forecast revenue
+      const forecast = revenueAnalyticsEngine.forecastRevenue(sentLeads, 12);
+      setRevenueForecast(forecast);
 
-    // Identify at-risk deals
-    const atRisk = revenueAnalyticsEngine.identifyAtRiskDeals(sentLeads);
-    setAtRiskDeals(atRisk);
+      // Identify at-risk deals
+      const atRisk = revenueAnalyticsEngine.identifyAtRiskDeals(sentLeads);
+      setAtRiskDeals(atRisk);
 
-    // Analyze win/loss
-    const winLoss = revenueAnalyticsEngine.analyzeWinLoss(sentLeads);
-    setWinLossAnalysis(winLoss);
+      // Analyze win/loss
+      const winLoss = revenueAnalyticsEngine.analyzeWinLoss(sentLeads);
+      setWinLossAnalysis(winLoss);
 
-    // Get action items
-    const actions = revenueAnalyticsEngine.getActionItems(sentLeads);
-    setActionItems(actions);
+      // Get action items
+      const actions = revenueAnalyticsEngine.getActionItems(sentLeads);
+      setActionItems(actions);
+    } catch (error) {
+      console.error('Error in revenue analytics engine:', error);
+      // Set fallback values to prevent UI errors
+      setPipelineHealth(50);
+      setRevenueForecast({ forecast: 0, conservative: 0, optimistic: 0, confidence: 50 });
+      setAtRiskDeals([]);
+      setWinLossAnalysis({ winRate: 0, wonCount: 0, lostCount: 0, avgWonDealSize: 0 });
+      setActionItems([]);
+    }
   }, [sentLeads]);
 
   // ============================================================================
