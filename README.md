@@ -56,10 +56,46 @@ said to whom.
    `BIZ_CHANNEL_WHATSAPP=true`, and point the sandbox's "when a message
    comes in" webhook at `https://your-domain.com/api/webhooks/whatsapp`.
 6. `npm install`, `npm run dev`, open `/dashboard`.
-7. **Deploy to Vercel** and it just runs — `vercel.json` already wires up
-   the three cron jobs (send campaign twice on weekdays, check inbox every
-   20 min, run follow-ups hourly). No manual triggering needed after that;
-   the dashboard buttons exist for testing and one-off pushes.
+7. **Deploy to Vercel** (free Hobby plan is fine — see below for exactly
+   what that means) and set up the external scheduler once. After that,
+   nothing needs manual triggering; the dashboard buttons are for testing
+   and one-off pushes.
+
+## Staying on Vercel's free (Hobby) plan
+
+Hobby's Cron feature only allows **one run per day per job** — anything more
+frequent fails at deploy time. That's fine for the outreach send (once a day
+is the right cadence anyway — you don't want to blast leads more than once
+daily regardless of plan), but follow-ups and reply-checking need to run more
+often than that to feel automated. The fix costs nothing:
+
+1. `vercel.json` already schedules `/api/campaigns/send` through Vercel's
+   built-in Cron, once on weekday mornings — this one stays inside Hobby's
+   limit natively.
+2. For `/api/followups/run` (hourly) and `/api/inbox/check` (every 20-30
+   min), sign up free at [cron-job.org](https://cron-job.org) (or any
+   similar free scheduler) and point it at:
+   - `https://your-domain.vercel.app/api/followups/run` — every hour
+   - `https://your-domain.vercel.app/api/inbox/check` — every 20-30 min
+
+   In the scheduler's request settings, add a custom header:
+   `Authorization: Bearer <your CRON_SECRET>` — matching the `CRON_SECRET`
+   you set in Vercel's env vars. Without this header the routes return 401;
+   this is what stops a stranger from finding your URL and burning your
+   OpenAI/Twilio budget.
+3. Vercel itself sends that same `Authorization: Bearer $CRON_SECRET` header
+   automatically on its own Cron calls once `CRON_SECRET` is set as an env
+   var, so one secret covers both paths.
+
+**Everything else on Hobby is generous enough that you won't come close**:
+1M function invocations/month and 4 CPU-hours/month, against maybe ~3,000
+invocations/month at the schedule above — almost all of it spent waiting on
+external APIs (OpenAI, Gmail, Twilio), not computing. Each route also sets
+`maxDuration` and caps its batch size per run (10 leads for outreach, 30 for
+follow-ups) specifically so a single invocation can't run long enough to
+threaten Hobby's function-duration ceiling. If you outgrow this — hundreds of
+leads a day, sub-hourly reply detection — that's the point to look at
+Vercel Pro, not before.
 
 ## Deliberate scope decisions
 

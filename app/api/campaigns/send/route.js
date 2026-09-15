@@ -5,23 +5,33 @@ import { sendEmail } from '../../../../lib/gmail';
 import { sendWhatsApp } from '../../../../lib/whatsapp';
 import { remainingQuota, incrementQuota } from '../../../../lib/quota';
 import { computeNextFollowup, statusForStep } from '../../../../lib/followup';
+import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
 import business from '../../../../business.config';
 
-// POST /api/campaigns/send  { "limit": 20 }   — manual trigger from the dashboard
-// GET  /api/campaigns/send                    — Vercel Cron hits this on schedule
-// Sends the FIRST-touch message to up to `limit` leads with status='new',
-// prioritizing HOT then WARM then COLD, respecting daily channel quotas.
-// Safe to call repeatedly (e.g. from a cron every hour) — never double-sends
-// because it only ever selects status='new' leads and flips status immediately
-// after a successful send.
-export async function GET() {
+// Vercel Hobby caps function duration and — separately — caps Cron to once a
+// day, so 60s is generously more than one daily batch of DEFAULT_LIMIT needs.
+export const maxDuration = 60;
+const DEFAULT_LIMIT = 10; // keep a single invocation comfortably inside maxDuration
+
+// GET  /api/campaigns/send  — Vercel Cron hits this once/day (see vercel.json).
+// Vercel sends `Authorization: Bearer $CRON_SECRET` automatically when
+// CRON_SECRET is set, so this doubles as auth for the scheduled run.
+export async function GET(request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return POST(new Request('http://internal/', { method: 'POST', body: '{}' }));
 }
 
+// POST /api/campaigns/send  { "limit": 10 }   — manual trigger from the dashboard
+// Sends the FIRST-touch message to up to `limit` leads with status='new',
+// prioritizing HOT then WARM then COLD, respecting daily channel quotas.
+// Safe to call repeatedly — never double-sends because it only ever selects
+// status='new' leads and flips status immediately after a successful send.
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const requestedLimit = body.limit || 20;
+    const requestedLimit = Math.min(body.limit || DEFAULT_LIMIT, 25); // hard ceiling protects maxDuration
 
     const supabase = getSupabase();
     const { data: candidates, error } = await supabase

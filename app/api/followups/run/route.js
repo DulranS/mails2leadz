@@ -5,16 +5,27 @@ import { sendEmail } from '../../../../lib/gmail';
 import { sendWhatsApp } from '../../../../lib/whatsapp';
 import { remainingQuota, incrementQuota } from '../../../../lib/quota';
 import { computeNextFollowup, statusForStep } from '../../../../lib/followup';
+import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
 import business from '../../../../business.config';
 
+// Vercel Hobby caps Cron to once/day, so hourly runs need a free external
+// scheduler (cron-job.org) instead — see README. maxDuration + the batch
+// cap below keep each invocation cheap regardless of who triggers it.
+export const maxDuration = 60;
+const BATCH_LIMIT = 30;
+
 // POST /api/followups/run
-// Intended to be hit by a scheduled job (Vercel Cron, cron-job.org, etc.)
-// every 1-2 hours. Finds every lead whose next_followup_at has passed and
-// who hasn't replied, sends the next follow-up in the sequence, and either
-// schedules the next one or marks the sequence exhausted.
+// Finds every lead whose next_followup_at has passed and who hasn't replied,
+// sends the next follow-up in the sequence, and either schedules the next
+// one or marks the sequence exhausted.
 const STOP_STATUSES = ['replied', 'won', 'lost', 'do_not_contact'];
 
-export async function GET() {
+// GET is for the external scheduler — requires the same CRON_SECRET Vercel
+// Cron would send, checked manually here since this path bypasses Vercel Cron.
+export async function GET(request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return POST();
 }
 
@@ -28,7 +39,7 @@ export async function POST() {
       .select('*')
       .lte('next_followup_at', nowIso)
       .not('status', 'in', `(${STOP_STATUSES.join(',')})`)
-      .limit(200);
+      .limit(BATCH_LIMIT);
 
     if (error) throw error;
 

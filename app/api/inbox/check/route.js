@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { listRecentInboundReplies } from '../../../../lib/gmail';
+import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
+
+export const maxDuration = 30;
 
 // POST /api/inbox/check
-// Intended to be hit every 15-30 minutes by a scheduled job. Polling (not a
+// Intended to be hit every 15-30 minutes by a free external scheduler
+// (Vercel Cron can't do this on Hobby — capped at once/day). Polling (not a
 // Gmail push subscription) is the deliberate choice here — push requires a
 // Google Cloud Pub/Sub topic + domain verification, which is real setup
 // overhead you don't need to take on until volume justifies it. Polling every
 // 15-30 min is indistinguishable from "instant" for a B2B sales inbox.
-export async function GET() {
+export async function GET(request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   return POST();
 }
 
