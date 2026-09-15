@@ -52,6 +52,15 @@ filtering, so one SME's data is genuinely isolated from another's.
 
 ## Setup (in order)
 
+0. **If you extracted this over an existing mails2leadz checkout** (instead
+   of replacing the folder wholesale), run the cleanup script first —
+   `bash cleanup-legacy.sh` (Mac/Linux/Git Bash) or
+   `powershell -ExecutionPolicy Bypass -File cleanup-legacy.ps1` (Windows,
+   no WSL/Git Bash needed). It removes old pages/lib/components that were
+   built against providers and tables this rebuild doesn't have — skipping
+   this step is the most common cause of a build failing on a stale page
+   like `/crm`. Then `git add -A && git commit && git push` so the cleanup
+   actually reaches whatever's deployed, not just your local folder.
 1. **Supabase project**: create one, run `database/schema.sql` in the SQL
    editor. Copy the project URL + `service_role` key + `anon` key into
    `.env.local` (copy `.env.example` first).
