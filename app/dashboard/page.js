@@ -13,9 +13,9 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState('');
   const router = useRouter();
-  const supabase = getSupabaseBrowserClient();
 
   const refresh = useCallback(async () => {
+    const supabase = getSupabaseBrowserClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) { router.push('/login'); return; }
     setReady(true);
@@ -44,11 +44,12 @@ export default function Dashboard() {
       else counts.in_sequence++;
     });
     setStats(counts);
-  }, [router, supabase]);
+  }, [router]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   async function handleSignOut() {
+    const supabase = getSupabaseBrowserClient();
     await supabase.auth.signOut();
     router.push('/login');
   }
