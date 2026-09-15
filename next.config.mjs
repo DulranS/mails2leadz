@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {},
-  webpack: (config, { isServer }) => {
+  webpack: (config) => {
     config.watchOptions = {
       ...config.watchOptions,
-      ignored: ['**/format_DISABLED/**', '**/node_modules/**'],
+      ignored: ['**/node_modules/**'],
     };
     return config;
   },

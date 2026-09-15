@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/campaigns/send", "schedule": "0 9,14 * * 1-5" },
+    { "path": "/api/inbox/check", "schedule": "*/20 * * * *" },
+    { "path": "/api/followups/run", "schedule": "0 * * * *" }
+  ]
+}

@@ -1,151 +1,76 @@
-# Auto-Leads - Automated Lead Generation & Email Outreach System
+# Outbound Engine
 
-## 🎯 Overview
+A lean, automated B2B outbound pipeline: import leads → AI scores + personalizes
+→ sends (email, optionally WhatsApp) → auto follow-ups on a schedule → stops
+instantly when someone replies. One config file makes it reusable for any
+business, software or service.
 
-Auto-Leads is a **production-ready, commercial-grade automated lead generation and email outreach platform** designed to maximize business value through intelligent automation.
+This IS your mails2leadz project folder, pruned and rebuilt in place — same
+repo, same config files (`next.config.mjs`, `tailwind.config.js`,
+`jsconfig.json`, `public/`), so you can drop this over your existing local
+copy or push it as-is. What's gone: the two competing databases (Firebase +
+Supabase), ~30 duplicate dashboard files, ~45 old API routes built against
+the old schema, and ~85 root-level progress-report markdown files from past
+iterations. `backend/` (the Python scraper) was left untouched since it's
+independent of the Next.js app. Nothing here was deleted from your original
+upload — only from this rebuilt copy.
 
-### Key Features
-- ✅ **Automated Email Outreach** - Send personalized emails to leads from CSV uploads
-- ✅ **Reply Detection** - Automatically detect when leads reply to emails
-- ✅ **Follow-Up Automation** - Schedule and send follow-up emails (1/3/7 day intervals)
-- ✅ **CRM Integration** - Track leads, deals, and customer relationships
-- ✅ **Business Intelligence** - Analytics, conversion tracking, and revenue forecasting
-- ✅ **Hot Lead Detection** - Identify and prioritize recent replies (≤7 days)
-- ✅ **Quick Actions** - One-click deal creation and email responses
-- ✅ **Duplicate Prevention** - Prevent duplicate emails (24-hour window)
-- ✅ **Attachment Support** - Send multiple attachments with emails
-- ✅ **Template Variables** - Comprehensive substitution (15+ variations)
+## How it actually works
 
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+ installed
-- Firebase project configured
-- Gmail API credentials
-- Domain name (optional but recommended)
-
-### Deployment (30 Minutes)
-
-1. **Install Dependencies**
-```bash
-npm install
+```
+CSV upload ──▶ /api/leads/import ──▶ AI scores lead (HOT/WARM/COLD) ──▶ leads table
+                                                                            │
+Dashboard "Send outreach" or Vercel Cron (weekdays 9am/2pm) ──▶ /api/campaigns/send
+    picks HOT leads first, respects daily quota, AI drafts the message,
+    sends via Gmail API or Twilio WhatsApp, schedules next_followup_at
+                                                                            │
+Cron every hour ──▶ /api/followups/run
+    sends follow-up #1, #2, #3 (48h apart, configurable) until reply or exhausted
+                                                                            │
+Cron every 20 min ──▶ /api/inbox/check (Gmail polling)
+Instant ──▶ /api/webhooks/whatsapp (Twilio webhook, real-time)
+    either one flips the lead to status='replied' and CANCELS all future
+    follow-ups — a human takes it from there
 ```
 
-2. **Configure Environment Variables**
-- Create `.env.local` file
-- Add environment variables (see `ENV_CONFIG.md`)
-- Required: Firebase config, Gmail API credentials
+Nothing here auto-deletes a lead or fabricates a reply. Every send and every
+inbound message is logged in `messages` so you can audit exactly what was
+said to whom.
 
-3. **Test Locally**
-```bash
-npm run dev
-```
+## Setup (in order)
 
-4. **Deploy to Vercel**
-```bash
-npm i -g vercel
-vercel --prod
-```
+1. **Supabase**: create a project, run `database/schema.sql` in the SQL
+   editor, copy the project URL + `service_role` key + `anon` key into
+   `.env.local` (copy `.env.example` first).
+2. **Gmail API**: enable the Gmail API in Google Cloud Console, create an
+   OAuth client, and get a refresh token via the
+   [OAuth Playground](https://developers.google.com/oauthplayground) using
+   scopes `gmail.send` and `gmail.readonly`. Put those in `.env.local`.
+3. **OpenAI**: add `OPENAI_API_KEY`.
+4. **business.config.js**: fill in `BIZ_*` env vars — this is what makes the
+   AI write like *your* business instead of a generic SaaS demo. Two
+   sentences in `BIZ_OFFER_DESCRIPTION` matter more than anything else in
+   this repo.
+5. **(Optional) WhatsApp**: create a Twilio account, activate the WhatsApp
+   sandbox (or a registered sender for production), set
+   `BIZ_CHANNEL_WHATSAPP=true`, and point the sandbox's "when a message
+   comes in" webhook at `https://your-domain.com/api/webhooks/whatsapp`.
+6. `npm install`, `npm run dev`, open `/dashboard`.
+7. **Deploy to Vercel** and it just runs — `vercel.json` already wires up
+   the three cron jobs (send campaign twice on weekdays, check inbox every
+   20 min, run follow-ups hourly). No manual triggering needed after that;
+   the dashboard buttons exist for testing and one-off pushes.
 
-5. **Configure Environment Variables in Vercel**
-- Add all environment variables to Vercel dashboard
-- See `ENV_CONFIG.md` for complete list
+## Deliberate scope decisions
 
-## 📚 Documentation
-
-### System Documentation
-- **[PRODUCTION_SUMMARY.md](PRODUCTION_SUMMARY.md)** - Executive summary for customers
-- **[SYSTEM_STATUS.md](SYSTEM_STATUS.md)** - Complete system overview and status
-- **[ENV_CONFIG.md](ENV_CONFIG.md)** - Environment variables setup guide
-- **[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md)** - Production readiness checklist
-- **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** - Step-by-step deployment instructions
-
-### Feature Documentation
-- **[DUPLICATE_PREVENTION_FIX.md](DUPLICATE_PREVENTION_FIX.md)** - Duplicate prevention and attachments
-- **[FOLLOW_UP_CENTER_FIX.md](FOLLOW_UP_CENTER_FIX.md)** - Follow-up center visibility
-- **[BUSINESS_VALUE_ENHANCEMENT.md](BUSINESS_VALUE_ENHANCEMENT.md)** - Business value maximization
-- **[SMS_QUALIFICATION_SYSTEM.md](SMS_QUALIFICATION_SYSTEM.md)** - SMS qualification system
-
-### Setup Documentation
-- **[FIREBASE_SETUP.md](FIREBASE_SETUP.md)** - Firebase configuration guide
-
-## 💰 Pricing & Costs
-
-### Software Costs
-- **Vercel Hosting**: $20-100/month
-- **Firebase**: $25-100/month (pay as you go)
-- **Total**: $45-200/month
-
-### Total Estimated Cost
-- **Small Business**: $50-100/month
-- **Medium Business**: $100-300/month
-- **Large Business**: $300-500/month
-
-## 🎯 Business Impact
-
-### Revenue Example
-- 1,000 leads per month
-- 20% reply rate = 200 replies
-- 25% conversion = 50 deals
-- $5,000 average deal value
-- **$250,000/month potential revenue**
-
-## 🔒 Security & Compliance
-
-### Security Features
-- Firebase Authentication with secure tokens
-- Row-level security (users can only access their own data)
-- All data encrypted in transit (HTTPS) and at rest (Firebase)
-- Rate limiting and input validation
-- Environment variables for sensitive data
-
-### Compliance
-- GDPR ready (data deletion and export)
-- Configurable data retention (30+ days)
-- User data isolation by user ID
-- Complete audit logging
-
-## 🎉 Production Ready
-
-The Auto-Leads system is **production-ready for commercial deployment** with:
-- ✅ Complete email sending with duplicate prevention
-- ✅ Reply detection and follow-up automation
-- ✅ CRM integration with deal management
-- ✅ Business value maximization features
-- ✅ Comprehensive security and compliance
-- ✅ Performance optimization
-- ✅ Complete documentation
-- ✅ Deployment guides and checklists
-
-**Deploy to Vercel and start generating revenue with automated lead generation!** 🚀
-
-## Getting Started (Development)
-
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-For detailed deployment instructions, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md).
+- **Polling, not push, for Gmail replies.** A true push subscription needs a
+  Google Cloud Pub/Sub topic and domain verification — real setup overhead
+  for a marginal speed gain on a sales inbox. 20-minute polling is
+  effectively instant for this use case.
+- **AI failures never block the pipeline.** `scoreLead()` falls back to
+  WARM if OpenAI is down or misconfigured — a bad API key should never stop
+  leads from being imported. `draftMessage()` does surface errors, since a
+  broken outbound message is worse than a delayed one.
+- **One schema, one status field.** No `saas_*` tables, no duplicate lead
+  concept. If you need channel-specific fields later, add columns — don't
+  fork the table.
