@@ -6,7 +6,8 @@ import { getSupabaseBrowserClient } from '../../../lib/supabaseBrowser';
 
 const FIELD_GROUPS = [
   {
-    title: 'Business identity (drives every AI-drafted message)',
+    title: 'Business identity',
+    subtitle: 'Drives every AI-drafted message \u2014 be specific, it directly shapes the output.',
     fields: [
       ['name', 'Business name', 'text'],
       ['sender_name', 'Your name (used in sign-offs)', 'text'],
@@ -19,6 +20,7 @@ const FIELD_GROUPS = [
   },
   {
     title: 'Email sending (Gmail)',
+    subtitle: 'Messages send from your own mailbox, never a shared address.',
     fields: [
       ['channel_email', 'Email enabled', 'checkbox'],
       ['gmail_sender_email', 'Sender email address', 'text'],
@@ -28,7 +30,8 @@ const FIELD_GROUPS = [
     ],
   },
   {
-    title: 'WhatsApp sending (Twilio) — optional',
+    title: 'WhatsApp sending (Twilio)',
+    subtitle: 'Optional \u2014 leave disabled if you only need email.',
     fields: [
       ['channel_whatsapp', 'WhatsApp enabled', 'checkbox'],
       ['twilio_whatsapp_number', 'Twilio WhatsApp number', 'text'],
@@ -38,6 +41,7 @@ const FIELD_GROUPS = [
   },
   {
     title: 'Limits',
+    subtitle: 'Sane defaults are already set \u2014 change only if you know why.',
     fields: [
       ['max_emails_per_day', 'Max emails/day', 'number'],
       ['max_whatsapp_per_day', 'Max WhatsApp/day', 'number'],
@@ -67,6 +71,7 @@ export default function SettingsPage() {
 
   function update(field, value) {
     setAccount((prev) => ({ ...prev, [field]: value }));
+    setSavedAt(null);
   }
 
   async function handleSave(e) {
@@ -83,59 +88,80 @@ export default function SettingsPage() {
     setSavedAt(new Date());
   }
 
-  if (!account) return <div style={{ padding: 24, fontFamily: 'system-ui' }}>Loading...</div>;
+  if (!account) {
+    return <div className="p-8 font-sans text-slate-500">Loading\u2026</div>;
+  }
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: 24, fontFamily: 'system-ui' }}>
-      <a href="/dashboard" style={{ color: '#06c' }}>&larr; Back to dashboard</a>
-      <h1>Settings</h1>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+        <a href="/dashboard" className="text-sm font-medium text-blue-600 hover:underline">&larr; Back to dashboard</a>
+        <h1 className="mb-6 mt-2 text-xl font-bold tracking-tight">Settings</h1>
 
-      <form onSubmit={handleSave}>
-        {FIELD_GROUPS.map((group) => (
-          <fieldset key={group.title} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-            <legend style={{ padding: '0 8px', fontWeight: 600 }}>{group.title}</legend>
-            {group.fields.map(([field, label, type, options]) => (
-              <div key={field} style={{ marginBottom: 10 }}>
-                <label style={{ display: 'block', fontSize: 13, color: '#555', marginBottom: 4 }}>{label}</label>
-                {type === 'checkbox' ? (
-                  <input
-                    type="checkbox"
-                    checked={!!account[field]}
-                    onChange={(e) => update(field, e.target.checked)}
-                  />
-                ) : type === 'textarea' ? (
-                  <textarea
-                    value={account[field] || ''}
-                    onChange={(e) => update(field, e.target.value)}
-                    rows={3}
-                    style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6 }}
-                  />
-                ) : type === 'select' ? (
-                  <select
-                    value={account[field] || ''}
-                    onChange={(e) => update(field, e.target.value)}
-                    style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6 }}
-                  >
-                    {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                ) : (
-                  <input
-                    type={type}
-                    value={account[field] ?? ''}
-                    onChange={(e) => update(field, type === 'number' ? Number(e.target.value) : e.target.value)}
-                    style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6 }}
-                  />
-                )}
+        <form onSubmit={handleSave} className="space-y-6">
+          {FIELD_GROUPS.map((group) => (
+            <fieldset key={group.title} className="rounded-lg border border-slate-200 bg-white p-5">
+              <legend className="px-1 text-sm font-semibold">{group.title}</legend>
+              {group.subtitle && <p className="mb-4 mt-1 text-xs text-slate-500">{group.subtitle}</p>}
+              <div className="space-y-3">
+                {group.fields.map(([field, label, type, options]) => (
+                  <div key={field}>
+                    {type === 'checkbox' ? (
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={!!account[field]}
+                          onChange={(e) => update(field, e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                        {label}
+                      </label>
+                    ) : (
+                      <>
+                        <label className="mb-1 block text-xs font-medium text-slate-500">{label}</label>
+                        {type === 'textarea' ? (
+                          <textarea
+                            value={account[field] || ''}
+                            onChange={(e) => update(field, e.target.value)}
+                            rows={3}
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                          />
+                        ) : type === 'select' ? (
+                          <select
+                            value={account[field] || ''}
+                            onChange={(e) => update(field, e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                          >
+                            {options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            type={type}
+                            value={account[field] ?? ''}
+                            onChange={(e) => update(field, type === 'number' ? Number(e.target.value) : e.target.value)}
+                            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </fieldset>
-        ))}
+            </fieldset>
+          ))}
 
-        <button type="submit" disabled={saving} style={{ padding: '10px 20px', borderRadius: 6 }}>
-          {saving ? 'Saving...' : 'Save settings'}
-        </button>
-        {savedAt && <span style={{ marginLeft: 12, color: '#080', fontSize: 14 }}>Saved.</span>}
-      </form>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Saving\u2026' : 'Save settings'}
+            </button>
+            {savedAt && <span className="text-sm text-emerald-600">Saved.</span>}
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

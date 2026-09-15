@@ -1,0 +1,4 @@
+place_id,business_name,rating,reviews,category,address,whatsapp_number,website
+demo-1,Riverside Bakery,4.6,128,Bakery,"12 River St, Springfield",+15550101,https://riversidebakery.example.com
+demo-2,Northwind Fitness Studio,4.8,64,Gym,"88 Northwind Ave, Springfield",+15550102,https://northwindfitness.example.com
+demo-3,Bluepeak Consulting,4.3,21,Business Consultant,"400 Bluepeak Blvd, Springfield",,https://bluepeakconsulting.example.com

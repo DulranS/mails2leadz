@@ -15,11 +15,43 @@ AI gets a tone wrong.
 
 | Step | Automated? |
 |---|---|
+| Finding contact emails on a business's own website (optional) | Yes — you supply the business list, it finds the email |
 | CSV import, dedupe, AI lead scoring | Yes — safe, nothing external happens |
 | AI drafting (first touch + follow-ups) | Yes — but the result is a `draft`, not a send |
 | **Sending** (email or WhatsApp) | **No — requires a click from the account owner** |
 | Reply detection | Yes — daily check, stops future drafts on reply |
 | Unsubscribe handling | Yes — one-click link in every email, no external service |
+
+## Finding leads, not just messaging them
+
+If you (or your SME customer) already have a list of businesses — e.g. an
+export from a maps/directory listing, with a `website` column — but no
+email address yet, the "Find leads from websites" button on the dashboard
+looks up a public contact email on each business's own site (checking
+`/contact`, `/about`, etc.) and pipes the result straight into the normal
+import → score → draft pipeline. It does **not** scrape Google Maps, LinkedIn,
+or any other platform itself, and it never touches personal/individual data —
+only publicly published business contact addresses on that business's own
+website. This step is entirely optional: everything else works the same if
+you just import a CSV that already has emails in it.
+
+Expected input columns: `place_id, business_name, rating, reviews,
+category, address, whatsapp_number, website` (see
+`sample-businesses-for-enrichment.csv`) — that's deliberately the shape of
+a typical exported business/directory listing, so you can point this at a
+list you already have without reformatting it by hand.
+
+It runs as a small separate FastAPI service (`backend/`) rather than inside
+a Vercel function, because visiting several pages per business doesn't fit
+reliably inside one serverless invocation. Deploy it anywhere that runs a
+long-lived Python process (Render, Railway, Fly — a free tier is enough),
+set `SERVICE_API_KEY` there and `ALLOWED_ORIGINS` to your app's URL, then
+set `ENRICHMENT_SERVICE_URL` + `ENRICHMENT_SERVICE_KEY` (same value as
+`SERVICE_API_KEY`) in the Next app's env vars. Leave both unset and the
+dashboard simply hides the button — nothing else depends on it. Its job
+store is in-memory, so a job in progress is lost if the service restarts;
+fine for a batch you kick off and wait a minute or two for, not meant to
+survive a redeploy mid-job.
 
 ## Architecture
 
@@ -118,4 +150,40 @@ actually needed.
 - No external compliance/consent-management integration — unsubscribe is
   handled in-house (`/api/unsubscribe`, a signed link, no third-party
   service), which is enough for a small business sending its own outreach
-  without taking on a compliance-platform dependency.
+  without taking on a compliance-platform dependency. This is a "no
+  external vendor" decision, not a "skip compliance" one: keep the
+  unsubscribe link and the `do_not_contact` status working in every
+  deployment — it's what keeps outreach legal (CAN-SPAM/GDPR-style opt-out
+  requirements) and it's cheap to keep, unlike a consent-platform
+  integration, which genuinely would be scope creep at this stage.
+- No Google Maps / LinkedIn / social-platform scraping of any kind. The
+  optional lead-sourcing step (`backend/`) only fetches pages on a
+  business's *own* website that it already chose to publish, and only for
+  business lists you already assembled yourself.
+
+## What changed in this pass
+
+This build combines the previous rebuild ("fixed") with a review of the
+earlier, much larger prototype (dozens of half-finished dashboards, a CRM,
+an ICP wizard, Firebase remnants) — most of that wasn't reused, on purpose:
+it was built against providers/tables this schema doesn't have, or was
+scope beyond what a controlled, approval-gated outbound tool needs. What
+*was* worth carrying forward was the standalone email-finder service
+(`backend/` + `anemails/` in the old prototype), which is now wired into
+the actual product instead of sitting disconnected:
+
+- `app/api/leads/enrich` — proxies to `backend/` so the dashboard can turn
+  a list of businesses into a list of leads with emails.
+- `app/api/leads/[id]/messages` + the lead detail panel on the dashboard —
+  full conversation history per lead (not just the latest draft), so an
+  account owner can actually see what's gone out and what came back.
+- `app/api/quota` + the "sends left today" tile — the daily cap was already
+  enforced server-side; it's now visible before you hit it, not just when
+  an approve click 429s.
+- `backend/main.py` now requires a shared `SERVICE_API_KEY` and restricts
+  CORS — as a standalone public URL it would otherwise work as an open,
+  unauthenticated scraping proxy for anyone who found it, not just your
+  own frontend.
+- Dashboard, settings, and login pages restyled with Tailwind (already
+  configured, previously unused) instead of inline styles — same logic,
+  more readable at a glance for a non-technical SME owner.
