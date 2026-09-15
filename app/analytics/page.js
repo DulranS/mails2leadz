@@ -4,15 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '../components/ui/DashboardLayout';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
-// Import Firebase functions
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+// Firebase imports removed - using Supabase instead
+// Firebase was causing "Unexpected end of JSON input" webpack errors
 
-const firebaseConfig = {
-  // Your Firebase config - same as dashboard
-};
-
-const db = getFirestore(initializeApp(firebaseConfig));
+const db = null;  // Firebase disabled - use Supabase APIs instead
 
 export default function AnalyticsPage() {
   const [data, setData] = useState({
