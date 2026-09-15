@@ -6,10 +6,19 @@ import { NextResponse } from 'next/server';
 export async function middleware(request) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // If Supabase isn't configured (missing/placeholder env vars), don't take
+  // the whole site down — just skip session refresh for this request. Every
+  // page still gets its own auth check client-side / server-side as needed.
+  if (!url || !anonKey) {
+    console.error('middleware: missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    return response;
+  }
+
+  try {
+    const supabase = createServerClient(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -22,10 +31,15 @@ export async function middleware(request) {
           );
         },
       },
-    }
-  );
+    });
 
-  await supabase.auth.getUser();
+    await supabase.auth.getUser();
+  } catch (err) {
+    // Auth refresh is best-effort. A network blip or misconfigured Supabase
+    // project should degrade gracefully, not 500 every page on the site.
+    console.error('middleware: Supabase auth refresh failed', err);
+  }
+
   return response;
 }
 
