@@ -1,112 +1,112 @@
 # Outbound Engine
 
-A lean, automated B2B outbound pipeline: import leads → AI scores + personalizes
-→ sends (email, optionally WhatsApp) → auto follow-ups on a schedule → stops
-instantly when someone replies. One config file makes it reusable for any
-business, software or service.
+A controlled, AI-assisted outbound pipeline built for SMEs (and your own
+personal-business use) — not a black-box autopilot. Each customer signs into
+their own account, sets up their own business identity and their own Gmail/
+WhatsApp sending credentials, imports leads, and gets AI-scored, AI-drafted
+messages — but **nothing goes out to a real person until that customer
+clicks "approve & send."** Follow-ups and reply-detection are automated;
+sending is not. That's a deliberate product decision, not a limitation: an
+SME buying this needs to trust what goes out under their business name, and
+"fully automated" is the fastest way to lose that trust the first time the
+AI gets a tone wrong.
 
-This IS your mails2leadz project folder, pruned and rebuilt in place — same
-repo, same config files (`next.config.mjs`, `tailwind.config.js`,
-`jsconfig.json`, `public/`), so you can drop this over your existing local
-copy or push it as-is. What's gone: the two competing databases (Firebase +
-Supabase), ~30 duplicate dashboard files, ~45 old API routes built against
-the old schema, and ~85 root-level progress-report markdown files from past
-iterations. `backend/` (the Python scraper) was left untouched since it's
-independent of the Next.js app. Nothing here was deleted from your original
-upload — only from this rebuilt copy.
+## What's automated vs. what's controlled
 
-## How it actually works
+| Step | Automated? |
+|---|---|
+| CSV import, dedupe, AI lead scoring | Yes — safe, nothing external happens |
+| AI drafting (first touch + follow-ups) | Yes — but the result is a `draft`, not a send |
+| **Sending** (email or WhatsApp) | **No — requires a click from the account owner** |
+| Reply detection | Yes — daily check, stops future drafts on reply |
+| Unsubscribe handling | Yes — one-click link in every email, no external service |
+
+## Architecture
 
 ```
+Sign up / sign in (Supabase Auth) ──▶ account auto-created on first login
+        │
+Settings page ──▶ business identity + own Gmail/WhatsApp credentials
+        │
 CSV upload ──▶ /api/leads/import ──▶ AI scores lead (HOT/WARM/COLD) ──▶ leads table
-                                                                            │
-Dashboard "Send outreach" or Vercel Cron (weekdays 9am/2pm) ──▶ /api/campaigns/send
-    picks HOT leads first, respects daily quota, AI drafts the message,
-    sends via Gmail API or Twilio WhatsApp, schedules next_followup_at
-                                                                            │
-Cron every hour ──▶ /api/followups/run
-    sends follow-up #1, #2, #3 (48h apart, configurable) until reply or exhausted
-                                                                            │
-Cron every 20 min ──▶ /api/inbox/check (Gmail polling)
-Instant ──▶ /api/webhooks/whatsapp (Twilio webhook, real-time)
-    either one flips the lead to status='replied' and CANCELS all future
-    follow-ups — a human takes it from there
+        │
+Daily cron (6am) ──▶ /api/campaigns/draft
+    AI drafts the first-touch message for new leads → status: draft (NOT SENT)
+        │
+Dashboard "Drafts awaiting review" ──▶ edit if needed ──▶ Approve & send
+    ──▶ /api/messages/:id/approve ──▶ actually sends via the account's own
+        Gmail/Twilio credentials, schedules next_followup_at
+        │
+Daily cron (5am, before drafting) ──▶ /api/inbox/check
+    polls each account's Gmail inbox → reply found → lead flagged 'replied',
+    all future follow-up drafts stop for that lead
+        │
+Daily cron (7am) ──▶ /api/followups/draft
+    drafts the next follow-up for leads whose next_followup_at has passed
+    and who haven't replied — again, DRAFT only, same review step applies
 ```
 
-Nothing here auto-deletes a lead or fabricates a reply. Every send and every
-inbound message is logged in `messages` so you can audit exactly what was
-said to whom.
+Every account only ever sees its own leads and messages — enforced by
+Postgres Row Level Security (`database/schema.sql`), not just app-level
+filtering, so one SME's data is genuinely isolated from another's.
 
 ## Setup (in order)
 
-1. **Supabase**: create a project, run `database/schema.sql` in the SQL
-   editor, copy the project URL + `service_role` key + `anon` key into
+1. **Supabase project**: create one, run `database/schema.sql` in the SQL
+   editor. Copy the project URL + `service_role` key + `anon` key into
    `.env.local` (copy `.env.example` first).
-2. **Gmail API**: enable the Gmail API in Google Cloud Console, create an
-   OAuth client, and get a refresh token via the
-   [OAuth Playground](https://developers.google.com/oauthplayground) using
-   scopes `gmail.send` and `gmail.readonly`. Put those in `.env.local`.
-3. **OpenAI**: add `OPENAI_API_KEY`.
-4. **business.config.js**: fill in `BIZ_*` env vars — this is what makes the
-   AI write like *your* business instead of a generic SaaS demo. Two
-   sentences in `BIZ_OFFER_DESCRIPTION` matter more than anything else in
-   this repo.
-5. **(Optional) WhatsApp**: create a Twilio account, activate the WhatsApp
-   sandbox (or a registered sender for production), set
-   `BIZ_CHANNEL_WHATSAPP=true`, and point the sandbox's "when a message
-   comes in" webhook at `https://your-domain.com/api/webhooks/whatsapp`.
-6. `npm install`, `npm run dev`, open `/dashboard`.
-7. **Deploy to Vercel** (free Hobby plan is fine — see below for exactly
-   what that means) and set up the external scheduler once. After that,
-   nothing needs manual triggering; the dashboard buttons are for testing
-   and one-off pushes.
+2. **Supabase Auth**: email/password sign-up works out of the box. If you
+   want zero-friction onboarding for SME customers, turn off "Confirm email"
+   under Authentication → Providers → Email in the Supabase dashboard
+   (otherwise new users must click a confirmation link before signing in).
+3. **OpenAI**: add `OPENAI_API_KEY` — one key, shared across every account,
+   since it's your infrastructure cost, not something customers configure.
+4. **`CRON_SECRET`** and **`UNSUB_SECRET`**: any long random strings
+   (`openssl rand -hex 32`).
+5. `npm install`, `npm run dev`, open `/login`, sign up, you land on
+   `/dashboard`.
+6. **Each account fills in its own Settings** (`/dashboard/settings`):
+   business identity (what drives every AI-drafted message), and its own
+   Gmail OAuth credentials (client ID/secret/refresh token via the
+   [OAuth Playground](https://developers.google.com/oauthplayground),
+   scopes `gmail.send` + `gmail.readonly`) and, optionally, Twilio WhatsApp
+   credentials. This is the one piece of setup you can't skip per customer —
+   messages must come from *their* mailbox, not yours.
+7. **Deploy to Vercel** (free Hobby plan — see below), set the same env vars
+   there, and set `NEXT_PUBLIC_APP_URL` to your real deployed URL (used to
+   build unsubscribe links).
 
 ## Staying on Vercel's free (Hobby) plan
 
-Hobby's Cron feature only allows **one run per day per job** — anything more
-frequent fails at deploy time. That's fine for the outreach send (once a day
-is the right cadence anyway — you don't want to blast leads more than once
-daily regardless of plan), but follow-ups and reply-checking need to run more
-often than that to feel automated. The fix costs nothing:
+All three scheduled jobs in `vercel.json` run once a day, staggered an hour
+apart (inbox check, then outreach drafts, then follow-up drafts) — Hobby
+caps Cron at once/day per job, and since sending is manual anyway, daily is
+genuinely enough here; nothing about the "controlled" model needs
+higher-frequency polling. No external scheduler required. Each route also
+sets `maxDuration` and a small batch cap so a single invocation can't run
+long enough to threaten Hobby's function-duration ceiling, and the whole
+schedule totals a tiny fraction of Hobby's 1M invocations/month and 4
+CPU-hour/month limits.
 
-1. `vercel.json` already schedules `/api/campaigns/send` through Vercel's
-   built-in Cron, once on weekday mornings — this one stays inside Hobby's
-   limit natively.
-2. For `/api/followups/run` (hourly) and `/api/inbox/check` (every 20-30
-   min), sign up free at [cron-job.org](https://cron-job.org) (or any
-   similar free scheduler) and point it at:
-   - `https://your-domain.vercel.app/api/followups/run` — every hour
-   - `https://your-domain.vercel.app/api/inbox/check` — every 20-30 min
+## Known limitation, called out on purpose
 
-   In the scheduler's request settings, add a custom header:
-   `Authorization: Bearer <your CRON_SECRET>` — matching the `CRON_SECRET`
-   you set in Vercel's env vars. Without this header the routes return 401;
-   this is what stops a stranger from finding your URL and burning your
-   OpenAI/Twilio budget.
-3. Vercel itself sends that same `Authorization: Bearer $CRON_SECRET` header
-   automatically on its own Cron calls once `CRON_SECRET` is set as an env
-   var, so one secret covers both paths.
+`accounts.gmail_refresh_token` and `accounts.twilio_auth_token` are stored
+as plain columns for now. That's fine while it's just you, or a handful of
+trusted early SME customers — but before charging strangers money, move
+these into [Supabase Vault](https://supabase.com/docs/guides/database/vault)
+(encrypted secrets) instead of a plain table. Deliberately not done here —
+pulling in a secrets-management layer before you have a first paying
+customer is exactly the kind of scope creep worth avoiding until it's
+actually needed.
 
-**Everything else on Hobby is generous enough that you won't come close**:
-1M function invocations/month and 4 CPU-hours/month, against maybe ~3,000
-invocations/month at the schedule above — almost all of it spent waiting on
-external APIs (OpenAI, Gmail, Twilio), not computing. Each route also sets
-`maxDuration` and caps its batch size per run (10 leads for outreach, 30 for
-follow-ups) specifically so a single invocation can't run long enough to
-threaten Hobby's function-duration ceiling. If you outgrow this — hundreds of
-leads a day, sub-hourly reply detection — that's the point to look at
-Vercel Pro, not before.
+## What's deliberately NOT here (scope, not oversight)
 
-## Deliberate scope decisions
-
-- **Polling, not push, for Gmail replies.** A true push subscription needs a
-  Google Cloud Pub/Sub topic and domain verification — real setup overhead
-  for a marginal speed gain on a sales inbox. 20-minute polling is
-  effectively instant for this use case.
-- **AI failures never block the pipeline.** `scoreLead()` falls back to
-  WARM if OpenAI is down or misconfigured — a bad API key should never stop
-  leads from being imported. `draftMessage()` does surface errors, since a
-  broken outbound message is worse than a delayed one.
-- **One schema, one status field.** No `saas_*` tables, no duplicate lead
-  concept. If you need channel-specific fields later, add columns — don't
-  fork the table.
+- No team seats / multi-user accounts — one login per account.
+- No billing/subscription system — that's a separate, later decision.
+- No CRM-style pipeline stages beyond `new → drafted → contacted →
+  followup_N → replied/won/lost/do_not_contact` — enough to run outbound,
+  not a full CRM.
+- No external compliance/consent-management integration — unsubscribe is
+  handled in-house (`/api/unsubscribe`, a signed link, no third-party
+  service), which is enough for a small business sending its own outreach
+  without taking on a compliance-platform dependency.
