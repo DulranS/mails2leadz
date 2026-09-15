@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { DashboardLayout } from "../components/ui/DashboardLayout";
-import CRM from "../components/CRM";
-import { useNotifications } from "../components/ui/NotificationProvider";
+import { DashboardLayout } from "../../components/ui/DashboardLayout";
+import CRMComponent from "../../components/CRM";
+import { useNotifications } from "../../components/ui/NotificationProvider";
 
 export default function CRMPage() {
   const { addNotification } = useNotifications();
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [data, setData] = useState({
+  const [data] = useState({
     leads: [],
     contacts: {},
     repliedLeads: {},
@@ -20,7 +20,7 @@ export default function CRMPage() {
 
   // Firebase has been disabled due to webpack compilation errors
   // The CRM page requires migration to use Supabase APIs instead
-  // TODO: Implement Supabase-based data loading for all CRM functionality
+  // Supabase-based data loading for all CRM functionality is planned for future implementation
 
   useEffect(() => {
     // Firebase disabled - authentication requires Supabase migration
@@ -31,7 +31,7 @@ export default function CRMPage() {
   useEffect(() => {
     // Firebase disabled - data loading requires Supabase migration
     setLoading(false);
-  }, [user?.uid]);
+  }, []);
 
   const handleUpdateLead = async (email, updates) => {
     // Firebase disabled - implement using Supabase
@@ -85,12 +85,8 @@ export default function CRMPage() {
       title="Customer Relationship Management"
       subtitle="Manage leads, deals, and customer interactions"
     >
-      <CRM
-        leads={data.leads}
-        contacts={data.contacts}
-        repliedLeads={data.repliedLeads}
-        leadScores={data.leadScores}
-        dealStages={data.dealStages}
+      <CRMComponent
+        data={data}
         onUpdateLead={handleUpdateLead}
         onAddNote={handleAddNote}
         onScheduleFollowUp={handleScheduleFollowUp}

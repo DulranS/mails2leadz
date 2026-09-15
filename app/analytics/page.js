@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { DashboardLayout } from '../components/ui/DashboardLayout';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import { DashboardLayout } from '../../components/ui/DashboardLayout';
+import AnalyticsDashboard from '../../components/AnalyticsDashboard';
 
 // Firebase imports removed - using Supabase instead
 // Firebase was causing "Unexpected end of JSON input" webpack errors
