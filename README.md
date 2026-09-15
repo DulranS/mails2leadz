@@ -105,7 +105,10 @@ filtering, so one SME's data is genuinely isolated from another's.
 4. **`CRON_SECRET`** and **`UNSUB_SECRET`**: any long random strings
    (`openssl rand -hex 32`).
 5. `npm install`, `npm run dev`, open `/login`, sign up, you land on
-   `/dashboard`.
+   `/dashboard`. (`package.json` lists `tailwindcss` +
+   `@tailwindcss/postcss` as devDependencies — if the UI ever renders
+   completely unstyled, that's the tell that `npm install` wasn't run
+   after a `package.json` change, not a config problem.)
 6. **Each account fills in its own Settings** (`/dashboard/settings`):
    business identity (what drives every AI-drafted message), and its own
    Gmail OAuth credentials (client ID/secret/refresh token via the
