@@ -4,77 +4,160 @@ import React, { useState, useEffect } from "react";
 import { DashboardLayout } from "../../components/ui/DashboardLayout";
 import CRMComponent from "../../components/CRM";
 import { useNotifications } from "../../components/ui/NotificationProvider";
+import { supabase } from "../../lib/supabaseClient";
 
 export default function CRMPage() {
   const { addNotification } = useNotifications();
-  const [user, setUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [data] = useState({
+  const [data, setData] = useState({
     leads: [],
     contacts: {},
     repliedLeads: {},
     leadScores: {},
-    dealStages: {},
+    dealStages: {
+      discovery: 0,
+      negotiation: 0,
+      closed: 0,
+    },
   });
   const [loading, setLoading] = useState(true);
 
-  // Firebase has been disabled due to webpack compilation errors
-  // The CRM page requires migration to use Supabase APIs instead
-  // Supabase-based data loading for all CRM functionality is planned for future implementation
-
   useEffect(() => {
-    // Firebase disabled - authentication requires Supabase migration
-    setUser(null);
-    setLoadingAuth(false);
+    fetchLeads();
   }, []);
 
-  useEffect(() => {
-    // Firebase disabled - data loading requires Supabase migration
-    setLoading(false);
-  }, []);
+  const fetchLeads = async () => {
+    try {
+      if (!supabase) {
+        console.warn('Supabase not configured, using mock data');
+        setLoading(false);
+        return;
+      }
+
+      const { data: leads, error } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const transformedLeads = leads.map(lead => ({
+        email: lead.email,
+        status: lead.status || 'New',
+        company: lead.company_name || '',
+        score: lead.score || 'UNSCORED',
+        ...lead
+      }));
+
+      const leadScores = {};
+      leads.forEach(lead => {
+        const scoreMap = { 'HOT': 85, 'WARM': 60, 'COLD': 30, 'UNSCORED': 0 };
+        leadScores[lead.email] = scoreMap[lead.score] || 0;
+      });
+
+      const dealStages = {
+        discovery: leads.filter(l => l.status === 'new' || l.status === 'contacted').length,
+        negotiation: leads.filter(l => l.status === 'followup_1' || l.status === 'followup_2').length,
+        closed: leads.filter(l => l.status === 'won' || l.status === 'lost').length,
+      };
+
+      setData({
+        leads: transformedLeads,
+        contacts: {},
+        repliedLeads: {},
+        leadScores,
+        dealStages,
+      });
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+      addNotification('Failed to load leads', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUpdateLead = async (email, updates) => {
-    // Firebase disabled - implement using Supabase
-    addNotification("CRM requires Supabase migration", "error");
+    try {
+      if (!supabase) {
+        addNotification("Supabase not configured", "error");
+        return;
+      }
+
+      const { error } = await supabase
+        .from('leads')
+        .update(updates)
+        .eq('email', email);
+
+      if (error) throw error;
+
+      addNotification("Lead updated successfully", "success");
+      fetchLeads();
+    } catch (error) {
+      console.error('Error updating lead:', error);
+      addNotification('Failed to update lead', 'error');
+    }
   };
 
   const handleAddNote = async (email, noteText) => {
-    // Firebase disabled - implement using Supabase
-    addNotification("CRM requires Supabase migration", "error");
+    try {
+      if (!supabase) {
+        addNotification("Supabase not configured", "error");
+        return;
+      }
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ 
+          research_notes: noteText,
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', email);
+
+      if (error) throw error;
+
+      addNotification("Note added successfully", "success");
+    } catch (error) {
+      console.error('Error adding note:', error);
+      addNotification('Failed to add note', 'error');
+    }
   };
 
   const handleScheduleFollowUp = async (email) => {
-    // Firebase disabled - implement using Supabase
-    addNotification("CRM requires Supabase migration", "error");
+    try {
+      if (!supabase) {
+        addNotification("Supabase not configured", "error");
+        return;
+      }
+
+      const nextFollowUp = new Date();
+      nextFollowUp.setDate(nextFollowUp.getDate() + 3);
+
+      const { error } = await supabase
+        .from('leads')
+        .update({ 
+          next_followup_at: nextFollowUp.toISOString(),
+          followup_count: (data.leads.find(l => l.email === email)?.followup_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('email', email);
+
+      if (error) throw error;
+
+      addNotification("Follow-up scheduled", "success");
+      fetchLeads();
+    } catch (error) {
+      console.error('Error scheduling follow-up:', error);
+      addNotification('Failed to schedule follow-up', 'error');
+    }
   };
-
-  if (loadingAuth) {
-    return (
-      <DashboardLayout title="CRM" subtitle="Loading...">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  if (!user) {
-    return (
-      <DashboardLayout title="CRM" subtitle="Authentication Required">
-        <div className="text-center py-12">
-          <p className="text-gray-600 dark:text-gray-400">
-            The CRM page requires Supabase migration. Firebase has been disabled due to webpack build errors.
-          </p>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   if (loading) {
     return (
-      <DashboardLayout title="CRM" subtitle="Loading CRM data...">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <DashboardLayout
+        title="Customer Relationship Management"
+        subtitle="Manage leads, deals, and customer interactions"
+      >
+        <div className="p-6 bg-white rounded-lg shadow">
+          <p className="text-gray-500">Loading leads...</p>
         </div>
       </DashboardLayout>
     );
