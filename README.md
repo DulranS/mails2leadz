@@ -281,6 +281,24 @@ six pages, each answering one question:
 renders (label, color) — Today, Pipeline, Leads, and the lead drawer all
 read from it, so they can't drift out of sync with each other.
 
+## What's new in this pass: a front door, not just a login screen
+
+There was no marketing page before this — visiting the deployed URL just
+redirected straight past any explanation of the product into `/login`. That's
+fixed:
+
+- `app/page.js` — a real landing page (hero, the 3-step find → draft →
+  approve loop, the "why sending still needs a click" trust argument, and a
+  features summary) instead of an instant redirect. `/dashboard` still
+  handles its own auth check and redirect, so this changes nothing about
+  how sign-in works.
+- `app/login/page.js` — restyled (a brand panel + the same form, unchanged
+  logic) instead of a bare centered box.
+- A serif display typeface (Fraunces, via `next/font/google`) is now used
+  for headlines on the landing page and login screen only — the dashboard
+  itself is untouched and still renders in the fast system sans stack, on
+  purpose: a tool people work in all day should stay quiet, not "designed."
+
 ## What's new in this pass: compounding value without adding risk
 
 The previous version proved the controlled, approval-gated loop works.

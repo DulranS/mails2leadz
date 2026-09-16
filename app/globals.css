@@ -4,6 +4,15 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Display type for headlines on the marketing page and login screen only —
+   see app/layout.js. Everywhere else (the dashboard) keeps the plain system
+   sans stack below, on purpose: an app someone works in all day should stay
+   quiet and fast, not typographically "designed". */
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-optical-sizing: auto;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
