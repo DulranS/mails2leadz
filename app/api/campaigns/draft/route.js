@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { draftMessage } from '../../../../lib/ai';
+import { trackUsage } from '../../../../lib/aiUsage';
+import { getBestTemplates } from '../../../../lib/templates';
 import { requireUser } from '../../../../lib/supabaseServer';
 import { getOrCreateAccount, businessProfileFrom } from '../../../../lib/account';
 import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
@@ -81,7 +83,9 @@ async function draftForAccount(account, limit) {
     }
 
     try {
-      const draft = await draftMessage({ lead, step: 0, channel, business });
+      const templateExamples = await getBestTemplates(account.id, channel, 0);
+      const draft = await draftMessage({ lead, step: 0, channel, business, templateExamples });
+      await trackUsage(account.id, draft.usage);
 
       await supabase.from('messages').insert({
         account_id: account.id,

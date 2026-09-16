@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabase } from '../../../../lib/supabase';
 import { draftMessage } from '../../../../lib/ai';
+import { trackUsage } from '../../../../lib/aiUsage';
+import { getBestTemplates } from '../../../../lib/templates';
 import { businessProfileFrom } from '../../../../lib/account';
 import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
 
@@ -55,7 +57,9 @@ export async function GET(request) {
         .limit(1)
         .maybeSingle();
 
-      const draft = await draftMessage({ lead, step, channel, business });
+      const templateExamples = await getBestTemplates(account.id, channel, step);
+      const draft = await draftMessage({ lead, step, channel, business, templateExamples });
+      await trackUsage(account.id, draft.usage);
       const subject = channel === 'email' && lastMsg?.subject ? `Re: ${lastMsg.subject}` : draft.subject;
 
       await supabase.from('messages').insert({

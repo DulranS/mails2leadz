@@ -15,11 +15,44 @@ AI gets a tone wrong.
 
 | Step | Automated? |
 |---|---|
+| Finding contact emails on a business's own website (optional) | Yes — you supply the business list, it finds the email |
 | CSV import, dedupe, AI lead scoring | Yes — safe, nothing external happens |
 | AI drafting (first touch + follow-ups) | Yes — but the result is a `draft`, not a send |
 | **Sending** (email or WhatsApp) | **No — requires a click from the account owner** |
 | Reply detection | Yes — daily check, stops future drafts on reply |
 | Unsubscribe handling | Yes — one-click link in every email, no external service |
+| Daily owner digest (drafts waiting / new replies) | Yes — emailed to the owner's own inbox only, never a lead |
+
+## Finding leads, not just messaging them
+
+If you (or your SME customer) already have a list of businesses — e.g. an
+export from a maps/directory listing, with a `website` column — but no
+email address yet, the "Find leads from websites" button on the dashboard
+looks up a public contact email on each business's own site (checking
+`/contact`, `/about`, etc.) and pipes the result straight into the normal
+import → score → draft pipeline. It does **not** scrape Google Maps, LinkedIn,
+or any other platform itself, and it never touches personal/individual data —
+only publicly published business contact addresses on that business's own
+website. This step is entirely optional: everything else works the same if
+you just import a CSV that already has emails in it.
+
+Expected input columns: `place_id, business_name, rating, reviews,
+category, address, whatsapp_number, website` (see
+`sample-businesses-for-enrichment.csv`) — that's deliberately the shape of
+a typical exported business/directory listing, so you can point this at a
+list you already have without reformatting it by hand.
+
+It runs as a small separate FastAPI service (`backend/`) rather than inside
+a Vercel function, because visiting several pages per business doesn't fit
+reliably inside one serverless invocation. Deploy it anywhere that runs a
+long-lived Python process (Render, Railway, Fly — a free tier is enough),
+set `SERVICE_API_KEY` there and `ALLOWED_ORIGINS` to your app's URL, then
+set `ENRICHMENT_SERVICE_URL` + `ENRICHMENT_SERVICE_KEY` (same value as
+`SERVICE_API_KEY`) in the Next app's env vars. Leave both unset and the
+dashboard simply hides the button — nothing else depends on it. Its job
+store is in-memory, so a job in progress is lost if the service restarts;
+fine for a batch you kick off and wait a minute or two for, not meant to
+survive a redeploy mid-job.
 
 ## Architecture
 
@@ -73,7 +106,10 @@ filtering, so one SME's data is genuinely isolated from another's.
 4. **`CRON_SECRET`** and **`UNSUB_SECRET`**: any long random strings
    (`openssl rand -hex 32`).
 5. `npm install`, `npm run dev`, open `/login`, sign up, you land on
-   `/dashboard`.
+   `/dashboard`. (`package.json` lists `tailwindcss` +
+   `@tailwindcss/postcss` as devDependencies — if the UI ever renders
+   completely unstyled, that's the tell that `npm install` wasn't run
+   after a `package.json` change, not a config problem.)
 6. **Each account fills in its own Settings** (`/dashboard/settings`):
    business identity (what drives every AI-drafted message), and its own
    Gmail OAuth credentials (client ID/secret/refresh token via the
@@ -87,8 +123,9 @@ filtering, so one SME's data is genuinely isolated from another's.
 
 ## Staying on Vercel's free (Hobby) plan
 
-All three scheduled jobs in `vercel.json` run once a day, staggered an hour
-apart (inbox check, then outreach drafts, then follow-up drafts) — Hobby
+All four scheduled jobs in `vercel.json` run once a day, staggered an hour
+apart (inbox check, outreach drafts, follow-up drafts, then the owner
+digest last so it can report on what the earlier three just did) — Hobby
 caps Cron at once/day per job, and since sending is manual anyway, daily is
 genuinely enough here; nothing about the "controlled" model needs
 higher-frequency polling. No external scheduler required. Each route also
@@ -96,6 +133,16 @@ sets `maxDuration` and a small batch cap so a single invocation can't run
 long enough to threaten Hobby's function-duration ceiling, and the whole
 schedule totals a tiny fraction of Hobby's 1M invocations/month and 4
 CPU-hour/month limits.
+
+Vercel's Hobby plan has, at various points, also capped the *number* of
+distinct cron jobs a project can register — that limit has moved over time,
+so if adding this 4th one gets rejected on your account, fold the digest
+into an existing cron instead of registering a separate entry: in
+`app/api/followups/draft/route.js`, `import { sendDailyDigests } from
+'../../../../lib/digest'` and `await sendDailyDigests()` at the end of the
+`GET` handler, then delete the `/api/digest/send` line from `vercel.json`.
+`lib/digest.js` was written as a standalone function specifically so
+either wiring works with no other changes.
 
 ## Known limitation, called out on purpose
 
@@ -118,4 +165,115 @@ actually needed.
 - No external compliance/consent-management integration — unsubscribe is
   handled in-house (`/api/unsubscribe`, a signed link, no third-party
   service), which is enough for a small business sending its own outreach
-  without taking on a compliance-platform dependency.
+  without taking on a compliance-platform dependency. This is a "no
+  external vendor" decision, not a "skip compliance" one: keep the
+  unsubscribe link and the `do_not_contact` status working in every
+  deployment — it's what keeps outreach legal (CAN-SPAM/GDPR-style opt-out
+  requirements) and it's cheap to keep, unlike a consent-platform
+  integration, which genuinely would be scope creep at this stage.
+- No Google Maps / LinkedIn / social-platform scraping of any kind. The
+  optional lead-sourcing step (`backend/`) only fetches pages on a
+  business's *own* website that it already chose to publish, and only for
+  business lists you already assembled yourself.
+
+## What changed in this pass
+
+This build combines the previous rebuild ("fixed") with a review of the
+earlier, much larger prototype (dozens of half-finished dashboards, a CRM,
+an ICP wizard, Firebase remnants) — most of that wasn't reused, on purpose:
+it was built against providers/tables this schema doesn't have, or was
+scope beyond what a controlled, approval-gated outbound tool needs. What
+*was* worth carrying forward was the standalone email-finder service
+(`backend/` + `anemails/` in the old prototype), which is now wired into
+the actual product instead of sitting disconnected:
+
+- `app/api/leads/enrich` — proxies to `backend/` so the dashboard can turn
+  a list of businesses into a list of leads with emails.
+- `app/api/leads/[id]/messages` + the lead detail panel on the dashboard —
+  full conversation history per lead (not just the latest draft), so an
+  account owner can actually see what's gone out and what came back.
+- `app/api/quota` + the "sends left today" tile — the daily cap was already
+  enforced server-side; it's now visible before you hit it, not just when
+  an approve click 429s.
+- `backend/main.py` now requires a shared `SERVICE_API_KEY` and restricts
+  CORS — as a standalone public URL it would otherwise work as an open,
+  unauthenticated scraping proxy for anyone who found it, not just your
+  own frontend.
+- Dashboard, settings, and login pages restyled with Tailwind (already
+  configured, previously unused) instead of inline styles — same logic,
+  more readable at a glance for a non-technical SME owner.
+
+## The dashboard is five pages, not one
+
+Everything used to live on a single long page. It's now a proper app shell
+(`app/dashboard/layout.js`: sidebar nav, live "sends left today" gauges,
+one shared account/quota fetch instead of every page re-fetching it) with
+five pages, each answering one question:
+
+- **Today** (`/dashboard`) — "what needs me right now?" The draft-review
+  queue is the hero, not one tile among many, because reviewing drafts is
+  the one action that's actually gating the whole system. A funnel strip
+  (new → drafted → in sequence → replied → won) sits below it for context.
+- **Pipeline** (`/dashboard/pipeline`) — "where does everything stand?" A
+  board grouped by coarse stage, click into any lead for its full
+  conversation thread and to mark it won/lost/do-not-contact by hand. Not
+  drag-and-drop, on purpose — status changes are either system-driven
+  (a reply came in) or one of three deliberate manual actions, not a
+  free-form CRM stage a lead gets dragged through.
+- **Leads** (`/dashboard/leads`) — "grow and search the list." CSV import,
+  the website-based email lookup, and a searchable/filterable table live
+  here, separated from Today so the daily review flow isn't cluttered by
+  list-growing actions you might do once a week, not every day.
+- **Settings** (`/dashboard/settings`) — business identity, credentials,
+  limits, plus a **draft preview panel**: generate a real AI draft against
+  a fixed sample lead using whatever's currently in the form (saves it
+  first), so you can judge tone and quality right after writing your offer
+  description — before any real contact ever sees a message; and, further
+  down, the Playbook and daily-digest test button (see below).
+- **Analytics** (`/dashboard/analytics`) — "is this working, and what's it
+  costing?" Funnel, reply/win rate, score mix, send volume, and real AI
+  cost-to-date. See "What's new in this pass" below.
+
+`lib/statusMeta.js` is the single source of truth for how a status/score
+renders (label, color) — Today, Pipeline, Leads, and the lead drawer all
+read from it, so they can't drift out of sync with each other.
+
+## What's new in this pass: compounding value without adding risk
+
+The previous version proved the controlled, approval-gated loop works.
+This pass adds the layer an SME owner actually needs to run it well day to
+day, without touching the "nothing sends without a click" guarantee or
+pulling in any external compliance/consent platform:
+
+- **Analytics** (`/dashboard/analytics`, 5th sidebar page) — funnel,
+  reply/win rate, lead-score mix, a 14-day send-volume chart, and a real
+  **AI cost tracker**: every scoring/drafting call's actual token usage is
+  added to a running total on the account (`lib/aiUsage.js`), so the page
+  shows real dollars spent and cost-per-lead — not a guess. It's how you
+  answer "is this actually cheap to run" with a number instead of a hunch.
+- **Playbook** (`lib/templates.js`, section in Settings) — click "Save as
+  template" under any message you actually sent (in the lead drawer), and
+  future AI drafts for that channel/step use your 1–2 most recent saved
+  examples as style calibration (explicitly told not to copy them
+  verbatim). The AI's voice gets closer to yours the more you use it,
+  instead of staying flat at "generic AI tone" forever — and a
+  better-calibrated first draft is also a *cheaper* one, since it needs
+  fewer manual rewrites.
+- **Bulk approve + hottest-first review** (Today page) — drafts now sort
+  HOT → WARM → COLD, and you can select several and hit one "Approve &
+  send" instead of clicking through each individually. Approvals still
+  happen one at a time in sequence under the hood (so the daily quota
+  check on each send stays accurate) — this is a UI convenience, not a
+  weakening of the approval gate.
+- **Daily owner digest** (`lib/digest.js`, `/api/digest/send`) — one email
+  a day to *your own inbox* (never a lead's) summarizing drafts waiting and
+  new replies, skipped entirely on a quiet day so it's not noise. This is
+  the one thing in the whole system that's genuinely "fire and forget"
+  automation, and it's safe to run that way precisely because the only
+  person it messages is the person who already owns every send decision.
+  There's a "send me a test digest now" button in Settings.
+- Fixed a real bug surfaced while building the digest: `leads.updated_at`
+  was never actually being refreshed on update (no trigger existed), which
+  would have silently broken anything checking "when did this last
+  change." `database/schema.sql` now has a proper `set_updated_at` trigger
+  on `leads` and `accounts` — safe to re-run on an existing database.

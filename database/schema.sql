@@ -47,9 +47,18 @@ create table if not exists accounts (
   min_hours_between_followups int not null default 48,
   max_followups int not null default 3,
 
+  -- Running AI token usage (see lib/aiUsage.js) — powers the cost-to-date
+  -- tile on /dashboard/analytics. Cumulative, not reset monthly, since the
+  -- goal is "is this still cheap overall", not billing-cycle accounting.
+  ai_input_tokens bigint not null default 0,
+  ai_output_tokens bigint not null default 0,
+
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table accounts add column if not exists ai_input_tokens bigint not null default 0;
+alter table accounts add column if not exists ai_output_tokens bigint not null default 0;
 
 -- ---------------------------------------------------------------------------
 -- LEADS: one row per contact. Uniqueness is per-account, not global — two
@@ -120,6 +129,56 @@ create table if not exists send_counters (
   count int not null default 0,
   primary key (account_id, day, channel)
 );
+
+-- ---------------------------------------------------------------------------
+-- Keep `updated_at` honest on every UPDATE. Added because nothing in the
+-- app code was setting it by hand (leads.updated_at stayed stuck at
+-- creation time), which quietly broke anything that needs "when did this
+-- last change" — e.g. the analytics/digest "won in the last day" check.
+-- ---------------------------------------------------------------------------
+create or replace function set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists set_updated_at on leads;
+create trigger set_updated_at before update on leads
+  for each row execute function set_updated_at();
+
+drop trigger if exists set_updated_at on accounts;
+create trigger set_updated_at before update on accounts
+  for each row execute function set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- TEMPLATES: an account's own proven copy, saved from a message that was
+-- actually sent (see lib/templates.js). Used as few-shot calibration when
+-- drafting new messages — never sent as-is, never shared across accounts.
+-- This is what makes AI quality *compound* the more a business uses the
+-- tool, instead of staying flat at "generic AI voice" forever.
+-- ---------------------------------------------------------------------------
+create table if not exists templates (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references accounts(id) on delete cascade,
+  name text not null,
+  channel text not null,             -- email, whatsapp
+  is_followup boolean not null default false,
+  subject text,
+  body text not null,
+  source_message_id uuid references messages(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_templates_account on templates(account_id, channel, is_followup);
+
+alter table templates enable row level security;
+
+create policy "owner reads own templates" on templates
+  for select to authenticated using (
+    account_id in (select id from accounts where owner_id = auth.uid())
+  );
 
 -- ---------------------------------------------------------------------------
 -- ROW LEVEL SECURITY — this is what makes it safe for multiple SME

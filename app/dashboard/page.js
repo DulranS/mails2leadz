@@ -1,99 +1,89 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getSupabaseBrowserClient } from '../../lib/supabaseBrowser';
+import { useDashboard } from './layout';
+import EmptyState from '../../components/EmptyState';
+import { SCORE_META } from '../../lib/statusMeta';
 
-export default function Dashboard() {
-  const [ready, setReady] = useState(false);
-  const [leads, setLeads] = useState([]);
+const SCORE_RANK = { HOT: 0, WARM: 1, UNSCORED: 2, COLD: 3 };
+
+export default function TodayPage() {
+  const { account, refreshQuota } = useDashboard();
   const [drafts, setDrafts] = useState([]);
-  const [edits, setEdits] = useState({}); // draft id -> { subject, body } while editing
-  const [stats, setStats] = useState({ new: 0, drafted: 0, in_sequence: 0, replied: 0, won: 0 });
+  const [edits, setEdits] = useState({});
+  const [selected, setSelected] = useState(new Set());
+  const [funnel, setFunnel] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [log, setLog] = useState('');
-  const router = useRouter();
+  const [notice, setNotice] = useState(null); // { tone: 'success'|'error'|'info', text }
 
-  const refresh = useCallback(async () => {
+  const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { router.push('/login'); return; }
-    setReady(true);
-
-    const { data: leadRows } = await supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    setLeads(leadRows || []);
 
     const { data: draftRows } = await supabase
       .from('messages')
-      .select('*, leads(full_name, email, company_name)')
+      .select('*, leads(id, full_name, email, company_name, score)')
       .eq('status', 'draft')
       .order('created_at', { ascending: false })
       .limit(50);
-    setDrafts(draftRows || []);
 
+    // Hottest leads float to the top — reviewing them first is the highest
+    // leverage use of an owner's limited review time each day.
+    const sorted = [...(draftRows || [])].sort(
+      (a, b) => (SCORE_RANK[a.leads?.score] ?? 2) - (SCORE_RANK[b.leads?.score] ?? 2)
+    );
+    setDrafts(sorted);
+    setSelected(new Set());
+
+    const { data: leadRows } = await supabase.from('leads').select('status');
     const counts = { new: 0, drafted: 0, in_sequence: 0, replied: 0, won: 0 };
     (leadRows || []).forEach((l) => {
       if (l.status === 'new') counts.new++;
       else if (l.status === 'drafted') counts.drafted++;
       else if (l.status === 'replied') counts.replied++;
       else if (l.status === 'won') counts.won++;
-      else counts.in_sequence++;
+      else if (l.status !== 'do_not_contact' && l.status !== 'lost') counts.in_sequence++;
     });
-    setStats(counts);
-  }, [router]);
+    setFunnel(counts);
+    setLoading(false);
+  }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
-
-  async function handleSignOut() {
-    const supabase = getSupabaseBrowserClient();
-    await supabase.auth.signOut();
-    router.push('/login');
-  }
-
-  async function handleImport(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setBusy(true);
-    setLog('Importing...');
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch('/api/leads/import', { method: 'POST', body: formData });
-    const result = await res.json();
-    setLog(`Imported ${result.inserted}, skipped ${result.skipped_duplicate} duplicates, ${result.skipped_invalid} invalid.`);
-    setBusy(false);
-    refresh();
-  }
+  useEffect(() => { load(); }, [load]);
 
   async function handleDraftOutreach() {
     setBusy(true);
-    setLog('Drafting outreach for new leads (nothing sends yet)...');
+    setNotice({ tone: 'info', text: 'Drafting outreach for new leads\u2026 nothing sends yet.' });
     const res = await fetch('/api/campaigns/draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ limit: 10 }),
     });
     const result = await res.json();
-    setLog(`Drafted ${result.drafted}. Failed: ${result.failed?.length || 0}. Review below before sending.`);
+    if (!res.ok) {
+      setNotice({ tone: 'error', text: result.error || 'Drafting failed.' });
+    } else if (result.drafted === 0) {
+      setNotice({ tone: 'info', text: 'No new leads to draft for right now.' });
+    } else {
+      setNotice({ tone: 'success', text: `Drafted ${result.drafted} message${result.drafted === 1 ? '' : 's'}, ready for your review below.${result.failed?.length ? ` ${result.failed.length} failed.` : ''}` });
+    }
     setBusy(false);
-    refresh();
+    load();
   }
 
   async function handleCheckReplies() {
     setBusy(true);
-    setLog('Checking inbox...');
+    setNotice({ tone: 'info', text: 'Checking your inbox for replies\u2026' });
     const res = await fetch('/api/inbox/check', { method: 'POST' });
     const result = await res.json();
-    setLog(`Checked ${result.checked} messages, matched ${result.matched_to_leads} to leads.`);
+    setNotice(res.ok
+      ? { tone: 'success', text: `Checked ${result.checked} message${result.checked === 1 ? '' : 's'}, matched ${result.matched_to_leads} to leads.` }
+      : { tone: 'error', text: result.error || 'Could not check inbox.' });
     setBusy(false);
-    refresh();
+    load();
   }
 
-  async function handleApprove(draft) {
-    setBusy(true);
+  async function approveOne(draft) {
     const edited = edits[draft.id];
     const res = await fetch(`/api/messages/${draft.id}/approve`, {
       method: 'POST',
@@ -101,130 +91,226 @@ export default function Dashboard() {
       body: JSON.stringify(edited || {}),
     });
     const result = await res.json();
-    setLog(result.error ? `Failed to send: ${result.error}` : `Sent to ${draft.leads?.email || draft.leads?.company_name}.`);
+    return { ok: res.ok, error: result.error, draft };
+  }
+
+  async function handleApprove(draft) {
+    setBusy(true);
+    const { ok, error } = await approveOne(draft);
+    setNotice(ok
+      ? { tone: 'success', text: `Sent to ${draft.leads?.full_name || draft.leads?.email || draft.leads?.company_name}.` }
+      : { tone: 'error', text: error || 'Send failed.' });
     setBusy(false);
-    refresh();
+    load();
+    refreshQuota();
+  }
+
+  // Approves the selected drafts one at a time (not in parallel) so the
+  // daily-quota check on each send stays accurate — a burst of parallel
+  // approvals could otherwise all read "quota available" before any of
+  // them increments it.
+  async function handleApproveSelected() {
+    const toApprove = drafts.filter((d) => selected.has(d.id));
+    if (toApprove.length === 0) return;
+    setBusy(true);
+    setNotice({ tone: 'info', text: `Approving ${toApprove.length} draft${toApprove.length === 1 ? '' : 's'}\u2026` });
+    let sent = 0;
+    let failed = 0;
+    for (const draft of toApprove) {
+      const { ok } = await approveOne(draft);
+      if (ok) sent++; else failed++;
+    }
+    setNotice({
+      tone: failed ? 'error' : 'success',
+      text: `Sent ${sent} message${sent === 1 ? '' : 's'}.${failed ? ` ${failed} failed (often a daily quota limit) — check Pipeline for details.` : ''}`,
+    });
+    setBusy(false);
+    load();
+    refreshQuota();
   }
 
   async function handleReject(draft) {
     setBusy(true);
     await fetch(`/api/messages/${draft.id}/reject`, { method: 'POST' });
-    setLog('Draft discarded.');
     setBusy(false);
-    refresh();
+    load();
   }
 
-  async function handleDoNotContact(lead) {
-    setBusy(true);
-    await fetch(`/api/leads/${lead.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'do_not_contact' }),
+  function toggleSelected(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
     });
-    setBusy(false);
-    refresh();
   }
 
-  if (!ready) return <div style={{ padding: 24, fontFamily: 'system-ui' }}>Loading...</div>;
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === drafts.length ? new Set() : new Set(drafts.map((d) => d.id))));
+  }
+
+  const hotCount = useMemo(() => drafts.filter((d) => d.leads?.score === 'HOT').length, [drafts]);
+
+  if (loading) return <p className="text-sm text-slate-400">Loading\u2026</p>;
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24, fontFamily: 'system-ui' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Outbound Engine</h1>
-        <div>
-          <a href="/dashboard/settings" style={{ marginRight: 16, color: '#06c' }}>Settings</a>
-          <button onClick={handleSignOut}>Sign out</button>
+    <div className="max-w-3xl">
+      <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        {drafts.length > 0
+          ? `${drafts.length} draft${drafts.length === 1 ? '' : 's'} waiting on your review, sorted hottest first.`
+          : 'Nothing waiting on you right now.'}
+      </p>
+
+      {funnel && <FunnelStrip funnel={funnel} />}
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button
+          onClick={handleDraftOutreach}
+          disabled={busy}
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          Draft outreach for new leads
+        </button>
+        <button
+          onClick={handleCheckReplies}
+          disabled={busy}
+          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Check for replies
+        </button>
+      </div>
+
+      {notice && (
+        <div className={`mt-4 rounded-md border px-4 py-2.5 text-sm ${
+          notice.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          : notice.tone === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800'
+          : 'border-slate-200 bg-white text-slate-600'
+        }`}>
+          {notice.text}
         </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 16, margin: '16px 0', flexWrap: 'wrap' }}>
-        <Stat label="New" value={stats.new} />
-        <Stat label="Drafted (needs review)" value={stats.drafted} />
-        <Stat label="In sequence" value={stats.in_sequence} />
-        <Stat label="Replied" value={stats.replied} />
-        <Stat label="Won" value={stats.won} />
-      </div>
-
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '16px 0', flexWrap: 'wrap' }}>
-        <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>
-          Import CSV
-          <input type="file" accept=".csv" onChange={handleImport} disabled={busy} style={{ display: 'none' }} />
-        </label>
-        <button onClick={handleDraftOutreach} disabled={busy}>Draft outreach (top 10 new leads)</button>
-        <button onClick={handleCheckReplies} disabled={busy}>Check for replies</button>
-      </div>
-
-      {log && <div style={{ padding: 10, background: '#f4f4f4', borderRadius: 6, marginBottom: 16 }}>{log}</div>}
-
-      {drafts.length > 0 && (
-        <>
-          <h2>Drafts awaiting your review ({drafts.length})</h2>
-          <p style={{ color: '#666', fontSize: 14, marginTop: -8 }}>
-            Nothing here has been sent. Edit if needed, then approve to send.
-          </p>
-          {drafts.map((d) => (
-            <div key={d.id} style={{ border: '1px solid #ddd', borderRadius: 8, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>
-                To: {d.leads?.full_name || d.leads?.email} ({d.leads?.company_name || 'no company'}) &middot; {d.channel}
-                {d.sequence_step > 0 ? ` · follow-up #${d.sequence_step}` : ' · first touch'}
-              </div>
-              {d.channel === 'email' && (
-                <input
-                  value={edits[d.id]?.subject ?? d.subject ?? ''}
-                  onChange={(e) => setEdits((prev) => ({ ...prev, [d.id]: { ...prev[d.id], subject: e.target.value, body: prev[d.id]?.body ?? d.body } }))}
-                  style={{ width: '100%', padding: 8, marginBottom: 6, border: '1px solid #ccc', borderRadius: 6, fontWeight: 600 }}
-                />
-              )}
-              <textarea
-                value={edits[d.id]?.body ?? d.body}
-                onChange={(e) => setEdits((prev) => ({ ...prev, [d.id]: { ...prev[d.id], body: e.target.value, subject: prev[d.id]?.subject ?? d.subject } }))}
-                rows={4}
-                style={{ width: '100%', padding: 8, border: '1px solid #ccc', borderRadius: 6 }}
-              />
-              <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-                <button onClick={() => handleApprove(d)} disabled={busy}>Approve &amp; send</button>
-                <button onClick={() => handleReject(d)} disabled={busy}>Discard</button>
-              </div>
-            </div>
-          ))}
-        </>
       )}
 
-      <h2>Leads</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', borderBottom: '2px solid #ddd' }}>
-            <th>Company</th><th>Contact</th><th>Score</th><th>Status</th><th>Next follow-up</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {leads.map((l) => (
-            <tr key={l.id} style={{ borderBottom: '1px solid #eee' }}>
-              <td>{l.company_name || '—'}</td>
-              <td>{l.full_name || l.email}</td>
-              <td>{l.score}</td>
-              <td>{l.status}</td>
-              <td>{l.next_followup_at ? new Date(l.next_followup_at).toLocaleString() : '—'}</td>
-              <td>
-                {l.status !== 'do_not_contact' && (
-                  <button onClick={() => handleDoNotContact(l)} disabled={busy} style={{ fontSize: 12 }}>
-                    Do not contact
-                  </button>
+      <section className="mt-8">
+        {drafts.length === 0 ? (
+          <EmptyState
+            title="No drafts to review"
+            body="Click \u201cDraft outreach for new leads\u201d above once you\u2019ve imported some leads, and drafts will show up here for you to approve or edit."
+          />
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={selected.size > 0 && selected.size === drafts.length}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+                {hotCount > 0 && selected.size === 0 && (
+                  <span className="ml-1 rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">{hotCount} hot</span>
                 )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </label>
+              <button
+                onClick={handleApproveSelected}
+                disabled={busy || selected.size === 0}
+                className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+              >
+                Approve &amp; send {selected.size > 0 ? `(${selected.size})` : 'selected'}
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {drafts.map((d) => (
+                <DraftCard
+                  key={d.id}
+                  draft={d}
+                  edited={edits[d.id]}
+                  checked={selected.has(d.id)}
+                  onToggle={() => toggleSelected(d.id)}
+                  onEdit={(patch) => setEdits((prev) => ({ ...prev, [d.id]: { ...prev[d.id], ...patch } }))}
+                  onApprove={() => handleApprove(d)}
+                  onReject={() => handleReject(d)}
+                  busy={busy}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }
 
-function Stat({ label, value }) {
+function FunnelStrip({ funnel }) {
+  const items = [
+    ['New', funnel.new],
+    ['Drafted', funnel.drafted],
+    ['In sequence', funnel.in_sequence],
+    ['Replied', funnel.replied],
+    ['Won', funnel.won],
+  ];
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: '10px 16px' }}>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
-      <div style={{ fontSize: 12, color: '#666' }}>{label}</div>
+    <div className="mt-6 grid grid-cols-5 divide-x divide-slate-200 rounded-lg border border-slate-200 bg-white">
+      {items.map(([label, value]) => (
+        <div key={label} className="px-3 py-3 text-center sm:px-4">
+          <div className="text-xl font-semibold tabular-nums">{value}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DraftCard({ draft: d, edited, checked, onToggle, onEdit, onApprove, onReject, busy }) {
+  const score = d.leads?.score;
+  const scoreMeta = SCORE_META[score] || SCORE_META.UNSCORED;
+  return (
+    <div className={`rounded-lg border bg-white p-4 ${checked ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-200'}`}>
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          className="mr-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        <span className="font-medium text-slate-700">{d.leads?.full_name || d.leads?.email}</span>
+        <span>{d.leads?.company_name || 'No company on file'}</span>
+        {score && <span className={`rounded-full px-2 py-0.5 font-medium ${scoreMeta.badge}`}>{scoreMeta.label}</span>}
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{d.channel}</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+          {d.sequence_step > 0 ? `Follow-up ${d.sequence_step}` : 'First touch'}
+        </span>
+      </div>
+      {d.channel === 'email' && (
+        <input
+          value={edited?.subject ?? d.subject ?? ''}
+          onChange={(e) => onEdit({ subject: e.target.value, body: edited?.body ?? d.body })}
+          className="mb-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+      )}
+      <textarea
+        value={edited?.body ?? d.body}
+        onChange={(e) => onEdit({ body: e.target.value, subject: edited?.subject ?? d.subject })}
+        rows={4}
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={onApprove}
+          disabled={busy}
+          className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          Approve &amp; send
+        </button>
+        <button
+          onClick={onReject}
+          disabled={busy}
+          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Discard
+        </button>
+      </div>
     </div>
   );
 }

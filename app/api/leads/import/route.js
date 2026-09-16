@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Papa from 'papaparse';
 import { getSupabase } from '../../../../lib/supabase';
 import { scoreLead } from '../../../../lib/ai';
+import { trackUsage } from '../../../../lib/aiUsage';
 import { requireUser } from '../../../../lib/supabaseServer';
 import { getOrCreateAccount, businessProfileFrom } from '../../../../lib/account';
 
@@ -64,6 +65,7 @@ export async function POST(request) {
       const scoreResult = await scoreLead(lead, business);
       lead.score = scoreResult.score;
       lead.score_reason = scoreResult.reason;
+      await trackUsage(account.id, scoreResult.usage);
 
       const { error } = await supabase.from('leads').insert(lead);
       if (error) {
