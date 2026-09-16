@@ -1,5 +1,6 @@
 {
   "crons": [
+    { "path": "/api/leads/source", "schedule": "0 4 * * *" },
     { "path": "/api/campaigns/draft", "schedule": "0 6 * * *" },
     { "path": "/api/followups/draft", "schedule": "0 7 * * *" },
     { "path": "/api/inbox/check", "schedule": "0 5 * * *" },

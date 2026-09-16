@@ -15,6 +15,7 @@ export function useDashboard() {
 const NAV = [
   { href: '/dashboard', label: 'Today', match: (p) => p === '/dashboard' },
   { href: '/dashboard/pipeline', label: 'Pipeline', match: (p) => p.startsWith('/dashboard/pipeline') },
+  { href: '/dashboard/sourcing', label: 'Find leads', match: (p) => p.startsWith('/dashboard/sourcing') },
   { href: '/dashboard/leads', label: 'Leads', match: (p) => p.startsWith('/dashboard/leads') },
   { href: '/dashboard/analytics', label: 'Analytics', match: (p) => p.startsWith('/dashboard/analytics') },
   { href: '/dashboard/settings', label: 'Settings', match: (p) => p.startsWith('/dashboard/settings') },
@@ -69,8 +70,11 @@ export default function DashboardLayout({ children }) {
         <div className="mx-auto flex max-w-[1400px]">
           <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-slate-200 bg-white sm:flex">
             <div className="px-5 py-5">
-              <div className="text-[15px] font-semibold tracking-tight">Outbound Engine</div>
-              <div className="text-xs text-slate-400">{account?.name || 'Your business'}</div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-bold text-white shadow-sm">OE</span>
+                <span className="text-[15px] font-semibold tracking-tight">Outbound Engine</span>
+              </div>
+              <div className="mt-1 text-xs text-slate-400">{account?.name || 'Your business'}</div>
             </div>
             <nav className="flex-1 px-3">
               {NAV.map((item) => {

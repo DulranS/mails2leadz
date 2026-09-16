@@ -61,6 +61,19 @@ alter table accounts add column if not exists ai_input_tokens bigint not null de
 alter table accounts add column if not exists ai_output_tokens bigint not null default 0;
 
 -- ---------------------------------------------------------------------------
+-- AUTOMATED LEAD SOURCING: saved "find businesses like this" search that
+-- the daily cron (GET /api/leads/source) runs unattended, so new leads
+-- from Google Maps show up every morning without anyone clicking anything.
+-- Set up once from /dashboard/sourcing. Leave auto_source_enabled false to
+-- keep sourcing fully manual (the "Find leads on Google Maps" button still
+-- works either way).
+-- ---------------------------------------------------------------------------
+alter table accounts add column if not exists auto_source_enabled boolean not null default false;
+alter table accounts add column if not exists auto_source_query text;
+alter table accounts add column if not exists auto_source_location text;
+alter table accounts add column if not exists auto_source_daily_limit int not null default 15;
+
+-- ---------------------------------------------------------------------------
 -- LEADS: one row per contact. Uniqueness is per-account, not global — two
 -- different SME customers can both have a lead with the same email.
 -- ---------------------------------------------------------------------------
@@ -73,7 +86,11 @@ create table if not exists leads (
   company_name text,
   title text,
   website text,
-  source text default 'csv_import',
+  source text default 'csv_import',       -- csv_import, google_maps, website_enrichment
+  place_id text,                          -- Google Places ID, when source = 'google_maps'
+  rating numeric,
+  review_count int,
+  category text,
   research_notes text,
   score text default 'UNSCORED',
   score_reason text,
@@ -88,9 +105,21 @@ create table if not exists leads (
   unique (account_id, email)
 );
 
+-- Upgrading an existing deployment (table already existed before these
+-- columns did): these are no-ops on a fresh install, required on an old one.
+alter table leads add column if not exists place_id text;
+alter table leads add column if not exists rating numeric;
+alter table leads add column if not exists review_count int;
+alter table leads add column if not exists category text;
+
 create index if not exists idx_leads_account on leads(account_id);
 create index if not exists idx_leads_status on leads(status);
 create index if not exists idx_leads_next_followup on leads(next_followup_at);
+
+-- One business (by Google Place ID) is only ever sourced once per account,
+-- even across repeated manual searches or daily auto-sourcing runs.
+create unique index if not exists idx_leads_account_place
+  on leads(account_id, place_id) where place_id is not null;
 
 -- ---------------------------------------------------------------------------
 -- MESSAGES: every drafted, sent, and inbound message. Nothing gets sent to

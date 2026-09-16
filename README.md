@@ -25,34 +25,55 @@ AI gets a tone wrong.
 
 ## Finding leads, not just messaging them
 
-If you (or your SME customer) already have a list of businesses — e.g. an
-export from a maps/directory listing, with a `website` column — but no
-email address yet, the "Find leads from websites" button on the dashboard
-looks up a public contact email on each business's own site (checking
-`/contact`, `/about`, etc.) and pipes the result straight into the normal
-import → score → draft pipeline. It does **not** scrape Google Maps, LinkedIn,
-or any other platform itself, and it never touches personal/individual data —
-only publicly published business contact addresses on that business's own
-website. This step is entirely optional: everything else works the same if
-you just import a CSV that already has emails in it.
+There are now three ways leads get into the pipeline, from most to least
+automated:
 
+**1. `/dashboard/sourcing` — "Find leads on Google Maps" (new, primary path).**
+Type an industry ("boutique hotels") and a place ("Austin, TX"), click
+search. In one request the app:
+1. Calls the **Google Places API** for matching businesses (name, address,
+   phone, website, category, rating, review count) — Google's own
+   supported way to get Maps data programmatically, not screen-scraping,
+   so it doesn't break Google's ToS or get an IP blocked (see
+   `lib/leadSourcing.js`).
+2. Checks each business's own website for a public contact email
+   (`lib/emailFinder.js`) — same idea as step 2 below, just inline.
+3. AI-scores every result and inserts it as a new lead, deduped against
+   anything already sourced (by Google Place ID).
+
+Turn the same search into a **daily automation** from the same page — a
+saved industry + location that runs unattended every morning via
+`GET /api/leads/source` (see `vercel.json`), so new leads simply accumulate
+without anyone touching the dashboard. Nothing downstream changes: sourced
+leads flow into the exact same score → draft → approve → send pipeline as
+a CSV import.
+
+**2. "Find leads from websites" (`/dashboard/leads`) — CSV enrichment.**
+If you already have a list of businesses — e.g. an export from a
+directory listing, with a `website` column — but no email address yet,
+this button looks up a public contact email on each business's own site
+and pipes the result into the normal import → score → draft pipeline.
 Expected input columns: `place_id, business_name, rating, reviews,
 category, address, whatsapp_number, website` (see
-`sample-businesses-for-enrichment.csv`) — that's deliberately the shape of
-a typical exported business/directory listing, so you can point this at a
-list you already have without reformatting it by hand.
+`sample-businesses-for-enrichment.csv`).
 
-It runs as a small separate FastAPI service (`backend/`) rather than inside
-a Vercel function, because visiting several pages per business doesn't fit
-reliably inside one serverless invocation. Deploy it anywhere that runs a
-long-lived Python process (Render, Railway, Fly — a free tier is enough),
-set `SERVICE_API_KEY` there and `ALLOWED_ORIGINS` to your app's URL, then
-set `ENRICHMENT_SERVICE_URL` + `ENRICHMENT_SERVICE_KEY` (same value as
-`SERVICE_API_KEY`) in the Next app's env vars. Leave both unset and the
-dashboard simply hides the button — nothing else depends on it. Its job
-store is in-memory, so a job in progress is lost if the service restarts;
-fine for a batch you kick off and wait a minute or two for, not meant to
-survive a redeploy mid-job.
+Both (1) and (2) never touch personal/individual data — only publicly
+published business contact information (Google's own business listing
+data, or an email a business chose to publish on its own site).
+
+**3. Plain CSV import (`/dashboard/leads`)** — if you already have emails,
+skip sourcing entirely and import a CSV with `email, phone, full_name,
+company_name, title, website` columns.
+
+The CSV enrichment path optionally runs as a small separate FastAPI
+service (`backend/`) instead of inline, because visiting several pages per
+business at large batch sizes doesn't fit reliably inside one serverless
+invocation — useful for a one-off bulk batch of hundreds of businesses.
+Deploy it anywhere that runs a long-lived Python process (Render, Railway,
+Fly — a free tier is enough), set `SERVICE_API_KEY` there and
+`ALLOWED_ORIGINS` to your app's URL, then set `ENRICHMENT_SERVICE_URL` +
+`ENRICHMENT_SERVICE_KEY` in the Next app's env vars. Leave both unset and
+the dashboard simply hides that one button — nothing else depends on it.
 
 ## Architecture
 
@@ -101,33 +122,46 @@ filtering, so one SME's data is genuinely isolated from another's.
    want zero-friction onboarding for SME customers, turn off "Confirm email"
    under Authentication → Providers → Email in the Supabase dashboard
    (otherwise new users must click a confirmation link before signing in).
-3. **OpenAI**: add `OPENAI_API_KEY` — one key, shared across every account,
-   since it's your infrastructure cost, not something customers configure.
-4. **`CRON_SECRET`** and **`UNSUB_SECRET`**: any long random strings
+3. **AI provider**: add `DEEPSEEK_API_KEY` (get one at
+   platform.deepseek.com) — one key, shared across every account, since
+   it's your infrastructure cost, not something customers configure.
+   DeepSeek is the default (`AI_PROVIDER=deepseek`) because it's an
+   OpenAI-compatible, dramatically cheaper model that's plenty for short,
+   structured jobs like scoring a lead or drafting a sales message — see
+   `lib/ai.js`. Set `AI_PROVIDER=openai` + `OPENAI_API_KEY` instead if
+   you'd rather use OpenAI.
+4. **Google Places API** (for `/dashboard/sourcing` — Google Maps lead
+   sourcing): in the Google Cloud Console, enable "Places API (New)" on a
+   project and create an API key, then set `GOOGLE_PLACES_API_KEY`.
+   Optional — leave it blank and the "Find leads" page just says sourcing
+   isn't configured; every other feature works fine without it.
+5. **`CRON_SECRET`** and **`UNSUB_SECRET`**: any long random strings
    (`openssl rand -hex 32`).
-5. `npm install`, `npm run dev`, open `/login`, sign up, you land on
+6. `npm install`, `npm run dev`, open `/login`, sign up, you land on
    `/dashboard`. (`package.json` lists `tailwindcss` +
    `@tailwindcss/postcss` as devDependencies — if the UI ever renders
    completely unstyled, that's the tell that `npm install` wasn't run
    after a `package.json` change, not a config problem.)
-6. **Each account fills in its own Settings** (`/dashboard/settings`):
+7. **Each account fills in its own Settings** (`/dashboard/settings`):
    business identity (what drives every AI-drafted message), and its own
    Gmail OAuth credentials (client ID/secret/refresh token via the
    [OAuth Playground](https://developers.google.com/oauthplayground),
    scopes `gmail.send` + `gmail.readonly`) and, optionally, Twilio WhatsApp
    credentials. This is the one piece of setup you can't skip per customer —
-   messages must come from *their* mailbox, not yours.
-7. **Deploy to Vercel** (free Hobby plan — see below), set the same env vars
+   messages must come from *their* mailbox, not yours. Then set up lead
+   sourcing from `/dashboard/sourcing` (industry + location, one-off or
+   automated daily).
+8. **Deploy to Vercel** (free Hobby plan — see below), set the same env vars
    there, and set `NEXT_PUBLIC_APP_URL` to your real deployed URL (used to
    build unsubscribe links).
 
 ## Staying on Vercel's free (Hobby) plan
 
-All four scheduled jobs in `vercel.json` run once a day, staggered an hour
-apart (inbox check, outreach drafts, follow-up drafts, then the owner
-digest last so it can report on what the earlier three just did) — Hobby
-caps Cron at once/day per job, and since sending is manual anyway, daily is
-genuinely enough here; nothing about the "controlled" model needs
+All five scheduled jobs in `vercel.json` run once a day, staggered an hour
+apart (lead sourcing, inbox check, outreach drafts, follow-up drafts, then
+the owner digest last so it can report on what the earlier ones just did)
+— Hobby caps Cron at once/day per job, and since sending is manual anyway,
+daily is genuinely enough here; nothing about the "controlled" model needs
 higher-frequency polling. No external scheduler required. Each route also
 sets `maxDuration` and a small batch cap so a single invocation can't run
 long enough to threaten Hobby's function-duration ceiling, and the whole
@@ -136,7 +170,7 @@ CPU-hour/month limits.
 
 Vercel's Hobby plan has, at various points, also capped the *number* of
 distinct cron jobs a project can register — that limit has moved over time,
-so if adding this 4th one gets rejected on your account, fold the digest
+so if adding one of these gets rejected on your account, fold the digest
 into an existing cron instead of registering a separate entry: in
 `app/api/followups/draft/route.js`, `import { sendDailyDigests } from
 '../../../../lib/digest'` and `await sendDailyDigests()` at the end of the
@@ -171,10 +205,15 @@ actually needed.
   deployment — it's what keeps outreach legal (CAN-SPAM/GDPR-style opt-out
   requirements) and it's cheap to keep, unlike a consent-platform
   integration, which genuinely would be scope creep at this stage.
-- No Google Maps / LinkedIn / social-platform scraping of any kind. The
-  optional lead-sourcing step (`backend/`) only fetches pages on a
-  business's *own* website that it already chose to publish, and only for
-  business lists you already assembled yourself.
+- No LinkedIn / social-platform scraping, and no raw HTML scraping of the
+  Google Maps website itself — that breaks Google's Terms of Service and
+  gets an IP blocked at any real volume. Google Maps lead sourcing
+  (`/dashboard/sourcing`, `lib/leadSourcing.js`) instead calls Google's own
+  Places API — the supported, ToS-compliant way to get the same business
+  data programmatically. Email discovery (`lib/emailFinder.js`,
+  `backend/scraper.py`) only ever fetches pages on a business's *own*
+  website that it already chose to publish — never a platform, never
+  personal/individual data.
 
 ## What changed in this pass
 
@@ -203,12 +242,12 @@ the actual product instead of sitting disconnected:
   configured, previously unused) instead of inline styles — same logic,
   more readable at a glance for a non-technical SME owner.
 
-## The dashboard is five pages, not one
+## The dashboard is six pages, not one
 
 Everything used to live on a single long page. It's now a proper app shell
 (`app/dashboard/layout.js`: sidebar nav, live "sends left today" gauges,
 one shared account/quota fetch instead of every page re-fetching it) with
-five pages, each answering one question:
+six pages, each answering one question:
 
 - **Today** (`/dashboard`) — "what needs me right now?" The draft-review
   queue is the hero, not one tile among many, because reviewing drafts is
@@ -220,6 +259,10 @@ five pages, each answering one question:
   drag-and-drop, on purpose — status changes are either system-driven
   (a reply came in) or one of three deliberate manual actions, not a
   free-form CRM stage a lead gets dragged through.
+- **Find leads** (`/dashboard/sourcing`) — "get me more leads." Search
+  Google Maps by industry + location, or turn a search into a fully
+  automated daily job. This is the top of the funnel; everything else in
+  the app operates on whatever lands here.
 - **Leads** (`/dashboard/leads`) — "grow and search the list." CSV import,
   the website-based email lookup, and a searchable/filterable table live
   here, separated from Today so the daily review flow isn't cluttered by

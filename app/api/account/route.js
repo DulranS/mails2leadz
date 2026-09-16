@@ -8,6 +8,7 @@ const EDITABLE_FIELDS = [
   'channel_email', 'gmail_client_id', 'gmail_client_secret', 'gmail_refresh_token', 'gmail_sender_email',
   'channel_whatsapp', 'twilio_account_sid', 'twilio_auth_token', 'twilio_whatsapp_number',
   'max_emails_per_day', 'max_whatsapp_per_day', 'min_hours_between_followups', 'max_followups',
+  'auto_source_enabled', 'auto_source_query', 'auto_source_location', 'auto_source_daily_limit',
 ];
 
 export async function GET() {
