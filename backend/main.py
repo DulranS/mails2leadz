@@ -1,6 +1,4 @@
-import os
-from fastapi import FastAPI, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import io
@@ -9,53 +7,14 @@ import uuid
 from typing import Dict, Any
 from scraper import process_row, ORIGINAL_COLUMNS, OUTPUT_COLUMNS
 
-# This is a standalone service, deployed separately from the Next.js app
-# (Render/Railway/Fly/etc — anywhere that can run a long-lived Python
-# process, unlike Vercel's serverless functions). The Next app's
-# app/api/leads/enrich route proxies to it. Only used for the OPTIONAL
-# "find emails on business websites" lead-sourcing step — nothing else in
-# the product depends on this service being deployed.
 app = FastAPI()
-
-# Restrict to your deployed Next.js app's origin via env var in production
-# (comma-separated if you have more than one, e.g. a preview + prod URL).
-# Defaults to "*" for local dev convenience only.
-_allowed = os.environ.get("ALLOWED_ORIGINS", "*")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[o.strip() for o in _allowed.split(",")] if _allowed != "*" else ["*"],
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
-
 jobs: Dict[str, Dict[str, Any]] = {}
-
-
-@app.get("/health")
-async def health():
-    # Used by the Next app / uptime checks to confirm the service is up
-    # before pointing ENRICHMENT_SERVICE_URL at it.
-    return {"status": "ok"}
 
 class CSVUpload(BaseModel):
     csv_content: str
 
-
-def _check_service_key(x_service_key: str | None):
-    # Shared secret between the Next app and this service — without this,
-    # anyone who finds this URL could use it as a free, unauthenticated
-    # web-scraping proxy (an SSRF/abuse risk, not just a cost one). Set the
-    # SAME value for SERVICE_API_KEY here and ENRICHMENT_SERVICE_KEY in the
-    # Next app's env vars. If SERVICE_API_KEY isn't set, auth is skipped —
-    # fine for local dev, not for a public deployment.
-    expected = os.environ.get("SERVICE_API_KEY")
-    if expected and x_service_key != expected:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Service-Key")
-
-
 @app.post("/api/scrape")
-async def scrape_emails(payload: CSVUpload, x_service_key: str | None = Header(default=None)):
-    _check_service_key(x_service_key)
+async def scrape_emails(payload: CSVUpload):
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "processing", "current": 0, "total": 0}
     
@@ -103,8 +62,7 @@ async def scrape_emails(payload: CSVUpload, x_service_key: str | None = Header(d
     return JSONResponse({"job_id": job_id})
 
 @app.get("/api/status/{job_id}")
-async def get_status(job_id: str, x_service_key: str | None = Header(default=None)):
-    _check_service_key(x_service_key)
+async def get_status(job_id: str):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")

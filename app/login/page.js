@@ -41,49 +41,43 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 font-sans">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-bold tracking-tight">Outbound Engine</h1>
-        <p className="mb-6 mt-1 text-sm text-slate-500">
-          {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
-        </p>
+    <div style={{ maxWidth: 380, margin: '80px auto', fontFamily: 'system-ui', padding: 24 }}>
+      <h1 style={{ marginBottom: 4 }}>Outbound Engine</h1>
+      <p style={{ color: '#666', marginTop: 0 }}>
+        {mode === 'signin' ? 'Sign in to your account' : 'Create your account'}
+      </p>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-          />
-          {error && <div className="text-sm text-rose-600">{error}</div>}
-          {info && <div className="text-sm text-emerald-600">{info}</div>}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {mode === 'signin' ? 'Sign in' : 'Sign up'}
-          </button>
-        </form>
-
-        <button
-          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); setInfo(''); }}
-          className="mt-4 text-sm text-blue-600 hover:underline"
-        >
-          {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          style={{ padding: 10, border: '1px solid #ccc', borderRadius: 6 }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={6}
+          style={{ padding: 10, border: '1px solid #ccc', borderRadius: 6 }}
+        />
+        {error && <div style={{ color: '#c00', fontSize: 14 }}>{error}</div>}
+        {info && <div style={{ color: '#080', fontSize: 14 }}>{info}</div>}
+        <button type="submit" disabled={busy} style={{ padding: 10, borderRadius: 6 }}>
+          {mode === 'signin' ? 'Sign in' : 'Sign up'}
         </button>
-      </div>
+      </form>
+
+      <button
+        onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); setInfo(''); }}
+        style={{ marginTop: 16, background: 'none', border: 'none', color: '#06c', cursor: 'pointer', padding: 0 }}
+      >
+        {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+      </button>
     </div>
   );
 }
