@@ -3,13 +3,31 @@ import Papa from 'papaparse';
 import { getSupabase } from '../../../../lib/supabase';
 import { scoreLead } from '../../../../lib/ai';
 import { trackUsage } from '../../../../lib/aiUsage';
+import { findEmailsForWebsites } from '../../../../lib/emailFinder';
+import { mapRowToLead, stripBom } from '../../../../lib/csvColumns';
 import { requireUser } from '../../../../lib/supabaseServer';
 import { getOrCreateAccount, businessProfileFrom } from '../../../../lib/account';
 
+// Serverless functions have a duration ceiling — a scoring call per row
+// plus, for rows with no email, a website lookup, adds up fast on a huge
+// file. Cap rows per request so an oversized CSV fails loudly with a clear
+// message instead of silently timing out partway through with no result
+// at all (the worst possible failure mode for an import).
+export const maxDuration = 60;
+const MAX_ROWS_PER_IMPORT = 400;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // Accepts a CSV file upload (multipart/form-data, field name "file"),
 // scoped to the signed-in user's own account.
-// Expected columns (case-insensitive, extras are kept as research_notes):
-// email, phone, full_name, company_name, title, website
+//
+// Column names are matched flexibly (see lib/csvColumns.js) — "Company",
+// "Business Name", "E-mail", "Phone Number", "WhatsApp" etc. all map onto
+// the right field regardless of exact spelling/casing. An email address is
+// no longer required: a row with a phone and/or a website is still a
+// usable lead (and if it has a website but no email, this route looks one
+// up automatically before deciding). A row is only rejected if it has
+// none of email, phone, full_name, or company_name — i.e. nothing at all
+// to act on.
 export async function POST(request) {
   try {
     const user = await requireUser();
@@ -23,44 +41,113 @@ export async function POST(request) {
       return NextResponse.json({ error: 'No file uploaded (field name must be "file")' }, { status: 400 });
     }
 
-    const text = await file.text();
-    const { data: rows, errors } = Papa.parse(text, {
+    const rawText = stripBom(await file.text());
+    const { data: rawRows, errors } = Papa.parse(rawText, {
       header: true,
       skipEmptyLines: true,
-      transformHeader: (h) => h.trim().toLowerCase(),
+      transformHeader: (h) => h.trim(),
     });
 
     if (errors.length) {
       return NextResponse.json({ error: 'CSV parse error', details: errors.slice(0, 3) }, { status: 400 });
     }
+    if (!rawRows.length) {
+      return NextResponse.json({ error: 'That file has no data rows.' }, { status: 400 });
+    }
 
-    const supabase = getSupabase();
-    const results = { inserted: 0, skipped_duplicate: 0, skipped_invalid: 0, errors: [] };
+    const truncated = rawRows.length > MAX_ROWS_PER_IMPORT;
+    const rows = rawRows.slice(0, MAX_ROWS_PER_IMPORT);
 
+    // Pass 1: map every row's columns, decide which rows need a website
+    // lookup (no email, has a website), and reject only rows with
+    // genuinely nothing usable.
+    const results = {
+      inserted: 0,
+      skipped_duplicate: 0,
+      skipped_invalid: 0,
+      enriched_with_email: 0,
+      invalid_samples: [],
+      note: truncated
+        ? `File had ${rawRows.length} rows — only the first ${MAX_ROWS_PER_IMPORT} were processed. Split large files into batches.`
+        : undefined,
+    };
+
+    const prepared = [];
     for (const row of rows) {
-      const email = (row.email || '').trim().toLowerCase();
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      const { mapped, unmapped } = mapRowToLead(row);
+      const email = (mapped.email || '').trim().toLowerCase();
+      const validEmail = email && EMAIL_RE.test(email) ? email : null;
+      const invalidEmailNote = email && !validEmail ? `email column had "${mapped.email}" (not a valid address)` : null;
+
+      const phone = mapped.phone?.trim() || null;
+      const fullName = mapped.full_name?.trim() || null;
+      const companyName = mapped.company_name?.trim() || null;
+      const website = mapped.website?.trim() || null;
+      const title = mapped.title?.trim() || null;
+
+      if (!validEmail && !phone && !fullName && !companyName) {
         results.skipped_invalid++;
+        if (results.invalid_samples.length < 5) {
+          results.invalid_samples.push({ row: JSON.stringify(row).slice(0, 200), reason: 'no email, phone, name, or company found in this row' });
+        }
         continue;
       }
 
-      const knownCols = ['email', 'phone', 'full_name', 'company_name', 'title', 'website'];
-      const extraNotes = Object.entries(row)
-        .filter(([k, v]) => !knownCols.includes(k) && v)
+      const extraNotes = Object.entries(unmapped)
         .map(([k, v]) => `${k}: ${v}`)
+        .concat(invalidEmailNote ? [invalidEmailNote] : [])
         .join('; ');
 
-      const lead = {
-        account_id: account.id,
-        email,
-        phone: row.phone || null,
-        full_name: row.full_name || null,
-        company_name: row.company_name || null,
-        title: row.title || null,
-        website: row.website || null,
+      prepared.push({
+        email: validEmail,
+        phone,
+        full_name: fullName,
+        company_name: companyName,
+        title,
+        website,
         research_notes: extraNotes || null,
-        preferred_channel: 'email',
-      };
+        needsEmailLookup: !validEmail && !!website,
+      });
+    }
+
+    // Pass 2: for rows with a website but no email, look one up — same
+    // logic as /dashboard/sourcing, run with bounded concurrency so a
+    // batch of lookups doesn't run fully sequentially.
+    const lookupIndexes = prepared.map((p, i) => (p.needsEmailLookup ? i : -1)).filter((i) => i !== -1);
+    if (lookupIndexes.length) {
+      const found = await findEmailsForWebsites(lookupIndexes.map((i) => prepared[i].website));
+      lookupIndexes.forEach((i, j) => {
+        if (found[j]) {
+          prepared[i].email = found[j];
+          results.enriched_with_email++;
+        }
+      });
+    }
+
+    // Pass 3: pre-fetch this account's existing emails/phones once, so we
+    // skip the AI scoring call entirely for rows we already know are
+    // duplicates (cheaper and faster than scoring first and discovering
+    // the DB rejects it).
+    const supabase = getSupabase();
+    const { data: existingLeads } = await supabase
+      .from('leads')
+      .select('email, phone')
+      .eq('account_id', account.id);
+    const existingEmails = new Set((existingLeads || []).filter((l) => l.email).map((l) => l.email));
+    const existingPhones = new Set((existingLeads || []).filter((l) => l.phone).map((l) => l.phone));
+
+    for (const lead of prepared) {
+      const isDuplicate =
+        (lead.email && existingEmails.has(lead.email)) ||
+        (!lead.email && lead.phone && existingPhones.has(lead.phone));
+      if (isDuplicate) {
+        results.skipped_duplicate++;
+        continue;
+      }
+
+      lead.account_id = account.id;
+      lead.preferred_channel = !lead.email && lead.phone ? 'whatsapp' : 'email';
+      delete lead.needsEmailLookup;
 
       const scoreResult = await scoreLead(lead, business);
       lead.score = scoreResult.score;
@@ -72,9 +159,11 @@ export async function POST(request) {
         if (error.code === '23505') {
           results.skipped_duplicate++;
         } else {
-          results.errors.push({ email, message: error.message });
+          results.invalid_samples.length < 5 && results.invalid_samples.push({ row: lead.company_name || lead.email || '(unnamed row)', reason: error.message });
         }
       } else {
+        if (lead.email) existingEmails.add(lead.email);
+        if (lead.phone) existingPhones.add(lead.phone);
         results.inserted++;
       }
     }

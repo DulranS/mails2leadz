@@ -83,12 +83,26 @@ async function sourceLeadsForAccount(account, { query, location, limit }) {
     return { found: 0, with_email: 0, inserted: 0, skipped_duplicate: 0, skipped_no_name: 0, results: [] };
   }
 
-  const emails = await findEmailsForWebsites(found.map((b) => b.website));
-  found.forEach((b, i) => { b.email = emails[i]; });
+  // Efficiency: skip already-sourced businesses BEFORE paying for an
+  // email lookup or an AI scoring call on them — cheaper and faster than
+  // discovering the duplicate only when the insert is rejected.
+  const { data: existing } = await supabase
+    .from('leads')
+    .select('place_id')
+    .eq('account_id', account.id)
+    .not('place_id', 'is', null);
+  const existingPlaceIds = new Set((existing || []).map((l) => l.place_id));
 
   const outcome = { found: found.length, with_email: 0, inserted: 0, skipped_duplicate: 0, skipped_no_name: 0, results: [] };
+  const candidates = found.filter((b) => {
+    if (b.place_id && existingPlaceIds.has(b.place_id)) { outcome.skipped_duplicate++; return false; }
+    return true;
+  });
 
-  for (const biz of found) {
+  const emails = await findEmailsForWebsites(candidates.map((b) => b.website));
+  candidates.forEach((b, i) => { b.email = emails[i]; });
+
+  for (const biz of candidates) {
     if (!biz.company_name) { outcome.skipped_no_name++; continue; }
     if (biz.email) outcome.with_email++;
 

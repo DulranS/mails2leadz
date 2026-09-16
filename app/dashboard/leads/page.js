@@ -6,21 +6,10 @@ import { statusMeta, SCORE_META, PIPELINE_ORDER } from '../../../lib/statusMeta'
 import EmptyState from '../../../components/EmptyState';
 import LeadDrawer from '../../../components/LeadDrawer';
 
-// The enrichment service returns business-listing column names
-// (business_name, whatsapp_number, ...) since that's the shape of the
-// business list you feed it. /api/leads/import expects lead column names
-// (company_name, phone, ...). Only the header row needs remapping \u2014
-// anything not in this map still comes through as an unrecognized column,
-// which /api/leads/import folds into research_notes rather than dropping.
-const ENRICHED_HEADER_MAP = { business_name: 'company_name', whatsapp_number: 'phone' };
-function remapEnrichedCsvHeader(csvText) {
-  const newlineIndex = csvText.indexOf('\n');
-  if (newlineIndex === -1) return csvText;
-  const header = csvText.slice(0, newlineIndex).replace(/\r$/, '');
-  const rest = csvText.slice(newlineIndex);
-  const remapped = header.split(',').map((col) => ENRICHED_HEADER_MAP[col.trim()] || col).join(',');
-  return remapped + rest;
-}
+// Column names (business_name, whatsapp_number, "E-mail", etc.) are now
+// remapped server-side in /api/leads/import (see lib/csvColumns.js) —
+// whatever a spreadsheet calls its columns, the import route figures it
+// out, so the enrichment CSV can be sent straight through unmodified.
 
 export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
@@ -65,9 +54,19 @@ export default function LeadsPage() {
     formData.append('file', file);
     const res = await fetch('/api/leads/import', { method: 'POST', body: formData });
     const result = await res.json();
-    setNotice(res.ok
-      ? { tone: 'success', text: `Imported ${result.inserted}. Skipped ${result.skipped_duplicate} duplicates and ${result.skipped_invalid} invalid rows.` }
-      : { tone: 'error', text: result.error || 'Import failed.' });
+    if (!res.ok) {
+      setNotice({ tone: 'error', text: result.error || 'Import failed.' });
+    } else {
+      const parts = [`Imported ${result.inserted}.`];
+      if (result.enriched_with_email) parts.push(`Found ${result.enriched_with_email} emails automatically.`);
+      parts.push(`Skipped ${result.skipped_duplicate} duplicates and ${result.skipped_invalid} rows with nothing usable.`);
+      if (result.note) parts.push(result.note);
+      setNotice({
+        tone: result.inserted > 0 || result.skipped_invalid === 0 ? 'success' : 'error',
+        text: parts.join(' '),
+        samples: result.invalid_samples,
+      });
+    }
     setBusy(false);
     e.target.value = '';
     load();
@@ -107,7 +106,7 @@ export default function LeadsPage() {
       }
 
       setNotice({ tone: 'info', text: `Found emails for ${job.with_email}/${job.total} businesses. Importing as leads\u2026` });
-      const csvBlob = new Blob([remapEnrichedCsvHeader(job.csv)], { type: 'text/csv' });
+      const csvBlob = new Blob([job.csv], { type: 'text/csv' });
       const importForm = new FormData();
       importForm.append('file', csvBlob, 'enriched-leads.csv');
       const importRes = await fetch('/api/leads/import', { method: 'POST', body: importForm });
@@ -145,6 +144,13 @@ export default function LeadsPage() {
           : 'border-slate-200 bg-white text-slate-600'
         }`}>
           {notice.text}
+          {notice.samples?.length > 0 && (
+            <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs opacity-80">
+              {notice.samples.map((s, i) => (
+                <li key={i}><span className="font-medium">{s.row}</span> — {s.reason}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
