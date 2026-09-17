@@ -7,12 +7,14 @@ import { trackUsage } from '../../../../lib/aiUsage';
 import { requireUser } from '../../../../lib/supabaseServer';
 import { getOrCreateAccount, businessProfileFrom } from '../../../../lib/account';
 import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
+import { mapWithConcurrency } from '../../../../lib/concurrency';
 
 // Serverless functions default to 10s on Vercel Hobby / 15-60s on Pro —
 // sourcing does a Places API call plus a handful of parallel website
 // fetches plus one AI call per result, so give it real headroom.
 export const maxDuration = 60;
 const MAX_RESULTS_PER_RUN = 30;
+const SCORE_CONCURRENCY = 4;
 
 // POST /api/leads/source  { query, location, limit }
 // Manual "Find leads on Google Maps" trigger from the dashboard, scoped to
@@ -102,8 +104,15 @@ async function sourceLeadsForAccount(account, { query, location, limit }) {
   const emails = await findEmailsForWebsites(candidates.map((b) => b.website));
   candidates.forEach((b, i) => { b.email = emails[i]; });
 
-  for (const biz of candidates) {
-    if (!biz.company_name) { outcome.skipped_no_name++; continue; }
+  const named = candidates.filter((b) => {
+    if (!b.company_name) { outcome.skipped_no_name++; return false; }
+    return true;
+  });
+
+  // Scoring is one AI call per business — bounded concurrency here cuts
+  // this route's wall-clock time on a bigger search (up to 30 results)
+  // instead of scoring them one at a time.
+  await mapWithConcurrency(named, SCORE_CONCURRENCY, async (biz) => {
     if (biz.email) outcome.with_email++;
 
     const lead = {
@@ -138,7 +147,7 @@ async function sourceLeadsForAccount(account, { query, location, limit }) {
       outcome.inserted++;
       outcome.results.push({ company_name: lead.company_name, email: lead.email, phone: lead.phone, score: lead.score });
     }
-  }
+  });
 
   return outcome;
 }

@@ -281,6 +281,52 @@ six pages, each answering one question:
 renders (label, color) — Today, Pipeline, Leads, and the lead drawer all
 read from it, so they can't drift out of sync with each other.
 
+## What's new in this pass: efficiency (fewer round trips, lower cost, no correctness surprises)
+
+An audit for "make this efficient, especially on cost" turned up a few real
+things, not just theoretical ones:
+
+- **Atomic counters** — `lib/aiUsage.js` (`trackUsage`) and `lib/quota.js`
+  (`incrementQuota`) used to read a number, add to it in Node, then write it
+  back: two round trips, and a genuine race — two AI calls or two approvals
+  landing close together could lose one of the updates (the account's AI
+  cost tracker undercounting, or worse, the daily send cap silently letting
+  an extra message through). Both now call a Postgres function
+  (`increment_ai_usage` / `increment_send_counter` in `database/schema.sql`)
+  that does the whole thing in one atomic statement. **Run the updated
+  `database/schema.sql` in the Supabase SQL editor** to pick these up — it's
+  additive and safe to re-run on an existing database.
+- **Fewer duplicate queries in the drafting crons** — `campaigns/draft` and
+  `followups/draft` used to look up an account's saved templates once per
+  lead in the batch, even though every lead on the same channel/step gets
+  the identical result. Now cached per batch (at most 2–3 lookups instead
+  of one per lead).
+- **Bounded concurrency for AI calls** — drafting and lead-scoring used to
+  run strictly one-at-a-time in a loop, so a 10-lead batch took roughly 10x
+  one call's latency in wall-clock time. These routes are billed by
+  duration on Vercel, so that's paying for idle waiting. `lib/concurrency.js`
+  runs up to 4 at once instead — same number of AI calls, noticeably less
+  function time.
+- **Google Places search cache** — a new `places_search_cache` table
+  (2-hour TTL) means an accidental double-click or a quick repeat search on
+  `/dashboard/sourcing` doesn't pay for the Places API twice. The once-a-day
+  automated sourcing cron is untouched by this on purpose — it's supposed
+  to see what's new since yesterday, not a cached answer.
+- **Two composite indexes** (`leads(account_id, status)`,
+  `messages(account_id, status)`) for the account-scoped status lookups
+  that the dashboard, pipeline, and both drafting crons all run — cheap now,
+  matters once an account's lead count gets into the thousands.
+- The Today dashboard's two independent queries (draft queue, funnel
+  counts) now run in parallel instead of one after the other.
+
+What deliberately wasn't added: an HTTP/CDN caching layer on the API
+routes. Every route here returns one account's own private data behind
+auth — there's no shared response to cache, so Cache-Control headers
+would either do nothing or risk serving one customer's numbers to
+another. The actual cost drivers in this app are external, metered calls
+(the AI provider, Google Places) and DB round trips, which is what the
+changes above target directly.
+
 ## What's new in this pass: a front door, not just a login screen
 
 There was no marketing page before this — visiting the deployed URL just

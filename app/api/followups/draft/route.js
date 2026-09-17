@@ -5,9 +5,11 @@ import { trackUsage } from '../../../../lib/aiUsage';
 import { getBestTemplates } from '../../../../lib/templates';
 import { businessProfileFrom } from '../../../../lib/account';
 import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
+import { mapWithConcurrency } from '../../../../lib/concurrency';
 
 export const maxDuration = 60;
 const BATCH_LIMIT = 30;
+const DRAFT_CONCURRENCY = 4;
 const STOP_STATUSES = ['replied', 'won', 'lost', 'do_not_contact', 'sequence_exhausted', 'drafted'];
 
 // GET /api/followups/draft — Vercel Cron, once/day. Only DRAFTS the next
@@ -33,6 +35,20 @@ export async function GET(request) {
 
   const outcome = { drafted: 0, sequence_exhausted: 0, failed: [] };
 
+  // Cached per (channel, step) combo across this whole cron batch, since
+  // several due leads on the same channel/step share identical template
+  // examples — same reasoning as campaigns/draft, just keyed on step too
+  // because follow-up step varies lead to lead here.
+  const templateCache = new Map();
+  function templatesFor(accountId, channel, step) {
+    const key = `${accountId}:${channel}:${step}`;
+    if (!templateCache.has(key)) {
+      templateCache.set(key, getBestTemplates(accountId, channel, step));
+    }
+    return templateCache.get(key);
+  }
+
+  const due_leads = [];
   for (const lead of due || []) {
     const account = lead.accounts;
     if (!account) continue;
@@ -46,7 +62,10 @@ export async function GET(request) {
     }
 
     const channel = lead.preferred_channel === 'whatsapp' && account.channel_whatsapp ? 'whatsapp' : 'email';
+    due_leads.push({ lead, account, business, step, channel });
+  }
 
+  await mapWithConcurrency(due_leads, DRAFT_CONCURRENCY, async ({ lead, account, business, step, channel }) => {
     try {
       const { data: lastMsg } = await supabase
         .from('messages')
@@ -57,7 +76,7 @@ export async function GET(request) {
         .limit(1)
         .maybeSingle();
 
-      const templateExamples = await getBestTemplates(account.id, channel, step);
+      const templateExamples = await templatesFor(account.id, channel, step);
       const draft = await draftMessage({ lead, step, channel, business, templateExamples });
       await trackUsage(account.id, draft.usage);
       const subject = channel === 'email' && lastMsg?.subject ? `Re: ${lastMsg.subject}` : draft.subject;
@@ -80,7 +99,7 @@ export async function GET(request) {
       console.error(`Follow-up draft failed for lead ${lead.id}:`, err.message);
       outcome.failed.push({ leadId: lead.id, error: err.message });
     }
-  }
+  });
 
   return NextResponse.json(outcome);
 }

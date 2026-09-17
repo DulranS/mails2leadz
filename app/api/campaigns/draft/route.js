@@ -6,9 +6,11 @@ import { getBestTemplates } from '../../../../lib/templates';
 import { requireUser } from '../../../../lib/supabaseServer';
 import { getOrCreateAccount, businessProfileFrom } from '../../../../lib/account';
 import { isAuthorizedCronRequest } from '../../../../lib/cronAuth';
+import { mapWithConcurrency } from '../../../../lib/concurrency';
 
 export const maxDuration = 60;
 const DEFAULT_LIMIT = 10;
+const DRAFT_CONCURRENCY = 4;
 
 // GET  /api/campaigns/draft  — Vercel Cron, once/day (see vercel.json).
 // Drafts messages but sends NOTHING — safe to automate fully, nothing here
@@ -75,15 +77,35 @@ async function draftForAccount(account, limit) {
 
   const outcome = { drafted: 0, skipped_no_channel: 0, failed: [] };
 
+  // Every lead in this batch is step 0, so the only thing that varies is
+  // channel (email/whatsapp) — at most 2 distinct template lookups no
+  // matter how many leads are in the batch, cached here instead of one
+  // identical query per lead.
+  const templateCache = new Map();
+  async function templatesFor(channel) {
+    if (!templateCache.has(channel)) {
+      templateCache.set(channel, getBestTemplates(account.id, channel, 0));
+    }
+    return templateCache.get(channel);
+  }
+
+  const eligible = [];
   for (const lead of queue) {
     const channel = account.channel_whatsapp && lead.preferred_channel === 'whatsapp' ? 'whatsapp' : 'email';
     if ((channel === 'email' && !account.channel_email) || (channel === 'whatsapp' && !lead.phone)) {
       outcome.skipped_no_channel++;
       continue;
     }
+    eligible.push({ lead, channel });
+  }
 
+  // Bounded concurrency: drafting is I/O-bound (waiting on the AI provider),
+  // so running a few at once cuts this route's wall-clock time — which
+  // matters on a serverless platform billed by duration — without firing
+  // the whole batch at the provider simultaneously.
+  await mapWithConcurrency(eligible, DRAFT_CONCURRENCY, async ({ lead, channel }) => {
     try {
-      const templateExamples = await getBestTemplates(account.id, channel, 0);
+      const templateExamples = await templatesFor(channel);
       const draft = await draftMessage({ lead, step: 0, channel, business, templateExamples });
       await trackUsage(account.id, draft.usage);
 
@@ -104,7 +126,7 @@ async function draftForAccount(account, limit) {
       console.error(`Draft failed for ${lead.email}:`, err.message);
       outcome.failed.push({ email: lead.email, error: err.message });
     }
-  }
+  });
 
   return outcome;
 }

@@ -21,12 +21,17 @@ export default function TodayPage() {
   const load = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
 
-    const { data: draftRows } = await supabase
-      .from('messages')
-      .select('*, leads(id, full_name, email, company_name, score)')
-      .eq('status', 'draft')
-      .order('created_at', { ascending: false })
-      .limit(50);
+    // Independent queries — run together instead of one after the other so
+    // the page's initial load is one round trip's latency, not two.
+    const [{ data: draftRows }, { data: leadRows }] = await Promise.all([
+      supabase
+        .from('messages')
+        .select('*, leads(id, full_name, email, company_name, score)')
+        .eq('status', 'draft')
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase.from('leads').select('status'),
+    ]);
 
     // Hottest leads float to the top — reviewing them first is the highest
     // leverage use of an owner's limited review time each day.
@@ -36,7 +41,6 @@ export default function TodayPage() {
     setDrafts(sorted);
     setSelected(new Set());
 
-    const { data: leadRows } = await supabase.from('leads').select('status');
     const counts = { new: 0, drafted: 0, in_sequence: 0, replied: 0, won: 0 };
     (leadRows || []).forEach((l) => {
       if (l.status === 'new') counts.new++;

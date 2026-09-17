@@ -116,6 +116,14 @@ create index if not exists idx_leads_account on leads(account_id);
 create index if not exists idx_leads_status on leads(status);
 create index if not exists idx_leads_next_followup on leads(next_followup_at);
 
+-- Composite indexes for the account_id + status lookups every list/queue
+-- query in the app actually runs (Today's draft queue, the pipeline board,
+-- the campaigns/followups cron batches) — the single-column indexes above
+-- still work without these, but Postgres has to intersect two index scans
+-- instead of walking one, which gets slower as a busy account's lead/message
+-- count grows into the thousands.
+create index if not exists idx_leads_account_status on leads(account_id, status);
+
 -- One business (by Google Place ID) is only ever sourced once per account,
 -- even across repeated manual searches or daily auto-sourcing runs.
 create unique index if not exists idx_leads_account_place
@@ -147,6 +155,7 @@ create index if not exists idx_messages_account on messages(account_id);
 create index if not exists idx_messages_lead on messages(lead_id);
 create index if not exists idx_messages_status on messages(status);
 create index if not exists idx_messages_provider_thread on messages(provider_thread_id);
+create index if not exists idx_messages_account_status on messages(account_id, status);
 
 -- ---------------------------------------------------------------------------
 -- SEND COUNTERS: per-account daily caps per channel.
@@ -157,6 +166,56 @@ create table if not exists send_counters (
   channel text not null,
   count int not null default 0,
   primary key (account_id, day, channel)
+);
+
+-- ---------------------------------------------------------------------------
+-- ATOMIC COUNTERS — increment_ai_usage / increment_send_counter.
+-- Both replace a read-then-write round trip in application code
+-- (lib/aiUsage.js, lib/quota.js) with one statement each. That's not just
+-- fewer round trips: a read-then-write from Node can lose an update when
+-- two calls land close together (the daily cron drafting messages at the
+-- same moment as a manual "Draft now" click, or two approvals racing on the
+-- same account's send counter) — the second write overwrites the first
+-- instead of adding to it. `accounts.ai_input_tokens = ai_input_tokens + $1`
+-- and the `on conflict ... do update set count = count + excluded.count`
+-- below both happen inside Postgres in one statement, so there's no window
+-- for that to happen.
+-- ---------------------------------------------------------------------------
+create or replace function increment_ai_usage(p_account_id uuid, p_input_tokens bigint, p_output_tokens bigint)
+returns void as $$
+begin
+  update accounts
+  set ai_input_tokens = ai_input_tokens + coalesce(p_input_tokens, 0),
+      ai_output_tokens = ai_output_tokens + coalesce(p_output_tokens, 0)
+  where id = p_account_id;
+end;
+$$ language plpgsql;
+
+create or replace function increment_send_counter(p_account_id uuid, p_day date, p_channel text, p_n int default 1)
+returns void as $$
+begin
+  insert into send_counters (account_id, day, channel, count)
+  values (p_account_id, p_day, p_channel, p_n)
+  on conflict (account_id, day, channel)
+  do update set count = send_counters.count + excluded.count;
+end;
+$$ language plpgsql;
+
+-- ---------------------------------------------------------------------------
+-- PLACES SEARCH CACHE — short-TTL cache for Google Places "Text Search"
+-- results (lib/leadSourcing.js). Places bills per request, so this exists
+-- purely to protect against paying twice for the same query+location within
+-- a short window (an accidental double-click on "Find leads on Google
+-- Maps", a network retry, or a user re-running the exact same search a few
+-- minutes later while reviewing results). It deliberately does NOT cover
+-- the daily automated-sourcing cron, which already only runs once a day per
+-- saved search and is *supposed* to see whatever's new since yesterday —
+-- caching that would defeat the point of running it daily.
+-- ---------------------------------------------------------------------------
+create table if not exists places_search_cache (
+  cache_key text primary key,
+  results jsonb not null,
+  fetched_at timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
