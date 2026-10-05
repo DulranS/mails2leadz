@@ -30,5 +30,9 @@ await t('webhook: needs the secret, no Firebase token required', async () => {
   assert.equal((await proxy(req('/api/handle-sms-reply', { method: 'POST' }))).status, 401);
   assert.ok(passes(await proxy(req('/api/handle-sms-reply?key=sek', { method: 'POST' }))));
 });
+await t('webhook route also works for the signed-in dashboard, still tenant-checked', async () => {
+  assert.ok(passes(await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'alice', phone: '1' } }))));
+  assert.equal((await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'bob' } }))).status, 403);
+});
 await t('health is public', async () => assert.ok(passes(await proxy(req('/api/health')))));
 console.log(`\n${n} passed`);

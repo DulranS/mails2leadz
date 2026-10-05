@@ -28,12 +28,15 @@ export async function proxy(request) {
   if (PUBLIC.has(pathname)) return NextResponse.next();
 
   if (WEBHOOKS.has(pathname)) {
+    // Provider callbacks (Twilio) carry ?key=WEBHOOK_SECRET. The dashboard calls the same routes
+    // as a signed-in user, so a valid user token is also accepted (and then checked like any other call).
     const secret = process.env.WEBHOOK_SECRET;
-    if (!secret) {
-      if (process.env.NODE_ENV === 'production') return json(503, 'Webhook secret not configured');
-      return NextResponse.next();
+    if (secret && safeEqual(searchParams.get('key') || '', secret)) return NextResponse.next();
+    if (!extractBearer(request)) {
+      if (!secret && process.env.NODE_ENV === 'production') return json(503, 'Webhook secret not configured');
+      if (!secret) return NextResponse.next(); // local development only
+      return json(401, 'Invalid webhook key');
     }
-    return safeEqual(searchParams.get('key') || '', secret) ? NextResponse.next() : json(401, 'Invalid webhook key');
   }
 
   const user = await verifyIdToken(extractBearer(request));

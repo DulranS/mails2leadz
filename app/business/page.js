@@ -8,7 +8,7 @@ import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "f
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
-import { ALL_STAGES, STAGE_LABELS, buildDealWrite, dealDocId } from "../../lib/deal-utils.js";
+import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId } from "../../lib/deal-utils.js";
 
 const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
@@ -53,6 +53,7 @@ export default function BusinessValuePage() {
   const [error, setError] = useState("");
   const [raw, setRaw] = useState({ deals: [], outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, cost30: 0, calls30: 0 } });
   const [saving, setSaving] = useState("");
+  const [showProspects, setShowProspects] = useState(false);
 
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
@@ -127,7 +128,7 @@ export default function BusinessValuePage() {
   const maxMonth = Math.max(1, ...m.past.wonByMonth.map((x) => x.revenue));
   const maxFunnel = Math.max(1, ...m.present.funnel.map((x) => x.count));
   const aiCap = Number(raw.settings?.aiMonthlyBudgetUsd) || null;
-  const openDeals = m.deals.filter((d) => !["closed_won", "closed_lost", "delivery", "retention", "expansion"].includes(d.stage));
+  const openDeals = m.deals.filter((d) => PIPELINE_STAGES.includes(d.stage));
   const stale = openDeals.filter((d) => d.lastUpdate && Date.now() - d.lastUpdate > 14 * 86400000).sort((a, b) => b.value - a.value).slice(0, 5);
 
   return (
@@ -146,7 +147,7 @@ export default function BusinessValuePage() {
 
         {/* NOW */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-          <Stat label="Open pipeline" value={money(m.present.openValue)} hint={`${m.present.openCount} open deal${m.present.openCount === 1 ? "" : "s"}`} />
+          <Stat label="Open pipeline" value={money(m.present.openValue)} hint={`${m.present.openCount} qualified deal${m.present.openCount === 1 ? "" : "s"} · ${m.present.prospectCount} prospect${m.present.prospectCount === 1 ? "" : "s"} not counted`} />
           <Stat label="Weighted pipeline" value={money(m.present.weightedPipeline)} hint="value × chance by stage" />
           <Stat label="Won to date" value={money(m.past.wonRevenue)} hint={`${m.past.wonCount} deal${m.past.wonCount === 1 ? "" : "s"}`} />
           <Stat label="Win rate" value={pct(m.past.winRate)} hint={m.past.winRate === null ? "needs a won or lost deal" : `${m.past.wonCount} won · ${m.past.lostCount} lost`} />
@@ -232,10 +233,11 @@ export default function BusinessValuePage() {
 
         {/* DEALS */}
         <Card title="Your deals">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Set the real value of each deal. Forecasts and ROI are only as accurate as these numbers.</p>
-          {m.deals.length === 0 ? <p className="text-sm text-gray-500 dark:text-gray-400">No deals yet. Deals are created when a lead replies, or from the Replies panel on the dashboard.</p> : (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Set the real value of each deal. Forecasts and ROI are only as accurate as these numbers. People you have only contacted are prospects and stay hidden until they are qualified.</p>
+          {m.present.prospectCount > 0 && <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-3"><input type="checkbox" checked={showProspects} onChange={(e) => setShowProspects(e.target.checked)} /> Show {m.present.prospectCount} prospect{m.present.prospectCount === 1 ? "" : "s"}</label>}
+          {m.deals.filter((d) => showProspects || !PROSPECT_STAGES.includes(d.stage)).length === 0 ? <p className="text-sm text-gray-500 dark:text-gray-400">No qualified deals yet. When a lead replies, open the Replies panel on the dashboard and tap 💼 Deal, or set a stage in the CRM.</p> : (
             <div className="space-y-2">
-              {[...m.deals].sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0)).slice(0, 100).map((d) => (
+              {[...m.deals].filter((d) => showProspects || !PROSPECT_STAGES.includes(d.stage)).sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0)).slice(0, 100).map((d) => (
                 <div key={d.email} className="flex flex-col sm:flex-row sm:items-center gap-2 border border-gray-100 dark:border-gray-700 rounded-lg p-3">
                   <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-gray-900 dark:text-white">{d.businessName || d.email}</div><div className="truncate text-xs text-gray-500 dark:text-gray-400">{d.email}{d.estimated ? " · using default value" : ""}</div></div>
                   <select aria-label={`Stage for ${d.email}`} value={d.stage} disabled={saving === d.email} onChange={(e) => saveDeal(d, { stage: e.target.value })} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">

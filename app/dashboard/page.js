@@ -656,6 +656,7 @@ function DashboardComponent() {
   const [pipelineValue, setPipelineValue] = useState(0);
   const [dealRecords, setDealRecords] = useState([]); // full deal docs: real values + dates for KPIs
   const [bizSettings, setBizSettings] = useState({}); // avg deal value, monthly cost, stage probabilities
+  const [bizLoaded, setBizLoaded] = useState(false);
   const [abResults, setAbResults] = useState({
     a: { opens: 0, clicks: 0, sent: 0, replied: 0 },
     b: { opens: 0, clicks: 0, sent: 0, replied: 0 },
@@ -3902,6 +3903,7 @@ function DashboardComponent() {
       ]);
       const settingsData = settingsSnap?.exists?.() ? settingsSnap.data() : {};
       setBizSettings(settingsData);
+      setBizLoaded(true);
       const avgValue = Number(settingsData.avgDealValue) > 0 ? Number(settingsData.avgDealValue) : CONFIG.DEFAULT_AVG_DEAL_VALUE;
 
       // One deal per email. Older builds keyed some deals by bare email: prefer the uid_email doc.
@@ -7541,6 +7543,16 @@ function DashboardComponent() {
           </div>
         )}
 
+        {/* FIRST-RUN: the AI and the forecasts need two minutes of setup */}
+        {user && bizLoaded && !bizSettings.profile?.offer && (
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-indigo-950/40 border border-indigo-700/50 rounded-xl p-4">
+            <div className="flex-1 text-sm text-indigo-100">
+              <b>Finish setup (2 minutes):</b> tell the app what you sell so AI drafts talk about <i>your</i> business, and set a typical deal value so your forecasts mean something.
+            </div>
+            <button onClick={() => router.push("/account")} className="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Set up now</button>
+          </div>
+        )}
+
         {/* DASHBOARD STATS */}
         {whatsappLinks.length > 0 && (
           <div className="mb-6 sm:mb-8">
@@ -7633,7 +7645,7 @@ function DashboardComponent() {
                   ${bizMetrics.present.openValue.toLocaleString()}
                 </div>
                 <div className="text-xs text-purple-200 mt-1">
-                  {bizMetrics.present.openCount} open deal
+                  {bizMetrics.present.openCount} qualified deal
                   {bizMetrics.present.openCount === 1 ? "" : "s"} · $
                   {bizMetrics.present.weightedPipeline.toLocaleString()} weighted
                 </div>

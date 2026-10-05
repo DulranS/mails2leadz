@@ -6,7 +6,7 @@ import { onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
-import { DEFAULT_STAGE_PROBABILITY, OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
+import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -131,6 +131,7 @@ export default function AccountPage() {
           </div>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Chance of winning at each stage (advanced)</summary>
+            <p className="text-xs text-gray-500 mt-2">Applies once a lead is qualified. People you have only contacted are prospects and are not counted as pipeline.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               {OPEN_STAGES.map((s) => (
                 <div key={s}><label className={label} htmlFor={`p-${s}`}>{STAGE_LABELS[s]} (%)</label><input id={`p-${s}`} type="number" min="0" max="100" className={field} value={probs[s]} onChange={(e) => setProbs({ ...probs, [s]: e.target.value })} /></div>

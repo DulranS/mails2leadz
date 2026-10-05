@@ -84,6 +84,15 @@ t('post-sale stages count as won revenue once and never as open pipeline', () =>
   const w = buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'retention', existing: { stage: 'delivery' }, now: new Date(now) });
   assert.equal('closedAt' in w, false);
 });
+t('cold contacts are prospects: never counted as pipeline value or forecast', () => {
+  const many = Array.from({ length: 300 }, (_, i) => ({ email: `c${i}@x.com`, stage: i % 2 ? 'contacted' : 'new', createdAt: d(3), lastUpdate: d(30) }));
+  const x = computeBusinessMetrics({ deals: [...many, { email: 'real@x.com', stage: 'qualified', value: 2000, createdAt: d(3), lastUpdate: d(1) }], settings: { avgDealValue: 5000 }, now });
+  assert.equal(x.present.prospectCount, 300);
+  assert.equal(x.present.openCount, 1);
+  assert.equal(x.present.openValue, 2000);
+  assert.equal(x.present.staleCount, 0);          // untouched prospects are not "at risk revenue"
+  assert.ok(x.future.horizons[2].expected <= 500); // 25% of $2000 at most
+});
 t('empty account does not crash or divide by zero', () => {
   const e = computeBusinessMetrics({});
   assert.equal(e.past.winRate, null);
