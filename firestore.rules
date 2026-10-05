@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// Every customer can only see and change their own data.
+// Server API routes use the Firebase Admin SDK, which bypasses these rules, so the
+// browser never needs broader access than this.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    // A document belongs to the caller if it says so, or its id is "<uid>_<something>".
+    function ownsExisting(docId) {
+      return signedIn() && (
+        resource.data.get('userId', '') == uid() ||
+        resource.data.get('createdBy', '') == uid() ||
+        docId.matches('^' + uid() + '_.*')
+      );
+    }
+    function ownsNew(docId) {
+      return signedIn() && (
+        request.resource.data.get('userId', '') == uid() ||
+        request.resource.data.get('createdBy', '') == uid() ||
+        docId.matches('^' + uid() + '_.*')
+      );
+    }
+
+    // Everything under users/{uid}/... (settings, follow-up tasks, notes, contacts)
+    match /users/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+      match /{sub=**} {
+        allow read, write: if signedIn() && uid() == userId;
+      }
+    }
+
+    // Collections the signed-in user reads and writes directly from the browser.
+    match /{coll}/{docId} {
+      allow read, delete: if coll in [
+          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
+          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
+          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
+          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+        ] && ownsExisting(docId);
+
+      allow create: if coll in [
+          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
+          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
+          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
+          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+        ] && ownsNew(docId);
+
+      // Updates may not hand the document to somebody else.
+      allow update: if coll in [
+          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
+          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
+          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
+          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+        ] && ownsExisting(docId) && ownsNew(docId);
+
+      // AI usage is written only by the server. Users may read and delete (account deletion) their own.
+      allow read, delete: if coll in ['ai_usage', 'ai_usage_daily', 'ai_usage_monthly'] && ownsExisting(docId);
+    }
+  }
+}
