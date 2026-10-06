@@ -6745,29 +6745,61 @@ function DashboardComponent() {
         }),
       });
 
-      const res = await requestDeduplicator.fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          csvContent: reconstructedCsv,
-          senderName,
-          senderEmail,
-          fieldMappings,
-          accessToken,
-          refreshToken: user?.refreshToken || "",
-          abTestMode,
-          templateA,
-          templateB,
-          templateToSend,
-          leadQualityFilter,
-          emailImages: imagesWithBase64,
-          emailAttachments: attachmentsWithBase64,
-          userId: user.uid,
-          csvSource: csvFileName || "uploaded_csv",
-        }),
-      });
+      // Send in small batches: each request finishes in seconds (hosts cut off long requests with a
+      // plain-text "Internal Server Error"), progress is visible, and a mid-way failure keeps its totals.
+      const SEND_BATCH_SIZE = 10;
+      const toCsvLine = (row) =>
+        headers
+          .map((h) => {
+            const val = (row[h] || "").toString().trim();
+            return val.includes(",") || val.includes('"') || val.includes("\n")
+              ? `"${val.replace(/"/g, '""')}"`
+              : val;
+          })
+          .join(",");
+      const basePayload = {
+        senderName,
+        senderEmail,
+        fieldMappings,
+        accessToken,
+        refreshToken: user?.refreshToken || "",
+        abTestMode,
+        templateA,
+        templateB,
+        templateToSend,
+        leadQualityFilter,
+        emailImages: imagesWithBase64,
+        emailAttachments: attachmentsWithBase64,
+        userId: user.uid,
+        csvSource: csvFileName || "uploaded_csv",
+      };
 
-      const data = await res.json();
+      let res = null;
+      const data = { sent: 0, failed: 0, skipped: 0, results: [] };
+      for (let i = 0; i < recipientsToSend.length; i += SEND_BATCH_SIZE) {
+        const batch = recipientsToSend.slice(i, i + SEND_BATCH_SIZE);
+        if (recipientsToSend.length > SEND_BATCH_SIZE) {
+          setStatusType("info");
+          setStatus(`📤 Sending ${Math.min(i + batch.length, recipientsToSend.length)}/${recipientsToSend.length}…`);
+        }
+        const batchRes = await requestDeduplicator.fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...basePayload, csvContent: [headers.join(","), ...batch.map(toCsvLine)].join("\n") }),
+        });
+        const batchData = await batchRes.json();
+        res = batchRes;
+        if (!batchRes.ok) {
+          // Stop here; report what was already delivered so nothing is sent twice by mistake.
+          Object.assign(data, batchData, { sent: data.sent, failed: data.failed, skipped: data.skipped });
+          if (data.sent > 0) data.error = `${batchData.error || "Send failed"} (${data.sent} emails were already sent before this stopped)`;
+          break;
+        }
+        data.sent += batchData.sent || 0;
+        data.failed += batchData.failed || 0;
+        data.skipped += batchData.skipped || 0;
+        data.results.push(...(batchData.results || []));
+      }
 
       if (res.ok) {
         const sentCount = data.sent || 0;

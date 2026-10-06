@@ -5,6 +5,9 @@ import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
 
+// The dashboard sends in small batches, so one request should finish well inside this.
+export const maxDuration = 60;
+
 // Firebase Config
 const getFirebaseConfig = () => {
   const requiredEnvVars = [
@@ -369,6 +372,10 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       total: dataRows.length,
+      // `sent/failed/skipped` are what the dashboard reads; the *Count names are kept for older callers.
+      sent: successCount,
+      failed: failCount,
+      skipped: skipCount,
       successCount,
       failCount,
       skipCount,

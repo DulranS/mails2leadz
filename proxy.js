@@ -23,7 +23,7 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
-export async function proxy(request) {
+async function gate(request) {
   const { pathname, searchParams } = request.nextUrl;
   if (PUBLIC.has(pathname)) return NextResponse.next();
 
@@ -69,6 +69,15 @@ export async function proxy(request) {
   const headers = new Headers(request.headers);
   headers.set('x-user-id', user.uid);
   return NextResponse.next({ request: { headers } });
+}
+
+export async function proxy(request) {
+  try {
+    return await gate(request);
+  } catch (err) {
+    console.error('[proxy] unexpected error:', err);
+    return json(500, 'The security check failed unexpectedly. Please try again, and contact support if it persists.');
+  }
 }
 
 export const config = { matcher: ['/api/:path*'] };
