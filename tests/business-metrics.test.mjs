@@ -101,3 +101,27 @@ t('empty account does not crash or divide by zero', () => {
   assert.ok(e.notes.length >= 1);
 });
 console.log(`\n${n} passed`);
+
+// ---------- next actions ----------
+const { buildNextActions } = await import('../lib/next-actions.js');
+const mm = computeBusinessMetrics({ deals: [
+  { email: 'q@x.com', stage: 'qualified', createdAt: d(30), lastUpdate: d(20) },
+  { email: 'w@x.com', stage: 'closed_won', value: 1000, createdAt: d(10), closedAt: d(2), lastUpdate: d(2) },
+], settings: { avgDealValue: 2000 }, outreach: { sent: 50, replied: 5 }, now });
+t('next actions: replies without a deal come first, with money attached', () => {
+  const a = buildNextActions({ metrics: mm, unconvertedReplies: [{ email: 'a@x.com', business: 'Acme' }, { email: 'b@x.com' }], dueFollowUps: 3, monthlyGoal: 5000, sentRecently: 50 });
+  assert.equal(a[0].id, 'replies');
+  assert.match(a[0].detail, /\$1,000/);           // 2 replies × $2000 × 25%
+  assert.ok(a.some((x) => x.id === 'followups') && a.some((x) => x.id === 'stale') && a.some((x) => x.id === 'goal'));
+  assert.ok(a.length <= 5);
+});
+t('next actions: quiet when everything is healthy', () => {
+  const healthy = computeBusinessMetrics({ deals: [{ email: 'q@x.com', stage: 'demo', value: 3000, createdAt: d(5), lastUpdate: d(1) }], now });
+  assert.deepEqual(buildNextActions({ metrics: healthy, sentRecently: 10 }), []);
+});
+t('next actions: missing profile is flagged; goal already covered adds nothing', () => {
+  const a = buildNextActions({ metrics: mm, hasProfile: false, monthlyGoal: 900 });
+  assert.equal(a[0].id, 'profile');
+  assert.ok(!a.some((x) => x.id === 'goal'));
+});
+console.log('\nnext-actions ok');

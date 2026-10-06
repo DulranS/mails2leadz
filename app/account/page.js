@@ -19,6 +19,7 @@ export default function AccountPage() {
   const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
+  const [monthlyGoal, setMonthlyGoal] = useState("");
   const [probs, setProbs] = useState(() => Object.fromEntries(OPEN_STAGES.map((s) => [s, Math.round(DEFAULT_STAGE_PROBABILITY[s] * 100)])));
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState("");
@@ -39,6 +40,7 @@ export default function AccountPage() {
         if (d.profile) setProfile((p) => ({ ...p, ...d.profile }));
         if (d.avgDealValue) setAvgDealValue(String(d.avgDealValue));
         if (d.monthlyCost) setMonthlyCost(String(d.monthlyCost));
+        if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.probabilities) setProbs((p) => ({ ...p, ...Object.fromEntries(Object.entries(d.probabilities).map(([k, v]) => [k, Math.round(v * 100)])) }));
       } catch { setMsg({ type: "error", text: "Could not load your settings." }); }
     })();
@@ -52,6 +54,7 @@ export default function AccountPage() {
         profile,
         avgDealValue: Math.max(0, Number(avgDealValue) || 0),
         monthlyCost: Math.max(0, Number(monthlyCost) || 0),
+        monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         probabilities,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
@@ -127,6 +130,7 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Money settings <span className="text-xs font-normal text-gray-500">· makes your forecasts honest</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div><label className={label} htmlFor="adv">Typical deal value ($)</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ($)</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ($)</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
           </div>
           <details className="mt-4">

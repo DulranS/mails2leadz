@@ -8,15 +8,16 @@ import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "f
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
-import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId } from "../../lib/deal-utils.js";
+import { buildNextActions } from "../../lib/next-actions.js";
+import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
 const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
 const toMs = (v) => (!v ? null : typeof v?.toDate === "function" ? v.toDate().getTime() : new Date(v).getTime() || null);
 
-function Card({ title, children, className = "" }) {
+function Card({ title, children, className = "", id }) {
   return (
-    <section className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5 ${className}`}>
+    <section id={id} className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5 ${className}`}>
       {title && <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">{title}</h2>}
       {children}
     </section>
@@ -51,7 +52,7 @@ export default function BusinessValuePage() {
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState({ deals: [], outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, cost30: 0, calls30: 0 } });
+  const [raw, setRaw] = useState({ deals: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, cost30: 0, calls30: 0 } });
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
 
@@ -68,17 +69,22 @@ export default function BusinessValuePage() {
       const since90 = Date.now() - 90 * 86400000;
       const since30 = Date.now() - 30 * 86400000;
       const month = new Date().toISOString().slice(0, 7);
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(1000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${month}`)).catch(() => null),
         getDocs(query(collection(db, "ai_usage"), where("userId", "==", uid), limit(1000))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "users", uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
+      const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
+      const unconvertedMap = new Map();
       let sent = 0, replied = 0;
       sentSnap.docs.forEach((d) => {
         const x = d.data();
+        const to = String(x.to || x.recipientEmail || "").toLowerCase();
+        if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
         if (t && t < since90) return;
         sent++; if (x.replied) replied++;
@@ -90,8 +96,9 @@ export default function BusinessValuePage() {
         cost30 += Number(x.costUsd) || 0; calls30++;
         byFeature[x.feature] = (byFeature[x.feature] || 0) + 1;
       });
+      const dueFollowUps = taskSnap.docs.filter((d) => { const t = toMs(d.data().scheduledFor); return t && t <= Date.now(); }).length;
       setRaw({
-        deals, outreach: { sent, replied },
+        deals, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         ai: { month: aiMonthSnap?.exists?.() ? aiMonthSnap.data() : null, byFeature, cost30, calls30 },
       });
@@ -125,6 +132,9 @@ export default function BusinessValuePage() {
     );
   }
 
+  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent });
+  const goal = Number(raw.settings?.monthlyGoal) || 0;
+  const wonThisMonth = m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0;
   const maxMonth = Math.max(1, ...m.past.wonByMonth.map((x) => x.revenue));
   const maxFunnel = Math.max(1, ...m.present.funnel.map((x) => x.count));
   const aiCap = Number(raw.settings?.aiMonthlyBudgetUsd) || null;
@@ -144,6 +154,39 @@ export default function BusinessValuePage() {
         <div className="flex justify-end">
           <button onClick={load} disabled={loading} className="text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50">{loading ? "Loading…" : "↻ Refresh"}</button>
         </div>
+
+        {/* DO THIS NEXT */}
+        {!loading && (
+          <Card title="Do this next">
+            {actions.length === 0 ? (
+              <p className="text-sm text-gray-600 dark:text-gray-300">✅ You're on top of things. Keep sending, and turn every positive reply into a deal.</p>
+            ) : (
+              <ul className="space-y-2">
+                {actions.map((a) => (
+                  <li key={a.id} className={`rounded-lg border p-3 flex flex-col sm:flex-row sm:items-center gap-2 ${a.tone === "hot" ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20" : a.tone === "warn" ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/30"}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-white">{a.title}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{a.detail}</div>
+                    </div>
+                    {a.href.startsWith("#")
+                      ? <a href={a.href} className="shrink-0 text-sm px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-center">{a.cta}</a>
+                      : <Link href={a.href} className="shrink-0 text-sm px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-center">{a.cta}</Link>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {goal > 0 && !loading && (
+          <Card title="This month's goal">
+            <div className="flex justify-between text-sm text-gray-800 dark:text-gray-100 mb-2"><span>{money(wonThisMonth)} won</span><span>goal {money(goal)}</span></div>
+            <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.min(100, Math.round((wonThisMonth / goal) * 100))} aria-valuemin={0} aria-valuemax={100}>
+              <div className={`h-full rounded-full ${wonThisMonth >= goal ? "bg-green-500" : "bg-blue-600"}`} style={{ width: `${Math.min(100, (wonThisMonth / goal) * 100)}%` }} />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{wonThisMonth >= goal ? "🎉 Goal reached." : `Expected from your pipeline in the next 30 days: ${money(m.future.horizons[0].expected)}.`}</p>
+          </Card>
+        )}
 
         {/* NOW */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -232,7 +275,7 @@ export default function BusinessValuePage() {
         </div>
 
         {/* DEALS */}
-        <Card title="Your deals">
+        <Card title="Your deals" id="deals">
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Set the real value of each deal. Forecasts and ROI are only as accurate as these numbers. People you have only contacted are prospects and stay hidden until they are qualified.</p>
           {m.present.prospectCount > 0 && <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mb-3"><input type="checkbox" checked={showProspects} onChange={(e) => setShowProspects(e.target.checked)} /> Show {m.present.prospectCount} prospect{m.present.prospectCount === 1 ? "" : "s"}</label>}
           {m.deals.filter((d) => showProspects || !PROSPECT_STAGES.includes(d.stage)).length === 0 ? <p className="text-sm text-gray-500 dark:text-gray-400">No qualified deals yet. When a lead replies, open the Replies panel on the dashboard and tap 💼 Deal, or set a stage in the CRM.</p> : (
