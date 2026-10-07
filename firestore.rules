@@ -60,8 +60,10 @@ service cloud.firestore {
           'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
         ] && ownsExisting(docId) && ownsNew(docId);
 
-      // AI usage is written only by the server. Users may read and delete (account deletion) their own.
-      allow read, delete: if coll in ['ai_usage', 'ai_usage_daily', 'ai_usage_monthly'] && ownsExisting(docId);
+      // AI usage is written only by the server and is READ-ONLY for users. Letting a user
+      // delete these docs would let them reset their own daily/monthly AI spend caps.
+      // (They hold only counts and cost, no personal content, and are kept on account deletion.)
+      allow read: if coll in ['ai_usage', 'ai_usage_daily', 'ai_usage_monthly'] && ownsExisting(docId);
     }
   }
 }

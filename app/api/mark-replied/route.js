@@ -1,5 +1,6 @@
 // app/api/mark-replied/route.js
 import { NextResponse } from 'next/server';
+import { cancelPendingFollowUps } from '../../../lib/reply-sync.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from '../../../lib/server-firestore.js';
 
@@ -100,22 +101,23 @@ export async function POST(request) {
       );
     }
 
-    // Update the email record
-    const docRef = snapshot.docs[0].ref;
+    // Mark EVERY email we sent this lead (initial + follow-ups), not just the first.
     const existingData = snapshot.docs[0].data();
+    const repliedAt = new Date().toISOString();
+    for (const d of snapshot.docs) {
+      if (d.data().replied === true) continue;
+      await updateDoc(d.ref, { replied: true, repliedAt, followUpAt: null });
+    }
+    // ...and stop the follow-up reminders (the UI promises this).
+    const cancelledFollowUps = await cancelPendingFollowUps(db, userId, email);
 
-    await updateDoc(docRef, {
-      replied: true,
-      repliedAt: new Date().toISOString(),
-      followUpAt: null // Cancel any scheduled follow-ups
-    });
-
-    // Track company reply
+    // Track company reply (forward the caller's token: /api is auth-gated)
     try {
       const domain = extractDomainFromEmail(email);
-      await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/track-company`, {
+      const authHeader = request.headers.get('authorization');
+      await fetch(`${new URL(request.url).origin}/api/track-company`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) },
         body: JSON.stringify({
           userId,
           companyName: existingData.businessName || 'Unknown Company',
@@ -128,12 +130,12 @@ export async function POST(request) {
       });
     } catch (trackError) {
       console.warn('Failed to track company reply:', trackError);
-      // Don't fail the reply marking if company tracking fails
     }
 
     return NextResponse.json({
       success: true,
-      message: `Marked ${email} as replied`
+      message: `Marked ${email} as replied`,
+      cancelledFollowUps
     }, { headers });
 
   } catch (error) {

@@ -3,7 +3,7 @@ import { Card, CardHeader, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
-import { ALL_STAGES, STAGE_LABELS, normalizeStage } from "../../lib/deal-utils.js";
+import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
 const StageOptions = () =>
@@ -24,26 +24,32 @@ export const CRM = ({
   onUpdateLead,
   onAddNote,
   onScheduleFollowUp,
+  onAddLead,
 }) => {
-  const [selectedLead, setSelectedLead] = useState(null);
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [noteText, setNoteText] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "" });
+  const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Enhanced lead data with CRM information
+  // Enhanced lead data with CRM information (the page already merged notes / follow-ups / last contact).
   const crmLeads = useMemo(() => {
     return leads.map((lead) => ({
       ...lead,
       score: leadScores[lead.email] || 0,
       stage: dealStages[lead.email] || "new",
-      lastContact: contacts[lead.email]?.lastContact || null,
-      replied: !!repliedLeads[lead.email],
-      notes: contacts[lead.email]?.notes || [],
-      nextFollowUp: contacts[lead.email]?.nextFollowUp || null,
+      replied: !!repliedLeads[lead.email] || lead.replied === true,
       company: lead.business || lead.company || "Unknown",
+      // Real value if the user set one; otherwise the default, clearly marked as an estimate.
       value: dealValues[lead.email] || defaultDealValue,
+      valueIsEstimate: !dealValues[lead.email],
     }));
-  }, [leads, leadScores, dealStages, contacts, repliedLeads, dealValues, defaultDealValue]);
+  }, [leads, leadScores, dealStages, repliedLeads, dealValues, defaultDealValue]);
+
+  const selectedLead = useMemo(() => crmLeads.find((l) => l.email === selectedEmail) || null, [crmLeads, selectedEmail]);
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -71,7 +77,7 @@ export const CRM = ({
         filtered = filtered.filter((lead) => lead.nextFollowUp);
         break;
       case "new":
-        filtered = filtered.filter((lead) => lead.stage === "new");
+        filtered = filtered.filter((lead) => normalizeStage(lead.stage) === "new");
         break;
       default:
         break;
@@ -142,7 +148,25 @@ export const CRM = ({
     {
       key: "value",
       label: "Value",
-      render: (value) => `$${value.toLocaleString()}`,
+      render: (value, lead) => (
+        <label className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200">
+          $
+          <input
+            key={`${lead.email}-${lead.valueIsEstimate ? "est" : value}`}
+            type="number"
+            min="0"
+            inputMode="decimal"
+            aria-label={`Deal value for ${lead.email}`}
+            defaultValue={lead.valueIsEstimate ? "" : value}
+            placeholder={`${value} (est.)`}
+            onBlur={(e) => {
+              const v = e.target.value;
+              if (v !== "" && Number(v) !== (lead.valueIsEstimate ? null : value)) onUpdateLead?.(lead.email, { value: v });
+            }}
+            className="w-24 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700"
+          />
+        </label>
+      ),
     },
     {
       key: "actions",
@@ -153,7 +177,7 @@ export const CRM = ({
             size="sm"
             variant="outline"
             onClick={() => {
-              setSelectedLead(lead);
+              setSelectedEmail(lead.email);
               setShowLeadModal(true);
             }}
           >
@@ -164,7 +188,7 @@ export const CRM = ({
             variant="outline"
             onClick={() => onScheduleFollowUp?.(lead.email)}
           >
-            Follow-up
+            Remind me in 3 days
           </Button>
         </div>
       ),
@@ -175,10 +199,8 @@ export const CRM = ({
     total: crmLeads.length,
     hot: crmLeads.filter((l) => l.score >= 75).length,
     replied: crmLeads.filter((l) => l.replied).length,
-    pipeline: crmLeads.filter((l) =>
-      ["qualified", "demo", "proposal"].includes(l.stage),
-    ).length,
-    won: crmLeads.filter((l) => l.stage === "won").length,
+    pipeline: crmLeads.filter((l) => PIPELINE_STAGES.includes(normalizeStage(l.stage))).length,
+    won: crmLeads.filter((l) => WON_STAGES.includes(normalizeStage(l.stage))).length,
   };
 
   return (
@@ -193,17 +215,11 @@ export const CRM = ({
             Manage your leads and deals
           </p>
         </div>
-        <Button
-          onClick={() => {
-            /* Add new lead functionality */
-          }}
-        >
-          Add Lead
-        </Button>
+        <Button onClick={() => setShowAdd(true)}>Add Lead</Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
@@ -267,10 +283,10 @@ export const CRM = ({
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {[
                 { key: "all", label: "All" },
-                { key: "hot", label: "Hot" },
+                { key: "hot", label: "Hot (score 75+)" },
                 { key: "replied", label: "Replied" },
                 { key: "followup", label: "Needs Follow-up" },
                 { key: "new", label: "New" },
@@ -297,6 +313,11 @@ export const CRM = ({
           </h3>
         </CardHeader>
         <CardContent>
+          {crmLeads.length === 0 && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              No leads yet. Leads appear here automatically when you send outreach from the dashboard, or add one yourself (a referral, an inbound enquiry) with Add Lead.
+            </p>
+          )}
           <DataTable
             data={filteredLeads}
             columns={tableColumns}
@@ -394,28 +415,88 @@ export const CRM = ({
                   </p>
                 )}
               </div>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
+                  value={noteText}
                   placeholder="Add a note..."
+                  aria-label="Add a note"
+                  onChange={(e) => setNoteText(e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      onAddNote?.(selectedLead.email, e.target.value);
-                      e.target.value = "";
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && noteText.trim()) {
+                      onAddNote?.(selectedLead.email, noteText);
+                      setNoteText("");
                     }
                   }}
                 />
                 <Button
                   size="sm"
-                  onClick={() => onScheduleFollowUp?.(selectedLead.email)}
+                  variant="outline"
+                  disabled={!noteText.trim()}
+                  onClick={() => {
+                    onAddNote?.(selectedLead.email, noteText);
+                    setNoteText("");
+                  }}
                 >
-                  Schedule Follow-up
+                  Save note
+                </Button>
+                <Button size="sm" onClick={() => onScheduleFollowUp?.(selectedLead.email)}>
+                  Remind me in 3 days
                 </Button>
               </div>
             </div>
           </div>
         )}
+      </Modal>
+      {/* Add Lead Modal */}
+      <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add a lead" size="md">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setAdding(true);
+            const ok = await onAddLead?.(addForm);
+            setAdding(false);
+            if (ok) {
+              setShowAdd(false);
+              setAddForm({ email: "", businessName: "", stage: "qualified", value: "" });
+            }
+          }}
+          className="space-y-4"
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            For people who did not come from your cold email: referrals, inbound enquiries, walk-ins. They count in your pipeline and forecast like any other deal.
+          </p>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Email
+            <input type="email" required value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+          </label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Business name (optional)
+            <input type="text" value={addForm.businessName} onChange={(e) => setAddForm({ ...addForm, businessName: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Stage
+              <select value={addForm.stage} onChange={(e) => setAddForm({ ...addForm, stage: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                <StageOptions />
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Deal value $ (optional)
+              <input type="number" min="0" inputMode="decimal" value={addForm.value} placeholder={`${defaultDealValue} (est.)`}
+                onChange={(e) => setAddForm({ ...addForm, value: e.target.value })}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button type="submit" disabled={adding || !addForm.email}>{adding ? "Adding…" : "Add lead"}</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

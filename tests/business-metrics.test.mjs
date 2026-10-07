@@ -125,3 +125,19 @@ t('next actions: missing profile is flagged; goal already covered adds nothing',
   assert.ok(!a.some((x) => x.id === 'goal'));
 });
 console.log('\nnext-actions ok');
+
+// ---------- 90-day cost windows + estimated won deals ----------
+const old = computeBusinessMetrics({ deals: [
+  { email: 'old@x.com', stage: 'closed_won', value: 9000, createdAt: d(400), closedAt: d(300), lastUpdate: d(300) },
+  { email: 'new@x.com', stage: 'closed_won', createdAt: d(20), closedAt: d(5), lastUpdate: d(5) }, // no real value
+], settings: { avgDealValue: 1000, monthlyCost: 100 }, aiCostUsd: 3, outreach: { sent: 20, replied: 4 }, now });
+t('cost per win divides 90-day cost by 90-day wins (not all-time wins)', () => {
+  assert.equal(old.roi.wonCount, 1);
+  assert.equal(old.roi.costPerWin, 303); // (100*3 + 3) / 1 win in the window, not / 2 all-time
+});
+t('won deals on the default value are flagged and raise a "set real value" action', () => {
+  assert.equal(old.past.estimatedWonCount, 1);
+  assert.ok(old.notes.some((x) => /won deal/.test(x)));
+  assert.ok(buildNextActions({ metrics: old, sentRecently: 10 }).some((x) => x.id === 'values'));
+});
+console.log('\nwindows ok');

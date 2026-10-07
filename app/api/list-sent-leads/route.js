@@ -57,7 +57,7 @@ export async function POST(request) {
   // Set response headers with aggressive caching for Hobby plan
   const headers = {
     'Content-Type': 'application/json',
-    'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' // Cache for 30s, serve stale for 60s
+    'Cache-Control': 'private, no-store' // Cache for 30s, serve stale for 60s
   };
   
   try {

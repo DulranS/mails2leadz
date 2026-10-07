@@ -52,7 +52,7 @@ export default function BusinessValuePage() {
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState({ deals: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, cost30: 0, calls30: 0 } });
+  const [raw, setRaw] = useState({ deals: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
 
@@ -68,39 +68,54 @@ export default function BusinessValuePage() {
       const uid = user.uid;
       const since90 = Date.now() - 90 * 86400000;
       const since30 = Date.now() - 30 * 86400000;
-      const month = new Date().toISOString().slice(0, 7);
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap] = await Promise.all([
+      const nowD = new Date();
+      // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
+      const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+      const month = months[0];
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(1000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${month}`)).catch(() => null),
         getDocs(query(collection(db, "ai_usage"), where("userId", "==", uid), limit(1000))).catch(() => ({ docs: [] })),
         getDocs(query(collection(db, "users", uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
+        getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[1]}`)).catch(() => null),
+        getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[2]}`)).catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
       const unconvertedMap = new Map();
+      const repliedEmails = new Set();
       let sent = 0, replied = 0;
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
+        if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
         if (t && t < since90) return;
         sent++; if (x.replied) replied++;
       });
-      const byFeature = {}; let cost30 = 0, calls30 = 0;
+      const byFeature = {};
       aiSnap.docs.forEach((d) => {
         const x = d.data(); const t = toMs(x.at);
         if (t && t < since30) return;
-        cost30 += Number(x.costUsd) || 0; calls30++;
         byFeature[x.feature] = (byFeature[x.feature] || 0) + 1;
       });
-      const dueFollowUps = taskSnap.docs.filter((d) => { const t = toMs(d.data().scheduledFor); return t && t <= Date.now(); }).length;
+      const monthDoc = aiMonthSnap?.exists?.() ? aiMonthSnap.data() : null;
+      const costOf = (snap) => (snap?.exists?.() ? Number(snap.data().costUsd) || 0 : 0);
+      const costMonth = Number(monthDoc?.costUsd) || 0;
+      const cost90 = costMonth + costOf(aiPrev1) + costOf(aiPrev2);
+      // Don't nag about people who already answered: a reply ends the follow-up sequence.
+      const dueFollowUps = taskSnap.docs.filter((d) => {
+        const x = d.data();
+        if (repliedEmails.has(String(x.leadEmail || "").toLowerCase())) return false;
+        const t = toMs(x.scheduledFor); return t && t <= Date.now();
+      }).length;
       setRaw({
         deals, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
-        ai: { month: aiMonthSnap?.exists?.() ? aiMonthSnap.data() : null, byFeature, cost30, calls30 },
+        ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       });
     } catch (e) {
       console.error(e);
@@ -110,7 +125,7 @@ export default function BusinessValuePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost30 }), [raw]);
+  const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90 }), [raw]);
 
   const saveDeal = async (deal, changes) => {
     setSaving(deal.email);
@@ -137,7 +152,7 @@ export default function BusinessValuePage() {
   const wonThisMonth = m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0;
   const maxMonth = Math.max(1, ...m.past.wonByMonth.map((x) => x.revenue));
   const maxFunnel = Math.max(1, ...m.present.funnel.map((x) => x.count));
-  const aiCap = Number(raw.settings?.aiMonthlyBudgetUsd) || null;
+  const aiCap = Number(raw.ai.month?.capUsd) || null;
   const openDeals = m.deals.filter((d) => PIPELINE_STAGES.includes(d.stage));
   const stale = openDeals.filter((d) => d.lastUpdate && Date.now() - d.lastUpdate > 14 * 86400000).sort((a, b) => b.value - a.value).slice(0, 5);
 
@@ -265,9 +280,9 @@ export default function BusinessValuePage() {
           </Card>
           <Card title="AI usage">
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.calls30}</div><div className="text-xs text-gray-500 dark:text-gray-400">requests (30d)</div></div>
-              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">${raw.ai.cost30.toFixed(2)}</div><div className="text-xs text-gray-500 dark:text-gray-400">est. cost (30d)</div></div>
-              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.cost30 > 0 && m.past.wonCount > 0 ? `$${(raw.ai.cost30 / m.past.wonCount).toFixed(2)}` : "—"}</div><div className="text-xs text-gray-500 dark:text-gray-400">AI cost per win</div></div>
+              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.callsMonth}</div><div className="text-xs text-gray-500 dark:text-gray-400">requests this month</div></div>
+              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">${raw.ai.costMonth.toFixed(2)}{aiCap ? <span className="text-xs font-normal text-gray-500 dark:text-gray-400"> / {money(aiCap)}</span> : null}</div><div className="text-xs text-gray-500 dark:text-gray-400">est. cost this month</div></div>
+              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.cost90 > 0 && m.roi.wonCount > 0 ? `$${(raw.ai.cost90 / m.roi.wonCount).toFixed(2)}` : "—"}</div><div className="text-xs text-gray-500 dark:text-gray-400">AI cost per win (90d)</div></div>
             </div>
             {Object.keys(raw.ai.byFeature).length > 0 && <ul className="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-1">{Object.entries(raw.ai.byFeature).map(([k, v]) => <li key={k} className="flex justify-between"><span>{k.replace(/_/g, " ")}</span><span>{v}</span></li>)}</ul>}
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Costs are estimates. Repeat requests are cached (free) and each account has daily and monthly AI limits{aiCap ? ` (${money(aiCap)}/month)` : ""}.</p>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
+import { cancelPendingFollowUps } from '../../../lib/reply-sync.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION
@@ -202,13 +203,22 @@ export async function POST(request) {
               originalSubject: subject
             });
 
-            // Track company reply (non-blocking)
-            fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/mark-replied`, {
+            // Stop chasing: cancel pending follow-up reminders for this lead.
+            await cancelPendingFollowUps(db, userId, toEmail);
+
+            // Track company reply (non-blocking; forward the caller's token, /api is auth-gated)
+            const authHeader = request.headers.get('authorization');
+            fetch(`${new URL(request.url).origin}/api/track-company`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) },
               body: JSON.stringify({
                 userId,
-                email: toEmail
+                companyName: sentEmail.businessName || 'Unknown Company',
+                domain: String(toEmail).split('@')[1] || null,
+                email: toEmail,
+                contactName: sentEmail.contactName || '',
+                csvSource: sentEmail.csvSource || 'unknown',
+                action: 'reply'
               })
             }).catch(trackError => {
               console.warn(`[Check Replies] Failed to track reply for ${toEmail}:`, trackError);

@@ -63,6 +63,7 @@ import { selectUnreadCount } from "../../lib/redux/slices/repliesSlice";
 import { CONFIG, generateId } from "../../lib/dashboard-config.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
+import { computeSendTiming } from "../../lib/send-timing.js";
 import {
   generateQualificationSMS,
   parseQualificationResponse,
@@ -832,7 +833,6 @@ function DashboardComponent() {
   const [showResearchModal, setShowResearchModal] = useState(false);
   const [aiDraft, setAiDraft] = useState(null); // { contact, subject, body, angle, reasons, busy }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
-  const [sendTimeOptimization, setSendTimeOptimization] = useState(null);
   const [predictiveScores, setPredictiveScores] = useState({});
   const [sentimentAnalysis, setSentimentAnalysis] = useState({});
   const [smartFollowUpSuggestions, setSmartFollowUpSuggestions] = useState({});
@@ -871,18 +871,11 @@ function DashboardComponent() {
   // ============================================================================
   // BUSINESS INTELLIGENCE & ANALYTICS STATES
   // ============================================================================
-  const [analyticsTab, setAnalyticsTab] = useState("overview");
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-
-  const [pipelineData, setPipelineData] = useState(null);
-  const [loadingPipeline, setLoadingPipeline] = useState(false);
+  // Floating business snapshot (real numbers from bizMetrics). Closed by default.
+  const [analyticsTab, setAnalyticsTab] = useState("hidden");
 
   const [assignmentData, setAssignmentData] = useState(null);
   const [loadingAssignment, setLoadingAssignment] = useState(false);
-
-  const [predictiveData, setPredictiveData] = useState(null);
-  const [loadingPredictive, setLoadingPredictive] = useState(false);
 
   // ============================================================================
   // MULTI-CHANNEL MODAL STATES
@@ -2608,6 +2601,8 @@ function DashboardComponent() {
     });
   }, [dealRecords, bizSettings, whatsappLinks, repliedLeads]);
 
+  const sendTiming = useMemo(() => computeSendTiming(sentLeads), [sentLeads]);
+
   const conversionFunnel = useMemo(() => {
     const f = Object.fromEntries(bizMetrics.present.funnel.map((x) => [x.key, x.count]));
     const pct = (n, d) => (d > 0 ? Math.round((n / d) * 100) : 0);
@@ -2837,7 +2832,6 @@ function DashboardComponent() {
             loadAbResults(),
             loadWhatsAppContacts(),
             loadDailyEmailCount(),
-            loadSendTimeOptimization(),
           ]);
         }, 10000); // Increased to 10s to reduce concurrent CPU usage
         addNotification(
@@ -4109,29 +4103,6 @@ function DashboardComponent() {
   };
 
   // ============================================================================
-  // LOAD SEND TIME OPTIMIZATION FROM API
-  // ============================================================================
-  const loadSendTimeOptimization = async () => {
-    if (!user?.uid) return;
-
-    try {
-      const res = await retryFetch("/api/ai-send-time-optimizer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.uid }),
-      }, 2);
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setSendTimeOptimization(data);
-      }
-    } catch (err) {
-      errorHandler.logError(err, { function: 'loadSendTimeOptimization', userId: user?.uid, context: 'send-time-fetch' });
-    }
-  };
-
-  // ============================================================================
   // LOAD SENT LEADS FROM API WITH ERROR HANDLING
   // ============================================================================
   // ============================================================================
@@ -4518,6 +4489,25 @@ function DashboardComponent() {
   // };
 
   // ============================================================================
+  // SEND ONE QUEUED FOLLOW-UP (used by the follow-up queue)
+  // Throws on failure so the queue keeps the task pending instead of marking it done.
+  // The server still enforces: not replied, max 3 follow-ups, minimum gap between sends.
+  // ============================================================================
+  const handleSendFollowUp = async (lead, _stage) => {
+    if (!user?.uid || !lead?.email) throw new Error("Missing lead");
+    const token = await requestGmailToken();
+    const res = await retryFetch("/api/send-followup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: lead.email, accessToken: token, userId: user.uid, senderName }),
+    }, 2);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Follow-up failed");
+    invalidateCache("sent_emails");
+    return data;
+  };
+
+  // ============================================================================
   // SEND FOLLOW-UP WITH GMAIL TOKEN
   // ============================================================================
   const sendFollowUpWithToken = async (email, accessToken) => {
@@ -4645,45 +4635,6 @@ function DashboardComponent() {
       );
       
       addNotification(`❌ Error: ${err.message}. Added to retry queue.`, "error");
-    }
-  };
-
-  // ============================================================================
-  // AI AUTO-REPLY PROCESSOR
-  // ============================================================================
-  const runAutoReplyProcessor = async () => {
-    if (!autoReplyProcessorEnabled) {
-      setAiProcessorStatus("Disabled");
-      addNotification("AI auto-reply processor is disabled", "warning");
-      return;
-    }
-
-    if (!user?.uid) {
-      addNotification("User not authenticated", "error");
-      return;
-    }
-
-    setAiProcessorStatus("Running...");
-
-    try {
-      const res = await retryFetch("/api/auto-reply-processor", { method: "POST" }, 2);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Auto-reply processor failed");
-      }
-
-      setAiProcessorStatus(`Done · processed ${data.processed || 0} replies`);
-      addNotification("✅ AI auto-reply processor completed", "success", 4000);
-
-      await refreshAllData();
-    } catch (error) {
-      setAiProcessorStatus(`Error · ${error.message}`);
-      addNotification(
-        `❌ Auto-reply processor error: ${error.message}`,
-        "error",
-        6000,
-      );
     }
   };
 
@@ -7169,108 +7120,6 @@ function DashboardComponent() {
   // ============================================================================
   // LOADING STATE
   // ============================================================================
-  // BUSINESS INTELLIGENCE HANDLERS
-  // ============================================================================
-  const loadAnalytics = async (action = "comprehensive", timeframe = "30d") => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    try {
-      setLoadingAnalytics(true);
-      const res = await fetch("/api/analytics-engine", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.uid,
-          action,
-          timeframe,
-          data: { avg_deal_value: 5000 },
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAnalyticsData(data.analytics);
-        addNotification("✅ Analytics loaded", "success", 2000);
-      }
-    } catch (error) {
-      console.error("Load analytics error:", error);
-      addNotification(`❌ Failed to load analytics: ${error.message}`, "error");
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  };
-
-  const loadPipeline = async (action = "comprehensive") => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    try {
-      setLoadingPipeline(true);
-      const res = await fetch("/api/deal-pipeline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.uid,
-          action,
-          data: { targetDays: 90 },
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPipelineData(data.pipeline);
-        addNotification("✅ Pipeline loaded", "success", 2000);
-      }
-    } catch (error) {
-      console.error("Load pipeline error:", error);
-      addNotification(`❌ Failed to load pipeline: ${error.message}`, "error");
-    } finally {
-      setLoadingPipeline(false);
-    }
-  };
-
-  const loadPredictiveAnalysis = async (
-    action = "comprehensive",
-    leadId = null,
-  ) => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    try {
-      setLoadingPredictive(true);
-      const res = await fetch("/api/predictive-scoring", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.uid,
-          leadId,
-          action,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPredictiveData(data.predictions);
-        addNotification("✅ Predictions generated", "success", 2000);
-      }
-    } catch (error) {
-      console.error("Load predictive error:", error);
-      addNotification(
-        `❌ Failed to generate predictions: ${error.message}`,
-        "error",
-      );
-    } finally {
-      setLoadingPredictive(false);
-    }
-  };
-
   // ============================================================================
   // LOADING STATE
   // ============================================================================
@@ -7841,29 +7690,30 @@ function DashboardComponent() {
                   </div>
                 ) : null}
 
-                {sendTimeOptimization && (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">
-                      ⏰ Optimal Send Time
-                    </h3>
+                <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">⏰ Best time to send</h3>
+                  {!sendTiming.enough ? (
+                    <p className="text-xs text-gray-400">
+                      Learning from your own results: {sendTiming.sample} of {sendTiming.needed} emails sent so far. Keep sending and this will show when your leads actually reply.
+                    </p>
+                  ) : sendTiming.best ? (
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Next Best Time:</span>
-                        <span className="font-bold text-purple-400">
-                          {sendTimeOptimization.nextOptimalTimeFormatted}
-                        </span>
+                        <span className="text-gray-400">Best window:</span>
+                        <span className="font-bold text-purple-400">{sendTiming.best.day}, {sendTiming.best.window}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">
-                          Potential Improvement:
-                        </span>
+                        <span className="text-gray-400">Replies there:</span>
                         <span className="font-bold text-green-400">
-                          +{sendTimeOptimization.potentialImprovement}%
+                          {sendTiming.best.replies}/{sendTiming.best.sent} ({Math.round(sendTiming.best.rate * 100)}%) vs {Math.round(sendTiming.overallRate * 100)}% overall
                         </span>
                       </div>
+                      <p className="text-gray-500">Based on {sendTiming.sample} emails, in your local time. A guide, not a guarantee.</p>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-gray-400">No send window stands out yet. Check back after more replies.</p>
+                  )}
+                </div>
 
                 {/* Performance Monitor Toggle */}
                 <button
@@ -11089,291 +10939,80 @@ function DashboardComponent() {
           onClick={() =>
             setAnalyticsTab(analyticsTab === "hidden" ? "overview" : "hidden")
           }
+          aria-label="Business snapshot"
           className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg font-bold text-lg transition-all"
-          title="Business Intelligence"
+          title="Business snapshot"
         >
           📊
         </button>
       </div>
 
       {analyticsTab !== "hidden" && (
-        <div className="fixed bottom-24 right-4 z-40 bg-gray-900 border-2 border-cyan-500/50 rounded-2xl shadow-2xl w-80 sm:w-96 max-h-96 overflow-hidden">
+        <div className="fixed bottom-24 right-4 left-4 sm:left-auto z-40 bg-gray-900 border-2 border-cyan-500/50 rounded-2xl shadow-2xl sm:w-96 max-h-[70vh] overflow-hidden">
           <div className="bg-gradient-to-r from-cyan-900 to-blue-900 p-4 border-b border-cyan-500/30 flex justify-between items-center">
-            <h3 className="text-lg font-bold text-cyan-200">
-              📊 Business Intelligence
-            </h3>
-            <button
-              onClick={() => setAnalyticsTab("hidden")}
-              className="text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
+            <h3 className="text-lg font-bold text-cyan-200">📊 Business snapshot</h3>
+            <button onClick={() => setAnalyticsTab("hidden")} aria-label="Close snapshot" className="text-gray-400 hover:text-white px-2">✕</button>
           </div>
-
-          <div className="p-4 space-y-3 overflow-y-auto max-h-80">
+          <div className="p-4 space-y-3 overflow-y-auto max-h-[calc(70vh-4rem)]">
             <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setAnalyticsTab("overview");
-                  loadAnalytics("comprehensive");
-                }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "overview" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
-              >
-                📈 ROI & Analytics
-              </button>
-              <button
-                onClick={() => {
-                  setAnalyticsTab("pipeline");
-                  loadPipeline("comprehensive");
-                }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "pipeline" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
-              >
-                🎯 Pipeline
-              </button>
-              <button
-                onClick={() => {
-                  setAnalyticsTab("predict");
-                  loadPredictiveAnalysis("comprehensive");
-                }}
-                className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === "predict" ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
-              >
-                🔮 AI Predict
-              </button>
+              {[["overview", "💹 Results"], ["pipeline", "🎯 Pipeline"]].map(([key, label]) => (
+                <button key={key} onClick={() => setAnalyticsTab(key)}
+                  className={`flex-1 py-2 px-3 rounded text-sm font-bold transition ${analyticsTab === key ? "bg-cyan-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}>
+                  {label}
+                </button>
+              ))}
             </div>
-
-            {analyticsTab === "overview" && analyticsData && (
+            {analyticsTab === "overview" && (
               <div className="space-y-3">
-                {analyticsData.roi && (
-                  <div className="bg-green-900/30 border border-green-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-green-400 mb-2">
-                      💹 ROI Analysis
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-400">ROI:</span>{" "}
-                        <span className="font-bold text-green-400">
-                          {analyticsData.roi.roi}%
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Revenue:</span>{" "}
-                        <span className="font-bold text-green-400">
-                          ${analyticsData.roi.revenue}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Cost:</span>{" "}
-                        <span className="font-bold text-red-400">
-                          ${analyticsData.roi.totalCost}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Margin:</span>{" "}
-                        <span className="font-bold text-blue-400">
-                          {(analyticsData.roi.profitMargin || 0).toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
+                <div className="bg-green-900/30 border border-green-700/50 p-3 rounded">
+                  <div className="text-xs font-bold text-green-400 mb-2">Won so far</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">${bizMetrics.past.wonRevenue.toLocaleString()}</span></div>
+                    <div><span className="text-gray-400">Deals won:</span> <span className="font-bold text-green-400">{bizMetrics.past.wonCount}</span></div>
+                    <div><span className="text-gray-400">Win rate:</span> <span className="font-bold text-green-400">{bizMetrics.past.winRate === null ? "—" : `${Math.round(bizMetrics.past.winRate * 100)}%`}</span></div>
+                    <div><span className="text-gray-400">Avg time to win:</span> <span className="font-bold text-green-400">{bizMetrics.past.avgCycleDays ? `${bizMetrics.past.avgCycleDays}d` : "—"}</span></div>
                   </div>
-                )}
-
-                {analyticsData.funnel &&
-                  analyticsData.funnel.conversionRates && (
-                    <div className="bg-purple-900/30 border border-purple-700/50 p-3 rounded">
-                      <div className="text-xs font-bold text-purple-400 mb-2">
-                        📊 Conversion Funnel
-                      </div>
-                      <div className="space-y-1 text-xs">
-                        <div>
-                          <span className="text-gray-400">Overall:</span>{" "}
-                          <span className="font-bold text-purple-400">
-                            {(
-                              analyticsData.funnel.conversionRates.overall * 100
-                            ).toFixed(1)}
-                            %
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Open Rate:</span>{" "}
-                          <span className="font-bold text-purple-400">
-                            {(
-                              analyticsData.funnel.conversionRates
-                                .sent_to_open * 100
-                            ).toFixed(1)}
-                            %
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Click Rate:</span>{" "}
-                          <span className="font-bold text-purple-400">
-                            {(
-                              analyticsData.funnel.conversionRates
-                                .open_to_click * 100
-                            ).toFixed(1)}
-                            %
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                {analyticsData.channelPerformance && (
-                  <div className="bg-orange-900/30 border border-orange-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-orange-400 mb-2">
-                      📱 Best Channel
-                    </div>
-                    {Object.entries(analyticsData.channelPerformance).map(
-                      ([channel, data]) =>
-                        data.conversionRate > 0 && (
-                          <div key={channel} className="text-xs">
-                            <span className="text-gray-400 capitalize">
-                              {channel}:
-                            </span>{" "}
-                            <span className="font-bold text-orange-400">
-                              {(data.conversionRate * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                        ),
-                    )}
+                </div>
+                <div className="bg-purple-900/30 border border-purple-700/50 p-3 rounded">
+                  <div className="text-xs font-bold text-purple-400 mb-2">Outreach (last 90 days)</div>
+                  <div className="text-xs text-gray-300">
+                    {bizMetrics.present.funnel[0].count} contacted · {bizMetrics.present.funnel[1].count} replied
+                    {bizMetrics.present.replyRate === null ? "" : ` (${Math.round(bizMetrics.present.replyRate * 100)}% reply rate)`}
                   </div>
-                )}
-
-                {loadingAnalytics && (
-                  <div className="text-center text-sm text-gray-400">
-                    Loading analytics...
+                </div>
+                <div className="bg-orange-900/30 border border-orange-700/50 p-3 rounded">
+                  <div className="text-xs font-bold text-orange-400 mb-2">Return on cost (90 days)</div>
+                  <div className="text-xs text-gray-300">
+                    {bizMetrics.roi.multiple === null
+                      ? "Add what you pay per month in Account to see your return."
+                      : `$${bizMetrics.roi.revenue.toLocaleString()} won on $${bizMetrics.roi.cost.toLocaleString()} cost = ${bizMetrics.roi.multiple}× return`}
+                  </div>
+                </div>
+              </div>
+            )}
+            {analyticsTab === "pipeline" && (
+              <div className="space-y-3">
+                <div className="bg-cyan-900/30 border border-cyan-700/50 p-3 rounded">
+                  <div className="text-xs font-bold text-cyan-400 mb-2">💰 Open pipeline (qualified deals)</div>
+                  <div className="text-lg font-bold text-cyan-300">${bizMetrics.present.openValue.toLocaleString()}</div>
+                  <div className="text-xs text-cyan-400 mt-1">{bizMetrics.present.openCount} deal{bizMetrics.present.openCount === 1 ? "" : "s"} · ${bizMetrics.present.weightedPipeline.toLocaleString()} weighted by stage chance</div>
+                </div>
+                <div className="bg-blue-900/30 border border-blue-700/50 p-3 rounded">
+                  <div className="text-xs font-bold text-blue-400 mb-2">📈 What to expect ({bizMetrics.future.confidence} confidence)</div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {bizMetrics.future.horizons.map((h) => (
+                      <div key={h.days}><div className="text-gray-400">{h.days} days</div><div className="font-bold text-blue-300">${h.expected.toLocaleString()}</div></div>
+                    ))}
+                  </div>
+                </div>
+                {bizMetrics.present.staleCount > 0 && (
+                  <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded text-xs text-yellow-300">
+                    ⚠️ {bizMetrics.present.staleCount} deal{bizMetrics.present.staleCount === 1 ? " has" : "s have"} gone quiet for 2+ weeks (${bizMetrics.present.staleValue.toLocaleString()} at risk).
                   </div>
                 )}
               </div>
             )}
-
-            {analyticsTab === "pipeline" && pipelineData && (
-              <div className="space-y-3">
-                {pipelineData.expectedRevenue && (
-                  <div className="bg-cyan-900/30 border border-cyan-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-cyan-400 mb-2">
-                      💰 Pipeline Value
-                    </div>
-                    <div className="text-lg font-bold text-cyan-300">
-                      $
-                      {(
-                        pipelineData.expectedRevenue.totalExpected / 1000
-                      ).toFixed(0)}
-                      k
-                    </div>
-                    <div className="text-xs text-cyan-400 mt-1">
-                      Expected Revenue
-                    </div>
-                  </div>
-                )}
-
-                {pipelineData.forecast && (
-                  <div className="bg-blue-900/30 border border-blue-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-blue-400 mb-2">
-                      📈 Forecast (90d)
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-gray-400">Forecasted:</span>{" "}
-                        <span className="font-bold text-blue-400">
-                          $
-                          {(
-                            pipelineData.forecast.forecastedRevenue / 1000
-                          ).toFixed(0)}
-                          k
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Cycle:</span>{" "}
-                        <span className="font-bold text-blue-400">
-                          {pipelineData.forecast.avgSalesCycleDays}d
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {pipelineData.suggestions &&
-                  pipelineData.suggestions.length > 0 && (
-                    <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded">
-                      <div className="text-xs font-bold text-yellow-400 mb-2">
-                        💡 Next Steps
-                      </div>
-                      {pipelineData.suggestions
-                        .slice(0, 2)
-                        .map((suggestion, idx) => (
-                          <div
-                            key={idx}
-                            className="text-xs text-yellow-300 mb-1"
-                          >
-                            🎯 {suggestion.action}
-                          </div>
-                        ))}
-                    </div>
-                  )}
-
-                {loadingPipeline && (
-                  <div className="text-center text-sm text-gray-400">
-                    Loading pipeline...
-                  </div>
-                )}
-              </div>
-            )}
-
-            {analyticsTab === "predict" && predictiveData && (
-              <div className="space-y-3">
-                {predictiveData.closureProbability && (
-                  <div className="bg-teal-900/30 border border-teal-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-teal-400 mb-2">
-                      🎯 Close Probability
-                    </div>
-                    <div className="text-lg font-bold text-teal-300">
-                      {(predictiveData.closureProbability * 100).toFixed(0)}%
-                    </div>
-                    <div className="text-xs text-teal-400 mt-1">
-                      Likelihood to win
-                    </div>
-                  </div>
-                )}
-
-                {predictiveData.bestContactTime && (
-                  <div className="bg-pink-900/30 border border-pink-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-pink-400 mb-2">
-                      ⏰ Best Contact Time
-                    </div>
-                    <div className="text-sm text-pink-300 capitalize">
-                      {predictiveData.bestContactTime.recommendedDay}
-                    </div>
-                    <div className="text-xs text-pink-400 mt-1 capitalize">
-                      {predictiveData.bestContactTime.recommendedTime}
-                    </div>
-                  </div>
-                )}
-
-                {predictiveData.priceSensitivity && (
-                  <div className="bg-indigo-900/30 border border-indigo-700/50 p-3 rounded">
-                    <div className="text-xs font-bold text-indigo-400 mb-2">
-                      💵 Price Sensitivity
-                    </div>
-                    <div className="text-sm text-indigo-300">
-                      {predictiveData.priceSensitivity.sensitivityTier}
-                    </div>
-                    <div className="text-xs text-indigo-400 mt-1">
-                      {predictiveData.priceSensitivity.recommendedStrategy.substring(
-                        0,
-                        40,
-                      )}
-                      ...
-                    </div>
-                  </div>
-                )}
-
-                {loadingPredictive && (
-                  <div className="text-center text-sm text-gray-400">
-                    Loading predictions...
-                  </div>
-                )}
-              </div>
-            )}
+            <a href="/business" className="block text-center text-sm text-cyan-300 underline">Open full Business Value report</a>
           </div>
         </div>
       )}

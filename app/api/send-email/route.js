@@ -141,7 +141,8 @@ const encodeSubject = (subject) => {
 const createMimeMessage = (to, subject, body, senderEmail, senderName, replyTo = null, attachments = []) => {
   const boundary = 'boundary_' + Math.random().toString(36).substring(7);
 
-  let message = `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}\r\n`;
+  // If no sender address is configured, omit From: Gmail then uses the signed-in account (never send "From: undefined").
+  let message = senderEmail ? `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}\r\n` : '';
   message += `To: ${to}\r\n`;
   if (replyTo) message += `Reply-To: ${replyTo}\r\n`;
   message += `Subject: ${encodeSubject(subject)}\r\n`;
@@ -258,8 +259,8 @@ export async function POST(request) {
     
     // Setup Gmail
     const oauth2Client = new google.auth.OAuth2(
-      process.env.GMAIL_CLIENT_ID,
-      process.env.GMAIL_CLIENT_SECRET,
+      process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
       'https://developers.google.com/oauthplayground'
     );
     oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
@@ -402,8 +403,8 @@ async function handleFollowUpSend(contact, followUpCount, userId, accessToken, r
   }
 
   const oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
+    process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
     'https://developers.google.com/oauthplayground'
   );
   oauth2Client.setCredentials({ access_token: accessToken });
