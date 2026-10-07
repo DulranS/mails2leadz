@@ -67,7 +67,10 @@ async function gate(request) {
   }
 
   const headers = new Headers(request.headers);
+  headers.delete('x-user-id');
+  headers.delete('x-user-email');
   headers.set('x-user-id', user.uid);
+  headers.set('x-user-email', user.email || '');
   return NextResponse.next({ request: { headers } });
 }
 

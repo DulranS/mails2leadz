@@ -34,5 +34,11 @@ await t('webhook route also works for the signed-in dashboard, still tenant-chec
   assert.ok(passes(await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'alice', phone: '1' } }))));
   assert.equal((await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'bob' } }))).status, 403);
 });
+await t('a client cannot spoof the identity headers the server trusts', async () => {
+  const r = new NextRequest('http://x/api/deals?userId=alice', { headers: { authorization: `Bearer ${tokens.alice}`, 'x-user-id': 'bob', 'x-user-email': 'boss@x.com' } });
+  const out = await proxy(r);
+  assert.equal(out.headers.get('x-middleware-request-x-user-id'), 'alice');
+  assert.equal(out.headers.get('x-middleware-request-x-user-email'), 'alice@x.com');
+});
 await t('health is public', async () => assert.ok(passes(await proxy(req('/api/health')))));
 console.log(`\n${n} passed`);

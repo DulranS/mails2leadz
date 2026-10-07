@@ -24,6 +24,7 @@ export default function AccountPage() {
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState("");
   const [confirmText, setConfirmText] = useState("");
+  const [check, setCheck] = useState(null); // {ok, checks[]} | {error}
 
   useEffect(() => {
     if (!auth) { setReady(true); return; }
@@ -60,6 +61,16 @@ export default function AccountPage() {
       }, { merge: true });
       setMsg({ type: "ok", text: "Saved. The AI and your forecasts now use these." });
     } catch { setMsg({ type: "error", text: "Could not save. Please try again." }); }
+    finally { setBusy(""); }
+  };
+
+  const runCheck = async () => {
+    setBusy("check"); setCheck(null);
+    try {
+      const res = await fetch("/api/system-check");
+      const data = await res.json();
+      setCheck(res.ok ? data : { error: data.error || "The check could not run." });
+    } catch { setCheck({ error: "Could not reach the server." }); }
     finally { setBusy(""); }
   };
 
@@ -146,6 +157,25 @@ export default function AccountPage() {
         </section>
 
         <div className="flex justify-end"><button onClick={save} disabled={busy === "save" || !user} className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50">{busy === "save" ? "Saving…" : "Save changes"}</button></div>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Connection check</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Sending or saving not working? This tests the server, database, Gmail and AI setup and tells you what to fix.</p>
+          <button onClick={runCheck} disabled={busy === "check" || !user} className="mt-3 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">{busy === "check" ? "Checking…" : "Run connection check"}</button>
+          {check?.error && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-300">{check.error}</p>}
+          {check?.checks && (
+            <ul className="mt-3 space-y-2">
+              {check.checks.map((c) => (
+                <li key={c.id} className={`rounded-lg border p-3 text-sm ${c.ok ? "border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/20" : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20"}`}>
+                  <div className="font-medium text-gray-900 dark:text-white">{c.ok ? "✅" : "⚠️"} {c.label}</div>
+                  <div className="text-gray-700 dark:text-gray-300">{c.detail}</div>
+                  {!c.ok && c.fix && <div className="mt-1 text-gray-900 dark:text-white"><b>Fix:</b> {c.fix}</div>}
+                </li>
+              ))}
+              <li className="text-xs text-gray-500">{check.ok ? "Sending should work." : "Fix the red items above, redeploy, and run the check again."}</li>
+            </ul>
+          )}
+        </section>
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white">Your data</h2>

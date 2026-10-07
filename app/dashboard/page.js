@@ -6465,7 +6465,7 @@ function DashboardComponent() {
           setDailyEmailCount(data.dailyCount || CONFIG.MAX_DAILY_EMAILS);
         } else {
           addNotification(
-            `❌ Error: ${data.error || "Failed to send emails"}`,
+            `❌ Error: ${data.error || "Failed to send emails"}${res.status >= 500 ? " — open 👤 Account → Run connection check to see what is misconfigured." : ""}`,
             "error",
           );
         }
@@ -6936,7 +6936,7 @@ function DashboardComponent() {
           );
         } else {
           addNotification(
-            `❌ Error: ${data.error || "Failed to send emails"}`,
+            `❌ Error: ${data.error || "Failed to send emails"}${res.status >= 500 ? " — open 👤 Account → Run connection check to see what is misconfigured." : ""}`,
             "error",
           );
         }

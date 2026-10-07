@@ -12,7 +12,8 @@ Do these in order. The order matters: step 3 before step 4.
 5. **Twilio (if used):** set the SMS-reply and call-status webhook URLs to
    `https://your-domain.com/api/handle-sms-reply?key=WEBHOOK_SECRET` (and `/api/call-webhook?key=...`).
 6. **Google OAuth:** add `https://your-domain.com` as an authorized JavaScript origin, and enable the Gmail API.
-7. **Smoke test as a new customer** (5 minutes):
+7. **Open Account → Run connection check.** Every line should be green except optional ones (AI, SMS webhooks) you do not use. If something is red it tells you exactly what to set.
+8. **Smoke test as a new customer** (5 minutes):
    - Sign in. Open **Account**, fill in "What do you sell?", set a typical deal value, Save.
    - Upload a CSV, send to one address you own.
    - Use the 🤖 button on a lead: review the draft, approve, confirm it arrives.
