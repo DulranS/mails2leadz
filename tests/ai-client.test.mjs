@@ -36,4 +36,56 @@ await t('daily cap blocks BEFORE spending money; identical request is served fro
   await assert.rejects(callAI({ uid: 'cap', feature: 'f', system: 's', prompt: 'three' }), (e) => e.code === 'AI_DAILY_LIMIT' && e.status === 429);
   assert.equal(calls, 2);                                   // third never reached the provider
 });
+
+await t('DeepSeek is the default provider when its key is set; others become backups; AI_PROVIDER can override', () => {
+  for (const k of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
+  process.env.DEEPSEEK_API_KEY = 'd'; process.env.OPENAI_API_KEY = 'o';
+  let c = aiConfig();
+  assert.equal(c.provider, 'deepseek');
+  assert.equal(c.models.fast, 'deepseek-flash');
+  assert.deepEqual(c.providers.map((p) => p.name), ['deepseek', 'openai']);
+  process.env.AI_PROVIDER = 'openai';
+  assert.equal(aiConfig().provider, 'openai');
+  delete process.env.AI_PROVIDER; delete process.env.OPENAI_API_KEY;
+});
+await t('DeepSeek call: thinking off, JSON mode on, cached input billed at the cache price', async () => {
+  for (const k of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
+  process.env.DEEPSEEK_API_KEY = 'd'; process.env.AI_DAILY_CALL_LIMIT = '50';
+  let sent;
+  globalThis.fetch = async (url, init) => { sent = { url, body: JSON.parse(init.body) }; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"ok":1}' } }], usage: { prompt_tokens: 1000, prompt_cache_hit_tokens: 800, completion_tokens: 100 } }) }; };
+  const r = await callAI({ uid: 'ds', feature: 'f', system: 's', prompt: 'p-ds' });
+  assert.equal(sent.url, 'https://api.deepseek.com/chat/completions');
+  assert.deepEqual(sent.body.thinking, { type: 'disabled' });
+  assert.deepEqual(sent.body.response_format, { type: 'json_object' });
+  assert.equal(r.model, 'deepseek-flash');
+  // 200 miss * 0.3 + 800 hit * 0.006 + 100 out * 1.2 = 60 + 4.8 + 120 = 184.8 per 1M
+  assert.ok(Math.abs(r.costUsd - 184.8 / 1e6) < 1e-9, String(r.costUsd));
+});
+await t('falls back to the next provider when the first one is down', async () => {
+  for (const k of ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
+  process.env.DEEPSEEK_API_KEY = 'd'; process.env.OPENAI_API_KEY = 'o';
+  const hosts = [];
+  globalThis.fetch = async (url) => {
+    hosts.push(new URL(url).host);
+    if (url.includes('deepseek')) return { ok: false, status: 503, json: async () => ({ error: { message: 'busy' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"ok":2}' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }) };
+  };
+  const r = await callAI({ uid: 'fb', feature: 'f', system: 's', prompt: 'p-fb' });
+  assert.deepEqual(hosts, ['api.deepseek.com', 'api.openai.com']);
+  assert.equal(r.model, 'gpt-4o-mini');
+  assert.equal(r.data.ok, 2);
+});
+await t('retries once without "thinking" if the model rejects the field', async () => {
+  for (const k of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
+  process.env.DEEPSEEK_API_KEY = 'd';
+  const bodies = [];
+  globalThis.fetch = async (_u, init) => {
+    const b = JSON.parse(init.body); bodies.push(b);
+    if (b.thinking) return { ok: false, status: 400, json: async () => ({ error: { message: 'Unknown parameter: thinking' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"ok":3}' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }) };
+  };
+  const r = await callAI({ uid: 'th', feature: 'f', system: 's', prompt: 'p-th' });
+  assert.equal(bodies.length, 2); assert.equal('thinking' in bodies[1], false);
+  assert.equal(r.data.ok, 3);
+});
 console.log(`\n${n} passed`);

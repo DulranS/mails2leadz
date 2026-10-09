@@ -16,7 +16,7 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 export default function AccountPage() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional" });
+  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
@@ -130,6 +130,7 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="of">What do you sell? <span className="text-red-500">*</span></label><textarea id="of" rows={2} placeholder="e.g. Bookkeeping and payroll for restaurants" className={field} value={profile.offer} onChange={(e) => setProfile({ ...profile, offer: e.target.value })} /></div>
             <div><label className={label} htmlFor="vp">Main benefit to customers</label><input id="vp" placeholder="e.g. Saves 5 hours a week and avoids tax surprises" className={field} value={profile.valueProp} onChange={(e) => setProfile({ ...profile, valueProp: e.target.value })} /></div>
             <div><label className={label} htmlFor="au">Who do you help?</label><input id="au" placeholder="e.g. Independent restaurants with 5–30 staff" className={field} value={profile.audience} onChange={(e) => setProfile({ ...profile, audience: e.target.value })} /></div>
+            <div><label className={label} htmlFor="ph">Your phone number <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="ph" type="tel" inputMode="tel" placeholder="e.g. +94 77 123 4567" className={field} value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /><p className="text-xs text-gray-500 mt-1">Only used to connect "bridge" calls to you. It is never put into emails.</p></div>
             <div><label className={label} htmlFor="tn">Tone</label>
               <select id="tn" className={field} value={profile.tone} onChange={(e) => setProfile({ ...profile, tone: e.target.value })}>
                 <option>friendly and professional</option><option>warm and casual</option><option>direct and concise</option><option>formal</option>

@@ -4,6 +4,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
+import { headerSafe } from '../../../lib/server/route-helpers.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 export const maxDuration = 60;
@@ -142,10 +143,11 @@ const createMimeMessage = (to, subject, body, senderEmail, senderName, replyTo =
   const boundary = 'boundary_' + Math.random().toString(36).substring(7);
 
   // If no sender address is configured, omit From: Gmail then uses the signed-in account (never send "From: undefined").
-  let message = senderEmail ? `From: ${senderName ? `${senderName} <${senderEmail}>` : senderEmail}\r\n` : '';
-  message += `To: ${to}\r\n`;
-  if (replyTo) message += `Reply-To: ${replyTo}\r\n`;
-  message += `Subject: ${encodeSubject(subject)}\r\n`;
+  // Every header value is forced onto one line so a pasted/AI-written value can never add extra headers.
+  let message = senderEmail ? `From: ${senderName ? `${headerSafe(senderName)} <${headerSafe(senderEmail)}>` : headerSafe(senderEmail)}\r\n` : '';
+  message += `To: ${headerSafe(to)}\r\n`;
+  if (replyTo) message += `Reply-To: ${headerSafe(replyTo)}\r\n`;
+  message += `Subject: ${encodeSubject(headerSafe(subject))}\r\n`;
   message += `MIME-Version: 1.0\r\n`;
 
   if (attachments.length > 0) {

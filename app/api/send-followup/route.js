@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
+import { headerSafe, pickOriginal } from '../../../lib/server/route-helpers.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -13,8 +14,7 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
   'NEXT_PUBLIC_FIREBASE_APP_ID',
   'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GMAIL_SENDER_EMAIL'
+  'GOOGLE_CLIENT_SECRET'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -57,15 +57,15 @@ const CONFIG = {
 const FOLLOW_UP_TEMPLATES = [
   {
     subject: 'Quick question for {{business_name}}',
-    body: `Hi {{business_name}},\n\nJust circling back—did my note about outsourced dev & ops support land at a bad time?\n\nNo pressure at all, but if you're ever swamped with web, automation, or backend work and need a reliable extra hand, we're ready to help.\n\nBest,\n{{sender_name}}`
+    body: `Hi {{business_name}},\n\nJust circling back in case my last note got buried. Is this something you'd like to talk about, or is the timing not right?\n\nEither answer is fine, and a one-word reply is plenty.\n\nBest,\n{{sender_name}}`
   },
   {
-    subject: '{{business_name}}, a quick offer (no strings)',
-    body: `Hi again,\n\nI noticed you haven't had a chance to reply—totally understand!\n\nTo make this zero-risk: I'll audit one of your digital workflows for free and send 2–3 actionable automation ideas you can implement immediately.\n\nInterested? Hit "Yes" or reply with a workflow you'd like optimized.\n\nCheers,\n{{sender_name}}`
+    subject: '{{business_name}}, still interested?',
+    body: `Hi {{business_name}},\n\nI know inboxes get busy, so I'll keep this short. If a quick call or a few more details would help, just tell me what would be most useful and I'll send it over.\n\nThanks,\n{{sender_name}}`
   },
   {
     subject: 'Closing the loop',
-    body: `Hi {{business_name}},\n\nI'll stop emailing after this one!\n\nJust wanted to say: if outsourcing ever becomes a priority, we're here. Many of our clients started with a tiny task and now work with us monthly.\n\nEither way, keep crushing it!\n\n— {{sender_name}}`
+    body: `Hi {{business_name}},\n\nI'll stop here so I don't clutter your inbox. If things change, or you'd like to pick this up later, just reply and I'll be happy to help.\n\nWishing you all the best,\n{{sender_name}}`
   }
 ];
 
@@ -91,7 +91,9 @@ const encodeSubject = (subject) => {
 };
 
 const createMimeMessage = ({ from, to, subject, body, attachments = [] }) => {
-  let message = `From: ${from}\r\nTo: ${to}\r\nSubject: ${encodeSubject(subject)}\r\nMIME-Version: 1.0\r\n`;
+  // From is optional: when no sender address is configured Gmail uses the signed-in account.
+  // Every header value is forced onto one line (an AI/user-written subject must never be able to add headers).
+  let message = `${from ? `From: ${headerSafe(from)}\r\n` : ''}To: ${headerSafe(to)}\r\nSubject: ${encodeSubject(headerSafe(subject))}\r\nMIME-Version: 1.0\r\n`;
 
   if (attachments.length > 0) {
     const boundary = 'boundary_' + Math.random().toString(36).substr(2, 16);
@@ -141,7 +143,7 @@ export async function POST(request) {
       );
     }
     
-    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !(process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET) || !process.env.GMAIL_SENDER_EMAIL) {
+    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !(process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET)) {
       return NextResponse.json(
         { 
           error: 'Google/Gmail configuration missing',
@@ -152,7 +154,18 @@ export async function POST(request) {
       );
     }
     
-    const { email, accessToken, userId, senderName, attachments = [], customTemplates = null } = await request.json();
+    const payload = await request.json();
+    const { accessToken, senderName, attachments = [] } = payload;
+    const email = String(payload.email || '').trim().toLowerCase();
+    // The verified user (set by proxy.js) wins over anything in the body.
+    const userId = request.headers.get('x-user-id') || payload.userId;
+    // Approved AI/custom wording: plain strings only, bounded size.
+    const customTemplates = Array.isArray(payload.customTemplates)
+      ? payload.customTemplates
+          .filter((t) => t && typeof t.subject === 'string' && typeof t.body === 'string')
+          .slice(0, 3)
+          .map((t) => ({ subject: t.subject.slice(0, 200), body: t.body.slice(0, 5000) }))
+      : null;
     
     if (!email || !accessToken || !userId) {
       return NextResponse.json(
@@ -175,10 +188,12 @@ export async function POST(request) {
       );
     }
     
-    const existingDoc = existingSnapshot.docs[0];
-    const existingData = existingDoc.data();
+    // Several rows can exist for one lead (re-sends): use the one that carries the follow-up counter.
+    const picked = pickOriginal(existingSnapshot.docs);
+    const existingDoc = picked.doc;
+    const existingData = picked.data;
     
-    if (existingData.replied) {
+    if (existingSnapshot.docs.some((d) => d.data().replied === true)) {
       return NextResponse.json(
         { error: 'Lead has already replied. Loop closed.', code: 'ALREADY_REPLIED' },
         { status: 400, headers }
@@ -239,7 +254,7 @@ export async function POST(request) {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
     const rawMessage = createMimeMessage({
-      from: `${senderName || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>`,
+      from: process.env.GMAIL_SENDER_EMAIL ? `${headerSafe(senderName) || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>` : '',
       to: email,
       subject,
       body,
@@ -269,9 +284,10 @@ export async function POST(request) {
     // Track company followup
     try {
       const domain = extractDomainFromEmail(email);
-      await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/track-company`, {
+      const authHeader = request.headers.get('authorization');
+      await fetch(`${new URL(request.url).origin}/api/track-company`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) },
         body: JSON.stringify({
           userId,
           companyName: existingData.businessName || 'Unknown Company',

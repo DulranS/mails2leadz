@@ -67,8 +67,8 @@ export async function GET(request) {
 
   // 3. AI
   const ai = aiConfig();
-  add('ai', 'AI drafting', !!ai.provider, ai.provider ? `Using ${ai.provider} (${ai.models.fast}).` : 'No AI key configured.',
-    'Set OPENAI_API_KEY (or ANTHROPIC_API_KEY), then redeploy. Everything except AI drafting works without it.');
+  add('ai', 'AI drafting', !!ai.provider, ai.provider ? `Using ${ai.provider} (${ai.models.fast})${ai.providers.length > 1 ? `, with ${ai.providers.slice(1).map((p) => p.name).join(' / ')} as backup` : ''}.` : 'No AI key configured.',
+    'Set DEEPSEEK_API_KEY (recommended; or OPENAI_API_KEY / ANTHROPIC_API_KEY), then redeploy. Everything except AI drafting works without it.');
 
   // 4. Webhooks (only matters if SMS/calls are used)
   add('webhooks', 'SMS/call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',

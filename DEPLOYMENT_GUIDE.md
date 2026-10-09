@@ -17,12 +17,25 @@ Do these in order. The order matters: step 3 before step 4.
    - Sign in. Open **Account**, fill in "What do you sell?", set a typical deal value, Save.
    - Upload a CSV, send to one address you own.
    - Use the 🤖 button on a lead: review the draft, approve, confirm it arrives.
+   - When a follow-up is due, press **✨ AI draft** in the follow-up queue, edit, approve; open a replied lead's 💬 Thread and press **✨ Analyze reply**.
    - Open **Business Value**: your deal appears; set its value; mark it Won; see revenue and forecast update.
    - **Account > Download my data** works.
 
+## AI (DeepSeek)
+- Create a key at platform.deepseek.com and set `DEEPSEEK_API_KEY`. That is all: it becomes the default provider.
+- The default models are `deepseek-flash` (drafts, follow-ups, reply analysis) and `deepseek-v4-pro` (not used unless a feature asks for the smart tier).
+  Model names change over time: if Account → Run connection check or a draft says the model is unknown, set `AI_MODEL_FAST_DEEPSEEK` to the current name from your DeepSeek console. No code change needed.
+- Optional backup: also set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. If DeepSeek is down, requests fall back to it automatically.
+- The app turns DeepSeek "thinking" mode off for drafting (it is on by default, slower and costlier).
+
+## Phone calls (only if you use Twilio)
+- Set `NEXT_PUBLIC_BASE_URL` (your https domain) and `WEBHOOK_SECRET`; the app adds `?key=` to the call-status callback itself.
+- Calls are **not recorded** unless you set `TWILIO_RECORD_CALLS=true` (recording third parties can need their consent where you operate).
+- "Bridge" calls ring the **customer's own number** from Account → Your business; without it the call is refused.
+
 ## Costs to expect
-- AI: with the default cheap model one draft costs a fraction of a cent. Each customer is capped by
-  `AI_DAILY_CALL_LIMIT` and `AI_MONTHLY_BUDGET_USD`. Costs shown in the app are estimates.
+- AI: with DeepSeek one draft costs a fraction of a cent (the app budgets at DeepSeek's peak-hour price to stay safe).
+  Each customer is capped by `AI_DAILY_CALL_LIMIT` and `AI_MONTHLY_BUDGET_USD`. Costs shown in the app are estimates.
 - Gmail sending is limited by Google (consumer accounts roughly 500/day); the app's default daily cap respects this.
 
 ## Before you give the code to anyone

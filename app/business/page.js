@@ -55,6 +55,7 @@ export default function BusinessValuePage() {
   const [raw, setRaw] = useState({ deals: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
+  const [coach, setCoach] = useState(null); // { loading } | { error } | { result }
 
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
@@ -139,6 +140,27 @@ export default function BusinessValuePage() {
     finally { setSaving(""); }
   };
 
+
+  // AI "pipeline coach": only aggregate numbers leave the browser (no names, emails or message text).
+  const askCoach = async () => {
+    setCoach({ loading: true });
+    try {
+      const facts = {
+        sent: raw.outreach.sent, replied: raw.outreach.replied, replyRate: m.present.replyRate,
+        prospects: m.present.prospectCount, openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline,
+        staleCount: m.present.staleCount, staleValue: m.present.staleValue, wonCount: m.past.wonCount, lostCount: m.past.lostCount,
+        winRate: m.past.winRate, avgCycleDays: m.past.avgCycleDays, revenue90: m.roi.revenue, cost90: m.roi.cost,
+        forecast30: m.future.horizons[0].expected, forecast90: m.future.horizons[2].expected, confidence: m.future.confidence,
+        monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, wonThisMonth: m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0,
+        unconverted: raw.unconverted.length, dueFollowUps: raw.dueFollowUps,
+      };
+      const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) { setCoach({ error: data.error || "Could not create the summary right now." }); return; }
+      setCoach({ result: data });
+    } catch { setCoach({ error: "Could not reach the server." }); }
+  };
+
   if (authReady && !user) {
     return (
       <DashboardLayout title="Business Value">
@@ -189,6 +211,41 @@ export default function BusinessValuePage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </Card>
+        )}
+
+        {/* AI COACH */}
+        {!loading && (
+          <Card title="Explain my numbers (AI)">
+            {!coach && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <p className="text-sm text-gray-600 dark:text-gray-300 flex-1">Get a plain-language read of your pipeline and three things to do next. Only totals are sent to the AI, never names or emails.</p>
+                <button onClick={askCoach} className="shrink-0 text-sm px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium">✨ Explain my numbers</button>
+              </div>
+            )}
+            {coach?.loading && <p className="text-sm text-gray-600 dark:text-gray-300">Reading your numbers…</p>}
+            {coach?.error && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <p role="alert" className="text-sm text-red-600 dark:text-red-300 flex-1">{coach.error}</p>
+                <button onClick={askCoach} className="shrink-0 text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Try again</button>
+              </div>
+            )}
+            {coach?.result && (
+              <div className="space-y-3">
+                <p className="text-base font-semibold text-gray-900 dark:text-white">{coach.result.headline}</p>
+                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                  {coach.result.working.length > 0 && <div><div className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Going well</div><ul className="list-disc pl-5 space-y-1 text-gray-700 dark:text-gray-200">{coach.result.working.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+                  {coach.result.risks.length > 0 && <div><div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Needs attention</div><ul className="list-disc pl-5 space-y-1 text-gray-700 dark:text-gray-200">{coach.result.risks.map((x) => <li key={x}>{x}</li>)}</ul></div>}
+                </div>
+                <ol className="space-y-2">{coach.result.actions.map((a, i) => (
+                  <li key={a.title} className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-3"><div className="text-sm font-semibold text-gray-900 dark:text-white">{i + 1}. {a.title}</div><div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{a.why}</div></li>
+                ))}</ol>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">AI summary of the numbers above. It can be wrong, so check it against your own judgement.</p>
+                  <button onClick={askCoach} className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Refresh</button>
+                </div>
+              </div>
             )}
           </Card>
         )}

@@ -61,6 +61,19 @@ import { selectUnreadCount } from "../../lib/redux/slices/repliesSlice";
 
 // Import from new modules
 import { CONFIG, generateId } from "../../lib/dashboard-config.js";
+import {
+  DEFAULT_TEMPLATE_A,
+  DEFAULT_TEMPLATE_B,
+  DEFAULT_FOLLOW_UP_TEMPLATES,
+  POST_CLOSE_TEMPLATES,
+  POST_SALE_STAGES,
+  DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES,
+  DEFAULT_WHATSAPP_TEMPLATE,
+  DEFAULT_SMS_TEMPLATE,
+  DEFAULT_INSTAGRAM_TEMPLATE,
+  DEFAULT_TWITTER_TEMPLATE,
+  DEFAULT_LINKEDIN_TEMPLATE,
+} from "../../lib/default-templates.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
@@ -153,344 +166,7 @@ const firebase = initializeFirebase();
 const db = firebase?.db;
 const auth = firebase?.auth;
 
-// ============================================================================
-// EMAIL TEMPLATES - YOUR ACTUAL PITCH
-// ============================================================================
-const DEFAULT_TEMPLATE_A = {
-  id: "template_a",
-  name: "Initial Outreach",
-  subject: "Quick question for {{business_name}}",
-  body: `Hi {{business_name}}, 😊👋🏻
-I hope you're doing well.
-My name is {{sender_name}}. I run Syndicate Solutions, a Sri Lanka–based mini agency supporting
-small to mid-sized agencies and businesses with reliable execution across web, software,
-AI automation, and ongoing digital operations.
-We typically work as a white-label or outsourced partner when teams need:
-• extra delivery capacity
-• fast turnarounds without hiring
-• ongoing technical and digital support
-I'm reaching out to ask – do you ever use external support when workload or deadlines increase?
-If helpful, I'm open to starting with a small task or short contract to build trust before
-discussing anything larger.
-You can review my work here:
-Portfolio: https://syndicatesolutions.vercel.app/
-LinkedIn: https://www.linkedin.com/in/dulran-samarasinghe-13941b175/
-If it makes sense, you can book a short 15-minute call:
-https://cal.com/syndicate-solutions/15min
-You can contact me on Whatsapp - 0741143323
-You can email me at - syndicatesoftwaresolutions@gmail.com
-Otherwise, happy to continue the conversation over email.
-Best regards,
-{{sender_name}}
-Founder – Syndicate Solutions
-`,
-  channel: "email",
-  enabled: true,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-const DEFAULT_TEMPLATE_B = {
-  id: "template_b",
-  name: "Alternative Outreach",
-  subject: "{{business_name}}, quick question",
-  body: `Hi {{business_name}},
-I noticed your company and wanted to reach out.
-We help businesses like yours with web development, AI automation, and digital operations.
-Would you be open to a quick 15-minute chat to see if we can help?
-No pressure at all.
-Best,
-{{sender_name}}
-Syndicate Solutions
-`,
-  channel: "email",
-  enabled: true,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-};
-
-// ============================================================================
-// FOLLOW-UP TEMPLATES
-// ============================================================================
-const DEFAULT_FOLLOW_UP_TEMPLATES = [
-  {
-    id: "followup_1",
-    name: "Follow-Up 1 (Day 2)",
-    channel: "email",
-    enabled: true,
-    delayDays: 2,
-    subject: "Quick question for {{business_name}}",
-    body: `Hi {{business_name}},
-Just circling back—did my note about outsourced dev & ops support land at a bad time?
-No pressure at all, but if you're ever swamped with web, automation, or backend work and need a reliable extra hand (especially for white-label or fast-turnaround needs), we're ready to help.
-Even a 1-hour task is a great way to test the waters.
-Either way, wishing you a productive week!
-Best,
-{{sender_name}}
-Founder – Syndicate Solutions
-WhatsApp: 0741143323
-`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "followup_2",
-    name: "Follow-Up 2 (Day 5)",
-    channel: "email",
-    enabled: true,
-    delayDays: 5,
-    subject: "{{business_name}}, a quick offer (no strings)",
-    body: `Hi again,
-I noticed you haven't had a chance to reply—totally understand!
-To make this zero-risk: **I'll audit one of your digital workflows (e.g., lead capture, client onboarding, internal tooling) for free** and send 2–3 actionable automation ideas you can implement immediately—even if you never work with us.
-Zero sales pitch. Just value.
-Interested? Hit "Yes" or reply with a workflow you'd like optimized.
-Cheers,
-{{sender_name}}
-Portfolio: https://syndicatesolutions.vercel.app/
-Book a call: https://cal.com/syndicate-solutions/15min`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "followup_3",
-    name: "Breakup Email (Day 10)",
-    channel: "email",
-    enabled: true,
-    delayDays: 10,
-    subject: "Closing the loop",
-    body: `Hi {{business_name}},
-I'll stop emailing after this one! 😅
-Just wanted to say: if outsourcing ever becomes a priority—whether for web dev, AI tools, or ongoing ops—we're here. Many of our clients started with a tiny $100 task and now work with us monthly.
-If now's not the time, no worries! I'll circle back in a few months.
-Either way, keep crushing it!
-— {{sender_name}}
-WhatsApp: 0741143323
-`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-// ============================================================================
-// POST-CLOSE NURTURE SEQUENCES (Delivery & Retention)
-// ============================================================================
-const POST_CLOSE_TEMPLATES = [
-  {
-    id: "onboarding",
-    name: "Onboarding Welcome (Day 1)",
-    channel: "email",
-    enabled: true,
-    delayDays: 1,
-    subject: "Welcome aboard! Let's get started 🚀",
-    body: `Hi {{business_name}},
-
-Welcome to Syndicate Solutions! We're thrilled to have you on board.
-
-**Next Steps:**
-1. We'll schedule our kickoff call within 24 hours
-2. You'll receive access to our project portal
-3. Our team will review your requirements and create a timeline
-
-**What We Need From You:**
-- Any existing assets or documentation
-- Access to relevant accounts/tools
-- Your preferred communication channels
-
-**Our Commitment:**
-- Weekly progress updates
-- Transparent communication
-- Quality-first delivery
-
-If you have any questions before we start, just reply to this email or reach me on WhatsApp (0741143323).
-
-Looking forward to working together!
-
-Best,
-{{sender_name}}
-Founder – Syndicate Solutions`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "delivery",
-    name: "Delivery Milestone Check-in (Week 1)",
-    channel: "email",
-    enabled: true,
-    delayDays: 7,
-    subject: "Week 1 Progress Update ✅",
-    body: `Hi {{business_name}},
-
-I wanted to check in on your project's progress.
-
-**This Week's Accomplishments:**
-- [Project-specific updates will be added here]
-
-**Upcoming Milestones:**
-- [Next deliverables and timeline]
-
-**How Are We Doing?**
-Please take 30 seconds to rate our progress:
-1. Communication: 1-5
-2. Quality: 1-5
-3. Timeliness: 1-5
-
-Your feedback helps us continuously improve.
-
-**Need Anything?**
-If you have questions or need adjustments, just let me know.
-
-Best,
-{{sender_name}}`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "upsell",
-    name: "Retention & Upsell Opportunity (Day 30)",
-    channel: "email",
-    enabled: true,
-    delayDays: 30,
-    subject: "Scaling opportunities for {{business_name}} 📈",
-    body: `Hi {{business_name}},
-
-It's been a month since we started working together—hope everything is going well!
-
-**Quick Review:**
-- What's working great?
-- What could we improve?
-- Any new challenges on your horizon?
-
-**Growth Opportunities:**
-Based on our work together, I see some areas where we could help you scale:
-1. [Specific opportunity 1]
-2. [Specific opportunity 2]
-3. [Specific opportunity 3]
-
-**Special Offer:**
-As a valued client, you get priority access to:
-- Extended support hours
-- New feature beta access
-- Preferred pricing on additional projects
-
-Would you be open to a 15-minute call to discuss these opportunities?
-
-No pressure—just exploring how we can continue adding value.
-
-Best,
-{{sender_name}}
-Founder – Syndicate Solutions
-WhatsApp: 0741143323`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "retention",
-    name: "Quarterly Business Review (Day 90)",
-    channel: "email",
-    enabled: true,
-    delayDays: 90,
-    subject: "Quarterly Review: Maximizing Our Partnership 💎",
-    body: `Hi {{business_name}},
-
-It's been 3 months since we started our partnership. Let's review and optimize!
-
-**What We've Achieved Together:**
-- [Key metrics and accomplishments]
-- [ROI summary]
-- [Project completions]
-
-**Strategic Planning for Next Quarter:**
-- Your business goals
-- How we can support them
-- New initiatives to explore
-
-**Feedback Session:**
-I'd love to schedule a 30-minute review call to:
-1. Discuss what's working
-2. Identify improvement areas
-3. Plan for the next quarter
-
-**Exclusive Client Benefits:**
-- Quarterly strategy sessions
-- Priority support
-- Early access to new services
-
-When would be a good time for this review?
-
-Best,
-{{sender_name}}
-Founder – Syndicate Solutions`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-// ============================================================================
-// WHATSAPP FOLLOW-UP TEMPLATES (PHASE 3)
-// ============================================================================
-const DEFAULT_WHATSAPP_FOLLOW_UP_TEMPLATES = [
-  {
-    id: "whatsapp_followup_1",
-    name: "WhatsApp Follow-Up 1 (Day 3)",
-    channel: "whatsapp",
-    enabled: true,
-    delayDays: 3,
-    body: `Hi {{business_name}} 👋
-Just following up on my previous message. Did you get a chance to think about it?
-No pressure at all—just wanted to check if you're still interested in discussing how we can help with your digital needs.
-Best,
-{{sender_name}}`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "whatsapp_followup_2",
-    name: "WhatsApp Follow-Up 2 (Day 7)",
-    channel: "whatsapp",
-    enabled: true,
-    delayDays: 7,
-    body: `Hi {{business_name}} 👋
-Hope you're doing well!
-I wanted to share a quick idea that might help with your business—no strings attached.
-Would you be open to a quick chat about it?
-Cheers,
-{{sender_name}}`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-// ============================================================================
-// MULTI-CHANNEL TEMPLATES
-// ============================================================================
-const DEFAULT_WHATSAPP_TEMPLATE = `Hi {{business_name}} 👋😊
-Hope you're doing well.
-I'm {{sender_name}} from Sri Lanka – I run a small digital mini-agency supporting businesses with websites, content, and AI automation.
-Quick question:
-Are you currently working on anything digital that's taking too much time or not delivering the results you want?
-If yes, I'd be happy to share a quick idea – no pressure at all.`;
-
-const DEFAULT_SMS_TEMPLATE = `Hi {{business_name}} 👋
-This is {{sender_name}} from Syndicate Solutions.
-Quick question – are you currently working on any digital work that's delayed or not giving results?
-Reply YES or NO.`;
-
-const DEFAULT_INSTAGRAM_TEMPLATE = `Hi {{business_name}} 👋
-I run Syndicate Solutions – we help businesses like yours with web, AI, and digital ops.
-Would you be open to a quick chat about how we can help?
-No pressure at all.`;
-
-const DEFAULT_TWITTER_TEMPLATE = `Hi {{business_name}} 👋
-I run Syndicate Solutions – we help businesses like yours with web, AI, and digital ops.
-Would you be open to a quick chat?`;
-
-const DEFAULT_LINKEDIN_TEMPLATE = `Hi {{business_name}},
-I came across your company and was impressed by your work.
-We help businesses like yours with web development, AI automation, and digital operations.
-Would you be open to connecting and exploring potential collaboration?
-Best,
-{{sender_name}}`;
+// Default wording lives in lib/default-templates.js (neutral starter text, nothing specific to any business).
 
 // ============================================================================
 // MAIN DASHBOARD COMPONENT
@@ -832,6 +508,8 @@ function DashboardComponent() {
   const [researchResults, setResearchResults] = useState({});
   const [showResearchModal, setShowResearchModal] = useState(false);
   const [aiDraft, setAiDraft] = useState(null); // { contact, subject, body, angle, reasons, busy }
+  const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy }
+  const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
   const [predictiveScores, setPredictiveScores] = useState({});
   const [sentimentAnalysis, setSentimentAnalysis] = useState({});
@@ -1933,10 +1611,10 @@ function DashboardComponent() {
           replyRate > 15 ? "positive" : replyRate > 8 ? "neutral" : "negative",
         description:
           replyRate > 15
-            ? "Above industry average"
+            ? "Strong reply rate"
             : replyRate > 8
               ? "Average performance"
-              : "Below industry average",
+              : "Low: try a clearer question or offer",
       },
       {
         type: "metric",
@@ -4401,7 +4079,9 @@ function DashboardComponent() {
         setPipelineValue((prev) => prev + dealValue);
       }
 
-      if (normalizedStage === "closed_won") {
+      // Reminders are created only when the stage really changes (re-saving "Won" must not stack duplicates).
+      const stageChanged = !existing || normalizeStage(existing.stage) !== normalizedStage;
+      if (stageChanged && normalizedStage === "closed_won") {
         addNotification(`🎉 Deal won: ${email}`, "success");
         const onboardingTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "onboarding");
         if (onboardingTemplate) {
@@ -4417,7 +4097,7 @@ function DashboardComponent() {
             ).toISOString(),
           });
         }
-      } else if (normalizedStage === "delivery") {
+      } else if (stageChanged && normalizedStage === "delivery") {
         addNotification(`🚀 Delivery started for ${email}`, "info");
         const deliveryTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "delivery");
         if (deliveryTemplate) {
@@ -4433,7 +4113,7 @@ function DashboardComponent() {
             ).toISOString(),
           });
         }
-      } else if (normalizedStage === "retention") {
+      } else if (stageChanged && normalizedStage === "retention") {
         addNotification(`💎 Retention phase for ${email}`, "success");
         const upsellTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "upsell");
         if (upsellTemplate) {
@@ -4449,7 +4129,7 @@ function DashboardComponent() {
             ).toISOString(),
           });
         }
-      } else if (normalizedStage === "expansion") {
+      } else if (stageChanged && normalizedStage === "expansion") {
         addNotification(`📈 Expansion opportunity: ${email}`, "success");
         const retentionTemplate = POST_CLOSE_TEMPLATES.find((t) => t.id === "retention");
         if (retentionTemplate) {
@@ -5257,6 +4937,153 @@ function DashboardComponent() {
   };
 
   // ============================================================================
+  // AI FOLLOW-UP (draft -> you edit -> you approve -> normal follow-up send, with all server limits)
+  // ============================================================================
+  const handleAiFollowUpDraft = async (task) => {
+    if (!user?.uid || !task?.leadEmail) return;
+    const isPostSale = POST_SALE_STAGES.includes(task.followUpStage);
+    setStatusType("info");
+    setStatus(`✨ Drafting a follow-up for ${task.leadName || task.leadEmail}...`);
+    try {
+      const res = await fetch("/api/ai-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: task.leadEmail,
+          senderName,
+          ...(isPostSale
+            ? { purpose: task.followUpStage, businessName: sentLeads.find((l) => l.email === task.leadEmail)?.businessName || "" }
+            : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setStatus("");
+      if (!res.ok || !data.success) {
+        const soft = ["NO_PROFILE", "ALREADY_REPLIED", "MAX_FOLLOWUPS_REACHED", "AI_DAILY_LIMIT", "AI_BUDGET"].includes(data.code);
+        addNotification(data.error || "Could not create a follow-up draft", soft ? "warning" : "error", 8000);
+        return;
+      }
+      setAiFollowUp({
+        task,
+        email: task.leadEmail,
+        business: task.leadName || task.companyName || task.leadEmail,
+        subject: data.draft.subject,
+        body: data.draft.body,
+        number: data.followUpNumber,
+        isFinal: !!data.isFinal,
+        postSale: !!data.postSale,
+        busy: false,
+      });
+    } catch (err) {
+      console.error("AI follow-up draft error:", err);
+      setStatus("");
+      addNotification("Could not create a follow-up draft right now", "error");
+    }
+  };
+
+  const sendApprovedAiFollowUp = async () => {
+    if (!aiFollowUp || aiFollowUp.busy) return;
+    const { task, email, subject, body } = aiFollowUp;
+    if (!subject.trim() || !body.trim()) {
+      addNotification("Subject and message can't be empty", "warning");
+      return;
+    }
+    setAiFollowUp((d) => ({ ...d, busy: true }));
+    try {
+      const token = await requestGmailToken();
+      if (!token) throw new Error("Gmail permission was not granted");
+      const res = await retryFetch("/api/send-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          accessToken: token,
+          userId: user.uid,
+          senderName,
+          customTemplates: [{ subject: subject.trim(), body: body.trim() }],
+        }),
+      }, 2);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Follow-up failed");
+      if (task?.id) {
+        await completeFollowUpTask(user.uid, task.id, { completedBy: user.email, method: "email" }).catch(() => {});
+      }
+      invalidateCache("sent_emails");
+      addNotification(`✅ Follow-up #${data.followUpCount} sent to ${email}${data.loopClosed ? " (last one: loop closed)" : ""}`, "success", 5000);
+      setAiFollowUp(null);
+      await refreshAllData();
+    } catch (err) {
+      addNotification(`❌ Not sent: ${err.message || err}`, "error", 7000);
+      setAiFollowUp((d) => (d ? { ...d, busy: false } : d));
+    }
+  };
+
+  // Customer check-ins are personal notes to someone who already bought: open them in the owner's own
+  // email app (they edit and send from their own address), and tick the reminder off.
+  const openPostSaleDraft = async () => {
+    if (!aiFollowUp) return;
+    const { task, email, subject, body } = aiFollowUp;
+    window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, "_blank");
+    if (task?.id) {
+      await completeFollowUpTask(user.uid, task.id, { completedBy: user.email, method: "email_manual" }).catch(() => {});
+      const tasks = await loadFollowUpTasks(user.uid).catch(() => null);
+      if (tasks) setFollowUpTasks(tasks);
+    }
+    setAiFollowUp(null);
+  };
+
+  // ============================================================================
+  // AI REPLY ASSIST (reads their reply, suggests stage + an answer; you decide)
+  // ============================================================================
+  const handleAiReplyAssist = async () => {
+    const msgs = conversationThread?.messages || [];
+    const me = String(user?.email || "").toLowerCase();
+    const isMine = (m) => !!me && String(m.from || "").toLowerCase().includes(me);
+    const inbound = [...msgs].reverse().find((m) => !isMine(m));
+    const stripQuoted = (t) => String(t || "").split(/\n\s*On .{5,140}wrote:|\n\s*-{2,}\s*Original Message|\n\s*>/i)[0].trim();
+    const text = inbound ? stripQuoted(inbound.body || inbound.snippet) : "";
+    if (!text) {
+      addNotification("There is no reply from them in this thread yet.", "warning");
+      return;
+    }
+    const first = msgs.find((m) => isMine(m));
+    setAiReplyAssist({ loading: true });
+    try {
+      const res = await fetch("/api/ai-reply-assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          replyText: text,
+          businessName: conversationThread?.leadBusiness || "",
+          originalSubject: first?.subject || inbound?.subject || "",
+          senderName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setAiReplyAssist({ error: data.error || "Could not analyse this reply." });
+        return;
+      }
+      setAiReplyAssist({ result: data });
+    } catch {
+      setAiReplyAssist({ error: "Could not analyse this reply right now." });
+    }
+  };
+
+  const applyAiSuggestedStage = async () => {
+    const r = aiReplyAssist?.result;
+    const email = conversationThread?.leadEmail;
+    if (!r?.suggestedStage || !email) return;
+    if (r.suggestedStage === "closed_lost" && !confirm(`Mark ${email} as Lost and stop contacting them?`)) return;
+    try {
+      await updateDealStage(email, r.suggestedStage, { businessName: conversationThread?.leadBusiness });
+      addNotification(`Deal updated: ${r.suggestedStage === "closed_lost" ? "Lost" : r.suggestedStage}`, "success");
+    } catch {
+      addNotification("Could not update the deal", "error");
+    }
+  };
+
+  // ============================================================================
   // SMS SEND WITH TRACKING & DUPLICATE PREVENTION
   // ============================================================================
   const handleSendSMS = async (contact) => {
@@ -5420,6 +5247,7 @@ function DashboardComponent() {
 
     setLoadingConversation(true);
     setShowConversationModal(true);
+    setAiReplyAssist(null);
 
     try {
       const response = await retryFetch("/api/get-thread", {
@@ -8525,33 +8353,23 @@ function DashboardComponent() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="text-xs text-green-400">
-                        Pipeline Value
+                        Open pipeline
                       </div>
                       <div className="text-lg font-bold text-green-300">
-                        $
-                        {Math.round(
-                          (Object.values(repliedLeads).filter(Boolean).length *
-                            5000) /
-                            1000,
-                        )}
-                        k
+                        ${bizMetrics.present.openValue.toLocaleString()}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
-                        @$5K avg deal
+                        {bizMetrics.present.openCount} qualified deal
+                        {bizMetrics.present.openCount === 1 ? "" : "s"}
                       </div>
                     </div>
                     <div>
                       <div className="text-xs text-green-400">Next 30 Days</div>
                       <div className="text-lg font-bold text-green-300">
-                        $
-                        {Math.round(
-                          ((followUpStats?.readyForFollowUp || 0) * 5000) /
-                            1000,
-                        )}
-                        k
+                        ${bizMetrics.future.horizons[0].expected.toLocaleString()}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
-                        Expected from FUs
+                        Expected from your pipeline
                       </div>
                     </div>
                   </div>
@@ -8749,33 +8567,27 @@ function DashboardComponent() {
                   </div>
                   <div className="bg-gray-800/30 p-3 rounded border border-gray-700">
                     <div className="text-xs font-semibold text-green-300 mb-2">
-                      🎯 Conversion Forecast
+                      🎯 Your real numbers (last 90 days)
                     </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">
-                          Est. Replies (7 days)
-                        </span>
+                        <span className="text-gray-300">Reply rate</span>
                         <span className="font-bold text-green-400">
-                          {Math.ceil(whatsappLinks.length * 0.25)} leads
+                          {bizMetrics.present.replyRate === null
+                            ? "needs more sends"
+                            : `${Math.round(bizMetrics.present.replyRate * 100)}%`}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">
-                          Est. Conversions (30 days)
-                        </span>
+                        <span className="text-gray-300">Qualified deals</span>
                         <span className="font-bold text-green-400">
-                          {Math.ceil(whatsappLinks.length * 0.08)} deals
+                          {bizMetrics.present.openCount}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-300">Pipeline Value</span>
+                        <span className="text-gray-300">Weighted pipeline</span>
                         <span className="font-bold text-yellow-400">
-                          $
-                          {Math.round(
-                            (whatsappLinks.length * 0.08 * 5000) / 1000,
-                          )}
-                          k
+                          ${bizMetrics.present.weightedPipeline.toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -8786,21 +8598,16 @@ function DashboardComponent() {
                     </div>
                     <div className="space-y-1 text-xs text-gray-300">
                       <div>
-                        ✓ Focus on hot leads first (3x higher conversion rate)
+                        ✓ Reach hot leads first: they have already shown interest
                       </div>
                       <div>
                         ✓{" "}
                         {followUpStats.readyForFollowUp > 0
-                          ? `${followUpStats.readyForFollowUp} leads need follow-up today - Send using value-first template`
+                          ? `${followUpStats.readyForFollowUp} leads need a follow-up today. Use ✨ AI follow-up in the queue to draft one, then approve it.`
                           : "All leads are either replied or waiting - Check back in 48h"}
                       </div>
                       <div>
-                        ✓ Use question-based template for re-engagement (proven
-                        +40% improvement)
-                      </div>
-                      <div>
-                        ✓ Send between 9-11 AM for best open rates (+35%
-                        average)
+                        ✓ Your best send time is learned from your own replies (see Business Value once you have 30+ sends)
                       </div>
                     </div>
                   </div>
@@ -9227,12 +9034,16 @@ function DashboardComponent() {
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
                       $
                       {Math.round(
-                        (repliedLeadsList.length * 0.25 * 5000) / 1000,
-                      )}
-                      k
+                        repliedLeadsList.length *
+                          bizMetrics.settings.avgDealValue *
+                          (bizMetrics.settings.probabilities.qualified ?? 0.25),
+                      ).toLocaleString()}
                     </div>
                     <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">
-                      Potential Revenue
+                      Potential revenue
+                      <span className="block text-[10px] opacity-70">
+                        replies × your deal value × qualified chance
+                      </span>
                     </div>
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 text-xl sm:text-2xl opacity-20">
                       💰
@@ -10357,19 +10168,52 @@ function DashboardComponent() {
               )}
             </div>
             <div className="p-4 border-t border-gray-700/50 bg-gray-900/50">
-              <div className="flex justify-between items-center text-sm text-gray-400">
+              {aiReplyAssist?.loading && <p className="text-sm text-indigo-300 mb-3">✨ Reading their reply…</p>}
+              {aiReplyAssist?.error && <p role="alert" className="text-sm text-red-300 mb-3">{aiReplyAssist.error}</p>}
+              {aiReplyAssist?.result && (
+                <div className="mb-3 max-h-64 overflow-y-auto rounded-xl border border-indigo-700/50 bg-indigo-950/30 p-3 text-sm text-gray-100">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-indigo-600/40 px-2 py-0.5 text-xs font-semibold">{aiReplyAssist.result.label}</span>
+                    <span className="text-gray-200">{aiReplyAssist.result.summary}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-300">💡 {aiReplyAssist.result.advice}</p>
+                  {aiReplyAssist.result.suggestedStage && (
+                    <button onClick={applyAiSuggestedStage} className="mt-2 mr-2 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500">
+                      Move deal to: {aiReplyAssist.result.suggestedStage === "closed_lost" ? "Lost" : aiReplyAssist.result.suggestedStage}
+                    </button>
+                  )}
+                  {aiReplyAssist.result.draft && (
+                    <div className="mt-3">
+                      <div className="text-xs text-gray-400 mb-1">Suggested answer (edit it in your email app before sending):</div>
+                      <pre className="whitespace-pre-wrap rounded-lg bg-gray-900/70 p-2 text-xs text-gray-100">{aiReplyAssist.result.draft.body}</pre>
+                      <button
+                        onClick={() => window.open(`mailto:${conversationThread?.leadEmail}?subject=${encodeURIComponent(aiReplyAssist.result.draft.subject)}&body=${encodeURIComponent(aiReplyAssist.result.draft.body)}`, "_blank")}
+                        className="mt-2 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500"
+                      >
+                        Open draft in my email
+                      </button>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11px] text-gray-400">AI suggestions can be wrong. Nothing changes until you press a button.</p>
+                </div>
+              )}
+              <div className="flex flex-wrap justify-between items-center gap-2 text-sm text-gray-400">
                 <span>{conversationThread?.totalMessages || 0} messages</span>
-                <button
-                  onClick={() =>
-                    window.open(
-                      `mailto:${conversationThread?.leadEmail}`,
-                      "_blank",
-                    )
-                  }
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition"
-                >
-                  📧 Reply via Email
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={handleAiReplyAssist}
+                    disabled={aiReplyAssist?.loading || loadingConversation || !conversationThread?.messages}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition disabled:opacity-50"
+                  >
+                    ✨ Analyze reply
+                  </button>
+                  <button
+                    onClick={() => window.open(`mailto:${conversationThread?.leadEmail}`, "_blank")}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition"
+                  >
+                    📧 Reply via Email
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -10793,6 +10637,34 @@ function DashboardComponent() {
         </div>
       )}
 
+      {/* AI FOLLOW-UP REVIEW MODAL */}
+      {aiFollowUp && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Review AI follow-up">
+          <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-gray-900 border border-gray-700 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-white">{aiFollowUp.postSale ? "Customer check-in · review" : `Follow-up #${aiFollowUp.number} of 3 · review before sending`}</h3>
+                <p className="text-xs text-gray-400">To {aiFollowUp.email} · {aiFollowUp.business}</p>
+              </div>
+              <button onClick={() => !aiFollowUp.busy && setAiFollowUp(null)} className="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">✕</button>
+            </div>
+            {aiFollowUp.isFinal && <p className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-lg p-2 mb-3">This is the last follow-up. After it the loop closes and no more reminders are sent for this lead.</p>}
+            <label className="block text-xs text-gray-400 mb-1" htmlFor="ai-fu-subject">Subject</label>
+            <input id="ai-fu-subject" value={aiFollowUp.subject} onChange={(e) => setAiFollowUp((d) => ({ ...d, subject: e.target.value }))} className="w-full mb-3 px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm" />
+            <label className="block text-xs text-gray-400 mb-1" htmlFor="ai-fu-body">Message</label>
+            <textarea id="ai-fu-body" rows={9} value={aiFollowUp.body} onChange={(e) => setAiFollowUp((d) => ({ ...d, body: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm leading-relaxed" />
+            <p className="text-xs text-yellow-300/90 mt-2">Written from your earlier email and your business profile. Check every claim before sending. It is sent only when you press the button.</p>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end mt-4">
+              <button onClick={() => setAiFollowUp(null)} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Discard</button>
+              {aiFollowUp.postSale ? (
+                <button onClick={openPostSaleDraft} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold">Open in my email app</button>
+              ) : (
+                <button onClick={sendApprovedAiFollowUp} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-60">{aiFollowUp.busy ? "Sending…" : "Approve & send"}</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* AI RESEARCH MODAL */}
       {aiDraft && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Review AI draft">
@@ -11474,7 +11346,7 @@ function DashboardComponent() {
                                   {task.followUpStage || "Follow-up"}
                                 </div>
                                 <div className="flex gap-2 mt-2">
-                                  {task.channel === "email" && (
+                                  {task.channel === "email" && !POST_SALE_STAGES.includes(task.followUpStage) && (
                                     <button
                                       onClick={() =>
                                         handleSendEmailFollowUp(task)
@@ -11482,6 +11354,15 @@ function DashboardComponent() {
                                       className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition"
                                     >
                                       Send Email
+                                    </button>
+                                  )}
+                                  {task.channel === "email" && (
+                                    <button
+                                      onClick={() => handleAiFollowUpDraft(task)}
+                                      className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded transition"
+                                      title="AI writes the follow-up from your earlier email. You review and approve it before anything is sent."
+                                    >
+                                      {POST_SALE_STAGES.includes(task.followUpStage) ? "✨ Draft check-in" : "✨ AI draft"}
                                     </button>
                                   )}
                                   {task.channel === "whatsapp" && (
