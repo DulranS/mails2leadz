@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node tests/business-metrics.test.mjs && node tests/send-timing.test.mjs && node tests/ai-client.test.mjs && node --import ./tests/_register.mjs tests/proxy.test.mjs && node tests/auth-fetch.test.mjs && node tests/reply-intents.test.mjs && node tests/route-helpers.test.mjs"
+    "test": "node tests/business-metrics.test.mjs && node tests/send-timing.test.mjs && node tests/ai-client.test.mjs && node --import ./tests/_register.mjs tests/proxy.test.mjs && node tests/auth-fetch.test.mjs && node tests/reply-intents.test.mjs && node tests/route-helpers.test.mjs && node --test tests/api-retry.test.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",
