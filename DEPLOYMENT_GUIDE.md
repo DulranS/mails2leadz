@@ -30,6 +30,7 @@ Do these in order. The order matters: step 3 before step 4.
 
 ## Phone calls (only if you use Twilio)
 - Set `NEXT_PUBLIC_BASE_URL` (your https domain) and `WEBHOOK_SECRET`; the app adds `?key=` to the call-status callback itself.
+- Set `NEXT_PUBLIC_DEFAULT_COUNTRY_CODE` (digits only, e.g. `94`, `44`, `1`) so local numbers starting with 0 are dialled in the right country. Optional branding: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` (shown on the landing page).
 - Calls are **not recorded** unless you set `TWILIO_RECORD_CALLS=true` (recording third parties can need their consent where you operate).
 - "Bridge" calls ring the **customer's own number** from Account → Your business; without it the call is refused.
 

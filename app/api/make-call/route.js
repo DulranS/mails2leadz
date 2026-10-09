@@ -1,7 +1,8 @@
 // app/api/make-call/route.js
 import { NextResponse } from 'next/server';
+import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, doc, setDoc } from '../../../lib/server-firestore.js';
+import { getFirestore, collection, addDoc, doc, setDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import twilio from 'twilio';
 import { getBusinessProfile } from '../../../lib/ai-client.js';
 
@@ -57,8 +58,8 @@ const buildScript = (callType, { business, bridgeNumber, hook }) => {
   if (callType === 'interactive') {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="dtmf" timeout="10" numDigits="1" action="${xml(hook)}">
-    <Say voice="alice">Hello, this is ${who}. Press 1 to speak with someone, press 2 to receive more information by email, or press 3 to be removed from our list.</Say>
+  <Gather input="dtmf" timeout="10" numDigits="1" method="POST" action="${xml(hook)}">
+    <Say voice="alice">Hello, this is ${who}. Press 1 to speak with someone, press 2 to receive more information by email, or press 3 if you would rather not be called again.</Say>
   </Gather>
   <Say voice="alice">Thank you. Goodbye!</Say>
   <Hangup/>
@@ -74,18 +75,7 @@ const buildScript = (callType, { business, bridgeNumber, hook }) => {
 // ============================================================================
 // FORMAT PHONE NUMBER
 // ============================================================================
-const formatForDialing = (raw) => {
-  if (!raw || raw === 'N/A' || raw === '' || raw === 'undefined' || raw === 'null') return null;
-  let cleaned = raw.toString().replace(/\D/g, '');
-  if (cleaned.startsWith('0') && cleaned.length >= 9) {
-    cleaned = '94' + cleaned.slice(1);
-  }
-  if (cleaned.length === 9 && /^[7-9]/.test(cleaned)) {
-    cleaned = '94' + cleaned;
-  }
-  const isValid = /^[1-9]\d{9,14}$/.test(cleaned);
-  return isValid ? cleaned : null;
-};
+const formatForDialing = normalizePhone;
 
 // ============================================================================
 // POST HANDLER
@@ -119,6 +109,14 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    // Someone who pressed 3 ("do not call again") on an earlier call is never dialled again.
+    try {
+      const optedOut = await getDocs(query(collection(db, 'calls'), where('userId', '==', userId), where('toPhone', '==', formattedPhone), where('optedOut', '==', true)));
+      if (!optedOut.empty) {
+        return NextResponse.json({ error: 'This person asked not to be called again, so the call was not placed.', code: 'OPTED_OUT' }, { status: 409 });
+      }
+    } catch (e) { /* if the lookup fails, do not block the call */ }
 
     // Who is calling: the customer's own business name and (for bridge calls) their own phone.
     const profile = await getBusinessProfile(userId);

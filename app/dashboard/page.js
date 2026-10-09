@@ -52,7 +52,6 @@ import {
   sendPasswordResetEmail,
   browserLocalPersistence,
 } from "firebase/auth";
-import Head from "next/head";
 import { useRouter } from "next/navigation";
 import RepliesPanel from "../../components/RepliesPanel";
 import { useAppSelector } from "../../lib/redux/hooks";
@@ -73,6 +72,7 @@ import {
   DEFAULT_TWITTER_TEMPLATE,
   DEFAULT_LINKEDIN_TEMPLATE,
 } from "../../lib/default-templates.js";
+import { APP_NAME, APP_TAGLINE } from "../../lib/brand.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
@@ -730,19 +730,6 @@ function DashboardComponent() {
       daysSince: canContactResult.daysSince,
       lastContact: canContactResult.lastContact,
     };
-  };
-
-  // ============================================================================
-  // HELPER: Check if phone is a 077 priority number (formatted as 9477...)
-  // ============================================================================
-  const isPriorityPhone = (phone) => {
-    if (!phone) return false;
-    const cleaned = phone.toString().replace(/\D/g, "");
-    return (
-      cleaned.startsWith("9477") ||
-      cleaned.startsWith("9476") ||
-      cleaned.startsWith("9475")
-    );
   };
 
   // ============================================================================
@@ -2088,7 +2075,7 @@ function DashboardComponent() {
   };
 
   // ============================================================================
-  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY (OPTIMIZED WITH useMemo)
+  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM (OPTIMIZED WITH useMemo)
   // ============================================================================
   const filteredAndSortedContacts = useMemo(() => {
     let filteredContacts = [...whatsappLinks];
@@ -2139,18 +2126,12 @@ function DashboardComponent() {
 
       const aIsContacted = isContactedOnAnyChannel(a);
       const bIsContacted = isContactedOnAnyChannel(b);
-      const aIsPriority = isPriorityPhone(a.phone);
-      const bIsPriority = isPriorityPhone(b.phone);
       const aScore = leadScores[aKey] || 0;
       const bScore = leadScores[bKey] || 0;
 
       // Priority 1: Non-contacted first, contacted last
       if (!aIsContacted && bIsContacted) return -1;
       if (aIsContacted && !bIsContacted) return 1;
-
-      // Priority 2: 077/076/075 numbers
-      if (aIsPriority && !bIsPriority) return -1;
-      if (!aIsPriority && bIsPriority) return 1;
 
       // Priority 3: Selected sort
       if (sortBy === "score") {
@@ -2202,8 +2183,6 @@ function DashboardComponent() {
 
       const aIsContacted = isContactedOnAnyChannel(a);
       const bIsContacted = isContactedOnAnyChannel(b);
-      const aIsPriority = isPriorityPhone(a.phone);
-      const bIsPriority = isPriorityPhone(b.phone);
       
       // Use advanced lead scores from engine for better prioritization
       const aScore = advancedLeadScores[aKey] || leadScores[aKey] || 0;
@@ -2225,10 +2204,6 @@ function DashboardComponent() {
       if (aCategoryPriority !== bCategoryPriority) {
         return bCategoryPriority - aCategoryPriority;
       }
-
-      // 3. Then 077/076/075 priority
-      if (aIsPriority && !bIsPriority) return -1;
-      if (!aIsPriority && bIsPriority) return 1;
 
       // 4. Fallback to advanced score ranking
       return bScore - aScore;
@@ -5045,15 +5020,8 @@ function DashboardComponent() {
       senderName,
     );
 
-    let formattedPhone = contact.phone.toString().replace(/\D/g, "");
-
-    if (formattedPhone.startsWith("0") && formattedPhone.length >= 9) {
-      formattedPhone = "94" + formattedPhone.slice(1);
-    }
-
-    if (!formattedPhone.startsWith("+")) {
-      formattedPhone = "+" + formattedPhone;
-    }
+    const dialable = formatForDialing(contact.phone) || contact.phone.toString().replace(/\D/g, "");
+    const formattedPhone = `+${dialable}`;
 
     const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(messageBody)}`;
     window.location.href = smsUrl;
@@ -6805,7 +6773,7 @@ function DashboardComponent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <div className="text-lg text-white font-medium">
-            Loading your strategic outreach dashboard...
+            Loading your dashboard...
           </div>
           <div className="text-sm text-gray-400 mt-2">Please wait</div>
         </div>
@@ -6822,9 +6790,9 @@ function DashboardComponent() {
         <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full mx-4">
           <div className="text-center mb-6">
             <h1 className="text-3xl font-bold text-white mb-2">
-              B2B Growth Engine
+              {APP_NAME}
             </h1>
-            <p className="text-gray-400">Strategic Outreach Automation</p>
+            <p className="text-gray-400">{APP_TAGLINE}</p>
           </div>
 
           <div className="space-y-4">
@@ -6881,13 +6849,6 @@ function DashboardComponent() {
   // ============================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-200">
-      <Head>
-        <title>B2B Growth Engine | Strategic Outreach</title>
-        <meta
-          name="description"
-          content="Marketing automation dashboard for B2B outreach"
-        />
-      </Head>
 
       {/* NOTIFICATIONS */}
       <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
@@ -6941,10 +6902,10 @@ function DashboardComponent() {
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-white">
-                  B2B Growth Engine
+                  {APP_NAME}
                 </h1>
                 <p className="text-xs text-gray-400 hidden sm:block">
-                  Strategic Outreach Automation
+                  {APP_TAGLINE}
                 </p>
               </div>
             </div>
@@ -8445,7 +8406,7 @@ function DashboardComponent() {
                   </button>
                 </div>
                 <div className="max-h-96 overflow-y-auto space-y-3">
-                  {/* ✅ UPDATED: Use sortedWhatsappLinks to show 077 numbers first, contacted at bottom */}
+                  {/* ✅ UPDATED: Use sortedWhatsappLinks: contacted at bottom */}
                   {sortedWhatsappLinks.slice(0, 10).map((link) => {
                     const contactKey = link.email || link.phone;
                     const lastEmailSent = lastSent[contactKey];
@@ -10410,7 +10371,7 @@ function DashboardComponent() {
             {/* Footer */}
             <div className="p-2 sm:p-4 border-t border-gray-700 bg-gray-800 flex justify-between items-center">
               <div className="text-[10px] sm:text-xs text-gray-500">
-                💡 Contacted contacts shown at bottom • 077 numbers prioritized
+                💡 Contacted contacts shown at bottom
               </div>
               <button
                 onClick={() => setShowMultiChannelModal(false)}
