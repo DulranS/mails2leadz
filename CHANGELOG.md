@@ -3,6 +3,8 @@
 ## Last-day hardening (second pass)
 - **Sends are never repeated automatically.** A slow or failed email / SMS / call request used to be retried by the app (and, for follow-ups, again every 10 seconds by a background queue), which could reach a lead twice. Send and call requests now run exactly once, with a longer timeout; when one fails the app shows the server's reason (already replied, too soon, max reached) and you decide whether to try again. Reads are still retried. Test: `tests/api-retry.test.mjs`.
 - Removed dead code: an unused follow-up scheduler that called a route that does not exist, and an unused scraper client.
+- **Lost means Lost.** A deal marked Lost (including "asked to stop" from reply analysis) was only a label: the lead could still get a follow-up or a new cold email. The email send route, follow-up send route and AI follow-up draft now refuse Lost deals (reopen the deal to contact them again), and Lost leads no longer show in the follow-up lists. Test added in `tests/route-helpers.test.mjs`.
+- **One set of numbers.** The dashboard's "AI-Powered Analytics" panel used an older engine with an invented $5,000 deal value, made-up stage weights and an unmeasured "confidence %". It now shows 30/60/90-day expected revenue (with range), stalled deals and win/loss from the same calculation as Business Value. The old engine was deleted.
 - Lead lists no longer put Sri Lankan numbers first (an owner-specific sort); replied leads are ordered by most recent reply, follow-ups by urgency.
 
 ## Launch day: DeepSeek AI + selling-to-anyone fixes

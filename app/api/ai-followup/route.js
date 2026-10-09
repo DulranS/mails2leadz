@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server';
 import { collection, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { callAI, AiError, getBusinessProfile, profileBlock, SALES_GUARDRAILS } from '../../../lib/ai-client.js';
-import { getDb, uidFromRequest, clip, pickOriginal, daysSince, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { getDb, uidFromRequest, clip, pickOriginal, daysSince, isLostDeal, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { POST_SALE_STAGES } from '../../../lib/default-templates.js';
 
 export const maxDuration = 45;
@@ -58,6 +58,9 @@ export async function POST(request) {
     const o = original.data;
     if (snap.docs.some((d) => d.data().replied === true)) {
       return NextResponse.json({ success: false, code: 'ALREADY_REPLIED', error: 'This lead already replied. Move the deal forward instead of following up.' }, { status: 409, headers: NO_STORE });
+    }
+    if (await isLostDeal(db, uid, to)) {
+      return NextResponse.json({ success: false, code: 'DEAL_LOST', error: 'This deal is marked Lost, so no follow-up is drafted. Reopen the deal to contact them again.' }, { status: 409, headers: NO_STORE });
     }
     const step = original.count + 1;
     if (step > MAX_FOLLOW_UPS) {

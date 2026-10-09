@@ -4,7 +4,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
-import { headerSafe } from '../../../lib/server/route-helpers.js';
+import { headerSafe, isLostDeal } from '../../../lib/server/route-helpers.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 export const maxDuration = 60;
@@ -284,6 +284,13 @@ export async function POST(request) {
         continue;
       }
       
+      // A lead the owner marked Lost ("not interested" / "asked to stop") is never emailed again from here.
+      if (await isLostDeal(db, userId, email)) {
+        skipCount++;
+        results.push({ email, status: 'skipped', reason: 'Marked Lost: reopen the deal to contact again' });
+        continue;
+      }
+
       // Check duplicates - prevent sending to same email within 24 hours
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const duplicateQuery = query(

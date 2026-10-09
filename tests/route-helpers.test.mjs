@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { headerSafe, clip, pickOriginal, daysSince } from '../lib/server/route-helpers.js';
+import { headerSafe, clip, pickOriginal, daysSince, dealBlocksContact } from '../lib/server/route-helpers.js';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 const doc = (data) => ({ data: () => data });
 
@@ -28,5 +28,13 @@ t('daysSince handles ISO strings, junk and missing values', () => {
   assert.equal(daysSince('2026-10-07T00:00:00Z', now), 3);
   assert.equal(daysSince('nonsense', now), null);
   assert.equal(daysSince(null, now), null);
+});
+
+t('a Lost deal blocks contact; open, won or missing deals do not', () => {
+  assert.equal(dealBlocksContact({ stage: 'closed_lost' }), true);
+  assert.equal(dealBlocksContact({ stage: 'lost' }), true);
+  assert.equal(dealBlocksContact({ stage: 'qualified' }), false);
+  assert.equal(dealBlocksContact({ stage: 'closed_won' }), false);
+  assert.equal(dealBlocksContact(null), false);
 });
 console.log(`\n${n} passed`);

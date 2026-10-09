@@ -105,13 +105,11 @@ import { retryFetch } from "../../lib/api-retry.js";
 import { errorHandler, withErrorHandling } from "../../lib/error-handler.js";
 import { leadScoringEngine } from "../../lib/lead-scoring-engine.js";
 import { smartFollowupEngine } from "../../lib/smart-followup-engine.js";
-import { revenueAnalyticsEngine } from "../../lib/revenue-analytics-engine.js";
 import PerformanceMonitor from "../../components/PerformanceMonitor.jsx";
 import {
   loadSettingsFromFirebase,
   saveSettingsToFirebase,
   loadManualContactStatus,
-  updateDealStage,
   loadSentLeads,
   loadRepliedAndFollowUp,
   normalizeSentLead,
@@ -313,13 +311,6 @@ function DashboardComponent() {
   const [followUpRecommendations, setFollowUpRecommendations] = useState({});
   const [optimalFollowUpTimes, setOptimalFollowUpTimes] = useState({});
   const [nextBestActions, setNextBestActions] = useState({});
-
-  // Revenue analytics engine integration
-  const [pipelineHealth, setPipelineHealth] = useState(0);
-  const [revenueForecast, setRevenueForecast] = useState({ forecast: 0, conservative: 0, optimistic: 0 });
-  const [atRiskDeals, setAtRiskDeals] = useState([]);
-  const [winLossAnalysis, setWinLossAnalysis] = useState({});
-  const [actionItems, setActionItems] = useState([]);
 
   // Performance monitor integration
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
@@ -947,6 +938,8 @@ function DashboardComponent() {
       .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
+        // Deals marked Lost are not followed up (the server refuses them too).
+        if (normalizeStage(dealStage[lead.email] || dealStage[String(lead.email).toLowerCase()]) === "closed_lost") return false;
 
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         if (followUpCount >= 3) return false;
@@ -998,7 +991,7 @@ function DashboardComponent() {
       });
 
     return candidates;
-  }, [filteredSentLeads]);
+  }, [filteredSentLeads, dealStage]);
 
   // ============================================================================
   // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS (OPTIMIZED WITH useMemo)
@@ -1888,6 +1881,7 @@ function DashboardComponent() {
       .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
+        if (normalizeStage(dealStage[lead.email] || dealStage[String(lead.email).toLowerCase()]) === "closed_lost") return false;
 
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         if (followUpCount >= 3) return false;
@@ -1932,7 +1926,7 @@ function DashboardComponent() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [filteredSentLeads]);
+  }, [filteredSentLeads, dealStage]);
 
   // Get replied leads with details (OPTIMIZED WITH useMemo)
   const repliedLeadsList = useMemo(() => {
@@ -2616,43 +2610,6 @@ function DashboardComponent() {
     setOptimalFollowUpTimes(newOptimalTimes);
     setNextBestActions(newNextActions);
     setFollowUpRecommendations(newFollowUpRecs);
-  }, [sentLeads]);
-
-  // ============================================================================
-  // REVENUE ANALYTICS ENGINE INTEGRATION
-  // ============================================================================
-  useEffect(() => {
-    if (!sentLeads || sentLeads.length === 0) return;
-
-    try {
-      // Calculate pipeline health
-      const health = revenueAnalyticsEngine.calculatePipelineHealth(sentLeads);
-      setPipelineHealth(health);
-
-      // Forecast revenue
-      const forecast = revenueAnalyticsEngine.forecastRevenue(sentLeads, 12);
-      setRevenueForecast(forecast);
-
-      // Identify at-risk deals
-      const atRisk = revenueAnalyticsEngine.identifyAtRiskDeals(sentLeads);
-      setAtRiskDeals(atRisk);
-
-      // Analyze win/loss
-      const winLoss = revenueAnalyticsEngine.analyzeWinLoss(sentLeads);
-      setWinLossAnalysis(winLoss);
-
-      // Get action items
-      const actions = revenueAnalyticsEngine.getActionItems(sentLeads);
-      setActionItems(actions);
-    } catch (error) {
-      console.error('Error in revenue analytics engine:', error);
-      // Set fallback values to prevent UI errors
-      setPipelineHealth(50);
-      setRevenueForecast({ forecast: 0, conservative: 0, optimistic: 0, confidence: 50 });
-      setAtRiskDeals([]);
-      setWinLossAnalysis({ winRate: 0, wonCount: 0, lostCount: 0, avgWonDealSize: 0 });
-      setActionItems([]);
-    }
   }, [sentLeads]);
 
   // ============================================================================
@@ -7281,130 +7238,68 @@ function DashboardComponent() {
                   </button>
                 </div>
 
-                {/* Pipeline Health */}
+                {/* Forecast: built from YOUR qualified deals, your stage probabilities and your own closing speed */}
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                  <h3 className="text-sm font-bold text-purple-300 mb-2">
-                    📊 Pipeline Health
-                  </h3>
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">💰 Expected revenue</h3>
                   <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Health Score:</span>
-                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {pipelineHealth.toFixed(0)}/100
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Status:</span>
-                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {pipelineHealth >= 70 ? 'Healthy' : pipelineHealth >= 40 ? 'Needs Attention' : 'Critical'}
-                      </span>
-                    </div>
+                    {bizMetrics.future.horizons.map((h) => (
+                      <div key={h.days} className="flex justify-between">
+                        <span className="text-gray-400">Next {h.days} days:</span>
+                        <span className="font-bold text-green-400">
+                          ${h.expected.toLocaleString()} <span className="text-gray-500 font-normal">(${h.low.toLocaleString()}–${h.high.toLocaleString()})</span>
+                        </span>
+                      </div>
+                    ))}
+                    <p className="text-gray-500">
+                      {bizMetrics.future.confidence === "low"
+                        ? "Early estimate: fewer than 5 closed deals so far, so the range is wide."
+                        : bizMetrics.future.confidence === "medium"
+                          ? "Based on your closed deals so far. It tightens as you close more."
+                          : "Based on 20+ closed deals."}
+                      {" "}Open the Business Value page to see how it is calculated.
+                    </p>
                   </div>
                 </div>
 
-                {/* Revenue Forecast */}
+                {/* Needs attention: qualified deals nobody has touched for 14+ days */}
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                  <h3 className="text-sm font-bold text-purple-300 mb-2">
-                    💰 Revenue Forecast (12 weeks)
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Expected:</span>
-                      <span className="font-bold text-green-400">
-                        ${revenueForecast.forecast.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Conservative:</span>
-                      <span className="font-bold text-blue-400">
-                        ${revenueForecast.conservative.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Optimistic:</span>
-                      <span className="font-bold text-purple-400">
-                        ${revenueForecast.optimistic.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Confidence:</span>
-                      <span className="font-bold text-yellow-400">
-                        {revenueForecast.confidence}%
-                      </span>
-                    </div>
-                  </div>
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">⚠️ Needs attention</h3>
+                  {bizMetrics.present.staleCount > 0 ? (
+                    <p className="text-xs text-gray-300">
+                      {bizMetrics.present.staleCount} qualified deal{bizMetrics.present.staleCount === 1 ? "" : "s"} worth ${bizMetrics.present.staleValue.toLocaleString()} with no update in 14+ days. Reach out or move them forward.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400">No stalled deals. Every qualified deal has been updated in the last 14 days.</p>
+                  )}
                 </div>
 
-                {/* At-Risk Deals */}
-                {atRiskDeals.length > 0 && (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-red-700 mb-4">
-                    <h3 className="text-sm font-bold text-red-300 mb-2">
-                      ⚠️ At-Risk Deals ({atRiskDeals.length})
-                    </h3>
-                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
-                      {atRiskDeals.slice(0, 5).map((deal, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-gray-900/50 p-2 rounded">
-                          <span className="text-gray-400 truncate">{deal.email || 'Unknown'}</span>
-                          <span className={`font-bold ${deal.riskLevel === 'Critical' ? 'text-red-400' : deal.riskLevel === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>
-                            {deal.riskLevel}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Items */}
-                {actionItems.length > 0 && (
+                {/* Win/loss from deals you actually closed */}
+                {bizMetrics.past.wonCount > 0 || bizMetrics.past.lostCount > 0 ? (
                   <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">
-                      🎯 Recommended Actions
-                    </h3>
-                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
-                      {actionItems.slice(0, 3).map((action, idx) => (
-                        <div key={idx} className="bg-gray-900/50 p-2 rounded">
-                          <div className={`font-bold ${action.priority === 'CRITICAL' ? 'text-red-400' : action.priority === 'HIGH' ? 'text-orange-400' : 'text-yellow-400'}`}>
-                            {action.priority}
-                          </div>
-                          <div className="text-gray-400 mt-1">{action.action}</div>
-                          <div className="text-green-400 mt-1">{action.impact}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Win/Loss Analysis */}
-                {winLossAnalysis.wonCount > 0 || winLossAnalysis.lostCount > 0 ? (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">
-                      📈 Win/Loss Analysis
-                    </h3>
+                    <h3 className="text-sm font-bold text-purple-300 mb-2">📈 Win / loss</h3>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Win Rate:</span>
+                        <span className="text-gray-400">Win rate:</span>
                         <span className="font-bold text-green-400">
-                          {winLossAnalysis.winRate}%
+                          {bizMetrics.past.winRate === null ? "n/a" : `${Math.round(bizMetrics.past.winRate * 100)}%`}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Won Deals:</span>
-                        <span className="font-bold text-green-400">
-                          {winLossAnalysis.wonCount}
-                        </span>
+                        <span className="text-gray-400">Won / lost:</span>
+                        <span className="font-bold text-white">{bizMetrics.past.wonCount} / {bizMetrics.past.lostCount}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Lost Deals:</span>
-                        <span className="font-bold text-red-400">
-                          {winLossAnalysis.lostCount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Avg Won Deal:</span>
+                        <span className="text-gray-400">Avg won deal:</span>
                         <span className="font-bold text-green-400">
-                          ${winLossAnalysis.avgWonDealSize.toLocaleString()}
+                          {bizMetrics.past.avgWonValue === null ? "n/a" : `$${bizMetrics.past.avgWonValue.toLocaleString()}`}
                         </span>
                       </div>
+                      {bizMetrics.past.avgCycleDays !== null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Avg days to win:</span>
+                          <span className="font-bold text-white">{bizMetrics.past.avgCycleDays}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}
