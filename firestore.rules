@@ -40,7 +40,7 @@ service cloud.firestore {
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
           'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
           'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'suppressions'
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'suppressions'
         ] && ownsExisting(docId);
 
       // 'suppressions' (opt-outs) is deliberately NOT in the create/update lists below: only the server writes it.
@@ -49,7 +49,7 @@ service cloud.firestore {
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
           'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
           'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices'
         ] && ownsNew(docId);
 
       // Updates may not hand the document to somebody else.
@@ -58,7 +58,7 @@ service cloud.firestore {
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
           'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
           'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices'
         ] && ownsExisting(docId) && ownsNew(docId);
 
       // AI usage is written only by the server and is READ-ONLY for users. Letting a user

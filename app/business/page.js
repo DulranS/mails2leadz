@@ -13,7 +13,10 @@ import { computeTemplateStats, suggestStageChances } from "../../lib/attribution
 import { buildNextActions } from "../../lib/next-actions.js";
 import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
-import { makeMoney } from "../../lib/currency.js";
+import { makeMoney, currencySymbol } from "../../lib/currency.js";
+import { computeBilling, computeUnbilled } from "../../lib/billing.js";
+import { computeCustomers, countQualificationGaps } from "../../lib/customers.js";
+import { computeWeeklyKpis, weeklyHeadline, weeklyReportText } from "../../lib/weekly-kpi.js";
 
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
 const toMs = (v) => (!v ? null : typeof v?.toDate === "function" ? v.toDate().getTime() : new Date(v).getTime() || null);
@@ -55,10 +58,11 @@ export default function BusinessValuePage() {
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState({ deals: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
+  const [raw, setRaw] = useState({ deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
   const [coach, setCoach] = useState(null); // { loading } | { error } | { result }
+  const [reportMsg, setReportMsg] = useState("");
 
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
@@ -76,7 +80,7 @@ export default function BusinessValuePage() {
       // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(1000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
@@ -85,6 +89,7 @@ export default function BusinessValuePage() {
         getDocs(query(collection(db, "users", uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[1]}`)).catch(() => null),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[2]}`)).catch(() => null),
+        getDocs(query(collection(db, "invoices"), where("userId", "==", uid), limit(2000))).catch(() => ({ docs: [] })),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -95,7 +100,7 @@ export default function BusinessValuePage() {
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
-        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, replied: !!x.replied, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
+        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
@@ -119,7 +124,7 @@ export default function BusinessValuePage() {
         const t = toMs(x.scheduledFor); return t && t <= Date.now();
       }).length;
       setRaw({
-        deals, emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
+        deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       });
@@ -135,6 +140,12 @@ export default function BusinessValuePage() {
   const tplStats = useMemo(() => computeTemplateStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])) }), [raw, m]);
   const chanceTip = useMemo(() => suggestStageChances({ deals: raw.deals || [], current: m.settings.probabilities }), [raw, m]);
   const [dismissedTip, setDismissedTip] = useState(false);
+
+  const billing = useMemo(() => computeBilling({ invoices: raw.invoices }), [raw]);
+  const unbilled = useMemo(() => computeUnbilled({ deals: m.deals, invoices: raw.invoices }), [m, raw]);
+  const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
+  const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
+  const weekly = useMemo(() => computeWeeklyKpis({ emailRows: raw.emailRows || [], deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
 
   const money = makeMoney(m.settings.currency); // the customer's own currency
   const money2 = makeMoney(m.settings.currency, 2);
@@ -184,6 +195,10 @@ export default function BusinessValuePage() {
         monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, wonThisMonth: m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0,
         unconverted: raw.unconverted.length, dueFollowUps: raw.dueFollowUps, currency: m.settings.currency,
         lostReasons: m.past.lostReasons.filter((r) => r.reason !== "unrecorded").slice(0, 3).map((r) => ({ reason: r.reason, count: r.count })),
+        overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, outstanding: billing.outstanding, collected30: billing.collected.last30, avgDaysToPay: billing.avgDaysToPay,
+        unbilledCount: unbilled.count, unbilledAmount: unbilled.amount,
+        customers: customers.total, atRisk: customers.atRisk.count, stuckOnboarding: customers.stuckOnboarding, openIssues: customers.openIssues,
+        weekly: Object.fromEntries(weekly.rows.map((r) => [r.key, { cur: r.cur, prev: r.prev }])),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -200,7 +215,11 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent });
+  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps });
+  const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues };
+  const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
+  const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };
+  const mailReport = () => { window.open(`mailto:${encodeURIComponent(user?.email || "")}?subject=${encodeURIComponent("Weekly report")}&body=${encodeURIComponent(reportText())}`, "_blank"); };
   const goal = Number(raw.settings?.monthlyGoal) || 0;
   const wonThisMonth = m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0;
   const maxMonth = Math.max(1, ...m.past.wonByMonth.map((x) => x.revenue));
@@ -246,6 +265,35 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
+        {/* THIS WEEK */}
+        {!loading && (
+          <Card title="This week vs last week">
+            <p className="text-sm text-gray-800 dark:text-gray-100 mb-3">{weeklyHeadline({ kpis: weekly, snapshot: { overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, atRiskCount: customers.atRisk.count }, money })}</p>
+            {!weekly.noActivity && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Measure</th><th className="py-1 text-right">Last 7 days</th><th className="py-1 text-right">Before that</th><th className="py-1 text-right">Change</th></tr></thead>
+                  <tbody>{weekly.rows.map((r) => {
+                    const f = (v) => (r.kind === "money" ? money(v) : v);
+                    const tone = r.good === null ? "text-gray-500 dark:text-gray-400" : r.good ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
+                    return (
+                      <tr key={r.key} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100">
+                        <td className="py-1.5">{r.label}</td><td className="py-1.5 text-right font-medium">{f(r.cur)}</td><td className="py-1.5 text-right">{f(r.prev)}</td>
+                        <td className={`py-1.5 text-right ${tone}`}>{r.direction === "flat" ? "same" : `${r.direction === "up" ? "+" : "-"}${f(Math.abs(r.diff))}`}</td>
+                      </tr>);
+                  })}</tbody>
+                </table>
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+              <button type="button" onClick={mailReport} className="min-h-[44px] px-4 rounded-lg text-sm bg-blue-600 hover:bg-blue-500 text-white">Email this report to me</button>
+              <button type="button" onClick={copyReport} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy as text</button>
+              {reportMsg && <span role="status" className="self-center text-xs text-gray-500 dark:text-gray-400">{reportMsg}</span>}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Replies are placed by the day they were detected. Stage changes are dated from the moment this version started tracking them, so older deals may not show in "newly qualified".{weekly.estimatedWonThisWeek > 0 ? ` ${weekly.estimatedWonThisWeek} won deal(s) this week use your default value.` : ""}</p>
+          </Card>
+        )}
+
         {/* AI COACH */}
         {!loading && (
           <Card title="Explain my numbers (AI)">
@@ -279,6 +327,30 @@ export default function BusinessValuePage() {
               </div>
             )}
           </Card>
+        )}
+
+        {/* MONEY OWED + CUSTOMERS */}
+        {!loading && (billing.outstandingCount > 0 || unbilled.count > 0 || customers.total > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card title="Cash and billing">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Owed to you</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{money(billing.outstanding)}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Overdue</div><div className={`text-lg font-semibold ${billing.overdue.count ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>{money(billing.overdue.amount)}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Collected, 90 days</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{money(billing.collected.last90)}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Won, never invoiced</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{money(unbilled.amount)}</div></div>
+              </div>
+              <Link href="/billing" className="inline-block mt-3 text-sm text-blue-600 dark:text-blue-400 underline">Open billing</Link>
+            </Card>
+            <Card title="Customer health">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Customers</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{customers.total}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Activated</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{pct(customers.activationRate)}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">At risk</div><div className={`text-lg font-semibold ${customers.atRisk.count ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>{customers.atRisk.count} · {money(customers.atRisk.value)}</div></div>
+                <div><div className="text-xs text-gray-500 dark:text-gray-400">Open support issues</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{customers.openIssues}</div></div>
+              </div>
+              <Link href="/customers" className="inline-block mt-3 text-sm text-blue-600 dark:text-blue-400 underline">Open customers</Link>
+            </Card>
+          </div>
         )}
 
         {goal > 0 && !loading && (
@@ -417,6 +489,14 @@ export default function BusinessValuePage() {
               <div><div className="text-xs text-gray-500 dark:text-gray-400">Return</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{m.roi.multiple === null ? "—" : `${m.roi.multiple}× cost`}</div></div>
               <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win / reply</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{m.roi.costPerWin === null ? "—" : money(m.roi.costPerWin)} / {m.roi.costPerReply === null ? "—" : money2(m.roi.costPerReply)}</div></div>
             </div>
+            {m.bdr && (
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-800 dark:text-gray-100">
+                <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Versus hiring an outbound rep</div>
+                A rep would cost about <b>{money(m.bdr.bdrMonthly)}</b> a month ({money(m.bdr.baseMonthly)} base{m.bdr.commissionPct > 0 ? ` + ${m.bdr.commissionPct}% commission on ${money(m.bdr.monthlyWon)} won per month = ${money(m.bdr.commissionMonthly)}` : ""}).
+                {m.bdr.toolMonthly === null ? " Add what you pay per month in Settings to see the saving." : <> This costs about <b>{money(m.bdr.toolMonthly)}</b> a month, a difference of <b>{money(m.bdr.savingMonthly)}</b>.</>}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cost only: a person also brings judgement and calls. You still approve every message here.</p>
+              </div>
+            )}
           </Card>
           <Card title="AI usage">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -441,7 +521,7 @@ export default function BusinessValuePage() {
                   <select aria-label={`Stage for ${d.email}`} value={d.stage} disabled={saving === d.email} onChange={(e) => saveDeal(d, { stage: e.target.value })} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                     {ALL_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
                   </select>
-                  <label className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200">$
+                  <label className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200">{currencySymbol(m.settings.currency)}
                     <input aria-label={`Value for ${d.email}`} type="number" min="0" inputMode="decimal" defaultValue={d.estimated ? "" : d.value} placeholder={String(d.value)} disabled={saving === d.email}
                       onBlur={(e) => { const v = e.target.value; if (v !== "" && Number(v) !== d.value) saveDeal(d, { value: v }); }}
                       className="w-28 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />

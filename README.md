@@ -9,7 +9,11 @@ worth. AI helps you write and prioritise; **you approve everything that gets sen
 | **AI** (DeepSeek by default) | **Draft** the first email, the next **follow-up** (written from what you actually sent, a different job each time), a **customer check-in** after a deal is won, and **analyse a reply** (what they want, the deal stage that fits, a suggested answer). A "pipeline coach" explains your numbers in plain language and suggests three actions. **Every AI output is a draft: you edit and approve, nothing is sent or changed on its own.** The best send time is learned from your own replies. Cheap model, cached, capped per customer per day and per month, usage shown to the customer |
 | **CRM & Deals** | One deal per lead, shared stages everywhere (New → Contacted → Qualified → Demo → Proposal → Negotiation → Won/Lost → Delivery/Retention/Expansion) |
 | **Business Value** | A "Do this next" list (replies with no deal, due follow-ups, quiet deals, goal gap) and monthly-goal progress. Past (won revenue by month, win rate, time to win, why deals are lost, where deals come from, email A/B results), present (open/weighted pipeline, funnel, deals needing attention), future (30/60/90-day forecast with a range), ROI, AI cost |
-| **Account** | Profile, "what I sell" (drives AI), your currency, deal-value / cost / stage-chance settings, download my data, delete my data and account |
+| **Customers** | Everyone you won: onboarding checklist (6 steps, activation = first result delivered), health flags that always say why (no contact 45+ days, issue open 3+ days, not activated after 7 days, overdue invoice), support issues with an AI reply draft, AI check-in drafts that fit the customer's age, "I spoke to them" log |
+| **Billing** | Invoice records (not tax invoices, no payments taken): owed, overdue, aging, cash collected, days to get paid, on-time rate, won-but-never-invoiced list. Overdue invoices get a polite AI reminder (friendly, firm, final by lateness, max one per 3 days, never threatens or invents payment details; falls back to a plain template if AI is off). You send it from your own email app |
+| **Qualification + closing** | CRM lead window: four answers (budget, decision maker, need, timeline) and an AI "next-step email" for deals from Qualified to Negotiation, written from the stage, notes and qualification |
+| **Weekly KPI** | Business Value: last 7 days vs the 7 days before (sent, replies, newly qualified, demos, won, revenue, lost, invoiced, collected, check-ins), a plain headline, "email this to me" and "copy as text" |
+| **Account** | Profile, "what I sell" (drives AI), your currency, payment terms and how customers pay you, deal-value / cost / stage-chance settings, optional "versus hiring a rep" cost comparison, download my data, delete my data and account |
 
 Numbers come from the customer's own deals. Where a value is an estimate (a deal without a set value)
 the app says so.
@@ -40,7 +44,7 @@ deals and you click Apply. Starter email/SMS wording is neutral and contains not
 add their own offer (Account → "Your business" feeds every AI draft). Not applicable to this product: multi-currency tax, payroll, accounting.
 
 ## Before you deploy a new version
-Publish `firestore.rules` (`firebase deploy --only firestore:rules`). The rules now make AI usage counters
+Publish `firestore.rules` (`firebase deploy --only firestore:rules`). **Required for Billing**: the rules now include the `invoices` collection; without them invoices cannot be saved. The rules now make AI usage counters
 read-only for customers; without republishing, the old rules still let a customer delete their own counters.
 
 ## Opt-out (unsubscribe) links

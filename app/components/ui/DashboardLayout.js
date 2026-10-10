@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../../../lib/firebase-client.js';
 import { Sidebar, SidebarItem } from './Sidebar';
 import { Button } from './Button';
 import { useTheme } from './ThemeProvider';
@@ -6,11 +8,18 @@ import { useTheme } from './ThemeProvider';
 export const DashboardLayout = ({ children, title, subtitle }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const [initial, setInitial] = useState('');
+  useEffect(() => {
+    if (!auth) return undefined;
+    return onAuthStateChanged(auth, (u) => setInitial(String(u?.displayName || u?.email || '').trim().charAt(0).toUpperCase()));
+  }, []);
 
   const navigationItems = [
     { href: '/dashboard', icon: '📊', label: 'Dashboard' },
     { href: '/business', icon: '💰', label: 'Business Value' },
     { href: '/crm', icon: '💼', label: 'CRM & Deals' },
+    { href: '/customers', icon: '🤝', label: 'Customers' },
+    { href: '/billing', icon: '🧾', label: 'Billing' },
     { href: '/account', icon: '⚙️', label: 'Account' },
   ];
 
@@ -63,7 +72,7 @@ export const DashboardLayout = ({ children, title, subtitle }) => {
               {/* User menu placeholder */}
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">U</span>
+                  <span className="text-white text-sm font-medium">{initial || '?'}</span>
                 </div>
               </div>
             </div>

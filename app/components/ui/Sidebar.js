@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { APP_NAME } from '../../../lib/brand.js';
 
 export const Sidebar = ({ isOpen, onToggle, children }) => {
   return (
@@ -23,7 +24,7 @@ export const Sidebar = ({ isOpen, onToggle, children }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Sales Machine
+              {APP_NAME}
             </h2>
             <button
               onClick={onToggle}
@@ -43,7 +44,7 @@ export const Sidebar = ({ isOpen, onToggle, children }) => {
           {/* Footer */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              v2.0.0 - Enhanced
+              You approve everything that gets sent.
             </div>
           </div>
         </div>

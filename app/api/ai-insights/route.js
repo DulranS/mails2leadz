@@ -30,10 +30,21 @@ export async function POST(request) {
       // why deals were lost: whitelisted reason ids + counts only
       lostReasons: (Array.isArray(facts.lostReasons) ? facts.lostReasons : []).filter((r) => LOST_REASONS.some((x) => x.id === r?.reason)).slice(0, 3).map((r) => ({ reason: r.reason, count: num(r.count, 100000) })),
       currency: /^[A-Z]{3}$/.test(String(facts.currency || '')) ? facts.currency : 'USD',
+      // money owed to the customer + account health (totals only)
+      overdueInvoices: num(facts.overdueCount), overdueAmount: num(facts.overdueAmount), moneyOwedToYou: num(facts.outstanding),
+      collectedLast30d: num(facts.collected30), avgDaysToGetPaid: num(facts.avgDaysToPay, 3650),
+      wonButNeverInvoiced: num(facts.unbilledCount), wonButNeverInvoicedAmount: num(facts.unbilledAmount),
+      customers: num(facts.customers), customersAtRisk: num(facts.atRisk), customersNotActivated: num(facts.stuckOnboarding), openSupportIssues: num(facts.openIssues),
     };
+    // Last 7 days against the 7 days before (whitelisted counts and money only).
+    const wk = facts.weekly && typeof facts.weekly === 'object' ? facts.weekly : null;
+    if (wk) {
+      const pair = (k) => ({ thisWeek: num(wk[k]?.cur), lastWeek: num(wk[k]?.prev) });
+      f.weekly = { emailsSent: pair('sent'), replies: pair('replies'), newlyQualified: pair('qualified'), dealsWon: pair('won'), revenueWon: pair('wonRevenue'), dealsLost: pair('lost'), invoiced: pair('invoiced'), cashCollected: pair('collected') };
+    }
 
     const profile = await getBusinessProfile(uid);
-    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nRules: use no numbers that are not in the JSON; money amounts are in the currency named in the JSON (write them with that currency, not '$' unless it is USD); never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
+    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nMoney already earned matters as much as new sales: overdue invoices, work won but never invoiced, and customers at risk count when ranking actions. If a "weekly" block is present, say how this week went against last week first. Rules: use no numbers that are not in the JSON; money amounts are in the currency named in the JSON (write them with that currency, not '$' unless it is USD); never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
     const prompt = `${profileBlock(profile) || 'No business profile saved.'}\n\nNumbers (last 90 days unless stated):\n${JSON.stringify(f)}`;
 
     const ai = await callAI({ uid, feature: 'pipeline_insights', tier: 'fast', system, prompt, maxTokens: 600 });

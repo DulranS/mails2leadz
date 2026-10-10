@@ -5,6 +5,8 @@ import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
 import { LEAD_SOURCES } from "../../lib/deal-utils.js";
+import { QUAL_FIELDS, qualificationSummary } from "../../lib/deal-extras.js";
+import DraftModal from "./DraftModal";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
 const StageOptions = () =>
@@ -21,6 +23,7 @@ export const CRM = ({
   leadScores = {},
   dealStages = {},
   dealValues = {},
+  dealQual = {},
   defaultDealValue = 1000,
   onUpdateLead,
   onAddNote,
@@ -33,6 +36,18 @@ export const CRM = ({
   const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
   const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
+  const [closing, setClosing] = useState({ busy: false, error: "", draft: null });
+
+  // AI closing nudge for an open deal. A draft only: it opens in the owner's own email app.
+  const askClosingDraft = async (lead) => {
+    setClosing({ busy: true, error: "", draft: null });
+    try {
+      const res = await fetch("/api/ai-deal-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "closing", email: lead.email }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setClosing({ busy: false, error: d.error || "Could not create a draft right now.", draft: null }); return; }
+      setClosing({ busy: false, error: "", draft: { lead, to: lead.email, title: `Next step: ${lead.company}`, subject: d.draft.subject, body: d.draft.body, source: d.source } });
+    } catch { setClosing({ busy: false, error: "Could not reach the server.", draft: null }); }
+  };
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -42,13 +57,14 @@ export const CRM = ({
       ...lead,
       score: leadScores[lead.email] || 0,
       stage: dealStages[lead.email] || "new",
+      qualification: dealQual[lead.email] || null,
       replied: !!repliedLeads[lead.email] || lead.replied === true,
       company: lead.business || lead.company || "Unknown",
       // Real value if the user set one; otherwise the default, clearly marked as an estimate.
       value: dealValues[lead.email] || defaultDealValue,
       valueIsEstimate: !dealValues[lead.email],
     }));
-  }, [leads, leadScores, dealStages, repliedLeads, dealValues, defaultDealValue]);
+  }, [leads, leadScores, dealStages, repliedLeads, dealValues, dealQual, defaultDealValue]);
 
   const selectedLead = useMemo(() => crmLeads.find((l) => l.email === selectedEmail) || null, [crmLeads, selectedEmail]);
 
@@ -390,6 +406,47 @@ export const CRM = ({
               </select>
             </div>
 
+            {/* Qualification */}
+            {(() => {
+              const q = qualificationSummary(selectedLead.qualification);
+              const tone = q.label === "Strong" ? "text-green-700 dark:text-green-300" : q.label === "Weak" ? "text-red-700 dark:text-red-300" : "text-gray-600 dark:text-gray-300";
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualification</label>
+                    <span className={`text-sm font-medium ${tone}`}>{q.label}{q.answered ? ` (${q.yes} yes, ${q.no} no)` : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {QUAL_FIELDS.map((f) => (
+                      <label key={f.id} className="block text-sm text-gray-700 dark:text-gray-300">
+                        {f.label}
+                        <select
+                          value={q.answers[f.id]}
+                          onChange={(e) => onUpdateLead?.(selectedLead.email, { qualification: { ...q.answers, [f.id]: e.target.value } })}
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          aria-label={`${f.label}: ${f.hint}`}
+                        >
+                          <option value="unknown">Not sure yet</option>
+                          <option value="yes">Yes</option>
+                          <option value="no">No</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Four quick answers show which deals deserve your time. They do not change your forecast.</p>
+                </div>
+              );
+            })()}
+
+            {PIPELINE_STAGES.includes(normalizeStage(selectedLead.stage)) && (
+              <div className="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/20 p-3">
+                <div className="text-sm font-medium text-gray-900 dark:text-white">Move this deal forward</div>
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">The AI writes a short email for the current stage using your notes and qualification. You edit it and send it yourself.</p>
+                {closing.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-1">{closing.error}</p>}
+                <Button size="sm" className="mt-2" loading={closing.busy} disabled={closing.busy} onClick={() => askClosingDraft(selectedLead)}>Draft the next-step email</Button>
+              </div>
+            )}
+
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -450,6 +507,11 @@ export const CRM = ({
           </div>
         )}
       </Modal>
+      <DraftModal
+        draft={closing.draft}
+        onClose={() => setClosing({ busy: false, error: "", draft: null })}
+        onOpened={() => { const l = closing.draft?.lead; setClosing({ busy: false, error: "", draft: null }); if (l) onUpdateLead?.(l.email, { touch: true }); }}
+      />
       {/* Add Lead Modal */}
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add a lead" size="md">
         <form

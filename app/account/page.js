@@ -23,6 +23,10 @@ export default function AccountPage() {
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
+  const [termsDays, setTermsDays] = useState("");
+  const [paymentInstructions, setPaymentInstructions] = useState("");
+  const [bdrCost, setBdrCost] = useState("");
+  const [bdrPct, setBdrPct] = useState("");
   const [probs, setProbs] = useState(() => Object.fromEntries(OPEN_STAGES.map((s) => [s, Math.round(DEFAULT_STAGE_PROBABILITY[s] * 100)])));
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState("");
@@ -47,6 +51,10 @@ export default function AccountPage() {
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
+        if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
+        if (d.paymentInstructions) setPaymentInstructions(String(d.paymentInstructions));
+        if (d.bdrMonthlyCost) setBdrCost(String(d.bdrMonthlyCost));
+        if (d.bdrCommissionPct) setBdrPct(String(d.bdrCommissionPct));
         if (d.probabilities) setProbs((p) => ({ ...p, ...Object.fromEntries(Object.entries(d.probabilities).map(([k, v]) => [k, Math.round(v * 100)])) }));
       } catch { setMsg({ type: "error", text: "Could not load your settings." }); }
     })();
@@ -63,6 +71,10 @@ export default function AccountPage() {
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
+        paymentTermsDays: Math.min(180, Math.max(0, Math.round(Number(termsDays) || 0))) || 14,
+        paymentInstructions: String(paymentInstructions || "").trim().slice(0, 400),
+        bdrMonthlyCost: Math.max(0, Number(bdrCost) || 0),
+        bdrCommissionPct: Math.min(100, Math.max(0, Number(bdrPct) || 0)),
         probabilities,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
@@ -155,6 +167,14 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
           </div>
           <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Compare with hiring an outbound rep (optional)</summary>
+            <p className="text-xs text-gray-500 mt-2">Enter what a salesperson doing this outreach would cost you. Business Value then shows the difference. Nothing is shown if you leave this empty.</p>
+            <div className="grid sm:grid-cols-2 gap-3 mt-3">
+              <div><label className={label} htmlFor="bdr">Rep base pay per month ({currencySymbol(currency)})</label><input id="bdr" type="number" min="0" inputMode="decimal" className={field} value={bdrCost} onChange={(e) => setBdrCost(e.target.value)} placeholder="0" /></div>
+              <div><label className={label} htmlFor="bdrp">Rep commission on won revenue (%)</label><input id="bdrp" type="number" min="0" max="100" inputMode="decimal" className={field} value={bdrPct} onChange={(e) => setBdrPct(e.target.value)} placeholder="0" /></div>
+            </div>
+          </details>
+          <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Chance of winning at each stage (advanced)</summary>
             <p className="text-xs text-gray-500 mt-2">Applies once a lead is qualified. People you have only contacted are prospects and are not counted as pipeline.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
@@ -164,6 +184,14 @@ export default function AccountPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">Start with the defaults and adjust once you've closed a few deals.</p>
           </details>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Getting paid <span className="text-xs font-normal text-gray-500">· used by Billing and payment reminders</span></h2>
+          <div className="grid sm:grid-cols-2 gap-3 mt-3">
+            <div><label className={label} htmlFor="pt">Payment terms (days)</label><input id="pt" type="number" min="0" max="180" inputMode="numeric" className={field} value={termsDays} onChange={(e) => setTermsDays(e.target.value)} placeholder="14" /><p className="text-xs text-gray-500 mt-1">How long customers have to pay. New invoices use this unless you change it.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="pi">How customers pay you</label><textarea id="pi" rows={3} maxLength={400} className={field} value={paymentInstructions} onChange={(e) => setPaymentInstructions(e.target.value)} placeholder="e.g. Bank transfer to Account 123456, Example Bank, or pay at https://..." /><p className="text-xs text-gray-500 mt-1">Added word for word to overdue-invoice reminders. The AI never makes up payment details.</p></div>
+          </div>
         </section>
 
         <div className="flex justify-end"><button onClick={save} disabled={busy === "save" || !user} className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold disabled:opacity-50">{busy === "save" ? "Saving…" : "Save changes"}</button></div>

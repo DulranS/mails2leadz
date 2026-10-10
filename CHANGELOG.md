@@ -1,5 +1,19 @@
 # Changelog
 
+## BDR coverage pass: billing, customers, qualification, weekly KPI
+New (all human-approved; AI = DeepSeek by default, capped and cached like the rest)
+- **Billing** (`/billing`, `lib/billing.js`, `invoices` collection): invoice records with due dates, mark paid / void, aging buckets, cash collected, average days to pay, on-time rate, 6-month cash chart, and "Won but not invoiced". Overdue reminders via `/api/ai-deal-draft` (`kind: collection`): tone by lateness, one per 3 days (enforced server-side), amount verified in the draft, forbidden wording (legal action, fees, interest) rejected, plain template fallback when AI is unavailable or capped. Opens in the owner's own email app; logs the reminder.
+- **Customers** (`/customers`, `lib/customers.js`): onboarding checklist stored on the deal, activation rate and days to activate, health with explicit reasons, support issues (add, resolve, AI reply draft that promises only what the owner types), AI check-in drafts matched to customer age, ticking the matching post-sale reminder.
+- **Qualification + closing**: four answers per deal in the CRM lead window; AI next-step email for Qualified to Negotiation (`kind: closing`, refuses opted-out and Lost contacts).
+- **Weekly KPI** (Business Value): this week vs last week, headline, email-to-me, copy as text. Deals now record when each stage was first reached (`stageTimes`) so weeks are dated honestly; older deals simply do not appear in "newly qualified".
+- **Versus hiring a rep** (optional, Account): base pay + commission % vs what this costs. Hidden unless entered.
+- "Do this next" now includes overdue invoices, unbilled wins, at-risk customers, not-activated customers and unqualified deals. The AI coach also reads totals for money owed, customer health and the weekly numbers (no names).
+- Navigation: Customers and Billing added; sidebar shows the app name instead of a hard-coded one; avatar shows the user's initial; deal-value inputs on Business Value use the customer's currency symbol (was "$").
+- Data export/delete include `invoices`. **Republish `firestore.rules`.**
+- Tests: `billing`, `customers` (extras, health, BDR, next actions), `weekly-kpi`.
+- Known behaviour: customers won more than 45 days ago with no logged contact show as "At risk" until you press "I spoke to them" once.
+- Still not done on purpose: payments, tax invoices, sending without you, scheduled/cron emails (Gmail tokens are short-lived browser tokens).
+
 ## Automation: draft everything, approve once
 - **⚡ Draft all, approve together** (dashboard → Pending Follow-Ups): checks Gmail for new replies first, AI-drafts every due prospect follow-up (max 10 per run, two at a time), and opens ONE window with all drafts. Edit, untick, press Send once. Sends are paced 1.5 s apart through the normal follow-up route, so every server rule still applies (not replied, max 3, minimum gap, daily limit, opt-outs, Lost deals). Nothing is sent before that press; skipped leads are listed with the reason. Customer check-ins (post-sale) stay separate: they open in your own mail app.
 - Consciously not automated: sending without you present (Gmail tokens are short-lived browser tokens; no refresh token is stored on the server), auto-replying, lead scraping.
