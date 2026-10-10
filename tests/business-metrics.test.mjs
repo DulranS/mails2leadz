@@ -164,3 +164,75 @@ t('lost reason is stored only when Lost, from the list, never over a system reas
   assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', existing: { stage: 'closed_lost', lostReason: 'unsubscribed' } }).lostReason, undefined);
 });
 console.log('\nlost reasons ok');
+
+// ---------- source attribution, A/B stats, stage-chance suggestion ----------
+import { computeTemplateStats, suggestStageChances } from '../lib/attribution.js';
+const sr = computeBusinessMetrics({ deals: [
+  { email: 'e1@x.com', stage: 'closed_won', value: 2000, createdAt: d(40), closedAt: d(5), lastUpdate: d(5) },
+  { email: 'e2@x.com', stage: 'closed_lost', value: 1000, lostReason: 'price', createdAt: d(40), closedAt: d(5), lastUpdate: d(5) },
+  { email: 'r1@x.com', stage: 'closed_won', value: 5000, source: 'referral', createdAt: d(20), closedAt: d(2), lastUpdate: d(2) },
+  { email: 'p1@x.com', stage: 'contacted', createdAt: d(3), lastUpdate: d(3) }, // prospect: not counted
+  { email: 'o1@x.com', stage: 'closed_lost', value: 700, lostReason: 'unsubscribed', createdAt: d(9), closedAt: d(2), lastUpdate: d(2) }, // opt-out: not counted
+], emailed: ['E1@x.com', 'e2@x.com', 'p1@x.com', 'o1@x.com'], now });
+t('source: cold email recognised from sent emails, tagged sources kept, prospects and opt-outs excluded', () => {
+  const by = Object.fromEntries(sr.past.bySource.map((r) => [r.source, r]));
+  assert.deepEqual([by.referral.deals, by.referral.won, by.referral.revenue, by.referral.winRate], [1, 1, 5000, 1]);
+  assert.deepEqual([by.email.deals, by.email.won, by.email.lost, by.email.revenue, by.email.winRate], [2, 1, 1, 2000, 0.5]);
+  assert.equal(sr.past.bySource.length, 2);
+  assert.equal(sr.past.bySource[0].source, 'referral'); // most revenue first
+});
+t('source is stored only on creation, from the list', () => {
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', source: 'referral' }).source, 'referral');
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', source: 'bogus' }).source, undefined);
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', source: 'referral', existing: { stage: 'new' } }).source, undefined);
+});
+t('reached stages accumulate; only deals tracked from creation are marked full', () => {
+  const w1 = buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'contacted' });
+  assert.deepEqual([w1.reached, w1.reachedFull], [['contacted'], true]);
+  const w2 = buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'demo', existing: { stage: 'contacted', reached: ['contacted'], reachedFull: true } });
+  assert.deepEqual(w2.reached, ['contacted', 'demo']);
+  const legacy = buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'proposal', existing: { stage: 'demo' } });
+  assert.deepEqual(legacy.reached, ['demo', 'proposal']);
+  assert.equal(legacy.reachedFull, undefined);
+});
+
+const mk = (n, tpl, repliedN, startT) => Array.from({ length: n }, (_, i) => ({ to: `${tpl}${i}@x.com`, template: tpl, replied: i < repliedN, t: startT + i }));
+t('A/B: needs both versions, 20+ leads each and a 5-point gap before calling a leader', () => {
+  assert.equal(computeTemplateStats({ emails: mk(30, 'A', 3, 1) }).active, false);
+  const early = computeTemplateStats({ emails: [...mk(10, 'A', 5, 1), ...mk(10, 'B', 1, 1)] });
+  assert.equal(early.active, true); assert.equal(early.verdict, null);
+  const close = computeTemplateStats({ emails: [...mk(40, 'A', 6, 1), ...mk(40, 'B', 5, 1)] });
+  assert.equal(close.verdict, null);
+  const clear = computeTemplateStats({ emails: [...mk(40, 'A', 4, 1), ...mk(40, 'B', 12, 1)] });
+  assert.deepEqual(clear.verdict, { leader: 'B', gapPoints: 20 });
+});
+t('A/B: a lead counts once, by the FIRST email; follow-ups and replies on later rows still count as replied; wins joined from deals', () => {
+  const s = computeTemplateStats({
+    emails: [{ to: 'x@x.com', template: 'B', replied: false, t: 2 }, { to: 'X@x.com', template: 'A', replied: true, t: 1 }],
+    dealsByEmail: new Map([['x@x.com', { stage: 'closed_won', value: 900 }]]),
+  });
+  assert.deepEqual(s.rows.map((r) => [r.template, r.leads, r.replied, r.won, r.revenue]), [['A', 1, 1, 1, 900]]);
+});
+
+const closedDeals = (stage, wins, losses) => [
+  ...Array.from({ length: wins }, (_, i) => ({ email: `w${stage}${i}`, stage: 'closed_won', reachedFull: true, reached: ['contacted', ...PIPE_UPTO(stage), 'closed_won'] })),
+  ...Array.from({ length: losses }, (_, i) => ({ email: `l${stage}${i}`, stage: 'closed_lost', lostReason: 'price', reachedFull: true, reached: ['contacted', ...PIPE_UPTO(stage), 'closed_lost'] })),
+];
+const ORDER = ['qualified', 'demo', 'proposal', 'negotiation'];
+function PIPE_UPTO(stage) { return ORDER.slice(0, ORDER.indexOf(stage) + 1); }
+t('stage chances: nothing suggested with too little data; shrunk toward current; monotonic; opt-outs and untracked deals ignored', () => {
+  assert.equal(suggestStageChances({ deals: closedDeals('negotiation', 4, 2) }), null); // < 10 deals reached any stage
+  const deals = [...closedDeals('negotiation', 12, 0), ...closedDeals('proposal', 0, 8),
+    { email: 'u', stage: 'closed_lost', lostReason: 'unsubscribed', reachedFull: true, reached: ['qualified', 'closed_lost'] },
+    { email: 'legacy', stage: 'closed_won', reached: ['qualified', 'closed_won'] }];
+  const sug = suggestStageChances({ deals });
+  assert.ok(sug);
+  const by = Object.fromEntries(sug.rows.map((r) => [r.stage, r]));
+  // 12 wins of 12 reached negotiation: (12 + 5*0.75)/(17) = 0.9265 -> 0.95 after rounding to 5%
+  assert.equal(by.negotiation.suggested, 0.95);
+  assert.equal(by.negotiation.deals, 12);
+  // proposal: reached by 20 (12 won + 8 lost): (12 + 5*0.6)/25 = 0.6 -> unchanged, so not listed
+  assert.equal(by.proposal, undefined);
+  for (const r of sug.rows) assert.ok(r.suggested >= 0.05 && r.suggested <= 0.95);
+});
+console.log('\nattribution ok');

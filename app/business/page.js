@@ -9,6 +9,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
+import { computeTemplateStats, suggestStageChances } from "../../lib/attribution.js";
 import { buildNextActions } from "../../lib/next-actions.js";
 import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
@@ -90,9 +91,11 @@ export default function BusinessValuePage() {
       const unconvertedMap = new Map();
       const repliedEmails = new Set();
       let sent = 0, replied = 0;
+      const emailRows = [];
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
+        if (to) emailRows.push({ to, template: x.template, replied: !!x.replied, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
@@ -116,7 +119,7 @@ export default function BusinessValuePage() {
         const t = toMs(x.scheduledFor); return t && t <= Date.now();
       }).length;
       setRaw({
-        deals, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
+        deals, emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       });
@@ -128,7 +131,10 @@ export default function BusinessValuePage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90 }), [raw]);
+  const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90, emailed: (raw.emailRows || []).map((r) => r.to) }), [raw]);
+  const tplStats = useMemo(() => computeTemplateStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])) }), [raw, m]);
+  const chanceTip = useMemo(() => suggestStageChances({ deals: raw.deals || [], current: m.settings.probabilities }), [raw, m]);
+  const [dismissedTip, setDismissedTip] = useState(false);
 
   const money = makeMoney(m.settings.currency); // the customer's own currency
   const money2 = makeMoney(m.settings.currency, 2);
@@ -153,6 +159,17 @@ export default function BusinessValuePage() {
     finally { setSaving(""); }
   };
 
+
+  // Stage-chance suggestion: applied only when the customer clicks Apply (merges just the probabilities).
+  const applyChances = async () => {
+    if (!chanceTip || !user?.uid) return;
+    setSaving("chances");
+    try {
+      await setDoc(doc(db, "users", user.uid, "settings", "business"), { probabilities: { ...m.settings.probabilities, ...chanceTip.suggested } }, { merge: true });
+      await load();
+    } catch { setError("Could not save the new stage chances."); }
+    finally { setSaving(""); }
+  };
 
   // AI "pipeline coach": only aggregate numbers leave the browser (no names, emails or message text).
   const askCoach = async () => {
@@ -298,6 +315,50 @@ export default function BusinessValuePage() {
             Based on your deals' values and stage chances (editable in <Link href="/account" className="underline">Settings</Link>).
           </p>
         </Card>
+
+        {chanceTip && !dismissedTip && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-100">
+            <div className="font-medium">Your closed deals suggest different stage chances</div>
+            <ul className="mt-1 space-y-0.5">{chanceTip.rows.map((r) => <li key={r.stage}>{STAGE_LABELS[r.stage]}: {pct(r.current)} → <b>{pct(r.suggested)}</b> <span className="text-xs opacity-80">({r.wins} won of {r.deals} deals that reached it)</span></li>)}</ul>
+            <p className="text-xs opacity-80 mt-1">Nothing changes unless you apply it. You can still edit every chance in Account → Money settings.</p>
+            <div className="flex gap-2 mt-2">
+              <button type="button" disabled={saving === "chances"} onClick={applyChances} className="min-h-[44px] px-4 rounded-lg bg-blue-600 text-white disabled:opacity-60">{saving === "chances" ? "Saving…" : "Apply"}</button>
+              <button type="button" onClick={() => setDismissedTip(true)} className="min-h-[44px] px-4 rounded-lg border border-blue-300 dark:border-blue-700">Not now</button>
+            </div>
+          </div>
+        )}
+
+        {(m.past.bySource.length > 0 || tplStats.active) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {m.past.bySource.length > 0 && (
+              <Card title="Where your deals come from">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Source</th><th className="py-1 text-right">Deals</th><th className="py-1 text-right">Won</th><th className="py-1 text-right">Win rate</th><th className="py-1 text-right">Revenue</th></tr></thead>
+                    <tbody>{m.past.bySource.map((r) => (
+                      <tr key={r.source} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">{r.label}</td><td className="py-1.5 text-right">{r.deals}</td><td className="py-1.5 text-right">{r.won}</td><td className="py-1.5 text-right">{pct(r.winRate)}</td><td className="py-1.5 text-right">{money(r.revenue)}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Qualified-or-later deals only. Cold email is recognised from the emails sent here; add referrals and inbound enquiries in CRM → Add a lead. SMS, calls and WhatsApp get no reply signal back, so they cannot be attributed.</p>
+              </Card>
+            )}
+            {tplStats.active && (
+              <Card title="Email A/B test: which version works">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Version</th><th className="py-1 text-right">Leads</th><th className="py-1 text-right">Replied</th><th className="py-1 text-right">Reply rate</th><th className="py-1 text-right">Won</th></tr></thead>
+                    <tbody>{tplStats.rows.map((r) => (
+                      <tr key={r.template} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">Version {r.template}</td><td className="py-1.5 text-right">{r.leads}</td><td className="py-1.5 text-right">{r.replied}</td><td className="py-1.5 text-right">{pct(r.replyRate)}</td><td className="py-1.5 text-right">{r.won}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+                <p className="text-sm mt-2 text-gray-800 dark:text-gray-100">{tplStats.verdict ? <>Version <b>{tplStats.verdict.leader}</b> is ahead by {tplStats.verdict.gapPoints} points of reply rate.</> : `Too early to call: it needs ${tplStats.minPerVersion}+ leads per version and a clear gap.`}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Counted by the first email each lead received.</p>
+              </Card>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* PAST */}

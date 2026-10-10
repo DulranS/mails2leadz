@@ -4,6 +4,7 @@ import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
+import { LEAD_SOURCES } from "../../lib/deal-utils.js";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
 const StageOptions = () =>
@@ -29,7 +30,7 @@ export const CRM = ({
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "" });
+  const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
   const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -459,7 +460,7 @@ export const CRM = ({
             setAdding(false);
             if (ok) {
               setShowAdd(false);
-              setAddForm({ email: "", businessName: "", stage: "qualified", value: "" });
+              setAddForm({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
             }
           }}
           className="space-y-4"
@@ -492,6 +493,13 @@ export const CRM = ({
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
             </label>
           </div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Where did they come from?
+            <select value={addForm.source} onChange={(e) => setAddForm({ ...addForm, source: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+              {LEAD_SOURCES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button type="submit" disabled={adding || !addForm.email}>{adding ? "Adding…" : "Add lead"}</Button>

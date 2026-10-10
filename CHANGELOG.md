@@ -3,6 +3,9 @@
 ## Final day: why deals are lost
 - **Lost reason.** Marking a deal Lost (dashboard, CRM, Business Value, or the AI reply suggestion) now asks why in one tap (price, timing, competitor, no need, said no, went silent, other) or lets you skip. Stored on the deal, cleared if the deal is reopened, never overwrites the system reasons `unsubscribed` / `bounced` (still not counted as lost sales). The AI "not interested" suggestion records its own reason.
 - **Business Value → "Why deals are lost"**: lost deals grouped by reason, largest money first; deals marked Lost without a reason show as "Not recorded". The AI pipeline coach receives only whitelisted reason ids + counts (no names).
+- **Where your deals come from** (Business Value): deals, win rate and revenue by source. Cold email is recognised from sent emails; "Add a lead" now asks referral / inbound / other. SMS, calls and WhatsApp are not attributable (no reply signal returns).
+- **Email A/B results** (Business Value): reply rate and wins per version, counted by each lead's first email; a leader is named only with 20+ leads per version and a 5-point gap.
+- **Stage-chance suggestions**: every deal now records the stages it passed through (`reached`, `reachedFull` for deals tracked from creation). With 10+ such closed deals at a stage, Business Value suggests new chances (shrunk toward yours, never lower for later stages). Applied only on click; it merges just `probabilities`.
 - Tests: `tests/business-metrics.test.mjs` (grouping, opt-out exclusion, write rules). `npm test` and `next build` pass.
 
 ## Opt-out + hardening pass
