@@ -4,9 +4,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
-import { headerSafe, isLostDeal } from '../../../lib/server/route-helpers.js';
-import { countToday } from '../../../lib/server/daily-count.js';
-import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
+import { headerSafe } from '../../../lib/server/route-helpers.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 export const maxDuration = 60;
@@ -85,6 +83,48 @@ const isValidEmail = (email) => {
   if (cleaned.length < 5) return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(cleaned);
+};
+
+// Helper function to replace template variables
+const replaceTemplateVariables = (text, firstName, lastName, businessName) => {
+  if (!text) return '';
+  
+  // Define all common variable name variations
+  const replacements = {
+    '{{first_name}}': firstName,
+    '{{firstName}}': firstName,
+    '{{First Name}}': firstName,
+    '{{first name}}': firstName,
+    '{{last_name}}': lastName,
+    '{{lastName}}': lastName,
+    '{{Last Name}}': lastName,
+    '{{last name}}': lastName,
+    '{{company}}': businessName,
+    '{{Company}}': businessName,
+    '{{business_name}}': businessName,
+    '{{businessName}}': businessName,
+    '{{Business Name}}': businessName,
+    '{{business name}}': businessName,
+    '{{business}}': businessName,
+    '{{Business}}': businessName
+  };
+  
+  // Apply exact replacements first
+  let result = text;
+  for (const [placeholder, value] of Object.entries(replacements)) {
+    result = result.replace(new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'gi'), value || '');
+  }
+  
+  // Handle any remaining {{variable}} patterns with fuzzy matching
+  result = result.replace(/\{\{([^}]+)\}\}/gi, (match, variable) => {
+    const varName = variable.toLowerCase().replace(/[_\s]/g, '');
+    if (varName.includes('firstname')) return firstName || '';
+    if (varName.includes('lastname')) return lastName || '';
+    if (varName.includes('company') || varName.includes('business')) return businessName || '';
+    return match; // Keep original if not recognized
+  });
+  
+  return result;
 };
 
 // Helper function to encode subject line using RFC 2047 encoded-word syntax
@@ -167,25 +207,43 @@ export async function POST(request) {
       emailAttachments = [],
       userId,
       csvSource,
-      senderName: typedSenderName,
+      contact,
+      followUpCount
     } = requestData;
+
+    // Handle follow-up requests
+    if (contact && followUpCount !== undefined) {
+      return await handleFollowUpSend(contact, followUpCount, userId, accessToken, requestData);
+    }
 
     // CSV-based email sending
     if (!userId || !accessToken || !csvContent) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Daily safety limit (protects the customer's Gmail account from being flagged for bulk sending).
-    // If today's count cannot be read at all we continue, but the limit is also enforced inside the loop below.
-    const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
-    let remaining = CONFIG.MAX_DAILY_EMAILS - (sentToday ?? 0);
-    if (remaining <= 0) {
+    // Check daily quota
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const emailQuery = query(
+      collection(db, 'sent_emails'),
+      where('userId', '==', userId),
+      where('sentAt', '>=', startOfDay)
+    );
+    
+    let emailSnapshot;
+    try {
+      emailSnapshot = await getDocs(emailQuery);
+    } catch (firebaseError) {
+      emailSnapshot = { size: 0 };
+    }
+    
+    if (emailSnapshot.size >= CONFIG.MAX_DAILY_EMAILS) {
       return NextResponse.json(
-        { error: 'Daily email limit reached', dailyCount: sentToday, limit: CONFIG.MAX_DAILY_EMAILS },
+        { error: 'Daily email limit reached', dailyCount: emailSnapshot.size, limit: CONFIG.MAX_DAILY_EMAILS },
         { status: 429 }
       );
     }
-
+    
     // Parse CSV
     const lines = csvContent.split('\n').filter(line => line.trim() !== '');
     if (lines.length < 2) {
@@ -210,18 +268,13 @@ export async function POST(request) {
     oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const senderEmail = process.env.GMAIL_SENDER_EMAIL || oauth2Client.credentials.email;
-    const senderMapping = fieldMappings?.sender_name || fieldMappings?.senderName || '';
+    const senderName = fieldMappings?.sender_name || fieldMappings?.senderName || '';
     const replyToEmail = fieldMappings?.reply_to || fieldMappings?.replyTo || null;
     
     let successCount = 0, failCount = 0, skipCount = 0;
     const results = [];
     
     for (const row of dataRows) {
-      if (remaining <= 0) {
-        skipCount++;
-        results.push({ email: parseCsvRow(row)[emailIndex]?.trim(), status: 'skipped', reason: `Daily limit of ${CONFIG.MAX_DAILY_EMAILS} reached: continue tomorrow` });
-        continue;
-      }
       const values = parseCsvRow(row);
       const email = values[emailIndex]?.trim();
       
@@ -231,13 +284,6 @@ export async function POST(request) {
         continue;
       }
       
-      // A lead the owner marked Lost ("not interested" / "asked to stop") is never emailed again from here.
-      if (await isLostDeal(db, userId, email)) {
-        skipCount++;
-        results.push({ email, status: 'skipped', reason: 'Marked Lost: reopen the deal to contact again' });
-        continue;
-      }
-
       // Check duplicates - prevent sending to same email within 24 hours
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const duplicateQuery = query(
@@ -273,10 +319,8 @@ export async function POST(request) {
       let body = template.body || '';
       
       // Apply template variable substitution
-      const senderName = resolveSenderName({ mappedTo: senderMapping, rowValues: recipient, typedName: typedSenderName });
-      const vars = { firstName, lastName, businessName, senderName };
-      subject = fillTemplate(subject, vars);
-      body = fillTemplate(body, vars);
+      subject = replaceTemplateVariables(subject, firstName, lastName, businessName);
+      body = replaceTemplateVariables(body, firstName, lastName, businessName);
       
       try {
         const rawMessage = createMimeMessage(email, subject, body, senderEmail, senderName, replyToEmail, emailAttachments);
@@ -315,7 +359,6 @@ export async function POST(request) {
         await addDoc(collection(db, 'sent_emails'), emailData);
 
         successCount++;
-        remaining--;
         results.push({ email, status: 'success', messageId: response.data.id });
 
         await new Promise(resolve => setTimeout(resolve, CONFIG.RATE_LIMIT_DELAY_MS));
@@ -349,3 +392,139 @@ export async function POST(request) {
 }
 
 // Follow-up Handler
+async function handleFollowUpSend(contact, followUpCount, userId, accessToken, requestData) {
+  if (!userId || !accessToken) {
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  const { senderName, templateToSend } = requestData;
+  const email = contact.email || contact.to;
+  
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  );
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  const senderEmail = process.env.GMAIL_SENDER_EMAIL || oauth2Client.credentials.email;
+  
+  const businessName = contact.businessName || '';
+  const firstName = contact.firstName || '';
+  
+  // Use template from request or default follow-up template
+  let template = requestData.templateToSend === 'followup' ? requestData.template : null;
+  
+  let subject, body;
+  
+  if (template && template.subject && template.body) {
+    // Use custom template with variable substitution
+    subject = template.subject || `Following up - ${businessName}`;
+    body = template.body || `Hi ${firstName},\n\nI wanted to follow up on my previous email. Are you still interested in discussing how we can help ${businessName}?\n\nBest regards,\n${senderName}`;
+    
+    // Apply template variable substitution
+    subject = replaceTemplateVariables(subject, firstName, '', businessName);
+    body = replaceTemplateVariables(body, firstName, '', businessName);
+  } else {
+    // Default follow-up template
+    subject = `Following up - ${businessName}`;
+    body = `Hi ${firstName},\n\nI wanted to follow up on my previous email. Are you still interested in discussing how we can help ${businessName}?\n\nBest regards,\n${senderName}`;
+  }
+  
+  // Check if follow-up was already sent recently (within 1 hour)
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const recentFollowUpQuery = query(
+    collection(db, 'sent_emails'),
+    where('userId', '==', userId),
+    where('to', '==', email.toLowerCase()),
+    where('lastFollowUpSentAt', '>=', oneHourAgo.toISOString())
+  );
+  
+  let recentFollowUp = false;
+  try {
+    const recentSnapshot = await getDocs(recentFollowUpQuery);
+    recentFollowUp = !recentSnapshot.empty;
+  } catch (error) {}
+  
+  if (recentFollowUp) {
+    return NextResponse.json({
+      success: false,
+      error: 'Follow-up already sent within the last hour',
+      email
+    }, { status: 429 });
+  }
+  
+  try {
+    const rawMessage = createMimeMessage(email, subject, body, senderEmail, senderName);
+    const encoded = Buffer.from(rawMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    
+    const response = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encoded }
+    });
+    
+    const now = new Date().toISOString();
+    
+    // Update existing record AFTER successful send
+    const q = query(
+      collection(db, 'sent_emails'),
+      where('userId', '==', userId),
+      where('to', '==', email.toLowerCase())
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const existingDoc = querySnapshot.docs[0];
+      const docRef = doc(db, 'sent_emails', existingDoc.id);
+      const existingData = existingDoc.data();
+      
+      const currentFollowUpCount = Number(existingData.followUpCount ?? existingData.followUpSentCount ?? 0);
+      const newFollowUpCount = currentFollowUpCount + 1;
+      
+      // Calculate next follow-up date based on template delays (2, 5, 10 days)
+      const daysToAdd = newFollowUpCount === 1 ? 2 : newFollowUpCount === 2 ? 5 : 10;
+      const nextFollowUpDate = new Date();
+      nextFollowUpDate.setDate(nextFollowUpDate.getDate() + daysToAdd);
+
+      await updateDoc(docRef, {
+        ...existingData,
+        subject,
+        body,
+        template: templateToSend || 'followup',
+        followUpCount: newFollowUpCount,
+        followUpSentCount: newFollowUpCount,
+        lastFollowUpAt: now,
+        lastFollowUpSentAt: now,
+        followUpDates: [...(existingData.followUpDates || []), now],
+        followUpAt: newFollowUpCount < 3 ? nextFollowUpDate.toISOString() : null,
+        messageId: response.data.id,
+        threadId: response.data.threadId
+      });
+
+      // Invalidate cache to ensure fresh data
+      invalidateCache('sent_emails');
+
+      return NextResponse.json({
+        success: true,
+        followUpCount: newFollowUpCount,
+        email,
+        messageId: response.data.id
+      });
+    } else {
+      // No existing record found - this should not happen for follow-ups
+      return NextResponse.json({
+        success: false,
+        error: 'No original email record found. Cannot send follow-up without initial email.',
+        code: 'NO_ORIGINAL_EMAIL'
+      }, { status: 404 });
+    }
+    
+  } catch (sendError) {
+    console.error(`Follow-up send error for ${email}:`, sendError);
+    return NextResponse.json({ error: sendError.message }, { status: 500 });
+  }
+}

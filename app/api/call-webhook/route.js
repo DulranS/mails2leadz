@@ -2,8 +2,6 @@
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from '../../../lib/server-firestore.js';
-import { getBusinessProfile } from '../../../lib/ai-client.js';
-import { normalizePhone } from '../../../lib/phone.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION
@@ -27,10 +25,6 @@ const db = getFirestore(app);
 export async function POST(request) {
   try {
     const formData = await request.formData();
-    // Twilio posts the key the caller pressed (Gather) to this same URL: answer it with call instructions.
-    if (formData.get('Digits') !== null && formData.get('Digits') !== undefined) {
-      return menuResponse(String(formData.get('Digits')), formData.get('CallSid'));
-    }
     const callSid = formData.get('CallSid');
     const callStatus = formData.get('CallStatus');
     const callDuration = formData.get('CallDuration');
@@ -81,57 +75,45 @@ export async function POST(request) {
 }
 
 // ============================================================================
-// GET HANDLER - the same menu, for callers that use GET
+// GET HANDLER - TWILIO WEBHOOK (for call instructions)
 // ============================================================================
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  return menuResponse(searchParams.get('Digits'), searchParams.get('CallSid'));
-}
-
-// ============================================================================
-// PHONE MENU: what happens when the person presses a key
-//   1 = connect to the CUSTOMER's own phone (Account > Your business), never anyone else's
-//   2 = they would like information by email: recorded on the call so the owner can follow up
-//   3 = do not call again: recorded, and the call route refuses to dial this number again
-// ============================================================================
-const esc = (t) => String(t || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
-const twiml = (inner) =>
-  new NextResponse(`<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  ${inner}\n</Response>`, { headers: { 'Content-Type': 'text/xml' } });
-
-async function findCall(callSid) {
-  if (!callSid) return null;
-  try {
-    const snap = await getDocs(query(collection(db, 'calls'), where('callSid', '==', callSid)));
-    return snap.empty ? null : snap.docs[0];
-  } catch {
-    return null;
-  }
-}
-
-async function menuResponse(digits, callSid) {
-  const call = await findCall(callSid);
-  const data = call ? call.data() : null;
-  const note = async (fields) => {
-    if (!call) return;
-    try { await updateDoc(doc(db, 'calls', call.id), { ...fields, updatedAt: new Date().toISOString() }); } catch {}
-  };
-
+  const digits = searchParams.get('Digits');
+  
+  // Interactive menu response
   if (digits === '1') {
-    const profile = data?.userId ? await getBusinessProfile(data.userId).catch(() => null) : null;
-    const owner = normalizePhone(profile?.phone);
-    await note({ keypress: '1', interest: 'wants_to_talk' });
-    if (!owner) {
-      return twiml('<Say voice="alice">Sorry, nobody is available to take your call right now. Please reply to our email and we will get back to you. Thank you!</Say>\n  <Hangup/>');
-    }
-    return twiml(`<Say voice="alice">Connecting you now. Please hold.</Say>\n  <Dial>+${esc(owner)}</Dial>`);
+    return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Connecting you to a representative now. Please hold.</Say>
+  <Dial>+94741143323</Dial>
+</Response>`, {
+      headers: { 'Content-Type': 'text/xml' }
+    });
+  } else if (digits === '2') {
+    return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">We'll send you more information via email shortly. Thank you!</Say>
+  <Hangup/>
+</Response>`, {
+      headers: { 'Content-Type': 'text/xml' }
+    });
+  } else if (digits === '3') {
+    return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">You've been removed from our list. We apologize for any inconvenience.</Say>
+  <Hangup/>
+</Response>`, {
+      headers: { 'Content-Type': 'text/xml' }
+    });
   }
-  if (digits === '2') {
-    await note({ keypress: '2', interest: 'wants_info_by_email' });
-    return twiml('<Say voice="alice">Thank you. We will follow up by email.</Say>\n  <Hangup/>');
-  }
-  if (digits === '3') {
-    await note({ keypress: '3', optedOut: true });
-    return twiml('<Say voice="alice">Understood. We will not call you again. Goodbye.</Say>\n  <Hangup/>');
-  }
-  return twiml('<Say voice="alice">Thank you. Goodbye!</Say>\n  <Hangup/>');
+  
+  // Default response
+  return new NextResponse(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Thank you for your interest. Goodbye!</Say>
+  <Hangup/>
+</Response>`, {
+    headers: { 'Content-Type': 'text/xml' }
+  });
 }

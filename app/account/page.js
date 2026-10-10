@@ -8,7 +8,6 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
-import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const label = "block text-sm font-medium text-gray-700 dark:text-gray-200";
@@ -21,8 +20,6 @@ export default function AccountPage() {
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
-  const [currency, setCurrency] = useState("USD");
-  const [usdRate, setUsdRate] = useState("");
   const [probs, setProbs] = useState(() => Object.fromEntries(OPEN_STAGES.map((s) => [s, Math.round(DEFAULT_STAGE_PROBABILITY[s] * 100)])));
   const [msg, setMsg] = useState(null); // {type, text}
   const [busy, setBusy] = useState("");
@@ -45,8 +42,6 @@ export default function AccountPage() {
         if (d.avgDealValue) setAvgDealValue(String(d.avgDealValue));
         if (d.monthlyCost) setMonthlyCost(String(d.monthlyCost));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
-        if (d.currency) setCurrency(normalizeCurrency(d.currency));
-        if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.probabilities) setProbs((p) => ({ ...p, ...Object.fromEntries(Object.entries(d.probabilities).map(([k, v]) => [k, Math.round(v * 100)])) }));
       } catch { setMsg({ type: "error", text: "Could not load your settings." }); }
     })();
@@ -61,8 +56,6 @@ export default function AccountPage() {
         avgDealValue: Math.max(0, Number(avgDealValue) || 0),
         monthlyCost: Math.max(0, Number(monthlyCost) || 0),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
-        currency: normalizeCurrency(currency),
-        usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
         probabilities,
         updatedAt: new Date().toISOString(),
       }, { merge: true });
@@ -148,11 +141,9 @@ export default function AccountPage() {
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white">Money settings <span className="text-xs font-normal text-gray-500">· makes your forecasts honest</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
-            <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
-            {currency !== "USD" && <div className="sm:col-span-2"><label className={label} htmlFor="fx">1 US dollar = how many {currency}? <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="fx" type="number" min="0" inputMode="decimal" className={field} value={usdRate} onChange={(e) => setUsdRate(e.target.value)} placeholder="e.g. 300" /><p className="text-xs text-gray-500 mt-1">The AI provider bills in US dollars. This converts that small cost so your ROI is in {currency}. Leave empty to count it 1:1.</p></div>}
-            <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
-            <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
-            <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
+            <div><label className={label} htmlFor="adv">Typical deal value ($)</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ($)</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
+            <div><label className={label} htmlFor="mc">What you pay per month ($)</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
           </div>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Chance of winning at each stage (advanced)</summary>

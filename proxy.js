@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 
 const PUBLIC = new Set(['/api/health', '/api/auth/callback']);
-const WEBHOOKS = new Set(['/api/call-webhook']);
+const WEBHOOKS = new Set(['/api/call-webhook', '/api/handle-sms-reply']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
@@ -51,17 +51,18 @@ async function gate(request) {
   if (claimed && claimed !== user.uid) return json(403, 'You can only access your own data.');
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-    // Routes call request.json() whatever the Content-Type says, so the tenant check must not depend on
-    // the declared type either (a "text/plain" body carrying someone else's userId would slip past).
-    const len = Number(request.headers.get('content-length') || 0);
-    if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
-    try {
-      const body = await request.clone().json();
-      if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
-        return json(403, 'You can only access your own data.');
+    const type = request.headers.get('content-type') || '';
+    if (type.includes('application/json')) {
+      const len = Number(request.headers.get('content-length') || 0);
+      if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
+      try {
+        const body = await request.clone().json();
+        if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
+          return json(403, 'You can only access your own data.');
+        }
+      } catch {
+        /* non-JSON or empty body: route handles it */
       }
-    } catch {
-      /* not JSON or empty body: the route handles it */
     }
   }
 

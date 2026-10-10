@@ -6,12 +6,6 @@ import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
 import ReduxProvider from '../components/ReduxProvider';
 import ErrorBoundary from './components/ErrorBoundary';
-import { APP_NAME, APP_DESCRIPTION } from '../lib/brand.js';
-
-export const metadata = {
-  title: { default: APP_NAME, template: `%s | ${APP_NAME}` },
-  description: APP_DESCRIPTION,
-};
 
 export default function RootLayout({ children }) {
   return (

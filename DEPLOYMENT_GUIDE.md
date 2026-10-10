@@ -9,9 +9,10 @@ Do these in order. The order matters: step 3 before step 4.
 3. **Deploy the app** (`vercel --prod` or your host) and open `/api/health`: it must answer `{"status":"ok"}`.
 4. **Deploy the Firestore rules:** `firebase deploy --only firestore:rules`.
    (Doing this before step 2/3 makes the API unable to read the database.)
-5. **Twilio (if used):** the call-status webhook is set by the app itself (see "Phone calls" below). Nothing to configure in the Twilio console for it.
+5. **Twilio (if used):** set the SMS-reply and call-status webhook URLs to
+   `https://your-domain.com/api/handle-sms-reply?key=WEBHOOK_SECRET` (and `/api/call-webhook?key=...`).
 6. **Google OAuth:** add `https://your-domain.com` as an authorized JavaScript origin, and enable the Gmail API.
-7. **Open Account → Run connection check.** Every line should be green except optional ones (AI, Twilio) you do not use. If something is red it tells you exactly what to set.
+7. **Open Account → Run connection check.** Every line should be green except optional ones (AI, SMS webhooks) you do not use. If something is red it tells you exactly what to set.
 8. **Smoke test as a new customer** (5 minutes):
    - Sign in. Open **Account**, fill in "What do you sell?", set a typical deal value, Save.
    - Upload a CSV, send to one address you own.
@@ -29,7 +30,6 @@ Do these in order. The order matters: step 3 before step 4.
 
 ## Phone calls (only if you use Twilio)
 - Set `NEXT_PUBLIC_BASE_URL` (your https domain) and `WEBHOOK_SECRET`; the app adds `?key=` to the call-status callback itself.
-- Set `NEXT_PUBLIC_DEFAULT_COUNTRY_CODE` (digits only, e.g. `94`, `44`, `1`) so local numbers starting with 0 are dialled in the right country. Optional branding: `NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_CONTACT_EMAIL` (shown on the landing page).
 - Calls are **not recorded** unless you set `TWILIO_RECORD_CALLS=true` (recording third parties can need their consent where you operate).
 - "Bridge" calls ring the **customer's own number** from Account → Your business; without it the call is refused.
 

@@ -70,9 +70,9 @@ export async function GET(request) {
   add('ai', 'AI drafting', !!ai.provider, ai.provider ? `Using ${ai.provider} (${ai.models.fast})${ai.providers.length > 1 ? `, with ${ai.providers.slice(1).map((p) => p.name).join(' / ')} as backup` : ''}.` : 'No AI key configured.',
     'Set DEEPSEEK_API_KEY (recommended; or OPENAI_API_KEY / ANTHROPIC_API_KEY), then redeploy. Everything except AI drafting works without it.');
 
-  // 4. Webhooks (only matters if phone calls are used)
-  add('webhooks', 'Call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',
-    'Set WEBHOOK_SECRET to a long random string (the app adds ?key= to the call-status callback itself). Skip if you do not use phone calls.');
+  // 4. Webhooks (only matters if SMS/calls are used)
+  add('webhooks', 'SMS/call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',
+    'Set WEBHOOK_SECRET to a long random string and add ?key=<it> to your Twilio webhook URLs. Skip if you do not use SMS replies.');
 
   const blocking = checks.filter((c) => !c.ok && ['database', 'gmail'].includes(c.id));
   return NextResponse.json({ ok: blocking.length === 0, isAdmin, checks }, { headers: { 'Cache-Control': 'no-store' } });
