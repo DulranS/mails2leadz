@@ -33,12 +33,12 @@ await t('admin-only route: customer 403, admin passes', async () => {
   assert.ok(passes(await proxy(req('/api/email-debug', { token: tokens.boss }))));
 });
 await t('webhook: needs the secret, no Firebase token required', async () => {
-  assert.equal((await proxy(req('/api/handle-sms-reply', { method: 'POST' }))).status, 401);
-  assert.ok(passes(await proxy(req('/api/handle-sms-reply?key=sek', { method: 'POST' }))));
+  assert.equal((await proxy(req('/api/call-webhook', { method: 'POST' }))).status, 401);
+  assert.ok(passes(await proxy(req('/api/call-webhook?key=sek', { method: 'POST' }))));
 });
 await t('webhook route also works for the signed-in dashboard, still tenant-checked', async () => {
-  assert.ok(passes(await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'alice', phone: '1' } }))));
-  assert.equal((await proxy(req('/api/handle-sms-reply', { token: tokens.alice, method: 'POST', body: { userId: 'bob' } }))).status, 403);
+  assert.ok(passes(await proxy(req('/api/call-webhook', { token: tokens.alice, method: 'POST', body: { userId: 'alice', phone: '1' } }))));
+  assert.equal((await proxy(req('/api/call-webhook', { token: tokens.alice, method: 'POST', body: { userId: 'bob' } }))).status, 403);
 });
 await t('a client cannot spoof the identity headers the server trusts', async () => {
   const r = new NextRequest('http://x/api/deals?userId=alice', { headers: { authorization: `Bearer ${tokens.alice}`, 'x-user-id': 'bob', 'x-user-email': 'boss@x.com' } });

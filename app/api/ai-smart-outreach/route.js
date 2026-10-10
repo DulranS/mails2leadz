@@ -25,7 +25,8 @@ try {
 export async function POST(request) {
   try {
     if (!db) return NextResponse.json({ error: 'Database not initialised' }, { status: 500 });
-    const { companyName, companyWebsite, contactEmail, contactName, userId, senderName } = await request.json();
+    const { companyName, companyWebsite, contactEmail, contactName, userId: bodyUserId, senderName } = await request.json();
+    const userId = request.headers.get('x-user-id') || bodyUserId; // the verified user wins over the body
     if (!companyName || !userId) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 
     if (contactEmail) {

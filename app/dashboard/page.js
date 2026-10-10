@@ -77,11 +77,6 @@ import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } 
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
 import {
-  generateQualificationSMS,
-  parseQualificationResponse,
-  formatQualificationSummary,
-} from "../../lib/sms-qualifier";
-import {
   formatForDialing,
   formatPhoneForDisplay,
   isValidEmail,
@@ -4567,97 +4562,6 @@ function DashboardComponent() {
   };
 
   // ============================================================================
-  // SMS SALES QUALIFICATION
-  // ============================================================================
-  const handleSMSQualification = async (leads) => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    if (!leads || leads.length === 0) {
-      addNotification("No leads selected for qualification", "warning");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Send qualification SMS to ${leads.length} leads?\n\n` +
-        `This will ask for their budget, timeframe, and preferred contact method.\n\n` +
-        `Continue?`,
-    );
-
-    if (!confirmed) return;
-
-    setStatus("Sending qualification SMS...");
-    setIsSending(true);
-
-    try {
-      const response = await fetch("/api/send-sms-qualification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          leads,
-          userId: user.uid,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        addNotification(
-          `Qualification SMS sent: ${data.successCount} success, ${data.failCount} failed`,
-          data.failCount > 0 ? "warning" : "success",
-        );
-      } else {
-        addNotification(
-          `Failed to send qualification SMS: ${data.error}`,
-          "error",
-        );
-      }
-    } catch (error) {
-      addNotification(`SMS qualification error: ${error.message}`, "error");
-    } finally {
-      setIsSending(false);
-      setStatus("");
-    }
-  };
-
-  const handleSMSReply = async (phone, response) => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/handle-sms-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone,
-          response,
-          userId: user.uid,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        if (data.qualified) {
-          addNotification(`✅ Lead qualified! ${data.summary}`, "success");
-        } else {
-          addNotification(`❌ Lead archived: ${data.summary}`, "warning");
-        }
-
-        await loadSentLeads();
-      } else {
-        addNotification(`Failed to handle SMS reply: ${data.error}`, "error");
-      }
-    } catch (error) {
-      addNotification(`SMS reply error: ${error.message}`, "error");
-    }
-  };
-
-  // ============================================================================
   // SMART AI RESEARCH + OUTREACH
   // ============================================================================
   const handleSmartResearchOutreach = async (contact) => {
@@ -9117,38 +9021,6 @@ function DashboardComponent() {
                           {status}
                         </div>
                       )}
-
-                      {/* SMS QUALIFICATION BUTTON */}
-                      <button
-                        onClick={() =>
-                          handleSMSQualification(safeFollowUpCandidates)
-                        }
-                        disabled={isSending}
-                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 mt-4 ${
-                          isSending
-                            ? "bg-gray-600 cursor-not-allowed opacity-60"
-                            : "bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-500 hover:via-emerald-500 hover:to-teal-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                        }`}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative px-8 py-4 text-white font-bold text-lg">
-                          <div className="flex items-center justify-center gap-3">
-                            <span className="text-2xl">📱</span>
-                            <span>
-                              {isSending
-                                ? "Sending..."
-                                : `SMS Qualify All Leads (${safeFollowUpCandidates.length})`}
-                            </span>
-                            {!isSending && <span className="text-lg">→</span>}
-                          </div>
-                          {!isSending && (
-                            <div className="text-sm font-normal text-green-100 mt-1 text-center">
-                              Send aggressive qualification SMS to filter
-                              time-wasters
-                            </div>
-                          )}
-                        </div>
-                      </button>
 
                       {/* WHATSAPP FOLLOW-UP TRACKING PANEL */}
                       {(whatsappLinks.length > 0 ||

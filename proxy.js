@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 
 const PUBLIC = new Set(['/api/health', '/api/auth/callback']);
-const WEBHOOKS = new Set(['/api/call-webhook', '/api/handle-sms-reply']);
+const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;

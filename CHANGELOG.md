@@ -12,6 +12,9 @@ Pipeline bugs that would have embarrassed customers
 - **AI-approved first emails arrived with raw `<p>`/`<br>` tags.** The draft was converted to HTML but the route sends plain text. Drafts are now sent as plain text.
 - Removed an unused second follow-up path inside `send-email` that skipped the "already replied / Lost / max 3" rules, and an unused `updateDealStage` helper that would have saved an invented $5,000 as a real deal value.
 
+- **Removed the "SMS Qualify All Leads" bulk feature (button, 2 routes, helper).** Its send step was a stub: it logged the text, returned success with a `placeholder_` ID and saved the lead as "sent", so customers were told qualification texts went out when none did. Its reply route also could not receive real Twilio posts (form data, no `userId`). Single SMS through Twilio (`/api/send-sms`) is unchanged. Phone-call status webhook is unchanged.
+- Older AI routes (`ai-smart-outreach`, `research-company`) now use the verified user, not the `userId` in the body. Reply search no longer breaks on subjects containing quotes.
+
 Business value
 - **Currency.** Every figure was hard-coded "$". Account → Money settings now has a currency (22 common ones) and an optional "1 USD = ?" rate that converts the AI provider's USD cost for ROI. Dashboard, Business Value, "Do this next" and the AI coach use it. Test: `tests/currency.test.mjs`.
 - **AI follow-up queue review.** "✨ Review N due with AI" drafts the due email follow-ups one at a time (max 10 per run). You edit and approve or skip each; nothing is sent without a click, server limits still apply, and it stops if an AI limit is hit.
