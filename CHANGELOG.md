@@ -1,5 +1,10 @@
 # Changelog
 
+## Last-day hardening (second pass)
+- **Sends are never repeated automatically.** A slow or failed email / SMS / call request used to be retried by the app (and, for follow-ups, again every 10 seconds by a background queue), which could reach a lead twice. Send and call requests now run exactly once, with a longer timeout; when one fails the app shows the server's reason (already replied, too soon, max reached) and you decide whether to try again. Reads are still retried. Test: `tests/api-retry.test.mjs`.
+- Removed dead code: an unused follow-up scheduler that called a route that does not exist, and an unused scraper client.
+- Lead lists no longer put Sri Lankan numbers first (an owner-specific sort); replied leads are ordered by most recent reply, follow-ups by urgency.
+
 ## Launch day: DeepSeek AI + selling-to-anyone fixes
 AI (all human-approved, capped, cached)
 - DeepSeek is the default provider (OpenAI/Anthropic stay as optional backups with automatic fallback). Thinking mode is switched off for drafting; cost is estimated at DeepSeek's peak price, with cached input billed at the cache price, so spend caps are never under-counted.

@@ -20,7 +20,6 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import serviceHealthMonitor from "../../lib/service-health";
 import gracefulDegradationManager from "../../lib/graceful-degradation";
 import requestDeduplicator from "../../lib/request-deduplication";
-import retryQueue from "../../lib/retry-queue";
 import ErrorBoundary from "../../components/ErrorBoundary";
 import {
   getFirestore,
@@ -102,7 +101,7 @@ import {
 import { useContactTracking } from "../../hooks/useContactTracking.js";
 import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
 import { useLeadScoring } from "../../hooks/useLeadScoring.js";
-import { retryFetch, getRetryStats } from "../../lib/api-retry.js";
+import { retryFetch } from "../../lib/api-retry.js";
 import { errorHandler, withErrorHandling } from "../../lib/error-handler.js";
 import { leadScoringEngine } from "../../lib/lead-scoring-engine.js";
 import { smartFollowupEngine } from "../../lib/smart-followup-engine.js";
@@ -457,11 +456,7 @@ function DashboardComponent() {
 
   const [autoReplyProcessorEnabled, setAutoReplyProcessorEnabled] =
     useState(true);
-  const [autoFollowupSchedulerEnabled, setAutoFollowupSchedulerEnabled] =
-    useState(true);
   const [aiProcessorStatus, setAiProcessorStatus] = useState("Idle");
-  const [followupSchedulerStatus, setFollowupSchedulerStatus] =
-    useState("Idle");
   const [showAllPendingLeads, setShowAllPendingLeads] = useState(false);
   const [showAllReadyLeads, setShowAllReadyLeads] = useState(false);
   const [showAllRepliedLeads, setShowAllRepliedLeads] = useState(false);
@@ -980,11 +975,6 @@ function DashboardComponent() {
           ? (now - sentAtDate) / (1000 * 60 * 60 * 24)
           : 999;
 
-        // Check if this is a WhatsApp number (+94 7...)
-        const isWhatsApp =
-          lead.phone &&
-          (lead.phone.includes("+947") || lead.phone.includes("947"));
-
         // Urgency score: higher for leads that haven't been followed up recently
         // Clamp to 0-100 range to prevent negative values
         const urgencyScore = Math.max(
@@ -1000,13 +990,9 @@ function DashboardComponent() {
           daysSinceSent,
           urgencyScore,
           safetyScore: Math.max(0, (3 - followUpCount) * 33.33),
-          isWhatsApp, // Add flag for WhatsApp numbers
         };
       })
       .sort((a, b) => {
-        // Prioritize WhatsApp numbers at the top
-        if (a.isWhatsApp && !b.isWhatsApp) return -1;
-        if (!a.isWhatsApp && b.isWhatsApp) return 1;
         // Then sort by urgency score
         return b.urgencyScore - a.urgencyScore;
       });
@@ -1971,24 +1957,15 @@ function DashboardComponent() {
           ? (now - repliedAtDate) / (1000 * 60 * 60 * 24)
           : 0;
 
-        // Check if this is a WhatsApp number (+94 7...)
-        const isWhatsApp =
-          lead.phone &&
-          (lead.phone.includes("+947") || lead.phone.includes("947"));
-
         return {
           ...lead,
           daysSinceSent,
           daysSinceReply,
           repliedAt: lead.repliedAt || lead.sentAt,
           isHotLead: daysSinceReply <= 7, // Hot if replied within 7 days
-          isWhatsApp, // Add flag for WhatsApp numbers
         };
       })
       .sort((a, b) => {
-        // Prioritize WhatsApp numbers at the top
-        if (a.isWhatsApp && !b.isWhatsApp) return -1;
-        if (!a.isWhatsApp && b.isWhatsApp) return 1;
         // Then sort by most recent reply first
         const dateA = new Date(a.repliedAt || a.sentAt);
         const dateB = new Date(b.repliedAt || b.sentAt);
@@ -4259,31 +4236,12 @@ function DashboardComponent() {
         // Invalidate cache to ensure fresh data
         invalidateCache("sent_emails");
       } else {
-        // Add to retry queue if follow-up fails
-        await retryQueue.add(
-          async () => {
-            const retryRes = await retryFetch("/api/send-followup", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email,
-                accessToken,
-                userId: user.uid,
-                senderName,
-              }),
-            }, 2);
-            return retryRes.json();
-          },
-          {
-            priority: 'high',
-            category: 'followup',
-            context: { email, userId: user.uid },
-          }
-        );
-        
+        // The server refuses on purpose in some cases (already replied, too soon, max reached), so show its
+        // reason. Nothing is re-sent automatically: the owner decides whether to try again.
         addNotification(
-          `⚠️ Follow-up failed for ${email}. Added to retry queue.`,
+          `⚠️ Follow-up not sent to ${email}: ${data?.error || "please try again"}`,
           "warning",
+          6000,
         );
       }
 
@@ -4292,74 +4250,7 @@ function DashboardComponent() {
     } catch (err) {
       console.error("Follow-up send error:", err);
       
-      // Add to retry queue on error
-      await retryQueue.add(
-        async () => {
-          const retryRes = await retryFetch("/api/send-followup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email,
-              accessToken,
-              userId: user.uid,
-              senderName,
-            }),
-          }, 2);
-          return retryRes.json();
-        },
-        {
-          priority: 'high',
-          category: 'followup',
-          context: { email, userId: user.uid },
-        }
-      );
-      
-      addNotification(`❌ Error: ${err.message}. Added to retry queue.`, "error");
-    }
-  };
-
-  // ============================================================================
-  // AI FOLLOWUP SCHEDULER
-  // ============================================================================
-  const runFollowupScheduler = async () => {
-    if (!autoFollowupSchedulerEnabled) {
-      setFollowupSchedulerStatus("Disabled");
-      addNotification("Smart follow-up scheduler is disabled", "warning");
-      return;
-    }
-
-    if (!user?.uid) {
-      addNotification("User not authenticated", "error");
-      return;
-    }
-
-    setFollowupSchedulerStatus("Running...");
-
-    try {
-      const res = await retryFetch("/api/followup-scheduler", { method: "POST" }, 2);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Follow-up scheduler failed");
-      }
-
-      setFollowupSchedulerStatus(
-        `Done · processed ${data.processed || 0} followups`,
-      );
-      addNotification(
-        "✅ Smart follow-up scheduler completed",
-        "success",
-        4000,
-      );
-
-      await refreshAllData();
-    } catch (error) {
-      setFollowupSchedulerStatus(`Error · ${error.message}`);
-      addNotification(
-        `❌ Follow-up scheduler error: ${error.message}`,
-        "error",
-        6000,
-      );
+      addNotification(`❌ Follow-up not sent: ${err.message}. Please try again.`, "error");
     }
   };
 
