@@ -11,6 +11,7 @@ New (all human-approved; AI = DeepSeek by default, capped and cached like the re
 - Navigation: Customers and Billing added; sidebar shows the app name instead of a hard-coded one; avatar shows the user's initial; deal-value inputs on Business Value use the customer's currency symbol (was "$").
 - Data export/delete include `invoices`. **Republish `firestore.rules`.**
 - Tests: `billing`, `customers` (extras, health, BDR, next actions), `weekly-kpi`.
+- Second audit: re-saving an old deal at the same stage no longer counts as fresh progress in the weekly report; Business Value reads up to 2000 deals (same as the CRM); new win-back signal: deals lost on timing or silence 3 to 12 months ago appear in "Do this next" so they can be reopened.
 - Known behaviour: customers won more than 45 days ago with no logged contact show as "At risk" until you press "I spoke to them" once.
 - Still not done on purpose: payments, tax invoices, sending without you, scheduled/cron emails (Gmail tokens are short-lived browser tokens).
 

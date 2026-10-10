@@ -81,7 +81,7 @@ export default function BusinessValuePage() {
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
       const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap] = await Promise.all([
-        getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(1000))),
+        getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(2000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${month}`)).catch(() => null),

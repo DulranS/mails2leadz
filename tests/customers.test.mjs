@@ -134,4 +134,24 @@ t('next actions: overdue money first, then unbilled, at-risk customers, qualific
   assert.equal(a[0].href, '/billing');
   assert.equal(buildNextActions({ metrics, customers: { atRisk: { count: 0, value: 0 }, stuckOnboarding: 2 } }).some((x) => x.id === 'onboarding'), true);
 });
+t('re-saving an unchanged legacy deal does not stamp a new stage time', () => {
+  const legacy = { email: 'a@x.com', stage: 'qualified', createdAt: iso(100), lastUpdate: iso(90) }; // saved before stage times existed
+  const again = buildDealWrite({ uid: 'u', email: 'a@x.com', existing: legacy, stage: 'qualified', value: 500, now: new Date(NOW) });
+  assert.deepEqual(again.stageTimes, {});
+  const moved = buildDealWrite({ uid: 'u', email: 'a@x.com', existing: legacy, stage: 'demo', now: new Date(NOW) });
+  assert.deepEqual(Object.keys(moved.stageTimes), ['demo']);
+});
+t('win-back: only timing / silent losses between 90 days and a year old, never opt-outs', () => {
+  const lost = (o) => ({ stage: 'closed_lost', value: 1000, valueIsEstimate: false, createdAt: iso(300), lastUpdate: iso(100), ...o });
+  const m = computeBusinessMetrics({ now: NOW, deals: [
+    lost({ email: 'a@x.com', lostReason: 'timing', closedAt: iso(100) }),
+    lost({ email: 'b@x.com', lostReason: 'no_response', closedAt: iso(200) }),
+    lost({ email: 'c@x.com', lostReason: 'timing', closedAt: iso(30) }),       // too recent
+    lost({ email: 'd@x.com', lostReason: 'timing', closedAt: iso(400) }),      // too old
+    lost({ email: 'e@x.com', lostReason: 'price', closedAt: iso(100) }),       // not a timing loss
+    lost({ email: 'f@x.com', lostReason: 'unsubscribed', closedAt: iso(100) }),
+  ] });
+  assert.deepEqual(m.past.winBack, { count: 2, value: 2000 });
+  assert.equal(buildNextActions({ metrics: m }).some((x) => x.id === 'winback'), true);
+});
 console.log(`\n${n} passed`);
