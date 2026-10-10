@@ -88,4 +88,26 @@ await t('retries once without "thinking" if the model rejects the field', async 
   assert.equal(bodies.length, 2); assert.equal('thinking' in bodies[1], false);
   assert.equal(r.data.ok, 3);
 });
+await t('DeepSeek: an unknown model name falls back to another current name, remembers it, and bills at the Flash rate', async () => {
+  process.env.DEEPSEEK_API_KEY = 'dk'; delete process.env.AI_PROVIDER; delete process.env.AI_MODEL_FAST_DEEPSEEK; process.env.AI_DAILY_CALL_LIMIT = '50';
+  const seen = [];
+  globalThis.fetch = async (_u, init) => {
+    const m = JSON.parse(init.body).model; seen.push(m);
+    if (m === 'deepseek-flash') return { ok: false, status: 400, json: async () => ({ error: { message: 'Model Not Exist' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"ok":true}' } }], usage: { prompt_tokens: 1000, completion_tokens: 100 } }) };
+  };
+  const r = await callAI({ uid: 'fb', feature: 'f', system: 's', prompt: 'x1' });
+  assert.equal(r.data.ok, true); assert.equal(r.model, 'deepseek-v4-flash');
+  assert.deepEqual(seen, ['deepseek-flash', 'deepseek-v4-flash']);
+  assert.ok(r.costUsd < 0.001);                         // known price, not the conservative unknown-model default
+  seen.length = 0;
+  await callAI({ uid: 'fb', feature: 'f', system: 's', prompt: 'x2' });
+  assert.deepEqual(seen, ['deepseek-v4-flash']);        // remembered: no wasted failed call
+});
+await t('DeepSeek: other errors (bad key, outage) are not retried with other model names', async () => {
+  const seen = [];
+  globalThis.fetch = async (_u, init) => { seen.push(JSON.parse(init.body).model); return { ok: false, status: 401, json: async () => ({ error: { message: 'bad key' } }) }; };
+  await assert.rejects(callAI({ uid: 'fb2', feature: 'f', system: 's', prompt: 'y' }), (e) => e.code === 'AI_AUTH');
+  assert.equal(seen.length, 1);
+});
 console.log(`\n${n} passed`);

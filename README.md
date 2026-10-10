@@ -41,3 +41,5 @@ and cancels pending follow-ups. Every send and AI-draft route then refuses that 
 cannot be reopened from the app. Opt-outs are not counted as lost sales in win rate. Needs `NEXT_PUBLIC_BASE_URL` (https),
 `UNSUBSCRIBE_SECRET` (or `WEBHOOK_SECRET`) and the Firebase service account; **Account → Run connection check** shows
 whether it is active. Re-publish `firestore.rules` after deploying.
+
+**Bounces.** When "Check replies" runs, the app also looks for the mail system's "address not found" notices (last 14 days) for people you emailed and puts those addresses on the same do-not-contact list (deal marked Lost, reason "bounced", not counted as a lost sale). Full mailboxes, spam rejections and temporary errors never suppress anyone.

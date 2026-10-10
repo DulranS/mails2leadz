@@ -5,6 +5,8 @@
 - **`send-new-leads` emails were declared quoted-printable but not encoded,** so any "=" (every link with a query string) could be corrupted. Now base64.
 - **Google client secret is read only from `GOOGLE_CLIENT_SECRET`.** The `NEXT_PUBLIC_GOOGLE_CLIENT_SECRET` fallback is gone (a NEXT_PUBLIC_ value is published to every browser). The connection check flags the old name and says how to rename it and rotate the secret.
 - Added `.env.example` (README and docs pointed to it), removed an empty stray file and two unused dependencies (`@supabase/supabase-js`, `node-fetch`).
+- **Hard bounces stop further mail.** Reply checking also scans recent "address not found" bounce notices and suppresses those addresses (deal Lost, reason "bounced"; not counted as a lost sale). Soft failures never suppress. Test: `tests/bounces.test.mjs`.
+- **DeepSeek model names can no longer take AI down.** If DeepSeek rejects the configured model name as unknown, the client tries the other current names once and remembers the one that works. Test in `tests/ai-client.test.mjs`.
 - Shared tables: sorting is case-insensitive and number-aware with empty values last; pagination stacks on phones with larger tap targets.
 
 

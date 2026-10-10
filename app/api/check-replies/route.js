@@ -1,7 +1,9 @@
 // app/api/check-replies/route.js
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, updateDoc } from '../../../lib/server-firestore.js';
+import { getFirestore, collection, query, where, getDocs, updateDoc, isAdminMode } from '../../../lib/server-firestore.js';
+import { hardBounceRecipients } from '../../../lib/server/bounces.js';
+import { suppressContact } from '../../../lib/server/suppress.js';
 import { google } from 'googleapis';
 import { cancelPendingFollowUps } from '../../../lib/reply-sync.js';
 
@@ -250,6 +252,26 @@ export async function POST(request) {
       }
     }
 
+    // Bounces: a notice from the mail system saying an address does not exist. Suppress it so we never mail it again
+    // (repeated mail to dead addresses hurts the customer's own Gmail sending reputation). Best effort: never fails the check.
+    const bounced = [];
+    try {
+      if (isAdminMode()) {
+        const ours = [...new Set(emailsToCheck.map((d) => String(d.data().to || '').toLowerCase()).filter(Boolean))];
+        const list = await gmail.users.messages.list({ userId: 'me', q: 'from:(mailer-daemon OR postmaster) newer_than:14d', maxResults: 15 });
+        for (const m of list.data.messages || []) {
+          const msg = await gmail.users.messages.get({ userId: 'me', id: m.id, format: 'metadata', metadataHeaders: ['subject'] });
+          for (const addr of hardBounceRecipients(msg.data.snippet, ours)) {
+            if (bounced.includes(addr)) continue;
+            await suppressContact(db, { uid: userId, email: addr, reason: 'bounced', source: 'bounce' });
+            bounced.push(addr);
+          }
+        }
+      }
+    } catch (bounceError) {
+      console.warn('[Check Replies] bounce scan skipped:', bounceError?.message);
+    }
+
     // Log summary
     console.log(`[Check Replies] Checked ${emailsToCheck.length} emails, found ${replyCount} replies, ${errorCount} errors`);
 
@@ -257,6 +279,7 @@ export async function POST(request) {
       replyCount,
       checked: emailsToCheck.length,
       errors: errorCount,
+      bounced,
       replies: newReplies
     }, { headers });
 
