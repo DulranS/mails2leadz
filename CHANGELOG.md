@@ -1,5 +1,9 @@
 # Changelog
 
+## Automation: draft everything, approve once
+- **⚡ Draft all, approve together** (dashboard → Pending Follow-Ups): checks Gmail for new replies first, AI-drafts every due prospect follow-up (max 10 per run, two at a time), and opens ONE window with all drafts. Edit, untick, press Send once. Sends are paced 1.5 s apart through the normal follow-up route, so every server rule still applies (not replied, max 3, minimum gap, daily limit, opt-outs, Lost deals). Nothing is sent before that press; skipped leads are listed with the reason. Customer check-ins (post-sale) stay separate: they open in your own mail app.
+- Consciously not automated: sending without you present (Gmail tokens are short-lived browser tokens; no refresh token is stored on the server), auto-replying, lead scraping.
+
 ## Final day: why deals are lost
 - **Lost reason.** Marking a deal Lost (dashboard, CRM, Business Value, or the AI reply suggestion) now asks why in one tap (price, timing, competitor, no need, said no, went silent, other) or lets you skip. Stored on the deal, cleared if the deal is reopened, never overwrites the system reasons `unsubscribed` / `bounced` (still not counted as lost sales). The AI "not interested" suggestion records its own reason.
 - **Business Value → "Why deals are lost"**: lost deals grouped by reason, largest money first; deals marked Lost without a reason show as "Not recorded". The AI pipeline coach receives only whitelisted reason ids + counts (no names).

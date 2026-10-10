@@ -75,6 +75,7 @@ import {
 import { APP_NAME, APP_TAGLINE } from "../../lib/brand.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
 import LostReasonModal from "../components/ui/LostReasonModal";
+import AutoBatchModal from "../components/AutoBatchModal";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
 import {
@@ -494,6 +495,8 @@ function DashboardComponent() {
   const [aiDraft, setAiDraft] = useState(null); // { contact, subject, body, angle, reasons, busy }
   const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy, batch }
   const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
+  const [autoBatch, setAutoBatch] = useState(null); // "Draft all, approve together": { phase, note, skipped, items }
+  const autoBatchBusy = useRef(false);
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
   const [predictiveScores, setPredictiveScores] = useState({});
@@ -4762,6 +4765,108 @@ function DashboardComponent() {
     }
     aiBatchRef.current = { queue: [...due], total: due.length, position: 0 };
     await advanceAiBatch();
+  };
+
+  // ============================================================================
+  // "DRAFT ALL DUE, APPROVE TOGETHER": checks for new replies, AI-drafts every due prospect follow-up (max 10 per run),
+  // shows them in ONE window. You edit / untick, then press Send once. Nothing is sent before that press, and the
+  // server still enforces: not replied, max 3, minimum gap, daily limit, opt-outs, Lost deals.
+  // ============================================================================
+  const patchAutoBatch = (fn) => setAutoBatch((b) => (b ? fn(b) : b));
+  const changeAutoItem = (id, patch) => patchAutoBatch((b) => ({ ...b, items: b.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
+  const closeAutoBatch = () => { if (!autoBatchBusy.current) setAutoBatch(null); };
+
+  const startAutoBatch = async () => {
+    if (!user?.uid || autoBatchBusy.current || aiBatchRef.current) return;
+    const due = getDueEmailTasks().filter((t) => !POST_SALE_STAGES.includes(t.followUpStage)).slice(0, 10);
+    if (due.length === 0) {
+      addNotification("No prospect follow-ups are due right now.", "info");
+      return;
+    }
+    autoBatchBusy.current = true;
+    setAutoBatch({ phase: "preparing", note: "Checking for new replies first, so nobody who answered gets a nudge…", skipped: [], items: [] });
+    try {
+      let token = "";
+      try { token = await requestGmailToken(); } catch { token = ""; }
+      if (!token) {
+        addNotification("Gmail permission was not granted, so nothing was prepared.", "warning", 6000);
+        setAutoBatch(null);
+        return;
+      }
+      // 1) fresh replies (a reply ends the sequence; the draft route also refuses anyone who replied)
+      try {
+        const rr = await retryFetch("/api/check-replies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.uid, accessToken: token, senderEmail }) }, 2);
+        if (rr.ok) {
+          const rd = await rr.json().catch(() => ({}));
+          if (rd.replyCount > 0) { addNotification(`📬 ${rd.replyCount} new repl${rd.replyCount === 1 ? "y" : "ies"} found: those leads are skipped.`, "success", 6000); await loadRepliedAndFollowUp(); }
+        }
+      } catch { /* drafting still refuses leads that replied */ }
+
+      // 2) AI drafts, two at a time
+      const items = [];
+      const skipped = [];
+      let stopReason = "";
+      let next = 0;
+      const worker = async () => {
+        while (next < due.length && !stopReason) {
+          const task = due[next++];
+          patchAutoBatch((b) => ({ ...b, note: `Writing follow-ups… ${Math.min(next, due.length)} of ${due.length}` }));
+          try {
+            const res = await fetch("/api/ai-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: task.leadEmail, senderName }) });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+              items.push({ id: task.id || task.leadEmail, task, email: task.leadEmail, business: task.leadName || task.companyName || task.leadEmail, subject: data.draft.subject, body: data.draft.body, number: data.followUpNumber, isFinal: !!data.isFinal, selected: true, state: "draft", error: "" });
+            } else if (["NO_PROFILE", "AI_DAILY_LIMIT", "AI_BUDGET", "AI_NOT_CONFIGURED", "AI_AUTH"].includes(data.code) || res.status >= 500) {
+              stopReason = data.error || "The AI is not available right now.";
+            } else {
+              skipped.push(`${task.leadName || task.leadEmail}: ${data.error || "no draft"}`);
+            }
+          } catch { stopReason = "Could not reach the AI service."; }
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      if (stopReason) skipped.push(`Stopped early: ${stopReason}`);
+      items.sort((a, b) => due.findIndex((t) => (t.id || t.leadEmail) === a.id) - due.findIndex((t) => (t.id || t.leadEmail) === b.id));
+      if (items.length === 0) {
+        addNotification(stopReason || "Nothing to send: those leads already replied, opted out, or finished their follow-ups.", "info", 7000);
+        setAutoBatch(null);
+        return;
+      }
+      setAutoBatch({ phase: "review", note: "", skipped, items, token });
+    } finally {
+      autoBatchBusy.current = false;
+    }
+  };
+
+  const sendAutoBatch = async () => {
+    if (autoBatchBusy.current || !autoBatch || autoBatch.phase !== "review") return;
+    const todo = autoBatch.items.filter((i) => i.selected && i.state === "draft" && i.subject.trim() && i.body.trim());
+    if (todo.length === 0) { addNotification("Nothing selected, or a subject / message is empty.", "warning"); return; }
+    autoBatchBusy.current = true;
+    patchAutoBatch((b) => ({ ...b, phase: "sending" }));
+    try {
+      let token = autoBatch.token;
+      try { token = await requestGmailToken(); } catch { /* keep the one from earlier */ }
+      for (let n = 0; n < todo.length; n++) {
+        const it = todo[n];
+        changeAutoItem(it.id, { state: "sending" });
+        try {
+          const res = await retryFetch("/api/send-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: it.email, accessToken: token, userId: user.uid, senderName, customTemplates: [{ subject: it.subject.trim(), body: it.body.trim() }] }) }, 2);
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Follow-up failed");
+          if (it.task?.id) await completeFollowUpTask(user.uid, it.task.id, { completedBy: user.email, method: "email" }).catch(() => {});
+          changeAutoItem(it.id, { state: "sent" });
+        } catch (err) {
+          changeAutoItem(it.id, { state: "failed", error: String(err.message || err) });
+        }
+        if (n < todo.length - 1) await new Promise((r) => setTimeout(r, 1500)); // gentle pacing between sends
+      }
+      invalidateCache("sent_emails");
+      await refreshAllData();
+      patchAutoBatch((b) => ({ ...b, phase: "done" }));
+    } finally {
+      autoBatchBusy.current = false;
+    }
   };
 
   const sendApprovedAiFollowUp = async () => {
@@ -10758,6 +10863,15 @@ function DashboardComponent() {
                       ✨ Review {Math.min(getDueEmailTasks().length, 10)} due with AI
                     </button>
                   )}
+                  {getDueEmailTasks().filter((t) => !POST_SALE_STAGES.includes(t.followUpStage)).length > 0 && (
+                    <button
+                      onClick={startAutoBatch}
+                      className="text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg font-semibold transition"
+                      title="Checks for new replies, AI-drafts every due follow-up, and shows them together. You approve once; nothing is sent before that."
+                    >
+                      ⚡ Draft all, approve together
+                    </button>
+                  )}
                 </div>
                 {(followUpTasks.pending || []).filter((task) => {
                   if (
@@ -11152,6 +11266,7 @@ function DashboardComponent() {
           </div>
         </div>
       )}
+      <AutoBatchModal batch={autoBatch} onChangeItem={changeAutoItem} onSend={sendAutoBatch} onClose={closeAutoBatch} />
       <LostReasonModal
         target={lostPrompt}
         onCancel={() => setLostPrompt(null)}
