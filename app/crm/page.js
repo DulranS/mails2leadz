@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
+import LostReasonModal from "../components/ui/LostReasonModal";
 import { dealDocId, buildDealWrite, normalizeStage } from "../../lib/deal-utils.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
@@ -231,17 +232,24 @@ export default function CRMPage() {
       stage: changes.stage ?? existing?.stage ?? data.dealStages[e] ?? "new",
       businessName: changes.businessName ?? (!existing ? lead?.business : undefined),
       value: changes.value,
+      lostReason: changes.lostReason,
     });
     if (changes.notes) write.notes = changes.notes;
     await setDoc(ref, write, { merge: true });
     return { write, existing };
   };
 
+  const [lostPrompt, setLostPrompt] = useState(null);
   const handleUpdateLead = async (email, updates) => {
     if (!user?.uid || !db) return;
+    // Marking Lost: ask why first (one tap), unless already Lost or the reason is already known.
+    if (normalizeStage(updates.stage) === "closed_lost" && updates.stage !== undefined && !updates.lostReason && !updates.skipLostReason && normalizeStage(data.dealStages[norm(email)]) !== "closed_lost") {
+      setLostPrompt({ email, updates });
+      return;
+    }
     try {
       const e = norm(email);
-      const { write } = await writeDeal(e, { stage: updates.stage, value: updates.value });
+      const { write } = await writeDeal(e, { stage: updates.stage, value: updates.value, lostReason: updates.lostReason });
       setData((prev) => ({
         ...prev,
         dealStages: { ...prev.dealStages, [e]: write.stage },
@@ -376,6 +384,12 @@ export default function CRMPage() {
         onAddNote={handleAddNote}
         onScheduleFollowUp={handleScheduleFollowUp}
         onAddLead={handleAddLead}
+      />
+      <LostReasonModal
+        target={lostPrompt}
+        onCancel={() => setLostPrompt(null)}
+        onSkip={() => { const t = lostPrompt; setLostPrompt(null); if (t) handleUpdateLead(t.email, { ...t.updates, skipLostReason: true }); }}
+        onPick={(reason) => { const t = lostPrompt; setLostPrompt(null); if (t) handleUpdateLead(t.email, { ...t.updates, lostReason: reason }); }}
       />
     </DashboardLayout>
   );

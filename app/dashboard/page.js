@@ -74,6 +74,7 @@ import {
 } from "../../lib/default-templates.js";
 import { APP_NAME, APP_TAGLINE } from "../../lib/brand.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
+import LostReasonModal from "../components/ui/LostReasonModal";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
 import {
@@ -3950,10 +3951,16 @@ function DashboardComponent() {
   // ============================================================================
   // UPDATE DEAL STAGE IN FIREBASE
   // ============================================================================
+  const [lostPrompt, setLostPrompt] = useState(null); // { email, extra } while the "why lost?" question is open
   const updateDealStage = async (email, stage, extra = {}) => {
     if (!user?.uid || !email || !db) return;
 
     const normalizedStage = normalizeStage(stage);
+    // Marking Lost: ask why first (one tap), unless the reason is already known or it was already Lost.
+    if (normalizedStage === "closed_lost" && !extra.lostReason && !extra.skipLostReason && normalizeStage(dealStage[email] || "new") !== "closed_lost") {
+      setLostPrompt({ email, extra });
+      return;
+    }
     const wasClosed = isClosedStage(dealStage[email] || "new");
     const isClosed = isClosedStage(normalizedStage);
     const avgValue = Number(bizSettings.avgDealValue) > 0 ? Number(bizSettings.avgDealValue) : CONFIG.DEFAULT_AVG_DEAL_VALUE;
@@ -3970,6 +3977,7 @@ function DashboardComponent() {
         existing,
         businessName: extra.businessName,
         value: extra.value,
+        lostReason: extra.lostReason,
       });
       await setDoc(dealRef, write, { merge: true });
 
@@ -4853,7 +4861,7 @@ function DashboardComponent() {
     if (!r?.suggestedStage || !email) return;
     if (r.suggestedStage === "closed_lost" && !confirm(`Mark ${email} as Lost and stop contacting them?`)) return;
     try {
-      await updateDealStage(email, r.suggestedStage, { businessName: conversationThread?.leadBusiness });
+      await updateDealStage(email, r.suggestedStage, { businessName: conversationThread?.leadBusiness, ...(r.suggestedStage === "closed_lost" ? { lostReason: "not_interested" } : {}) });
       addNotification(`Deal updated: ${r.suggestedStage === "closed_lost" ? "Lost" : r.suggestedStage}`, "success");
     } catch {
       addNotification("Could not update the deal", "error");
@@ -11144,6 +11152,12 @@ function DashboardComponent() {
           </div>
         </div>
       )}
+      <LostReasonModal
+        target={lostPrompt}
+        onCancel={() => setLostPrompt(null)}
+        onSkip={() => { const t = lostPrompt; setLostPrompt(null); if (t) updateDealStage(t.email, "closed_lost", { ...t.extra, skipLostReason: true }); }}
+        onPick={(reason) => { const t = lostPrompt; setLostPrompt(null); if (t) updateDealStage(t.email, "closed_lost", { ...t.extra, lostReason: reason }); }}
+      />
     </div>
   );
 }

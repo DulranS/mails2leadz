@@ -6,6 +6,7 @@ import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "firebase/firestore";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
+import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { buildNextActions } from "../../lib/next-actions.js";
@@ -134,13 +135,19 @@ export default function BusinessValuePage() {
   const usd = makeMoney("USD"); // AI usage is billed by the provider in USD
   const usd2 = makeMoney("USD", 2);
 
+  const [lostPrompt, setLostPrompt] = useState(null);
   const saveDeal = async (deal, changes) => {
+    // Marking Lost: ask why first (one tap), unless already Lost or the reason is already known.
+    if (changes.stage && normalizeStage(changes.stage) === "closed_lost" && !changes.lostReason && !changes.skipLostReason && deal.stage !== "closed_lost") {
+      setLostPrompt({ deal, changes });
+      return;
+    }
     setSaving(deal.email);
     try {
       const ref = doc(db, "deals", dealDocId(user.uid, deal.email));
       const snap = await getDoc(ref);
       const existing = snap.exists() ? snap.data() : null;
-      await setDoc(ref, buildDealWrite({ uid: user.uid, email: deal.email, existing, stage: changes.stage ?? existing?.stage ?? deal.stage, value: changes.value }), { merge: true });
+      await setDoc(ref, buildDealWrite({ uid: user.uid, email: deal.email, existing, stage: changes.stage ?? existing?.stage ?? deal.stage, value: changes.value, lostReason: changes.lostReason }), { merge: true });
       await load();
     } catch (e) { setError("Could not save that change."); }
     finally { setSaving(""); }
@@ -159,6 +166,7 @@ export default function BusinessValuePage() {
         forecast30: m.future.horizons[0].expected, forecast90: m.future.horizons[2].expected, confidence: m.future.confidence,
         monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, wonThisMonth: m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0,
         unconverted: raw.unconverted.length, dueFollowUps: raw.dueFollowUps, currency: m.settings.currency,
+        lostReasons: m.past.lostReasons.filter((r) => r.reason !== "unrecorded").slice(0, 3).map((r) => ({ reason: r.reason, count: r.count })),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -331,6 +339,14 @@ export default function BusinessValuePage() {
           </Card>
         </div>
 
+        {/* Why deals are lost (owner-picked reasons) */}
+        {m.past.lostCount > 0 && (
+          <Card title={`Why deals are lost · ${m.past.lostCount} deal${m.past.lostCount === 1 ? "" : "s"}, ${money(m.past.lostValue)}`}>
+            {m.past.lostReasons.map((r) => <Bar key={r.reason} label={r.label} value={r.value} max={Math.max(1, m.past.lostReasons[0].value)} right={`${r.count} · ${money(r.value)}`} />)}
+            {m.past.lostReasons.some((r) => r.reason === "unrecorded") && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">"Not recorded" = marked Lost without a reason. Opt-outs and bounced addresses are not counted as lost sales.</p>}
+          </Card>
+        )}
+
         {/* ROI + AI */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <Card title="Return on cost (last 90 days)">
@@ -373,6 +389,12 @@ export default function BusinessValuePage() {
             </div>)}
         </Card>
       </div>
+      <LostReasonModal
+        target={lostPrompt ? { email: lostPrompt.deal.email } : null}
+        onCancel={() => setLostPrompt(null)}
+        onSkip={() => { const t = lostPrompt; setLostPrompt(null); if (t) saveDeal(t.deal, { ...t.changes, skipLostReason: true }); }}
+        onPick={(reason) => { const t = lostPrompt; setLostPrompt(null); if (t) saveDeal(t.deal, { ...t.changes, lostReason: reason }); }}
+      />
     </DashboardLayout>
   );
 }

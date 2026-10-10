@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { callAI, AiError, getBusinessProfile, profileBlock } from '../../../lib/ai-client.js';
 import { uidFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { LOST_REASONS } from '../../../lib/deal-utils.js';
 
 export const maxDuration = 45;
 
@@ -26,6 +27,8 @@ export async function POST(request) {
       avgDaysToWin: num(facts.avgCycleDays, 3650), revenueWonLast90d: num(facts.revenue90), costLast90d: num(facts.cost90),
       forecast30d: num(facts.forecast30), forecast90d: num(facts.forecast90), monthlyGoal: num(facts.monthlyGoal), wonThisMonth: num(facts.wonThisMonth),
       repliesWithoutDeal: num(facts.unconverted), followUpsDue: num(facts.dueFollowUps), forecastConfidence: ['low', 'medium', 'high'].includes(facts.confidence) ? facts.confidence : 'low',
+      // why deals were lost: whitelisted reason ids + counts only
+      lostReasons: (Array.isArray(facts.lostReasons) ? facts.lostReasons : []).filter((r) => LOST_REASONS.some((x) => x.id === r?.reason)).slice(0, 3).map((r) => ({ reason: r.reason, count: num(r.count, 100000) })),
       currency: /^[A-Z]{3}$/.test(String(facts.currency || '')) ? facts.currency : 'USD',
     };
 

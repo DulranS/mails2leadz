@@ -141,3 +141,26 @@ t('won deals on the default value are flagged and raise a "set real value" actio
   assert.ok(buildNextActions({ metrics: old, sentRecently: 10 }).some((x) => x.id === 'values'));
 });
 console.log('\nwindows ok');
+
+// ---------- lost reasons ----------
+const lr = computeBusinessMetrics({ deals: [
+  { email: 'a@x.com', stage: 'closed_lost', value: 3000, lostReason: 'price', createdAt: d(30), closedAt: d(3), lastUpdate: d(3) },
+  { email: 'b@x.com', stage: 'closed_lost', value: 1000, lostReason: 'price', createdAt: d(30), closedAt: d(3), lastUpdate: d(3) },
+  { email: 'c@x.com', stage: 'closed_lost', value: 500, lostReason: 'timing', createdAt: d(30), closedAt: d(3), lastUpdate: d(3) },
+  { email: 'd@x.com', stage: 'closed_lost', value: 800, createdAt: d(30), closedAt: d(3), lastUpdate: d(3) }, // no reason
+  { email: 'e@x.com', stage: 'closed_lost', value: 900, lostReason: 'unsubscribed', createdAt: d(30), closedAt: d(3), lastUpdate: d(3) }, // opt-out: not a lost sale
+], now });
+t('lost reasons: grouped by money lost, unrecorded kept, opt-outs excluded', () => {
+  assert.equal(lr.past.lostCount, 4);
+  assert.deepEqual(lr.past.lostReasons.map((r) => [r.reason, r.count, r.value]), [['price', 2, 4000], ['unrecorded', 1, 800], ['timing', 1, 500]]);
+  assert.equal(lr.past.lostReasons[0].label, 'Price / budget');
+});
+t('lost reason is stored only when Lost, from the list, never over a system reason; cleared on reopen', () => {
+  const lost = buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'closed_lost', lostReason: 'price', existing: { stage: 'qualified' } });
+  assert.equal(lost.lostReason, 'price');
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'closed_lost', lostReason: 'made-up', existing: { stage: 'qualified' } }).lostReason, undefined);
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'closed_lost', lostReason: 'price', existing: { stage: 'closed_lost', lostReason: 'unsubscribed' } }).lostReason, undefined);
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', existing: { stage: 'closed_lost', lostReason: 'price' } }).lostReason, null);
+  assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'qualified', existing: { stage: 'closed_lost', lostReason: 'unsubscribed' } }).lostReason, undefined);
+});
+console.log('\nlost reasons ok');

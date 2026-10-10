@@ -1,5 +1,10 @@
 # Changelog
 
+## Final day: why deals are lost
+- **Lost reason.** Marking a deal Lost (dashboard, CRM, Business Value, or the AI reply suggestion) now asks why in one tap (price, timing, competitor, no need, said no, went silent, other) or lets you skip. Stored on the deal, cleared if the deal is reopened, never overwrites the system reasons `unsubscribed` / `bounced` (still not counted as lost sales). The AI "not interested" suggestion records its own reason.
+- **Business Value → "Why deals are lost"**: lost deals grouped by reason, largest money first; deals marked Lost without a reason show as "Not recorded". The AI pipeline coach receives only whitelisted reason ids + counts (no names).
+- Tests: `tests/business-metrics.test.mjs` (grouping, opt-out exclusion, write rules). `npm test` and `next build` pass.
+
 ## Opt-out + hardening pass
 - **Opt-out links in every email.** First emails, follow-ups and new-lead batches carry a one-click opt-out link and `List-Unsubscribe` headers. Opting out writes a per-customer suppression list, marks an open deal Lost ("unsubscribed"), cancels pending follow-ups, and every send / AI-draft route refuses that address (an opt-out cannot be reopened like a Lost deal). Opt-outs are not counted as lost sales in win rate / lost value. Test: `tests/unsubscribe.test.mjs`.
 - **`send-new-leads` emails were declared quoted-printable but not encoded,** so any "=" (every link with a query string) could be corrupted. Now base64.
