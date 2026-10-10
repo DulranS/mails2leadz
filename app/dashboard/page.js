@@ -126,6 +126,7 @@ import {
   autoCleanupOldRecords,
 } from "../../lib/firebase-operations.js";
 import { invalidateCache } from "../../lib/firebase-cache.js";
+import { makeMoney } from "../../lib/currency.js";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -193,13 +194,12 @@ function DashboardComponent() {
   const [whatsappLinks, setWhatsappLinks] = useState([]);
   const [validEmails, setValidEmails] = useState(0);
   const [validWhatsApp, setValidWhatsApp] = useState(0);
-  const [leadQualityFilter, setLeadQualityFilter] = useState("HOT");
+  const [leadQualityFilter, setLeadQualityFilter] = useState("all"); // never silently drop a customer's leads on first upload
   const [previewRecipient, setPreviewRecipient] = useState(null);
   const [fieldMappings, setFieldMappings] = useState({});
   const [csvFileName, setCsvFileName] = useState("");
   const [csvUploadDate, setCsvUploadDate] = useState(null);
   const [isEnrichingCsv, setIsEnrichingCsv] = useState(false);
-  const [enrichMode, setEnrichMode] = useState("download");
   const [enrichStatusMessage, setEnrichStatusMessage] = useState("");
 
   // ============================================================================
@@ -323,6 +323,8 @@ function DashboardComponent() {
   const [pipelineValue, setPipelineValue] = useState(0);
   const [dealRecords, setDealRecords] = useState([]); // full deal docs: real values + dates for KPIs
   const [bizSettings, setBizSettings] = useState({}); // avg deal value, monthly cost, stage probabilities
+  const money = makeMoney(bizSettings.currency); // customer's own currency (Account → Money settings)
+  const [aiCost90, setAiCost90] = useState(0); // AI spend, last 3 calendar months (USD), so ROI matches the Business Value page
   const [bizLoaded, setBizLoaded] = useState(false);
   const [abResults, setAbResults] = useState({
     a: { opens: 0, clicks: 0, sent: 0, replied: 0 },
@@ -494,7 +496,8 @@ function DashboardComponent() {
   const [researchResults, setResearchResults] = useState({});
   const [showResearchModal, setShowResearchModal] = useState(false);
   const [aiDraft, setAiDraft] = useState(null); // { contact, subject, body, angle, reasons, busy }
-  const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy }
+  const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy, batch }
+  const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
   const [predictiveScores, setPredictiveScores] = useState({});
@@ -602,8 +605,6 @@ function DashboardComponent() {
   // REF FOR AUTO-SAVE
   // ============================================================================
   const autoSaveTimeoutRef = useRef(null);
-  const enrichCsvInputRef = useRef(null);
-  const enrichModeRef = useRef("download");
 
   // ============================================================================
   // NOTIFICATION HELPER
@@ -2222,8 +2223,9 @@ function DashboardComponent() {
       deals: dealRecords,
       outreach: { sent: contacted, replied },
       settings: bizSettings,
+      aiCostUsd: aiCost90,
     });
-  }, [dealRecords, bizSettings, whatsappLinks, repliedLeads]);
+  }, [dealRecords, bizSettings, whatsappLinks, repliedLeads, aiCost90]);
 
   const sendTiming = useMemo(() => computeSendTiming(sentLeads), [sentLeads]);
 
@@ -3478,10 +3480,14 @@ function DashboardComponent() {
         where("userId", "==", user.uid),
         limit(1000),
       );
-      const [snapshot, settingsSnap] = await Promise.all([
+      const nowD = new Date();
+      const aiMonths = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+      const [snapshot, settingsSnap, ...aiSnaps] = await Promise.all([
         getDocs(q),
         getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
+        ...aiMonths.map((m) => getDoc(doc(db, "ai_usage_monthly", `${user.uid}_${m}`)).catch(() => null)),
       ]);
+      setAiCost90(aiSnaps.reduce((sum, sn) => sum + (sn?.exists?.() ? Number(sn.data().costUsd) || 0 : 0), 0));
       const settingsData = settingsSnap?.exists?.() ? settingsSnap.data() : {};
       setBizSettings(settingsData);
       setBizLoaded(true);
@@ -4721,8 +4727,7 @@ function DashboardComponent() {
     try {
       const accessToken = await requestGmailToken();
       if (!accessToken) throw new Error("Gmail permission was not granted");
-      const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const html = body.trim().split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+      // The send route sends plain text (like every other template), so the draft must stay plain text.
       const csvCell = (v) => `"${String(v || "").replace(/"/g, '""')}"`;
       const res = await fetch("/api/send-email", {
         method: "POST",
@@ -4735,7 +4740,7 @@ function DashboardComponent() {
           accessToken,
           refreshToken: user?.refreshToken || "",
           abTestMode: false,
-          templateA: { subject: subject.trim(), body: html },
+          templateA: { subject: subject.trim(), body: body.trim() },
           templateToSend: "A",
           userId: user.uid,
           csvSource: "ai_draft",
@@ -4762,8 +4767,9 @@ function DashboardComponent() {
   // ============================================================================
   // AI FOLLOW-UP (draft -> you edit -> you approve -> normal follow-up send, with all server limits)
   // ============================================================================
-  const handleAiFollowUpDraft = async (task) => {
-    if (!user?.uid || !task?.leadEmail) return;
+  // Returns "ok" (review window opened), "skip" (this lead cannot be drafted, carry on) or "stop" (AI unavailable / limit hit).
+  const handleAiFollowUpDraft = async (task, opts = {}) => {
+    if (!user?.uid || !task?.leadEmail) return "skip";
     const isPostSale = POST_SALE_STAGES.includes(task.followUpStage);
     setStatusType("info");
     setStatus(`✨ Drafting a follow-up for ${task.leadName || task.leadEmail}...`);
@@ -4782,9 +4788,9 @@ function DashboardComponent() {
       const data = await res.json().catch(() => ({}));
       setStatus("");
       if (!res.ok || !data.success) {
-        const soft = ["NO_PROFILE", "ALREADY_REPLIED", "MAX_FOLLOWUPS_REACHED", "AI_DAILY_LIMIT", "AI_BUDGET"].includes(data.code);
+        const soft = ["NO_PROFILE", "ALREADY_REPLIED", "MAX_FOLLOWUPS_REACHED", "DEAL_LOST", "AI_DAILY_LIMIT", "AI_BUDGET"].includes(data.code);
         addNotification(data.error || "Could not create a follow-up draft", soft ? "warning" : "error", 8000);
-        return;
+        return ["NO_PROFILE", "AI_DAILY_LIMIT", "AI_BUDGET", "AI_NOT_CONFIGURED", "AI_AUTH"].includes(data.code) || res.status >= 500 ? "stop" : "skip";
       }
       setAiFollowUp({
         task,
@@ -4796,12 +4802,54 @@ function DashboardComponent() {
         isFinal: !!data.isFinal,
         postSale: !!data.postSale,
         busy: false,
+        batch: opts.batch || null,
       });
+      return "ok";
     } catch (err) {
       console.error("AI follow-up draft error:", err);
       setStatus("");
       addNotification("Could not create a follow-up draft right now", "error");
+      return "stop";
     }
+  };
+
+  // ---- "Review all due with AI": drafts ONE lead at a time, you approve / edit / skip each. Nothing is sent on its own. ----
+  const getDueEmailTasks = () =>
+    (followUpTasks.pending || [])
+      .filter((t) => t.channel === "email" && t.leadEmail && (!t.scheduledFor || new Date(t.scheduledFor) <= new Date()))
+      .sort((a, b) => new Date(a.scheduledFor || 0) - new Date(b.scheduledFor || 0));
+
+  const endAiBatch = (message) => {
+    aiBatchRef.current = null;
+    setAiFollowUp(null);
+    if (message) addNotification(message, "success", 5000);
+  };
+
+  const advanceAiBatch = async () => {
+    const b = aiBatchRef.current;
+    if (!b) return;
+    while (b.queue.length) {
+      const next = b.queue.shift();
+      b.position += 1;
+      const result = await handleAiFollowUpDraft(next, { batch: { n: b.position, total: b.total } });
+      if (result === "ok") return;
+      if (result === "stop") {
+        endAiBatch();
+        return;
+      }
+    }
+    endAiBatch("✅ Review finished. Everything due has been handled.");
+  };
+
+  const startAiBatchReview = async () => {
+    if (aiBatchRef.current) return;
+    const due = getDueEmailTasks().slice(0, 10); // 10 per run keeps AI spend predictable
+    if (due.length === 0) {
+      addNotification("No email follow-ups are due right now.", "info");
+      return;
+    }
+    aiBatchRef.current = { queue: [...due], total: due.length, position: 0 };
+    await advanceAiBatch();
   };
 
   const sendApprovedAiFollowUp = async () => {
@@ -4835,6 +4883,7 @@ function DashboardComponent() {
       addNotification(`✅ Follow-up #${data.followUpCount} sent to ${email}${data.loopClosed ? " (last one: loop closed)" : ""}`, "success", 5000);
       setAiFollowUp(null);
       await refreshAllData();
+      if (aiBatchRef.current) await advanceAiBatch();
     } catch (err) {
       addNotification(`❌ Not sent: ${err.message || err}`, "error", 7000);
       setAiFollowUp((d) => (d ? { ...d, busy: false } : d));
@@ -4853,6 +4902,7 @@ function DashboardComponent() {
       if (tasks) setFollowUpTasks(tasks);
     }
     setAiFollowUp(null);
+    if (aiBatchRef.current) await advanceAiBatch();
   };
 
   // ============================================================================
@@ -5693,89 +5743,6 @@ function DashboardComponent() {
       setEnrichStatusMessage("");
     }
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
-
-  const getDownloadFilenameFromResponse = (res) => {
-    const disposition = res.headers.get("content-disposition") || "";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const basicMatch = disposition.match(/filename="?([^"]+)"?/i);
-    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
-    if (basicMatch?.[1]) return basicMatch[1];
-    return `enriched-${new Date().toISOString().split("T")[0]}.csv`;
-  };
-
-  const triggerCsvDownload = (csvText, filename) => {
-    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const runCsvEnrichment = async (file, mode) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      addNotification("Please choose a CSV file", "error");
-      setEnrichStatusMessage("Please choose a valid CSV file.");
-      return;
-    }
-
-    try {
-      setIsEnrichingCsv(true);
-      setEnrichStatusMessage("Uploading CSV for enrichment...");
-      const rawCsv = await file.text();
-
-      const res = await fetch("/api/enrich", {
-        method: "POST",
-        headers: { "Content-Type": "text/csv" },
-        body: rawCsv,
-      });
-
-      const enrichedCsv = await res.text();
-      if (!res.ok) {
-        throw new Error(
-          enrichedCsv || `Enrichment request failed (${res.status})`,
-        );
-      }
-      if (!enrichedCsv?.trim()) {
-        throw new Error("Enrichment API returned an empty response");
-      }
-
-      const responseFileName = getDownloadFilenameFromResponse(res);
-      triggerCsvDownload(enrichedCsv, responseFileName);
-      addNotification("✅ Enriched CSV downloaded", "success");
-      setEnrichStatusMessage(`Enrichment completed: ${responseFileName}`);
-
-      if (mode === "autoload") {
-        processCsvContent(enrichedCsv, responseFileName);
-        addNotification("✅ Enriched CSV auto-loaded into app", "success");
-        setEnrichStatusMessage(
-          `Enriched file loaded into app: ${responseFileName}`,
-        );
-      }
-    } catch (error) {
-      console.error("CSV enrichment failed:", error);
-      addNotification(`❌ Enrichment failed: ${error.message}`, "error");
-      setEnrichStatusMessage(`Enrichment failed: ${error.message}`);
-    } finally {
-      setIsEnrichingCsv(false);
-      setEnrichMode("download");
-      enrichModeRef.current = "download";
-    }
-  };
-
-  const startEnrichFlow = (mode) => {
-    enrichModeRef.current = mode;
-    setEnrichMode(mode);
-    enrichCsvInputRef.current?.click();
-  };
-
-  const handleEnrichCsvSelect = async (e) => {
-    const file = e.target.files?.[0];
-    await runCsvEnrichment(file, enrichModeRef.current);
-    e.target.value = "";
-  };
 
   // ============================================================================
   // HANDLE CSV UPLOAD
@@ -7160,12 +7127,12 @@ function DashboardComponent() {
                   💰 Pipeline
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${bizMetrics.present.openValue.toLocaleString()}
+                  {money(bizMetrics.present.openValue)}
                 </div>
                 <div className="text-xs text-purple-200 mt-1">
                   {bizMetrics.present.openCount} qualified deal
-                  {bizMetrics.present.openCount === 1 ? "" : "s"} · $
-                  {bizMetrics.present.weightedPipeline.toLocaleString()} weighted
+                  {bizMetrics.present.openCount === 1 ? "" : "s"} ·{" "}
+                  {money(bizMetrics.present.weightedPipeline)} weighted
                 </div>
               </div>
 
@@ -7174,12 +7141,11 @@ function DashboardComponent() {
                   📈 Monthly
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${revenueForecasts.expectedMonthlyRevenue.toLocaleString()}
+                  {money(revenueForecasts.expectedMonthlyRevenue)}
                 </div>
                 <div className="text-xs text-orange-200 mt-1">
-                  30-day forecast · $
-                  {revenueForecasts.expectedMonthlyLow.toLocaleString()}–$
-                  {revenueForecasts.expectedMonthlyHigh.toLocaleString()}
+                  30-day forecast · {money(revenueForecasts.expectedMonthlyLow)}–
+                  {money(revenueForecasts.expectedMonthlyHigh)}
                   {bizMetrics.future.confidence === "low" ? " (early estimate)" : ""}
                 </div>
               </div>
@@ -7207,7 +7173,7 @@ function DashboardComponent() {
                       <div key={h.days} className="flex justify-between">
                         <span className="text-gray-400">Next {h.days} days:</span>
                         <span className="font-bold text-green-400">
-                          ${h.expected.toLocaleString()} <span className="text-gray-500 font-normal">(${h.low.toLocaleString()}–${h.high.toLocaleString()})</span>
+                          {money(h.expected)} <span className="text-gray-500 font-normal">({money(h.low)}–{money(h.high)})</span>
                         </span>
                       </div>
                     ))}
@@ -7227,7 +7193,7 @@ function DashboardComponent() {
                   <h3 className="text-sm font-bold text-purple-300 mb-2">⚠️ Needs attention</h3>
                   {bizMetrics.present.staleCount > 0 ? (
                     <p className="text-xs text-gray-300">
-                      {bizMetrics.present.staleCount} qualified deal{bizMetrics.present.staleCount === 1 ? "" : "s"} worth ${bizMetrics.present.staleValue.toLocaleString()} with no update in 14+ days. Reach out or move them forward.
+                      {bizMetrics.present.staleCount} qualified deal{bizMetrics.present.staleCount === 1 ? "" : "s"} worth {money(bizMetrics.present.staleValue)} with no update in 14+ days. Reach out or move them forward.
                     </p>
                   ) : (
                     <p className="text-xs text-gray-400">No stalled deals. Every qualified deal has been updated in the last 14 days.</p>
@@ -7252,7 +7218,7 @@ function DashboardComponent() {
                       <div className="flex justify-between">
                         <span className="text-gray-400">Avg won deal:</span>
                         <span className="font-bold text-green-400">
-                          {bizMetrics.past.avgWonValue === null ? "n/a" : `$${bizMetrics.past.avgWonValue.toLocaleString()}`}
+                          {bizMetrics.past.avgWonValue === null ? "n/a" : `${money(bizMetrics.past.avgWonValue)}`}
                         </span>
                       </div>
                       {bizMetrics.past.avgCycleDays !== null && (
@@ -7323,40 +7289,6 @@ function DashboardComponent() {
                 onChange={handleCsvUpload}
                 className="w-full p-3 bg-gray-700 text-white border border-gray-600 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
               />
-              <input
-                ref={enrichCsvInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleEnrichCsvSelect}
-                className="hidden"
-              />
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => startEnrichFlow("download")}
-                  disabled={isEnrichingCsv}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isEnrichingCsv && enrichMode === "download"
-                    ? "Processing..."
-                    : "Enrich CSV (Download only)"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => startEnrichFlow("autoload")}
-                  disabled={isEnrichingCsv}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isEnrichingCsv && enrichMode === "autoload"
-                    ? "Processing..."
-                    : "Enrich CSV (Download + auto-load)"}
-                </button>
-              </div>
-              {enrichStatusMessage && (
-                <p className="mt-2 text-xs text-indigo-300">
-                  {enrichStatusMessage}
-                </p>
-              )}
               {csvFileName && (
                 <div className="mt-2 text-xs text-gray-400">
                   📁 {csvFileName} •{" "}
@@ -8103,7 +8035,7 @@ function DashboardComponent() {
                         Open pipeline
                       </div>
                       <div className="text-lg font-bold text-green-300">
-                        ${bizMetrics.present.openValue.toLocaleString()}
+                        {money(bizMetrics.present.openValue)}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
                         {bizMetrics.present.openCount} qualified deal
@@ -8113,7 +8045,7 @@ function DashboardComponent() {
                     <div>
                       <div className="text-xs text-green-400">Next 30 Days</div>
                       <div className="text-lg font-bold text-green-300">
-                        ${bizMetrics.future.horizons[0].expected.toLocaleString()}
+                        {money(bizMetrics.future.horizons[0].expected)}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
                         Expected from your pipeline
@@ -8334,7 +8266,7 @@ function DashboardComponent() {
                       <div className="flex justify-between items-center">
                         <span className="text-gray-300">Weighted pipeline</span>
                         <span className="font-bold text-yellow-400">
-                          ${bizMetrics.present.weightedPipeline.toLocaleString()}
+                          {money(bizMetrics.present.weightedPipeline)}
                         </span>
                       </div>
                     </div>
@@ -8779,12 +8711,11 @@ function DashboardComponent() {
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
-                      $
-                      {Math.round(
+                      {money(
                         repliedLeadsList.length *
                           bizMetrics.settings.avgDealValue *
                           (bizMetrics.settings.probabilities.qualified ?? 0.25),
-                      ).toLocaleString()}
+                      )}
                     </div>
                     <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">
                       Potential revenue
@@ -10390,10 +10321,11 @@ function DashboardComponent() {
           <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-gray-900 border border-gray-700 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
+                {aiFollowUp.batch && <p className="text-xs font-semibold text-indigo-300 mb-0.5">Reviewing {aiFollowUp.batch.n} of {aiFollowUp.batch.total} due follow-ups</p>}
                 <h3 className="text-lg font-bold text-white">{aiFollowUp.postSale ? "Customer check-in · review" : `Follow-up #${aiFollowUp.number} of 3 · review before sending`}</h3>
                 <p className="text-xs text-gray-400">To {aiFollowUp.email} · {aiFollowUp.business}</p>
               </div>
-              <button onClick={() => !aiFollowUp.busy && setAiFollowUp(null)} className="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">✕</button>
+              <button onClick={() => !aiFollowUp.busy && endAiBatch()} className="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">✕</button>
             </div>
             {aiFollowUp.isFinal && <p className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-lg p-2 mb-3">This is the last follow-up. After it the loop closes and no more reminders are sent for this lead.</p>}
             <label className="block text-xs text-gray-400 mb-1" htmlFor="ai-fu-subject">Subject</label>
@@ -10402,7 +10334,14 @@ function DashboardComponent() {
             <textarea id="ai-fu-body" rows={9} value={aiFollowUp.body} onChange={(e) => setAiFollowUp((d) => ({ ...d, body: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm leading-relaxed" />
             <p className="text-xs text-yellow-300/90 mt-2">Written from your earlier email and your business profile. Check every claim before sending. It is sent only when you press the button.</p>
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end mt-4">
-              <button onClick={() => setAiFollowUp(null)} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Discard</button>
+              {aiFollowUp.batch ? (
+                <>
+                  <button onClick={() => endAiBatch()} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm disabled:opacity-50">Stop review</button>
+                  <button onClick={() => advanceAiBatch()} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Skip for now</button>
+                </>
+              ) : (
+                <button onClick={() => setAiFollowUp(null)} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Discard</button>
+              )}
               {aiFollowUp.postSale ? (
                 <button onClick={openPostSaleDraft} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold">Open in my email app</button>
               ) : (
@@ -10586,7 +10525,7 @@ function DashboardComponent() {
                 <div className="bg-green-900/30 border border-green-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-green-400 mb-2">Won so far</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">${bizMetrics.past.wonRevenue.toLocaleString()}</span></div>
+                    <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">{money(bizMetrics.past.wonRevenue)}</span></div>
                     <div><span className="text-gray-400">Deals won:</span> <span className="font-bold text-green-400">{bizMetrics.past.wonCount}</span></div>
                     <div><span className="text-gray-400">Win rate:</span> <span className="font-bold text-green-400">{bizMetrics.past.winRate === null ? "—" : `${Math.round(bizMetrics.past.winRate * 100)}%`}</span></div>
                     <div><span className="text-gray-400">Avg time to win:</span> <span className="font-bold text-green-400">{bizMetrics.past.avgCycleDays ? `${bizMetrics.past.avgCycleDays}d` : "—"}</span></div>
@@ -10604,7 +10543,7 @@ function DashboardComponent() {
                   <div className="text-xs text-gray-300">
                     {bizMetrics.roi.multiple === null
                       ? "Add what you pay per month in Account to see your return."
-                      : `$${bizMetrics.roi.revenue.toLocaleString()} won on $${bizMetrics.roi.cost.toLocaleString()} cost = ${bizMetrics.roi.multiple}× return`}
+                      : `${money(bizMetrics.roi.revenue)} won on ${money(bizMetrics.roi.cost)} cost = ${bizMetrics.roi.multiple}× return`}
                   </div>
                 </div>
               </div>
@@ -10613,20 +10552,20 @@ function DashboardComponent() {
               <div className="space-y-3">
                 <div className="bg-cyan-900/30 border border-cyan-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-cyan-400 mb-2">💰 Open pipeline (qualified deals)</div>
-                  <div className="text-lg font-bold text-cyan-300">${bizMetrics.present.openValue.toLocaleString()}</div>
-                  <div className="text-xs text-cyan-400 mt-1">{bizMetrics.present.openCount} deal{bizMetrics.present.openCount === 1 ? "" : "s"} · ${bizMetrics.present.weightedPipeline.toLocaleString()} weighted by stage chance</div>
+                  <div className="text-lg font-bold text-cyan-300">{money(bizMetrics.present.openValue)}</div>
+                  <div className="text-xs text-cyan-400 mt-1">{bizMetrics.present.openCount} deal{bizMetrics.present.openCount === 1 ? "" : "s"} · {money(bizMetrics.present.weightedPipeline)} weighted by stage chance</div>
                 </div>
                 <div className="bg-blue-900/30 border border-blue-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-blue-400 mb-2">📈 What to expect ({bizMetrics.future.confidence} confidence)</div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     {bizMetrics.future.horizons.map((h) => (
-                      <div key={h.days}><div className="text-gray-400">{h.days} days</div><div className="font-bold text-blue-300">${h.expected.toLocaleString()}</div></div>
+                      <div key={h.days}><div className="text-gray-400">{h.days} days</div><div className="font-bold text-blue-300">{money(h.expected)}</div></div>
                     ))}
                   </div>
                 </div>
                 {bizMetrics.present.staleCount > 0 && (
                   <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded text-xs text-yellow-300">
-                    ⚠️ {bizMetrics.present.staleCount} deal{bizMetrics.present.staleCount === 1 ? " has" : "s have"} gone quiet for 2+ weeks (${bizMetrics.present.staleValue.toLocaleString()} at risk).
+                    ⚠️ {bizMetrics.present.staleCount} deal{bizMetrics.present.staleCount === 1 ? " has" : "s have"} gone quiet for 2+ weeks ({money(bizMetrics.present.staleValue)} at risk).
                   </div>
                 )}
               </div>
@@ -10923,12 +10862,23 @@ function DashboardComponent() {
 
               {/* PENDING TASKS */}
               <div className="mb-6">
-                <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span>📋</span>
-                  <span>
-                    Pending Follow-Ups ({followUpTasks.pending?.length || 0})
-                  </span>
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
+                  <h3 className="text-lg sm:text-xl font-bold text-orange-300 flex items-center gap-2">
+                    <span>📋</span>
+                    <span>
+                      Pending Follow-Ups ({followUpTasks.pending?.length || 0})
+                    </span>
+                  </h3>
+                  {getDueEmailTasks().length > 0 && (
+                    <button
+                      onClick={startAiBatchReview}
+                      className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg font-semibold transition"
+                      title="AI drafts each due email follow-up one at a time. You read, edit and approve every one. Nothing is sent automatically."
+                    >
+                      ✨ Review {Math.min(getDueEmailTasks().length, 10)} due with AI
+                    </button>
+                  )}
+                </div>
                 {(followUpTasks.pending || []).filter((task) => {
                   if (
                     followUpQueueChannel !== "all" &&

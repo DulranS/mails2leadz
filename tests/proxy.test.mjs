@@ -22,6 +22,12 @@ await t('own userId in query passes and identity header is set', async () => {
 await t("someone else's userId in query -> 403", async () => assert.equal((await proxy(req('/api/deals?userId=bob', { token: tokens.alice }))).status, 403));
 await t('own userId in JSON body passes', async () => assert.ok(passes(await proxy(req('/api/send-email', { token: tokens.alice, method: 'POST', body: { userId: 'alice', x: 1 } })))));
 await t("someone else's userId in JSON body -> 403", async () => assert.equal((await proxy(req('/api/send-email', { token: tokens.alice, method: 'POST', body: { userId: 'bob' } }))).status, 403));
+await t("someone else's userId hidden behind a non-JSON content-type -> 403", async () => {
+  const r = new NextRequest('http://x/api/send-email', { method: 'POST', headers: { authorization: `Bearer ${tokens.alice}`, 'content-type': 'text/plain' }, body: JSON.stringify({ userId: 'bob' }) });
+  assert.equal((await proxy(r)).status, 403);
+  const none = new NextRequest('http://x/api/send-email', { method: 'POST', headers: { authorization: `Bearer ${tokens.alice}` }, body: JSON.stringify({ userId: 'bob' }) });
+  assert.equal((await proxy(none)).status, 403);
+});
 await t('admin-only route: customer 403, admin passes', async () => {
   assert.equal((await proxy(req('/api/email-debug', { token: tokens.alice }))).status, 403);
   assert.ok(passes(await proxy(req('/api/email-debug', { token: tokens.boss }))));

@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
+import { headerSafe, isLostDeal } from '../../../lib/server/route-helpers.js';
+import { countToday } from '../../../lib/server/daily-count.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -67,9 +69,10 @@ const createMimeMessage = ({ from, to, subject, body, images = [], attachments =
   const mixedBoundary = 'mixed_' + Date.now();
   const relatedBoundary = 'related_' + Date.now();
   
-  let mimeMessage = `From: ${from}\r\n`;
-  mimeMessage += `To: ${to}\r\n`;
-  mimeMessage += `Subject: ${encodeSubject(subject)}\r\n`;
+  // One line per header, always: a pasted CSV value or AI text can never add extra headers (e.g. Bcc).
+  let mimeMessage = `From: ${headerSafe(from)}\r\n`;
+  mimeMessage += `To: ${headerSafe(to)}\r\n`;
+  mimeMessage += `Subject: ${encodeSubject(headerSafe(subject))}\r\n`;
   mimeMessage += `MIME-Version: 1.0\r\n`;
   mimeMessage += `Content-Type: multipart/mixed; boundary="${mixedBoundary}"\r\n\r\n`;
   
@@ -156,30 +159,22 @@ export async function POST(request) {
       );
     }
     
-    // Check daily limit
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const emailQuery = query(
-      collection(db, 'sent_emails'),
-      where('userId', '==', userId),
-      where('sentAt', '>=', startOfDay)
-    );
-    const emailSnapshot = await getDocs(emailQuery);
-    
-    const remainingQuota = CONFIG.MAX_DAILY_EMAILS - emailSnapshot.size;
-    
+    // Daily limit (dates are compared as ISO strings, see lib/server/daily-count.js)
+    const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
+    const remainingQuota = CONFIG.MAX_DAILY_EMAILS - (sentToday ?? 0);
+
     if (remainingQuota <= 0) {
       return NextResponse.json(
         {
           error: 'Daily email limit reached',
-          dailyCount: emailSnapshot.size,
+          dailyCount: sentToday,
           limit: CONFIG.MAX_DAILY_EMAILS,
           remainingToday: 0
         },
         { status: 429, headers }
       );
     }
-    
+
     // Filter to only new leads (not already sent)
     const newRecipients = [];
     for (const recipient of recipients) {
@@ -193,7 +188,7 @@ export async function POST(request) {
       );
       const existingSnapshot = await getDocs(existingQuery);
       
-      if (existingSnapshot.empty) {
+      if (existingSnapshot.empty && !(await isLostDeal(db, userId, email))) {
         newRecipients.push(recipient);
       }
     }
@@ -281,7 +276,7 @@ export async function POST(request) {
       }
     }
     
-    const newDailyCount = emailSnapshot.size + sentCount;
+    const newDailyCount = (sentToday ?? 0) + sentCount;
     
     return NextResponse.json({
       sent: sentCount,

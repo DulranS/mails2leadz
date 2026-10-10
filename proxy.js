@@ -51,18 +51,17 @@ async function gate(request) {
   if (claimed && claimed !== user.uid) return json(403, 'You can only access your own data.');
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-    const type = request.headers.get('content-type') || '';
-    if (type.includes('application/json')) {
-      const len = Number(request.headers.get('content-length') || 0);
-      if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
-      try {
-        const body = await request.clone().json();
-        if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
-          return json(403, 'You can only access your own data.');
-        }
-      } catch {
-        /* non-JSON or empty body: route handles it */
+    // Routes call request.json() whatever the Content-Type says, so the tenant check must not depend on
+    // the declared type either (a "text/plain" body carrying someone else's userId would slip past).
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
+    try {
+      const body = await request.clone().json();
+      if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
+        return json(403, 'You can only access your own data.');
       }
+    } catch {
+      /* not JSON or empty body: the route handles it */
     }
   }
 

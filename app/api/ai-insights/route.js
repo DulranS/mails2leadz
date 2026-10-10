@@ -26,10 +26,11 @@ export async function POST(request) {
       avgDaysToWin: num(facts.avgCycleDays, 3650), revenueWonLast90d: num(facts.revenue90), costLast90d: num(facts.cost90),
       forecast30d: num(facts.forecast30), forecast90d: num(facts.forecast90), monthlyGoal: num(facts.monthlyGoal), wonThisMonth: num(facts.wonThisMonth),
       repliesWithoutDeal: num(facts.unconverted), followUpsDue: num(facts.dueFollowUps), forecastConfidence: ['low', 'medium', 'high'].includes(facts.confidence) ? facts.confidence : 'low',
+      currency: /^[A-Z]{3}$/.test(String(facts.currency || '')) ? facts.currency : 'USD',
     };
 
     const profile = await getBusinessProfile(uid);
-    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nRules: use no numbers that are not in the JSON; never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
+    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nRules: use no numbers that are not in the JSON; money amounts are in the currency named in the JSON (write them with that currency, not '$' unless it is USD); never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
     const prompt = `${profileBlock(profile) || 'No business profile saved.'}\n\nNumbers (last 90 days unless stated):\n${JSON.stringify(f)}`;
 
     const ai = await callAI({ uid, feature: 'pipeline_insights', tier: 'fast', system, prompt, maxTokens: 600 });

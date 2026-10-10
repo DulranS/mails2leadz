@@ -11,7 +11,8 @@ import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { buildNextActions } from "../../lib/next-actions.js";
 import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
-const money = (n) => `$${Math.round(Number(n) || 0).toLocaleString()}`;
+import { makeMoney } from "../../lib/currency.js";
+
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
 const toMs = (v) => (!v ? null : typeof v?.toDate === "function" ? v.toDate().getTime() : new Date(v).getTime() || null);
 
@@ -92,7 +93,7 @@ export default function BusinessValuePage() {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
         if (x.replied && to) repliedEmails.add(to);
-        if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.recipientName || x.business_name || "" });
+        if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
         if (t && t < since90) return;
         sent++; if (x.replied) replied++;
@@ -128,6 +129,11 @@ export default function BusinessValuePage() {
 
   const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90 }), [raw]);
 
+  const money = makeMoney(m.settings.currency); // the customer's own currency
+  const money2 = makeMoney(m.settings.currency, 2);
+  const usd = makeMoney("USD"); // AI usage is billed by the provider in USD
+  const usd2 = makeMoney("USD", 2);
+
   const saveDeal = async (deal, changes) => {
     setSaving(deal.email);
     try {
@@ -152,7 +158,7 @@ export default function BusinessValuePage() {
         winRate: m.past.winRate, avgCycleDays: m.past.avgCycleDays, revenue90: m.roi.revenue, cost90: m.roi.cost,
         forecast30: m.future.horizons[0].expected, forecast90: m.future.horizons[2].expected, confidence: m.future.confidence,
         monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, wonThisMonth: m.past.wonByMonth[m.past.wonByMonth.length - 1]?.revenue || 0,
-        unconverted: raw.unconverted.length, dueFollowUps: raw.dueFollowUps,
+        unconverted: raw.unconverted.length, dueFollowUps: raw.dueFollowUps, currency: m.settings.currency,
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -332,17 +338,17 @@ export default function BusinessValuePage() {
               <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost (tools + AI)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{money(m.roi.cost)}</div></div>
               <div><div className="text-xs text-gray-500 dark:text-gray-400">Revenue won</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{money(m.roi.revenue)}</div></div>
               <div><div className="text-xs text-gray-500 dark:text-gray-400">Return</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{m.roi.multiple === null ? "—" : `${m.roi.multiple}× cost`}</div></div>
-              <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win / reply</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{m.roi.costPerWin === null ? "—" : money(m.roi.costPerWin)} / {m.roi.costPerReply === null ? "—" : `$${m.roi.costPerReply}`}</div></div>
+              <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win / reply</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{m.roi.costPerWin === null ? "—" : money(m.roi.costPerWin)} / {m.roi.costPerReply === null ? "—" : money2(m.roi.costPerReply)}</div></div>
             </div>
           </Card>
           <Card title="AI usage">
             <div className="grid grid-cols-3 gap-2 text-center">
               <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.callsMonth}</div><div className="text-xs text-gray-500 dark:text-gray-400">requests this month</div></div>
-              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">${raw.ai.costMonth.toFixed(2)}{aiCap ? <span className="text-xs font-normal text-gray-500 dark:text-gray-400"> / {money(aiCap)}</span> : null}</div><div className="text-xs text-gray-500 dark:text-gray-400">est. cost this month</div></div>
-              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.cost90 > 0 && m.roi.wonCount > 0 ? `$${(raw.ai.cost90 / m.roi.wonCount).toFixed(2)}` : "—"}</div><div className="text-xs text-gray-500 dark:text-gray-400">AI cost per win (90d)</div></div>
+              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{usd2(raw.ai.costMonth)}{aiCap ? <span className="text-xs font-normal text-gray-500 dark:text-gray-400"> / {usd(aiCap)}</span> : null}</div><div className="text-xs text-gray-500 dark:text-gray-400">est. cost this month</div></div>
+              <div><div className="text-lg font-semibold text-gray-900 dark:text-white">{raw.ai.cost90 > 0 && m.roi.wonCount > 0 ? usd2(raw.ai.cost90 / m.roi.wonCount) : "—"}</div><div className="text-xs text-gray-500 dark:text-gray-400">AI cost per win (90d)</div></div>
             </div>
             {Object.keys(raw.ai.byFeature).length > 0 && <ul className="mt-3 text-xs text-gray-600 dark:text-gray-300 space-y-1">{Object.entries(raw.ai.byFeature).map(([k, v]) => <li key={k} className="flex justify-between"><span>{k.replace(/_/g, " ")}</span><span>{v}</span></li>)}</ul>}
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Costs are estimates. Repeat requests are cached (free) and each account has daily and monthly AI limits{aiCap ? ` (${money(aiCap)}/month)` : ""}.</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Costs are estimates. Repeat requests are cached (free) and each account has daily and monthly AI limits{aiCap ? ` (${usd(aiCap)}/month)` : ""}.</p>
           </Card>
         </div>
 

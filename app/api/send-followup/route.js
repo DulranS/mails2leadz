@@ -4,6 +4,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { headerSafe, pickOriginal, isLostDeal } from '../../../lib/server/route-helpers.js';
+import { fillTemplate } from '../../../lib/server/template-vars.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -246,10 +247,9 @@ export async function POST(request) {
     const templatesToUse = customTemplates && customTemplates.length > 0 ? customTemplates : FOLLOW_UP_TEMPLATES;
     const template = templatesToUse[followUpIndex] || templatesToUse[templatesToUse.length - 1];
     
-    let subject = template.subject.replace('{{business_name}}', existingData.businessName || 'Contact');
-    let body = template.body
-      .replace('{{business_name}}', existingData.businessName || 'Contact')
-      .replace('{{sender_name}}', senderName || 'Team');
+    const vars = { businessName: existingData.businessName || 'Contact', firstName: existingData.contactName || '', senderName: senderName || 'Team' };
+    let subject = fillTemplate(template.subject, vars);
+    let body = fillTemplate(template.body, vars);
     
     const oauth2Client = new google.auth.OAuth2(
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,

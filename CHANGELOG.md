@@ -1,5 +1,23 @@
 # Changelog
 
+## Final audit pass (last day)
+Security / customer data
+- **Removed CSV "Enrich" (route, service, buttons).** It posted customers' lead lists to a hard-coded third-party AWS endpoint that was not theirs (and the buttons never sent a sign-in token, so they always failed). Scraping/enrichment is out of scope, as the README says.
+- **Tenant check can no longer be bypassed with a different `Content-Type`.** The gate only compared `userId` for `application/json` bodies, but the routes parse the body whatever the type says. It now checks every write request. Test: `tests/proxy.test.mjs`.
+- **Third send route hardened.** `send-new-leads` now strips line breaks from From/To/Subject (header injection), refuses Lost deals, and shares the daily limit.
+
+Pipeline bugs that would have embarrassed customers
+- **Daily send limits never worked.** `sentAt` is stored as an ISO string, but the send route and the quota display compared it with a Date/Timestamp, which matches nothing and raises no error: the 500/day cap never triggered and the dashboard always showed 0 used. One shared counter (`lib/server/daily-count.js`) now compares ISO strings, falls back to a scan if an index is missing, and the batch loop enforces the remaining allowance mid-batch. Test: `tests/daily-count.test.mjs`.
+- **`{{sender_name}}` was sent literally.** The starter templates use it, but the first-email route never filled it and used the dashboard's placeholder string as the From display name. One shared filler (`lib/server/template-vars.js`) now fills every occurrence in the first email and follow-ups. Test: `tests/template-vars.test.mjs`.
+- **AI-approved first emails arrived with raw `<p>`/`<br>` tags.** The draft was converted to HTML but the route sends plain text. Drafts are now sent as plain text.
+- Removed an unused second follow-up path inside `send-email` that skipped the "already replied / Lost / max 3" rules, and an unused `updateDealStage` helper that would have saved an invented $5,000 as a real deal value.
+
+Business value
+- **Currency.** Every figure was hard-coded "$". Account → Money settings now has a currency (22 common ones) and an optional "1 USD = ?" rate that converts the AI provider's USD cost for ROI. Dashboard, Business Value, "Do this next" and the AI coach use it. Test: `tests/currency.test.mjs`.
+- **AI follow-up queue review.** "✨ Review N due with AI" drafts the due email follow-ups one at a time (max 10 per run). You edit and approve or skip each; nothing is sent without a click, server limits still apply, and it stops if an AI limit is hit.
+- The dashboard ROI now includes AI cost, matching the Business Value page.
+- Upload filter defaults to "All" instead of "HOT only" (a CSV with a `lead_quality` column silently lost its WARM leads).
+
 ## Last-day hardening (second pass)
 - **Sends are never repeated automatically.** A slow or failed email / SMS / call request used to be retried by the app (and, for follow-ups, again every 10 seconds by a background queue), which could reach a lead twice. Send and call requests now run exactly once, with a longer timeout; when one fails the app shows the server's reason (already replied, too soon, max reached) and you decide whether to try again. Reads are still retried. Test: `tests/api-retry.test.mjs`.
 - Removed dead code: an unused follow-up scheduler that called a route that does not exist, and an unused scraper client.
