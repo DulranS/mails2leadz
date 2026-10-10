@@ -95,7 +95,7 @@ export default function BusinessValuePage() {
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
-        if (to) emailRows.push({ to, template: x.template, replied: !!x.replied, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
+        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, replied: !!x.replied, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);

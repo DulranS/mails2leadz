@@ -258,6 +258,7 @@ export async function POST(request) {
           subject,
           body,
           template: 'A',
+          abTest: false,
           sentAt: new Date().toISOString(),
           opened: false,
           openedCount: 0,

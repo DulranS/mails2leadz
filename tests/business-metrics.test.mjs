@@ -196,6 +196,19 @@ t('reached stages accumulate; only deals tracked from creation are marked full',
   assert.equal(legacy.reachedFull, undefined);
 });
 
+t('A/B: plain sends from before the test and rows flagged abTest:false are not counted', () => {
+  const s = computeTemplateStats({ emails: [
+    { to: 'old1@x.com', template: 'A', replied: false, t: 1 }, { to: 'old2@x.com', template: 'A', replied: false, t: 2 }, // before the test
+    { to: 'a1@x.com', template: 'A', abTest: true, replied: true, t: 10 }, { to: 'b1@x.com', template: 'B', abTest: true, replied: false, t: 11 },
+    { to: 'plain@x.com', template: 'A', abTest: false, replied: false, t: 12 },
+  ] });
+  assert.deepEqual(s.rows.map((r) => [r.template, r.leads]), [['A', 1], ['B', 1]]);
+  // older rows without the flag: counted from the first version-B email onward
+  const legacy = computeTemplateStats({ emails: [
+    { to: 'x1@x.com', template: 'A', replied: false, t: 1 }, { to: 'x2@x.com', template: 'B', replied: false, t: 5 }, { to: 'x3@x.com', template: 'A', replied: true, t: 6 },
+  ] });
+  assert.deepEqual(legacy.rows.map((r) => [r.template, r.leads]), [['A', 1], ['B', 1]]);
+});
 const mk = (n, tpl, repliedN, startT) => Array.from({ length: n }, (_, i) => ({ to: `${tpl}${i}@x.com`, template: tpl, replied: i < repliedN, t: startT + i }));
 t('A/B: needs both versions, 20+ leads each and a 5-point gap before calling a leader', () => {
   assert.equal(computeTemplateStats({ emails: mk(30, 'A', 3, 1) }).active, false);
@@ -208,7 +221,7 @@ t('A/B: needs both versions, 20+ leads each and a 5-point gap before calling a l
 });
 t('A/B: a lead counts once, by the FIRST email; follow-ups and replies on later rows still count as replied; wins joined from deals', () => {
   const s = computeTemplateStats({
-    emails: [{ to: 'x@x.com', template: 'B', replied: false, t: 2 }, { to: 'X@x.com', template: 'A', replied: true, t: 1 }],
+    emails: [{ to: 'x@x.com', template: 'B', abTest: true, replied: false, t: 2 }, { to: 'X@x.com', template: 'A', abTest: true, replied: true, t: 1 }],
     dealsByEmail: new Map([['x@x.com', { stage: 'closed_won', value: 900 }]]),
   });
   assert.deepEqual(s.rows.map((r) => [r.template, r.leads, r.replied, r.won, r.revenue]), [['A', 1, 1, 1, 900]]);

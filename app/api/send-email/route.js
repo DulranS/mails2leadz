@@ -299,6 +299,7 @@ export async function POST(request) {
           subject,
           body,
           template: abTestMode ? templateToSend : 'A',
+          abTest: !!abTestMode, // lets the A/B report count only emails that were really part of a test
           sentAt: new Date().toISOString(),
           opened: false,
           openedCount: 0,

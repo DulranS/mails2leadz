@@ -27,7 +27,7 @@ can only touch that user's data) and `firestore.rules`.
 ## What is working (Business Value)
 - **Where your deals come from**: win rate and revenue by source: cold email (recognised from the emails sent here), referral,
   inbound, other (tag these in CRM → Add a lead). SMS / calls / WhatsApp get no reply signal back, so they cannot be attributed.
-- **Email A/B test**: version A vs B by reply rate (counted by the first email each lead received). It only names a leader with 20+ leads
+- **Email A/B test**: version A vs B by reply rate (counted by the first email each lead received; only emails sent in A/B mode count, so plain sends from before a test don't skew version A). It only names a leader with 20+ leads
   per version and a 5-point gap; otherwise it says "too early to call".
 - **Stage-chance suggestions**: from your own closed deals, shrunk toward your current numbers, never lower for later stages. It appears
   only after 10+ closed deals that reached a stage *and were tracked from creation* (deals created before this version only know their
