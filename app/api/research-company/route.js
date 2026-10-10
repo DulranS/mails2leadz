@@ -25,7 +25,8 @@ const db = getFirestore(app);
 // ============================================================================
 export async function POST(request) {
   try {
-    const { companyName, companyWebsite, defaultEmailTemplate, userId } = await request.json();
+    const { companyName, companyWebsite, defaultEmailTemplate, userId: bodyUserId } = await request.json();
+    const userId = request.headers.get('x-user-id') || bodyUserId; // the verified user wins over the body
     if (!companyName || !userId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }

@@ -3,13 +3,14 @@
 //  1. Sign-in required: valid Firebase ID token in "Authorization: Bearer ...".
 //  2. Tenant isolation: a `userId` in the query string or JSON body must equal the token's uid.
 //  3. Provider webhooks (Twilio) can't send a Firebase token: they must carry ?key=WEBHOOK_SECRET.
-//  4. Public: /api/health only.
+//  4. Public: /api/health, /api/auth/callback and /api/unsubscribe (signed-link opt-out).
 
 import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 
-const PUBLIC = new Set(['/api/health', '/api/auth/callback']);
-const WEBHOOKS = new Set(['/api/call-webhook', '/api/handle-sms-reply']);
+// /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe']);
+const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
@@ -51,18 +52,17 @@ async function gate(request) {
   if (claimed && claimed !== user.uid) return json(403, 'You can only access your own data.');
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-    const type = request.headers.get('content-type') || '';
-    if (type.includes('application/json')) {
-      const len = Number(request.headers.get('content-length') || 0);
-      if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
-      try {
-        const body = await request.clone().json();
-        if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
-          return json(403, 'You can only access your own data.');
-        }
-      } catch {
-        /* non-JSON or empty body: route handles it */
+    // Routes call request.json() whatever the Content-Type says, so the tenant check must not depend on
+    // the declared type either (a "text/plain" body carrying someone else's userId would slip past).
+    const len = Number(request.headers.get('content-length') || 0);
+    if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
+    try {
+      const body = await request.clone().json();
+      if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
+        return json(403, 'You can only access your own data.');
       }
+    } catch {
+      /* not JSON or empty body: the route handles it */
     }
   }
 

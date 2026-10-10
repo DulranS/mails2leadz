@@ -6,16 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node tests/business-metrics.test.mjs && node tests/send-timing.test.mjs && node tests/ai-client.test.mjs && node --import ./tests/_register.mjs tests/proxy.test.mjs && node tests/auth-fetch.test.mjs && node tests/reply-intents.test.mjs && node tests/route-helpers.test.mjs && node --test tests/api-retry.test.mjs"
+    "test": "node tests/business-metrics.test.mjs && node tests/send-timing.test.mjs && node tests/ai-client.test.mjs && node --import ./tests/_register.mjs tests/proxy.test.mjs && node tests/auth-fetch.test.mjs && node tests/reply-intents.test.mjs && node tests/route-helpers.test.mjs && node tests/phone.test.mjs && node tests/currency.test.mjs && node tests/template-vars.test.mjs && node tests/daily-count.test.mjs && node tests/unsubscribe.test.mjs && node --test tests/api-retry.test.mjs",
+    "prebuild": "node scripts/remove-retired-files.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",
-    "@supabase/supabase-js": "^2.100.1",
     "firebase": "^12.10.0",
     "firebase-admin": "^14.5.0",
     "googleapis": "^171.4.0",
     "next": "^16.2.12",
-    "node-fetch": "^3.3.2",
     "openai": "^4.104.0",
     "papaparse": "^5.5.3",
     "react": "19.2.0",

@@ -60,19 +60,35 @@ export async function GET(request) {
 
   // 2. Gmail sending (Google sign-in client)
   const gid = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  const gsec = !!(process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET);
+  const gsec = !!process.env.GOOGLE_CLIENT_SECRET;
   add('gmail', 'Email sending (Gmail)', gid && gsec,
     gid && gsec ? 'Google client configured.' : `Missing: ${[!gid && 'client id', !gsec && 'client secret'].filter(Boolean).join(', ')}.`,
-    'Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Google Cloud > Credentials), enable the Gmail API, then redeploy.');
+    'Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Google Cloud > Credentials; if you only have NEXT_PUBLIC_GOOGLE_CLIENT_SECRET, rename it), enable the Gmail API, then redeploy.');
+
+  // 2b. A client secret under a NEXT_PUBLIC_ name is published to every visitor's browser. The app no longer reads it.
+  const legacyName = 'NEXT_PUBLIC_' + 'GOOGLE_CLIENT_SECRET';
+  const legacyPresent = !!process.env[legacyName];
+  add('secret-exposure', 'Google secret not exposed', !legacyPresent,
+    legacyPresent ? `${legacyName} is set. The app ignores it, but any NEXT_PUBLIC_ value is visible to every visitor.` : 'No secret is published to browsers.',
+    `Rename ${legacyName} to GOOGLE_CLIENT_SECRET in your hosting environment variables, redeploy, then create a NEW client secret in Google Cloud (the old one was exposed) and update it.`);
 
   // 3. AI
   const ai = aiConfig();
   add('ai', 'AI drafting', !!ai.provider, ai.provider ? `Using ${ai.provider} (${ai.models.fast})${ai.providers.length > 1 ? `, with ${ai.providers.slice(1).map((p) => p.name).join(' / ')} as backup` : ''}.` : 'No AI key configured.',
     'Set DEEPSEEK_API_KEY (recommended; or OPENAI_API_KEY / ANTHROPIC_API_KEY), then redeploy. Everything except AI drafting works without it.');
 
-  // 4. Webhooks (only matters if SMS/calls are used)
-  add('webhooks', 'SMS/call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',
-    'Set WEBHOOK_SECRET to a long random string and add ?key=<it> to your Twilio webhook URLs. Skip if you do not use SMS replies.');
+  // 4. Webhooks (only matters if phone calls are used)
+  add('webhooks', 'Call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',
+    'Set WEBHOOK_SECRET to a long random string (the app adds ?key= to the call-status callback itself). Skip if you do not use phone calls.');
+
+  // 5. Opt-out links (every outgoing email carries one when this is green)
+  const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();
+  const hasKey = !!(process.env.UNSUBSCRIBE_SECRET || process.env.WEBHOOK_SECRET);
+  const httpsBase = /^https:\/\//i.test(base);
+  const optOutOk = isAdminMode() && hasKey && httpsBase;
+  add('optout', 'Opt-out links in emails', optOutOk,
+    optOutOk ? 'Every email carries a one-click opt-out link and List-Unsubscribe headers.' : `Emails are sent WITHOUT an opt-out link. Missing: ${[!isAdminMode() && 'service account', !hasKey && 'secret', !httpsBase && 'https public URL'].filter(Boolean).join(', ')}.`,
+    'Set NEXT_PUBLIC_BASE_URL (your https domain), UNSUBSCRIBE_SECRET (a long random string; WEBHOOK_SECRET is used if this is empty) and FIREBASE_SERVICE_ACCOUNT_JSON, then redeploy.');
 
   const blocking = checks.filter((c) => !c.ok && ['database', 'gmail'].includes(c.id));
   return NextResponse.json({ ok: blocking.length === 0, isAdmin, checks }, { headers: { 'Cache-Control': 'no-store' } });

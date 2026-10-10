@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
+import { headerSafe, isBlockedContact, optOutFor } from '../../../lib/server/route-helpers.js';
+import { countToday } from '../../../lib/server/daily-count.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -63,17 +65,22 @@ const encodeSubject = (subject) => {
 // ============================================================================
 // CREATE MIME MESSAGE
 // ============================================================================
-const createMimeMessage = ({ from, to, subject, body, images = [], attachments = [] }) => {
+const toBase64Lines = (text) => Buffer.from(String(text), 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n');
+
+const createMimeMessage = ({ from, to, subject, body, images = [], attachments = [], optOut = null }) => {
   const mixedBoundary = 'mixed_' + Date.now();
   const relatedBoundary = 'related_' + Date.now();
   
-  let mimeMessage = `From: ${from}\r\n`;
-  mimeMessage += `To: ${to}\r\n`;
-  mimeMessage += `Subject: ${encodeSubject(subject)}\r\n`;
+  // One line per header, always: a pasted CSV value or AI text can never add extra headers (e.g. Bcc).
+  let mimeMessage = `From: ${headerSafe(from)}\r\n`;
+  mimeMessage += `To: ${headerSafe(to)}\r\n`;
+  mimeMessage += `Subject: ${encodeSubject(headerSafe(subject))}\r\n`;
   mimeMessage += `MIME-Version: 1.0\r\n`;
+  if (optOut) mimeMessage += optOut.headers;
   mimeMessage += `Content-Type: multipart/mixed; boundary="${mixedBoundary}"\r\n\r\n`;
   
   let htmlBody = body.replace(/\n/g, '<br>');
+  if (optOut) htmlBody += optOut.htmlFooter;
   images.forEach((img, index) => {
     const cid = img.cid || `img${index + 1}@massmailer`;
     htmlBody = htmlBody.replace(`{{image${index + 1}}}`, `<img src="cid:${cid}" style="max-width: 100%;" />`);
@@ -84,8 +91,9 @@ const createMimeMessage = ({ from, to, subject, body, images = [], attachments =
     mimeMessage += `Content-Type: multipart/related; boundary="${relatedBoundary}"\r\n\r\n`;
     mimeMessage += `--${relatedBoundary}\r\n`;
     mimeMessage += `Content-Type: text/html; charset=UTF-8\r\n`;
-    mimeMessage += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
-    mimeMessage += htmlBody + '\r\n\r\n';
+    // base64, not quoted-printable: the text is not QP-encoded, so any "=" (every link with ?x=y) would be decoded as a byte.
+    mimeMessage += `Content-Transfer-Encoding: base64\r\n\r\n`;
+    mimeMessage += toBase64Lines(htmlBody) + '\r\n\r\n';
     
     for (const img of images) {
       mimeMessage += `--${relatedBoundary}\r\n`;
@@ -99,8 +107,9 @@ const createMimeMessage = ({ from, to, subject, body, images = [], attachments =
     mimeMessage += `--${relatedBoundary}--\r\n`;
   } else {
     mimeMessage += `Content-Type: text/html; charset=UTF-8\r\n`;
-    mimeMessage += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
-    mimeMessage += htmlBody + '\r\n\r\n';
+    // base64, not quoted-printable: the text is not QP-encoded, so any "=" (every link with ?x=y) would be decoded as a byte.
+    mimeMessage += `Content-Transfer-Encoding: base64\r\n\r\n`;
+    mimeMessage += toBase64Lines(htmlBody) + '\r\n\r\n';
   }
   
   for (const attachment of attachments) {
@@ -156,30 +165,22 @@ export async function POST(request) {
       );
     }
     
-    // Check daily limit
-    const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const emailQuery = query(
-      collection(db, 'sent_emails'),
-      where('userId', '==', userId),
-      where('sentAt', '>=', startOfDay)
-    );
-    const emailSnapshot = await getDocs(emailQuery);
-    
-    const remainingQuota = CONFIG.MAX_DAILY_EMAILS - emailSnapshot.size;
-    
+    // Daily limit (dates are compared as ISO strings, see lib/server/daily-count.js)
+    const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
+    const remainingQuota = CONFIG.MAX_DAILY_EMAILS - (sentToday ?? 0);
+
     if (remainingQuota <= 0) {
       return NextResponse.json(
         {
           error: 'Daily email limit reached',
-          dailyCount: emailSnapshot.size,
+          dailyCount: sentToday,
           limit: CONFIG.MAX_DAILY_EMAILS,
           remainingToday: 0
         },
         { status: 429, headers }
       );
     }
-    
+
     // Filter to only new leads (not already sent)
     const newRecipients = [];
     for (const recipient of recipients) {
@@ -193,7 +194,7 @@ export async function POST(request) {
       );
       const existingSnapshot = await getDocs(existingQuery);
       
-      if (existingSnapshot.empty) {
+      if (existingSnapshot.empty && !(await isBlockedContact(db, userId, email))) {
         newRecipients.push(recipient);
       }
     }
@@ -204,7 +205,7 @@ export async function POST(request) {
     // Setup Gmail API
     const oauth2Client = new google.auth.OAuth2(
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      (process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET),
+      process.env.GOOGLE_CLIENT_SECRET,
       process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI
     );
     
@@ -241,7 +242,8 @@ export async function POST(request) {
           subject,
           body,
           images: emailImages,
-          attachments: emailAttachments
+          attachments: emailAttachments,
+          optOut: optOutFor(userId, email)
         });
         
         const response = await gmail.users.messages.send({
@@ -281,7 +283,7 @@ export async function POST(request) {
       }
     }
     
-    const newDailyCount = emailSnapshot.size + sentCount;
+    const newDailyCount = (sentToday ?? 0) + sentCount;
     
     return NextResponse.json({
       sent: sentCount,

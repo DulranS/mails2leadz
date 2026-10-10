@@ -40,9 +40,10 @@ service cloud.firestore {
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
           'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
           'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications'
+          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'suppressions'
         ] && ownsExisting(docId);
 
+      // 'suppressions' (opt-outs) is deliberately NOT in the create/update lists below: only the server writes it.
       allow create: if coll in [
           'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',

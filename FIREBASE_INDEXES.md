@@ -210,3 +210,17 @@ These indexes add minimal storage cost (~1-2KB per task) but significantly reduc
 - Firebase costs overall
 
 The cost savings from reduced read operations far outweigh the storage cost of indexes.
+
+### Daily send counters (recommended)
+
+Used by the daily safety limits (`lib/server/daily-count.js`). Without them the app still works: it falls back to reading that
+customer's documents and counting in code, which is correct but reads more documents as history grows. If Firestore logs a
+"query requires an index" link for one of these, open it and press Create.
+
+| Collection | Fields |
+|---|---|
+| `sent_emails` | `userId` (Asc), `sentAt` (Asc) |
+| `sms_sent` | `userId` (Asc), `sentAt` (Asc) |
+| `calls` | `userId` (Asc), `createdAt` (Asc) |
+
+`sentAt` / `createdAt` are stored as ISO-8601 strings, so these queries compare strings. Never write them as Firestore Timestamps.

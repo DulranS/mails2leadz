@@ -1,5 +1,6 @@
 // app/api/send-sms/route.js
 import { NextResponse } from 'next/server';
+import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import twilio from 'twilio';
@@ -33,18 +34,7 @@ const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 // ============================================================================
 // FORMAT PHONE NUMBER
 // ============================================================================
-const formatForDialing = (raw) => {
-  if (!raw || raw === 'N/A' || raw === '' || raw === 'undefined' || raw === 'null') return null;
-  let cleaned = raw.toString().replace(/\D/g, '');
-  if (cleaned.startsWith('0') && cleaned.length >= 9) {
-    cleaned = '94' + cleaned.slice(1);
-  }
-  if (cleaned.length === 9 && /^[7-9]/.test(cleaned)) {
-    cleaned = '94' + cleaned;
-  }
-  const isValid = /^[1-9]\d{9,14}$/.test(cleaned);
-  return isValid ? cleaned : null;
-};
+const formatForDialing = normalizePhone;
 
 // ============================================================================
 // POST HANDLER

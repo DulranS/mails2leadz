@@ -77,11 +77,11 @@ export async function POST(request) {
     if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
       debugInfo.configuration.gmailOAuth = {
         clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Missing',
-        clientSecret: (process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET) ? '✅ Set' : '❌ Missing',
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing',
         redirectUri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || '❌ Missing'
       };
 
-      if (!(process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET)) {
+      if (!process.env.GOOGLE_CLIENT_SECRET) {
         debugInfo.issues.push('Google Client Secret is required for OAuth');
         debugInfo.fixes.push('Set GOOGLE_CLIENT_SECRET (server-side only, no NEXT_PUBLIC_ prefix) in environment variables');
       }

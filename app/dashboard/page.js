@@ -52,7 +52,6 @@ import {
   sendPasswordResetEmail,
   browserLocalPersistence,
 } from "firebase/auth";
-import Head from "next/head";
 import { useRouter } from "next/navigation";
 import RepliesPanel from "../../components/RepliesPanel";
 import { useAppSelector } from "../../lib/redux/hooks";
@@ -73,14 +72,10 @@ import {
   DEFAULT_TWITTER_TEMPLATE,
   DEFAULT_LINKEDIN_TEMPLATE,
 } from "../../lib/default-templates.js";
+import { APP_NAME, APP_TAGLINE } from "../../lib/brand.js";
 import { dealDocId, buildDealWrite, normalizeStage, isClosed as isClosedStage } from "../../lib/deal-utils.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSendTiming } from "../../lib/send-timing.js";
-import {
-  generateQualificationSMS,
-  parseQualificationResponse,
-  formatQualificationSummary,
-} from "../../lib/sms-qualifier";
 import {
   formatForDialing,
   formatPhoneForDisplay,
@@ -105,13 +100,11 @@ import { retryFetch } from "../../lib/api-retry.js";
 import { errorHandler, withErrorHandling } from "../../lib/error-handler.js";
 import { leadScoringEngine } from "../../lib/lead-scoring-engine.js";
 import { smartFollowupEngine } from "../../lib/smart-followup-engine.js";
-import { revenueAnalyticsEngine } from "../../lib/revenue-analytics-engine.js";
 import PerformanceMonitor from "../../components/PerformanceMonitor.jsx";
 import {
   loadSettingsFromFirebase,
   saveSettingsToFirebase,
   loadManualContactStatus,
-  updateDealStage,
   loadSentLeads,
   loadRepliedAndFollowUp,
   normalizeSentLead,
@@ -128,6 +121,7 @@ import {
   autoCleanupOldRecords,
 } from "../../lib/firebase-operations.js";
 import { invalidateCache } from "../../lib/firebase-cache.js";
+import { makeMoney } from "../../lib/currency.js";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -195,13 +189,12 @@ function DashboardComponent() {
   const [whatsappLinks, setWhatsappLinks] = useState([]);
   const [validEmails, setValidEmails] = useState(0);
   const [validWhatsApp, setValidWhatsApp] = useState(0);
-  const [leadQualityFilter, setLeadQualityFilter] = useState("HOT");
+  const [leadQualityFilter, setLeadQualityFilter] = useState("all"); // never silently drop a customer's leads on first upload
   const [previewRecipient, setPreviewRecipient] = useState(null);
   const [fieldMappings, setFieldMappings] = useState({});
   const [csvFileName, setCsvFileName] = useState("");
   const [csvUploadDate, setCsvUploadDate] = useState(null);
   const [isEnrichingCsv, setIsEnrichingCsv] = useState(false);
-  const [enrichMode, setEnrichMode] = useState("download");
   const [enrichStatusMessage, setEnrichStatusMessage] = useState("");
 
   // ============================================================================
@@ -314,13 +307,6 @@ function DashboardComponent() {
   const [optimalFollowUpTimes, setOptimalFollowUpTimes] = useState({});
   const [nextBestActions, setNextBestActions] = useState({});
 
-  // Revenue analytics engine integration
-  const [pipelineHealth, setPipelineHealth] = useState(0);
-  const [revenueForecast, setRevenueForecast] = useState({ forecast: 0, conservative: 0, optimistic: 0 });
-  const [atRiskDeals, setAtRiskDeals] = useState([]);
-  const [winLossAnalysis, setWinLossAnalysis] = useState({});
-  const [actionItems, setActionItems] = useState([]);
-
   // Performance monitor integration
   const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
 
@@ -332,6 +318,8 @@ function DashboardComponent() {
   const [pipelineValue, setPipelineValue] = useState(0);
   const [dealRecords, setDealRecords] = useState([]); // full deal docs: real values + dates for KPIs
   const [bizSettings, setBizSettings] = useState({}); // avg deal value, monthly cost, stage probabilities
+  const money = makeMoney(bizSettings.currency); // customer's own currency (Account → Money settings)
+  const [aiCost90, setAiCost90] = useState(0); // AI spend, last 3 calendar months (USD), so ROI matches the Business Value page
   const [bizLoaded, setBizLoaded] = useState(false);
   const [abResults, setAbResults] = useState({
     a: { opens: 0, clicks: 0, sent: 0, replied: 0 },
@@ -503,7 +491,8 @@ function DashboardComponent() {
   const [researchResults, setResearchResults] = useState({});
   const [showResearchModal, setShowResearchModal] = useState(false);
   const [aiDraft, setAiDraft] = useState(null); // { contact, subject, body, angle, reasons, busy }
-  const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy }
+  const [aiFollowUp, setAiFollowUp] = useState(null); // { task, email, business, subject, body, number, isFinal, busy, batch }
+  const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
   const [predictiveScores, setPredictiveScores] = useState({});
@@ -611,8 +600,6 @@ function DashboardComponent() {
   // REF FOR AUTO-SAVE
   // ============================================================================
   const autoSaveTimeoutRef = useRef(null);
-  const enrichCsvInputRef = useRef(null);
-  const enrichModeRef = useRef("download");
 
   // ============================================================================
   // NOTIFICATION HELPER
@@ -739,19 +726,6 @@ function DashboardComponent() {
       daysSince: canContactResult.daysSince,
       lastContact: canContactResult.lastContact,
     };
-  };
-
-  // ============================================================================
-  // HELPER: Check if phone is a 077 priority number (formatted as 9477...)
-  // ============================================================================
-  const isPriorityPhone = (phone) => {
-    if (!phone) return false;
-    const cleaned = phone.toString().replace(/\D/g, "");
-    return (
-      cleaned.startsWith("9477") ||
-      cleaned.startsWith("9476") ||
-      cleaned.startsWith("9475")
-    );
   };
 
   // ============================================================================
@@ -947,6 +921,8 @@ function DashboardComponent() {
       .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
+        // Deals marked Lost are not followed up (the server refuses them too).
+        if (normalizeStage(dealStage[lead.email] || dealStage[String(lead.email).toLowerCase()]) === "closed_lost") return false;
 
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         if (followUpCount >= 3) return false;
@@ -998,7 +974,7 @@ function DashboardComponent() {
       });
 
     return candidates;
-  }, [filteredSentLeads]);
+  }, [filteredSentLeads, dealStage]);
 
   // ============================================================================
   // ✅ WHATSAPP FOLLOW-UP CANDIDATES WITH REMINDERS (OPTIMIZED WITH useMemo)
@@ -1888,6 +1864,7 @@ function DashboardComponent() {
       .filter((lead) => {
         if (!lead || !lead.email) return false;
         if (lead.replied) return false;
+        if (normalizeStage(dealStage[lead.email] || dealStage[String(lead.email).toLowerCase()]) === "closed_lost") return false;
 
         const followUpCount = lead.followUpCount ?? lead.followUpSentCount ?? 0;
         if (followUpCount >= 3) return false;
@@ -1932,7 +1909,7 @@ function DashboardComponent() {
       .sort((a, b) => a.daysRemaining - b.daysRemaining);
 
     return pending;
-  }, [filteredSentLeads]);
+  }, [filteredSentLeads, dealStage]);
 
   // Get replied leads with details (OPTIMIZED WITH useMemo)
   const repliedLeadsList = useMemo(() => {
@@ -2094,7 +2071,7 @@ function DashboardComponent() {
   };
 
   // ============================================================================
-  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM, 077 PRIORITY (OPTIMIZED WITH useMemo)
+  // FILTERED AND SORTED CONTACTS - CONTACTED AT BOTTOM (OPTIMIZED WITH useMemo)
   // ============================================================================
   const filteredAndSortedContacts = useMemo(() => {
     let filteredContacts = [...whatsappLinks];
@@ -2145,18 +2122,12 @@ function DashboardComponent() {
 
       const aIsContacted = isContactedOnAnyChannel(a);
       const bIsContacted = isContactedOnAnyChannel(b);
-      const aIsPriority = isPriorityPhone(a.phone);
-      const bIsPriority = isPriorityPhone(b.phone);
       const aScore = leadScores[aKey] || 0;
       const bScore = leadScores[bKey] || 0;
 
       // Priority 1: Non-contacted first, contacted last
       if (!aIsContacted && bIsContacted) return -1;
       if (aIsContacted && !bIsContacted) return 1;
-
-      // Priority 2: 077/076/075 numbers
-      if (aIsPriority && !bIsPriority) return -1;
-      if (!aIsPriority && bIsPriority) return 1;
 
       // Priority 3: Selected sort
       if (sortBy === "score") {
@@ -2208,8 +2179,6 @@ function DashboardComponent() {
 
       const aIsContacted = isContactedOnAnyChannel(a);
       const bIsContacted = isContactedOnAnyChannel(b);
-      const aIsPriority = isPriorityPhone(a.phone);
-      const bIsPriority = isPriorityPhone(b.phone);
       
       // Use advanced lead scores from engine for better prioritization
       const aScore = advancedLeadScores[aKey] || leadScores[aKey] || 0;
@@ -2232,10 +2201,6 @@ function DashboardComponent() {
         return bCategoryPriority - aCategoryPriority;
       }
 
-      // 3. Then 077/076/075 priority
-      if (aIsPriority && !bIsPriority) return -1;
-      if (!aIsPriority && bIsPriority) return 1;
-
       // 4. Fallback to advanced score ranking
       return bScore - aScore;
     });
@@ -2253,8 +2218,9 @@ function DashboardComponent() {
       deals: dealRecords,
       outreach: { sent: contacted, replied },
       settings: bizSettings,
+      aiCostUsd: aiCost90,
     });
-  }, [dealRecords, bizSettings, whatsappLinks, repliedLeads]);
+  }, [dealRecords, bizSettings, whatsappLinks, repliedLeads, aiCost90]);
 
   const sendTiming = useMemo(() => computeSendTiming(sentLeads), [sentLeads]);
 
@@ -2616,43 +2582,6 @@ function DashboardComponent() {
     setOptimalFollowUpTimes(newOptimalTimes);
     setNextBestActions(newNextActions);
     setFollowUpRecommendations(newFollowUpRecs);
-  }, [sentLeads]);
-
-  // ============================================================================
-  // REVENUE ANALYTICS ENGINE INTEGRATION
-  // ============================================================================
-  useEffect(() => {
-    if (!sentLeads || sentLeads.length === 0) return;
-
-    try {
-      // Calculate pipeline health
-      const health = revenueAnalyticsEngine.calculatePipelineHealth(sentLeads);
-      setPipelineHealth(health);
-
-      // Forecast revenue
-      const forecast = revenueAnalyticsEngine.forecastRevenue(sentLeads, 12);
-      setRevenueForecast(forecast);
-
-      // Identify at-risk deals
-      const atRisk = revenueAnalyticsEngine.identifyAtRiskDeals(sentLeads);
-      setAtRiskDeals(atRisk);
-
-      // Analyze win/loss
-      const winLoss = revenueAnalyticsEngine.analyzeWinLoss(sentLeads);
-      setWinLossAnalysis(winLoss);
-
-      // Get action items
-      const actions = revenueAnalyticsEngine.getActionItems(sentLeads);
-      setActionItems(actions);
-    } catch (error) {
-      console.error('Error in revenue analytics engine:', error);
-      // Set fallback values to prevent UI errors
-      setPipelineHealth(50);
-      setRevenueForecast({ forecast: 0, conservative: 0, optimistic: 0, confidence: 50 });
-      setAtRiskDeals([]);
-      setWinLossAnalysis({ winRate: 0, wonCount: 0, lostCount: 0, avgWonDealSize: 0 });
-      setActionItems([]);
-    }
   }, [sentLeads]);
 
   // ============================================================================
@@ -3546,10 +3475,14 @@ function DashboardComponent() {
         where("userId", "==", user.uid),
         limit(1000),
       );
-      const [snapshot, settingsSnap] = await Promise.all([
+      const nowD = new Date();
+      const aiMonths = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+      const [snapshot, settingsSnap, ...aiSnaps] = await Promise.all([
         getDocs(q),
         getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
+        ...aiMonths.map((m) => getDoc(doc(db, "ai_usage_monthly", `${user.uid}_${m}`)).catch(() => null)),
       ]);
+      setAiCost90(aiSnaps.reduce((sum, sn) => sum + (sn?.exists?.() ? Number(sn.data().costUsd) || 0 : 0), 0));
       const settingsData = settingsSnap?.exists?.() ? settingsSnap.data() : {};
       setBizSettings(settingsData);
       setBizLoaded(true);
@@ -4629,97 +4562,6 @@ function DashboardComponent() {
   };
 
   // ============================================================================
-  // SMS SALES QUALIFICATION
-  // ============================================================================
-  const handleSMSQualification = async (leads) => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    if (!leads || leads.length === 0) {
-      addNotification("No leads selected for qualification", "warning");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Send qualification SMS to ${leads.length} leads?\n\n` +
-        `This will ask for their budget, timeframe, and preferred contact method.\n\n` +
-        `Continue?`,
-    );
-
-    if (!confirmed) return;
-
-    setStatus("Sending qualification SMS...");
-    setIsSending(true);
-
-    try {
-      const response = await fetch("/api/send-sms-qualification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          leads,
-          userId: user.uid,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        addNotification(
-          `Qualification SMS sent: ${data.successCount} success, ${data.failCount} failed`,
-          data.failCount > 0 ? "warning" : "success",
-        );
-      } else {
-        addNotification(
-          `Failed to send qualification SMS: ${data.error}`,
-          "error",
-        );
-      }
-    } catch (error) {
-      addNotification(`SMS qualification error: ${error.message}`, "error");
-    } finally {
-      setIsSending(false);
-      setStatus("");
-    }
-  };
-
-  const handleSMSReply = async (phone, response) => {
-    if (!user?.uid) {
-      addNotification("Please sign in first", "error");
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/handle-sms-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone,
-          response,
-          userId: user.uid,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        if (data.qualified) {
-          addNotification(`✅ Lead qualified! ${data.summary}`, "success");
-        } else {
-          addNotification(`❌ Lead archived: ${data.summary}`, "warning");
-        }
-
-        await loadSentLeads();
-      } else {
-        addNotification(`Failed to handle SMS reply: ${data.error}`, "error");
-      }
-    } catch (error) {
-      addNotification(`SMS reply error: ${error.message}`, "error");
-    }
-  };
-
-  // ============================================================================
   // SMART AI RESEARCH + OUTREACH
   // ============================================================================
   const handleSmartResearchOutreach = async (contact) => {
@@ -4789,8 +4631,7 @@ function DashboardComponent() {
     try {
       const accessToken = await requestGmailToken();
       if (!accessToken) throw new Error("Gmail permission was not granted");
-      const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const html = body.trim().split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+      // The send route sends plain text (like every other template), so the draft must stay plain text.
       const csvCell = (v) => `"${String(v || "").replace(/"/g, '""')}"`;
       const res = await fetch("/api/send-email", {
         method: "POST",
@@ -4803,7 +4644,7 @@ function DashboardComponent() {
           accessToken,
           refreshToken: user?.refreshToken || "",
           abTestMode: false,
-          templateA: { subject: subject.trim(), body: html },
+          templateA: { subject: subject.trim(), body: body.trim() },
           templateToSend: "A",
           userId: user.uid,
           csvSource: "ai_draft",
@@ -4830,8 +4671,9 @@ function DashboardComponent() {
   // ============================================================================
   // AI FOLLOW-UP (draft -> you edit -> you approve -> normal follow-up send, with all server limits)
   // ============================================================================
-  const handleAiFollowUpDraft = async (task) => {
-    if (!user?.uid || !task?.leadEmail) return;
+  // Returns "ok" (review window opened), "skip" (this lead cannot be drafted, carry on) or "stop" (AI unavailable / limit hit).
+  const handleAiFollowUpDraft = async (task, opts = {}) => {
+    if (!user?.uid || !task?.leadEmail) return "skip";
     const isPostSale = POST_SALE_STAGES.includes(task.followUpStage);
     setStatusType("info");
     setStatus(`✨ Drafting a follow-up for ${task.leadName || task.leadEmail}...`);
@@ -4850,9 +4692,9 @@ function DashboardComponent() {
       const data = await res.json().catch(() => ({}));
       setStatus("");
       if (!res.ok || !data.success) {
-        const soft = ["NO_PROFILE", "ALREADY_REPLIED", "MAX_FOLLOWUPS_REACHED", "AI_DAILY_LIMIT", "AI_BUDGET"].includes(data.code);
+        const soft = ["NO_PROFILE", "ALREADY_REPLIED", "MAX_FOLLOWUPS_REACHED", "DEAL_LOST", "AI_DAILY_LIMIT", "AI_BUDGET"].includes(data.code);
         addNotification(data.error || "Could not create a follow-up draft", soft ? "warning" : "error", 8000);
-        return;
+        return ["NO_PROFILE", "AI_DAILY_LIMIT", "AI_BUDGET", "AI_NOT_CONFIGURED", "AI_AUTH"].includes(data.code) || res.status >= 500 ? "stop" : "skip";
       }
       setAiFollowUp({
         task,
@@ -4864,12 +4706,54 @@ function DashboardComponent() {
         isFinal: !!data.isFinal,
         postSale: !!data.postSale,
         busy: false,
+        batch: opts.batch || null,
       });
+      return "ok";
     } catch (err) {
       console.error("AI follow-up draft error:", err);
       setStatus("");
       addNotification("Could not create a follow-up draft right now", "error");
+      return "stop";
     }
+  };
+
+  // ---- "Review all due with AI": drafts ONE lead at a time, you approve / edit / skip each. Nothing is sent on its own. ----
+  const getDueEmailTasks = () =>
+    (followUpTasks.pending || [])
+      .filter((t) => t.channel === "email" && t.leadEmail && (!t.scheduledFor || new Date(t.scheduledFor) <= new Date()))
+      .sort((a, b) => new Date(a.scheduledFor || 0) - new Date(b.scheduledFor || 0));
+
+  const endAiBatch = (message) => {
+    aiBatchRef.current = null;
+    setAiFollowUp(null);
+    if (message) addNotification(message, "success", 5000);
+  };
+
+  const advanceAiBatch = async () => {
+    const b = aiBatchRef.current;
+    if (!b) return;
+    while (b.queue.length) {
+      const next = b.queue.shift();
+      b.position += 1;
+      const result = await handleAiFollowUpDraft(next, { batch: { n: b.position, total: b.total } });
+      if (result === "ok") return;
+      if (result === "stop") {
+        endAiBatch();
+        return;
+      }
+    }
+    endAiBatch("✅ Review finished. Everything due has been handled.");
+  };
+
+  const startAiBatchReview = async () => {
+    if (aiBatchRef.current) return;
+    const due = getDueEmailTasks().slice(0, 10); // 10 per run keeps AI spend predictable
+    if (due.length === 0) {
+      addNotification("No email follow-ups are due right now.", "info");
+      return;
+    }
+    aiBatchRef.current = { queue: [...due], total: due.length, position: 0 };
+    await advanceAiBatch();
   };
 
   const sendApprovedAiFollowUp = async () => {
@@ -4903,6 +4787,7 @@ function DashboardComponent() {
       addNotification(`✅ Follow-up #${data.followUpCount} sent to ${email}${data.loopClosed ? " (last one: loop closed)" : ""}`, "success", 5000);
       setAiFollowUp(null);
       await refreshAllData();
+      if (aiBatchRef.current) await advanceAiBatch();
     } catch (err) {
       addNotification(`❌ Not sent: ${err.message || err}`, "error", 7000);
       setAiFollowUp((d) => (d ? { ...d, busy: false } : d));
@@ -4921,6 +4806,7 @@ function DashboardComponent() {
       if (tasks) setFollowUpTasks(tasks);
     }
     setAiFollowUp(null);
+    if (aiBatchRef.current) await advanceAiBatch();
   };
 
   // ============================================================================
@@ -5088,15 +4974,8 @@ function DashboardComponent() {
       senderName,
     );
 
-    let formattedPhone = contact.phone.toString().replace(/\D/g, "");
-
-    if (formattedPhone.startsWith("0") && formattedPhone.length >= 9) {
-      formattedPhone = "94" + formattedPhone.slice(1);
-    }
-
-    if (!formattedPhone.startsWith("+")) {
-      formattedPhone = "+" + formattedPhone;
-    }
+    const dialable = formatForDialing(contact.phone) || contact.phone.toString().replace(/\D/g, "");
+    const formattedPhone = `+${dialable}`;
 
     const smsUrl = `sms:${formattedPhone}?body=${encodeURIComponent(messageBody)}`;
     window.location.href = smsUrl;
@@ -5768,89 +5647,6 @@ function DashboardComponent() {
       setEnrichStatusMessage("");
     }
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
-
-  const getDownloadFilenameFromResponse = (res) => {
-    const disposition = res.headers.get("content-disposition") || "";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const basicMatch = disposition.match(/filename="?([^"]+)"?/i);
-    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
-    if (basicMatch?.[1]) return basicMatch[1];
-    return `enriched-${new Date().toISOString().split("T")[0]}.csv`;
-  };
-
-  const triggerCsvDownload = (csvText, filename) => {
-    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const runCsvEnrichment = async (file, mode) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      addNotification("Please choose a CSV file", "error");
-      setEnrichStatusMessage("Please choose a valid CSV file.");
-      return;
-    }
-
-    try {
-      setIsEnrichingCsv(true);
-      setEnrichStatusMessage("Uploading CSV for enrichment...");
-      const rawCsv = await file.text();
-
-      const res = await fetch("/api/enrich", {
-        method: "POST",
-        headers: { "Content-Type": "text/csv" },
-        body: rawCsv,
-      });
-
-      const enrichedCsv = await res.text();
-      if (!res.ok) {
-        throw new Error(
-          enrichedCsv || `Enrichment request failed (${res.status})`,
-        );
-      }
-      if (!enrichedCsv?.trim()) {
-        throw new Error("Enrichment API returned an empty response");
-      }
-
-      const responseFileName = getDownloadFilenameFromResponse(res);
-      triggerCsvDownload(enrichedCsv, responseFileName);
-      addNotification("✅ Enriched CSV downloaded", "success");
-      setEnrichStatusMessage(`Enrichment completed: ${responseFileName}`);
-
-      if (mode === "autoload") {
-        processCsvContent(enrichedCsv, responseFileName);
-        addNotification("✅ Enriched CSV auto-loaded into app", "success");
-        setEnrichStatusMessage(
-          `Enriched file loaded into app: ${responseFileName}`,
-        );
-      }
-    } catch (error) {
-      console.error("CSV enrichment failed:", error);
-      addNotification(`❌ Enrichment failed: ${error.message}`, "error");
-      setEnrichStatusMessage(`Enrichment failed: ${error.message}`);
-    } finally {
-      setIsEnrichingCsv(false);
-      setEnrichMode("download");
-      enrichModeRef.current = "download";
-    }
-  };
-
-  const startEnrichFlow = (mode) => {
-    enrichModeRef.current = mode;
-    setEnrichMode(mode);
-    enrichCsvInputRef.current?.click();
-  };
-
-  const handleEnrichCsvSelect = async (e) => {
-    const file = e.target.files?.[0];
-    await runCsvEnrichment(file, enrichModeRef.current);
-    e.target.value = "";
-  };
 
   // ============================================================================
   // HANDLE CSV UPLOAD
@@ -6848,7 +6644,7 @@ function DashboardComponent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <div className="text-lg text-white font-medium">
-            Loading your strategic outreach dashboard...
+            Loading your dashboard...
           </div>
           <div className="text-sm text-gray-400 mt-2">Please wait</div>
         </div>
@@ -6865,9 +6661,9 @@ function DashboardComponent() {
         <div className="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 max-w-md w-full mx-4">
           <div className="text-center mb-6">
             <h1 className="text-3xl font-bold text-white mb-2">
-              B2B Growth Engine
+              {APP_NAME}
             </h1>
-            <p className="text-gray-400">Strategic Outreach Automation</p>
+            <p className="text-gray-400">{APP_TAGLINE}</p>
           </div>
 
           <div className="space-y-4">
@@ -6924,13 +6720,6 @@ function DashboardComponent() {
   // ============================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-200">
-      <Head>
-        <title>B2B Growth Engine | Strategic Outreach</title>
-        <meta
-          name="description"
-          content="Marketing automation dashboard for B2B outreach"
-        />
-      </Head>
 
       {/* NOTIFICATIONS */}
       <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
@@ -6984,10 +6773,10 @@ function DashboardComponent() {
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-white">
-                  B2B Growth Engine
+                  {APP_NAME}
                 </h1>
                 <p className="text-xs text-gray-400 hidden sm:block">
-                  Strategic Outreach Automation
+                  {APP_TAGLINE}
                 </p>
               </div>
             </div>
@@ -7242,12 +7031,12 @@ function DashboardComponent() {
                   💰 Pipeline
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${bizMetrics.present.openValue.toLocaleString()}
+                  {money(bizMetrics.present.openValue)}
                 </div>
                 <div className="text-xs text-purple-200 mt-1">
                   {bizMetrics.present.openCount} qualified deal
-                  {bizMetrics.present.openCount === 1 ? "" : "s"} · $
-                  {bizMetrics.present.weightedPipeline.toLocaleString()} weighted
+                  {bizMetrics.present.openCount === 1 ? "" : "s"} ·{" "}
+                  {money(bizMetrics.present.weightedPipeline)} weighted
                 </div>
               </div>
 
@@ -7256,12 +7045,11 @@ function DashboardComponent() {
                   📈 Monthly
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-white mt-1">
-                  ${revenueForecasts.expectedMonthlyRevenue.toLocaleString()}
+                  {money(revenueForecasts.expectedMonthlyRevenue)}
                 </div>
                 <div className="text-xs text-orange-200 mt-1">
-                  30-day forecast · $
-                  {revenueForecasts.expectedMonthlyLow.toLocaleString()}–$
-                  {revenueForecasts.expectedMonthlyHigh.toLocaleString()}
+                  30-day forecast · {money(revenueForecasts.expectedMonthlyLow)}–
+                  {money(revenueForecasts.expectedMonthlyHigh)}
                   {bizMetrics.future.confidence === "low" ? " (early estimate)" : ""}
                 </div>
               </div>
@@ -7281,130 +7069,68 @@ function DashboardComponent() {
                   </button>
                 </div>
 
-                {/* Pipeline Health */}
+                {/* Forecast: built from YOUR qualified deals, your stage probabilities and your own closing speed */}
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                  <h3 className="text-sm font-bold text-purple-300 mb-2">
-                    📊 Pipeline Health
-                  </h3>
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">💰 Expected revenue</h3>
                   <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Health Score:</span>
-                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {pipelineHealth.toFixed(0)}/100
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Status:</span>
-                      <span className={`font-bold ${pipelineHealth >= 70 ? 'text-green-400' : pipelineHealth >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {pipelineHealth >= 70 ? 'Healthy' : pipelineHealth >= 40 ? 'Needs Attention' : 'Critical'}
-                      </span>
-                    </div>
+                    {bizMetrics.future.horizons.map((h) => (
+                      <div key={h.days} className="flex justify-between">
+                        <span className="text-gray-400">Next {h.days} days:</span>
+                        <span className="font-bold text-green-400">
+                          {money(h.expected)} <span className="text-gray-500 font-normal">({money(h.low)}–{money(h.high)})</span>
+                        </span>
+                      </div>
+                    ))}
+                    <p className="text-gray-500">
+                      {bizMetrics.future.confidence === "low"
+                        ? "Early estimate: fewer than 5 closed deals so far, so the range is wide."
+                        : bizMetrics.future.confidence === "medium"
+                          ? "Based on your closed deals so far. It tightens as you close more."
+                          : "Based on 20+ closed deals."}
+                      {" "}Open the Business Value page to see how it is calculated.
+                    </p>
                   </div>
                 </div>
 
-                {/* Revenue Forecast */}
+                {/* Needs attention: qualified deals nobody has touched for 14+ days */}
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                  <h3 className="text-sm font-bold text-purple-300 mb-2">
-                    💰 Revenue Forecast (12 weeks)
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Expected:</span>
-                      <span className="font-bold text-green-400">
-                        ${revenueForecast.forecast.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Conservative:</span>
-                      <span className="font-bold text-blue-400">
-                        ${revenueForecast.conservative.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Optimistic:</span>
-                      <span className="font-bold text-purple-400">
-                        ${revenueForecast.optimistic.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Confidence:</span>
-                      <span className="font-bold text-yellow-400">
-                        {revenueForecast.confidence}%
-                      </span>
-                    </div>
-                  </div>
+                  <h3 className="text-sm font-bold text-purple-300 mb-2">⚠️ Needs attention</h3>
+                  {bizMetrics.present.staleCount > 0 ? (
+                    <p className="text-xs text-gray-300">
+                      {bizMetrics.present.staleCount} qualified deal{bizMetrics.present.staleCount === 1 ? "" : "s"} worth {money(bizMetrics.present.staleValue)} with no update in 14+ days. Reach out or move them forward.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400">No stalled deals. Every qualified deal has been updated in the last 14 days.</p>
+                  )}
                 </div>
 
-                {/* At-Risk Deals */}
-                {atRiskDeals.length > 0 && (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-red-700 mb-4">
-                    <h3 className="text-sm font-bold text-red-300 mb-2">
-                      ⚠️ At-Risk Deals ({atRiskDeals.length})
-                    </h3>
-                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
-                      {atRiskDeals.slice(0, 5).map((deal, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-gray-900/50 p-2 rounded">
-                          <span className="text-gray-400 truncate">{deal.email || 'Unknown'}</span>
-                          <span className={`font-bold ${deal.riskLevel === 'Critical' ? 'text-red-400' : deal.riskLevel === 'High' ? 'text-orange-400' : 'text-yellow-400'}`}>
-                            {deal.riskLevel}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Action Items */}
-                {actionItems.length > 0 && (
+                {/* Win/loss from deals you actually closed */}
+                {bizMetrics.past.wonCount > 0 || bizMetrics.past.lostCount > 0 ? (
                   <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">
-                      🎯 Recommended Actions
-                    </h3>
-                    <div className="space-y-2 text-xs max-h-40 overflow-y-auto">
-                      {actionItems.slice(0, 3).map((action, idx) => (
-                        <div key={idx} className="bg-gray-900/50 p-2 rounded">
-                          <div className={`font-bold ${action.priority === 'CRITICAL' ? 'text-red-400' : action.priority === 'HIGH' ? 'text-orange-400' : 'text-yellow-400'}`}>
-                            {action.priority}
-                          </div>
-                          <div className="text-gray-400 mt-1">{action.action}</div>
-                          <div className="text-green-400 mt-1">{action.impact}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Win/Loss Analysis */}
-                {winLossAnalysis.wonCount > 0 || winLossAnalysis.lostCount > 0 ? (
-                  <div className="bg-gray-800/50 p-4 rounded-lg border border-purple-700 mb-4">
-                    <h3 className="text-sm font-bold text-purple-300 mb-2">
-                      📈 Win/Loss Analysis
-                    </h3>
+                    <h3 className="text-sm font-bold text-purple-300 mb-2">📈 Win / loss</h3>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Win Rate:</span>
+                        <span className="text-gray-400">Win rate:</span>
                         <span className="font-bold text-green-400">
-                          {winLossAnalysis.winRate}%
+                          {bizMetrics.past.winRate === null ? "n/a" : `${Math.round(bizMetrics.past.winRate * 100)}%`}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Won Deals:</span>
-                        <span className="font-bold text-green-400">
-                          {winLossAnalysis.wonCount}
-                        </span>
+                        <span className="text-gray-400">Won / lost:</span>
+                        <span className="font-bold text-white">{bizMetrics.past.wonCount} / {bizMetrics.past.lostCount}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Lost Deals:</span>
-                        <span className="font-bold text-red-400">
-                          {winLossAnalysis.lostCount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">Avg Won Deal:</span>
+                        <span className="text-gray-400">Avg won deal:</span>
                         <span className="font-bold text-green-400">
-                          ${winLossAnalysis.avgWonDealSize.toLocaleString()}
+                          {bizMetrics.past.avgWonValue === null ? "n/a" : `${money(bizMetrics.past.avgWonValue)}`}
                         </span>
                       </div>
+                      {bizMetrics.past.avgCycleDays !== null && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Avg days to win:</span>
+                          <span className="font-bold text-white">{bizMetrics.past.avgCycleDays}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : null}
@@ -7467,40 +7193,6 @@ function DashboardComponent() {
                 onChange={handleCsvUpload}
                 className="w-full p-3 bg-gray-700 text-white border border-gray-600 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
               />
-              <input
-                ref={enrichCsvInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleEnrichCsvSelect}
-                className="hidden"
-              />
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => startEnrichFlow("download")}
-                  disabled={isEnrichingCsv}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isEnrichingCsv && enrichMode === "download"
-                    ? "Processing..."
-                    : "Enrich CSV (Download only)"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => startEnrichFlow("autoload")}
-                  disabled={isEnrichingCsv}
-                  className="px-3 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                >
-                  {isEnrichingCsv && enrichMode === "autoload"
-                    ? "Processing..."
-                    : "Enrich CSV (Download + auto-load)"}
-                </button>
-              </div>
-              {enrichStatusMessage && (
-                <p className="mt-2 text-xs text-indigo-300">
-                  {enrichStatusMessage}
-                </p>
-              )}
               {csvFileName && (
                 <div className="mt-2 text-xs text-gray-400">
                   📁 {csvFileName} •{" "}
@@ -8247,7 +7939,7 @@ function DashboardComponent() {
                         Open pipeline
                       </div>
                       <div className="text-lg font-bold text-green-300">
-                        ${bizMetrics.present.openValue.toLocaleString()}
+                        {money(bizMetrics.present.openValue)}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
                         {bizMetrics.present.openCount} qualified deal
@@ -8257,7 +7949,7 @@ function DashboardComponent() {
                     <div>
                       <div className="text-xs text-green-400">Next 30 Days</div>
                       <div className="text-lg font-bold text-green-300">
-                        ${bizMetrics.future.horizons[0].expected.toLocaleString()}
+                        {money(bizMetrics.future.horizons[0].expected)}
                       </div>
                       <div className="text-xs text-green-400 mt-1">
                         Expected from your pipeline
@@ -8478,7 +8170,7 @@ function DashboardComponent() {
                       <div className="flex justify-between items-center">
                         <span className="text-gray-300">Weighted pipeline</span>
                         <span className="font-bold text-yellow-400">
-                          ${bizMetrics.present.weightedPipeline.toLocaleString()}
+                          {money(bizMetrics.present.weightedPipeline)}
                         </span>
                       </div>
                     </div>
@@ -8550,7 +8242,7 @@ function DashboardComponent() {
                   </button>
                 </div>
                 <div className="max-h-96 overflow-y-auto space-y-3">
-                  {/* ✅ UPDATED: Use sortedWhatsappLinks to show 077 numbers first, contacted at bottom */}
+                  {/* ✅ UPDATED: Use sortedWhatsappLinks: contacted at bottom */}
                   {sortedWhatsappLinks.slice(0, 10).map((link) => {
                     const contactKey = link.email || link.phone;
                     const lastEmailSent = lastSent[contactKey];
@@ -8923,12 +8615,11 @@ function DashboardComponent() {
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl blur-xl group-hover:blur-2xl transition-all"></div>
                   <div className="relative bg-gradient-to-br from-purple-900/40 to-pink-800/40 p-3 sm:p-5 rounded-xl border border-purple-500/30 hover:border-purple-400/50 transition-all">
                     <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-400">
-                      $
-                      {Math.round(
+                      {money(
                         repliedLeadsList.length *
                           bizMetrics.settings.avgDealValue *
                           (bizMetrics.settings.probabilities.qualified ?? 0.25),
-                      ).toLocaleString()}
+                      )}
                     </div>
                     <div className="text-xs sm:text-sm text-purple-200 mt-1 sm:mt-2 font-medium">
                       Potential revenue
@@ -9330,38 +9021,6 @@ function DashboardComponent() {
                           {status}
                         </div>
                       )}
-
-                      {/* SMS QUALIFICATION BUTTON */}
-                      <button
-                        onClick={() =>
-                          handleSMSQualification(safeFollowUpCandidates)
-                        }
-                        disabled={isSending}
-                        className={`w-full relative group overflow-hidden rounded-xl transition-all duration-300 mt-4 ${
-                          isSending
-                            ? "bg-gray-600 cursor-not-allowed opacity-60"
-                            : "bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-500 hover:via-emerald-500 hover:to-teal-500 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                        }`}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="relative px-8 py-4 text-white font-bold text-lg">
-                          <div className="flex items-center justify-center gap-3">
-                            <span className="text-2xl">📱</span>
-                            <span>
-                              {isSending
-                                ? "Sending..."
-                                : `SMS Qualify All Leads (${safeFollowUpCandidates.length})`}
-                            </span>
-                            {!isSending && <span className="text-lg">→</span>}
-                          </div>
-                          {!isSending && (
-                            <div className="text-sm font-normal text-green-100 mt-1 text-center">
-                              Send aggressive qualification SMS to filter
-                              time-wasters
-                            </div>
-                          )}
-                        </div>
-                      </button>
 
                       {/* WHATSAPP FOLLOW-UP TRACKING PANEL */}
                       {(whatsappLinks.length > 0 ||
@@ -10515,7 +10174,7 @@ function DashboardComponent() {
             {/* Footer */}
             <div className="p-2 sm:p-4 border-t border-gray-700 bg-gray-800 flex justify-between items-center">
               <div className="text-[10px] sm:text-xs text-gray-500">
-                💡 Contacted contacts shown at bottom • 077 numbers prioritized
+                💡 Contacted contacts shown at bottom
               </div>
               <button
                 onClick={() => setShowMultiChannelModal(false)}
@@ -10534,10 +10193,11 @@ function DashboardComponent() {
           <div className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto bg-gray-900 border border-gray-700 rounded-t-2xl sm:rounded-2xl p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
+                {aiFollowUp.batch && <p className="text-xs font-semibold text-indigo-300 mb-0.5">Reviewing {aiFollowUp.batch.n} of {aiFollowUp.batch.total} due follow-ups</p>}
                 <h3 className="text-lg font-bold text-white">{aiFollowUp.postSale ? "Customer check-in · review" : `Follow-up #${aiFollowUp.number} of 3 · review before sending`}</h3>
                 <p className="text-xs text-gray-400">To {aiFollowUp.email} · {aiFollowUp.business}</p>
               </div>
-              <button onClick={() => !aiFollowUp.busy && setAiFollowUp(null)} className="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">✕</button>
+              <button onClick={() => !aiFollowUp.busy && endAiBatch()} className="text-gray-400 hover:text-white text-xl leading-none px-2" aria-label="Close">✕</button>
             </div>
             {aiFollowUp.isFinal && <p className="text-xs text-amber-300 bg-amber-950/40 border border-amber-800/50 rounded-lg p-2 mb-3">This is the last follow-up. After it the loop closes and no more reminders are sent for this lead.</p>}
             <label className="block text-xs text-gray-400 mb-1" htmlFor="ai-fu-subject">Subject</label>
@@ -10546,7 +10206,14 @@ function DashboardComponent() {
             <textarea id="ai-fu-body" rows={9} value={aiFollowUp.body} onChange={(e) => setAiFollowUp((d) => ({ ...d, body: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-600 text-white text-sm leading-relaxed" />
             <p className="text-xs text-yellow-300/90 mt-2">Written from your earlier email and your business profile. Check every claim before sending. It is sent only when you press the button.</p>
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end mt-4">
-              <button onClick={() => setAiFollowUp(null)} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Discard</button>
+              {aiFollowUp.batch ? (
+                <>
+                  <button onClick={() => endAiBatch()} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm disabled:opacity-50">Stop review</button>
+                  <button onClick={() => advanceAiBatch()} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Skip for now</button>
+                </>
+              ) : (
+                <button onClick={() => setAiFollowUp(null)} disabled={aiFollowUp.busy} className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm disabled:opacity-50">Discard</button>
+              )}
               {aiFollowUp.postSale ? (
                 <button onClick={openPostSaleDraft} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold">Open in my email app</button>
               ) : (
@@ -10730,7 +10397,7 @@ function DashboardComponent() {
                 <div className="bg-green-900/30 border border-green-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-green-400 mb-2">Won so far</div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">${bizMetrics.past.wonRevenue.toLocaleString()}</span></div>
+                    <div><span className="text-gray-400">Revenue:</span> <span className="font-bold text-green-400">{money(bizMetrics.past.wonRevenue)}</span></div>
                     <div><span className="text-gray-400">Deals won:</span> <span className="font-bold text-green-400">{bizMetrics.past.wonCount}</span></div>
                     <div><span className="text-gray-400">Win rate:</span> <span className="font-bold text-green-400">{bizMetrics.past.winRate === null ? "—" : `${Math.round(bizMetrics.past.winRate * 100)}%`}</span></div>
                     <div><span className="text-gray-400">Avg time to win:</span> <span className="font-bold text-green-400">{bizMetrics.past.avgCycleDays ? `${bizMetrics.past.avgCycleDays}d` : "—"}</span></div>
@@ -10748,7 +10415,7 @@ function DashboardComponent() {
                   <div className="text-xs text-gray-300">
                     {bizMetrics.roi.multiple === null
                       ? "Add what you pay per month in Account to see your return."
-                      : `$${bizMetrics.roi.revenue.toLocaleString()} won on $${bizMetrics.roi.cost.toLocaleString()} cost = ${bizMetrics.roi.multiple}× return`}
+                      : `${money(bizMetrics.roi.revenue)} won on ${money(bizMetrics.roi.cost)} cost = ${bizMetrics.roi.multiple}× return`}
                   </div>
                 </div>
               </div>
@@ -10757,20 +10424,20 @@ function DashboardComponent() {
               <div className="space-y-3">
                 <div className="bg-cyan-900/30 border border-cyan-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-cyan-400 mb-2">💰 Open pipeline (qualified deals)</div>
-                  <div className="text-lg font-bold text-cyan-300">${bizMetrics.present.openValue.toLocaleString()}</div>
-                  <div className="text-xs text-cyan-400 mt-1">{bizMetrics.present.openCount} deal{bizMetrics.present.openCount === 1 ? "" : "s"} · ${bizMetrics.present.weightedPipeline.toLocaleString()} weighted by stage chance</div>
+                  <div className="text-lg font-bold text-cyan-300">{money(bizMetrics.present.openValue)}</div>
+                  <div className="text-xs text-cyan-400 mt-1">{bizMetrics.present.openCount} deal{bizMetrics.present.openCount === 1 ? "" : "s"} · {money(bizMetrics.present.weightedPipeline)} weighted by stage chance</div>
                 </div>
                 <div className="bg-blue-900/30 border border-blue-700/50 p-3 rounded">
                   <div className="text-xs font-bold text-blue-400 mb-2">📈 What to expect ({bizMetrics.future.confidence} confidence)</div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     {bizMetrics.future.horizons.map((h) => (
-                      <div key={h.days}><div className="text-gray-400">{h.days} days</div><div className="font-bold text-blue-300">${h.expected.toLocaleString()}</div></div>
+                      <div key={h.days}><div className="text-gray-400">{h.days} days</div><div className="font-bold text-blue-300">{money(h.expected)}</div></div>
                     ))}
                   </div>
                 </div>
                 {bizMetrics.present.staleCount > 0 && (
                   <div className="bg-yellow-900/30 border border-yellow-700/50 p-3 rounded text-xs text-yellow-300">
-                    ⚠️ {bizMetrics.present.staleCount} deal{bizMetrics.present.staleCount === 1 ? " has" : "s have"} gone quiet for 2+ weeks (${bizMetrics.present.staleValue.toLocaleString()} at risk).
+                    ⚠️ {bizMetrics.present.staleCount} deal{bizMetrics.present.staleCount === 1 ? " has" : "s have"} gone quiet for 2+ weeks ({money(bizMetrics.present.staleValue)} at risk).
                   </div>
                 )}
               </div>
@@ -11067,12 +10734,23 @@ function DashboardComponent() {
 
               {/* PENDING TASKS */}
               <div className="mb-6">
-                <h3 className="text-lg sm:text-xl font-bold text-orange-300 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span>📋</span>
-                  <span>
-                    Pending Follow-Ups ({followUpTasks.pending?.length || 0})
-                  </span>
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
+                  <h3 className="text-lg sm:text-xl font-bold text-orange-300 flex items-center gap-2">
+                    <span>📋</span>
+                    <span>
+                      Pending Follow-Ups ({followUpTasks.pending?.length || 0})
+                    </span>
+                  </h3>
+                  {getDueEmailTasks().length > 0 && (
+                    <button
+                      onClick={startAiBatchReview}
+                      className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg font-semibold transition"
+                      title="AI drafts each due email follow-up one at a time. You read, edit and approve every one. Nothing is sent automatically."
+                    >
+                      ✨ Review {Math.min(getDueEmailTasks().length, 10)} due with AI
+                    </button>
+                  )}
+                </div>
                 {(followUpTasks.pending || []).filter((task) => {
                   if (
                     followUpQueueChannel !== "all" &&

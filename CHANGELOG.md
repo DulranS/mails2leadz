@@ -1,8 +1,43 @@
 # Changelog
 
+## Opt-out + hardening pass
+- **Opt-out links in every email.** First emails, follow-ups and new-lead batches carry a one-click opt-out link and `List-Unsubscribe` headers. Opting out writes a per-customer suppression list, marks an open deal Lost ("unsubscribed"), cancels pending follow-ups, and every send / AI-draft route refuses that address (an opt-out cannot be reopened like a Lost deal). Opt-outs are not counted as lost sales in win rate / lost value. Test: `tests/unsubscribe.test.mjs`.
+- **`send-new-leads` emails were declared quoted-printable but not encoded,** so any "=" (every link with a query string) could be corrupted. Now base64.
+- **Google client secret is read only from `GOOGLE_CLIENT_SECRET`.** The `NEXT_PUBLIC_GOOGLE_CLIENT_SECRET` fallback is gone (a NEXT_PUBLIC_ value is published to every browser). The connection check flags the old name and says how to rename it and rotate the secret.
+- Added `.env.example` (README and docs pointed to it), removed an empty stray file and two unused dependencies (`@supabase/supabase-js`, `node-fetch`).
+- Shared tables: sorting is case-insensitive and number-aware with empty values last; pagination stacks on phones with larger tap targets.
+
+
+## Final audit pass (last day)
+Security / customer data
+- **Removed CSV "Enrich" (route, service, buttons).** It posted customers' lead lists to a hard-coded third-party AWS endpoint that was not theirs (and the buttons never sent a sign-in token, so they always failed). Scraping/enrichment is out of scope, as the README says.
+- **Tenant check can no longer be bypassed with a different `Content-Type`.** The gate only compared `userId` for `application/json` bodies, but the routes parse the body whatever the type says. It now checks every write request. Test: `tests/proxy.test.mjs`.
+- **Third send route hardened.** `send-new-leads` now strips line breaks from From/To/Subject (header injection), refuses Lost deals, and shares the daily limit.
+
+Pipeline bugs that would have embarrassed customers
+- **Daily send limits never worked.** `sentAt` is stored as an ISO string, but the send route and the quota display compared it with a Date/Timestamp, which matches nothing and raises no error: the 500/day cap never triggered and the dashboard always showed 0 used. One shared counter (`lib/server/daily-count.js`) now compares ISO strings, falls back to a scan if an index is missing, and the batch loop enforces the remaining allowance mid-batch. Test: `tests/daily-count.test.mjs`.
+- **`{{sender_name}}` was sent literally.** The starter templates use it, but the first-email route never filled it and used the dashboard's placeholder string as the From display name. One shared filler (`lib/server/template-vars.js`) now fills every occurrence in the first email and follow-ups. Test: `tests/template-vars.test.mjs`.
+- **AI-approved first emails arrived with raw `<p>`/`<br>` tags.** The draft was converted to HTML but the route sends plain text. Drafts are now sent as plain text.
+- Removed an unused second follow-up path inside `send-email` that skipped the "already replied / Lost / max 3" rules, and an unused `updateDealStage` helper that would have saved an invented $5,000 as a real deal value.
+
+- **Removed the "SMS Qualify All Leads" bulk feature (button, 2 routes, helper).** Its send step was a stub: it logged the text, returned success with a `placeholder_` ID and saved the lead as "sent", so customers were told qualification texts went out when none did. Its reply route also could not receive real Twilio posts (form data, no `userId`). Single SMS through Twilio (`/api/send-sms`) is unchanged. Phone-call status webhook is unchanged.
+- Older AI routes (`ai-smart-outreach`, `research-company`) now use the verified user, not the `userId` in the body. Reply search no longer breaks on subjects containing quotes.
+
+Business value
+- **Currency.** Every figure was hard-coded "$". Account → Money settings now has a currency (22 common ones) and an optional "1 USD = ?" rate that converts the AI provider's USD cost for ROI. Dashboard, Business Value, "Do this next" and the AI coach use it. Test: `tests/currency.test.mjs`.
+- **AI follow-up queue review.** "✨ Review N due with AI" drafts the due email follow-ups one at a time (max 10 per run). You edit and approve or skip each; nothing is sent without a click, server limits still apply, and it stops if an AI limit is hit.
+- The dashboard ROI now includes AI cost, matching the Business Value page.
+- Upload filter defaults to "All" instead of "HOT only" (a CSV with a `lead_quality` column silently lost its WARM leads).
+
 ## Last-day hardening (second pass)
 - **Sends are never repeated automatically.** A slow or failed email / SMS / call request used to be retried by the app (and, for follow-ups, again every 10 seconds by a background queue), which could reach a lead twice. Send and call requests now run exactly once, with a longer timeout; when one fails the app shows the server's reason (already replied, too soon, max reached) and you decide whether to try again. Reads are still retried. Test: `tests/api-retry.test.mjs`.
 - Removed dead code: an unused follow-up scheduler that called a route that does not exist, and an unused scraper client.
+- **Lost means Lost.** A deal marked Lost (including "asked to stop" from reply analysis) was only a label: the lead could still get a follow-up or a new cold email. The email send route, follow-up send route and AI follow-up draft now refuse Lost deals (reopen the deal to contact them again), and Lost leads no longer show in the follow-up lists. Test added in `tests/route-helpers.test.mjs`.
+- **One set of numbers.** The dashboard's "AI-Powered Analytics" panel used an older engine with an invented $5,000 deal value, made-up stage weights and an unmeasured "confidence %". It now shows 30/60/90-day expected revenue (with range), stalled deals and win/loss from the same calculation as Business Value. The old engine was deleted.
+- **Landing page.** There was none: `/` redirected to a sign-in button under the generic name "B2B Growth Engine". `/` is now a short, honest landing page (what it does, how it works, what stays in your control; no made-up stats or testimonials). The product name is `NEXT_PUBLIC_APP_NAME` (default AutoLeads), the browser tab now has a real title, and `NEXT_PUBLIC_CONTACT_EMAIL` optionally shows a contact line.
+- **Phone calls, three leftovers fixed.** (1) The interactive call menu still connected "press 1" callers to the original owner's personal number; it now connects to the customer's own phone (Account → Your business), or says nobody is available. (2) The menu never read the key the caller pressed (Twilio posts it, the route only handled GET), so every key ended the call; keys 1/2/3 now work. (3) Pressing 3 used to say "removed from our list" and did nothing; it now records "do not call again" and the call route refuses to dial that number again. Pressing 2 records "wants info by email" on the call.
+- **Phone numbers work in any country.** Four places assumed Sri Lankan numbers (a 0-prefixed number from any other country became +94). One shared `lib/phone.js` now keeps any number written with +CC / 00CC as is and applies `NEXT_PUBLIC_DEFAULT_COUNTRY_CODE` (default 94) only to local 0-prefixed numbers. Test: `tests/phone.test.mjs`.
+- Removed the "077/076/075 numbers first" sort that overrode the customer's own sort choice.
 - Lead lists no longer put Sri Lankan numbers first (an owner-specific sort); replied leads are ordered by most recent reply, follow-ups by urgency.
 
 ## Launch day: DeepSeek AI + selling-to-anyone fixes

@@ -115,7 +115,7 @@ export async function POST(request) {
     // Set up Gmail API
     const oauth2Client = new google.auth.OAuth2(
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      (process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET),
+      process.env.GOOGLE_CLIENT_SECRET,
       process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI
     );
 
@@ -146,7 +146,9 @@ export async function POST(request) {
       for (let attempt = 0; attempt < CONFIG.MAX_RETRIES && !success; attempt++) {
         try {
           // Search for replies in Gmail
-          const searchQuery = `to:${senderEmail} from:${toEmail} in:inbox "${subject || ''}"`;
+          // Quotes/backslashes inside the subject would break the Gmail search phrase and silently hide the reply.
+          const safeSubject = String(subject || '').replace(/["\\\r\n]+/g, ' ').trim();
+          const searchQuery = `to:${senderEmail} from:${toEmail} in:inbox "${safeSubject}"`;
           console.log(`[Check Replies] Search query: ${searchQuery}`);
           
           const response = await gmail.users.messages.list({

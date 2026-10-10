@@ -486,7 +486,7 @@ export const CRM = ({
               </select>
             </label>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Deal value $ (optional)
+              Deal value (optional, in your currency)
               <input type="number" min="0" inputMode="decimal" value={addForm.value} placeholder={`${defaultDealValue} (est.)`}
                 onChange={(e) => setAddForm({ ...addForm, value: e.target.value })}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />

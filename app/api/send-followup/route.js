@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
-import { headerSafe, pickOriginal } from '../../../lib/server/route-helpers.js';
+import { headerSafe, pickOriginal, isBlockedContact, optOutFor } from '../../../lib/server/route-helpers.js';
+import { withTextFooter } from '../../../lib/server/unsubscribe.js';
+import { fillTemplate } from '../../../lib/server/template-vars.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -90,10 +92,10 @@ const encodeSubject = (subject) => {
   return subject;
 };
 
-const createMimeMessage = ({ from, to, subject, body, attachments = [] }) => {
+const createMimeMessage = ({ from, to, subject, body, attachments = [], extraHeaders = '' }) => {
   // From is optional: when no sender address is configured Gmail uses the signed-in account.
   // Every header value is forced onto one line (an AI/user-written subject must never be able to add headers).
-  let message = `${from ? `From: ${headerSafe(from)}\r\n` : ''}To: ${headerSafe(to)}\r\nSubject: ${encodeSubject(headerSafe(subject))}\r\nMIME-Version: 1.0\r\n`;
+  let message = `${from ? `From: ${headerSafe(from)}\r\n` : ''}To: ${headerSafe(to)}\r\nSubject: ${encodeSubject(headerSafe(subject))}\r\nMIME-Version: 1.0\r\n${extraHeaders}`;
 
   if (attachments.length > 0) {
     const boundary = 'boundary_' + Math.random().toString(36).substr(2, 16);
@@ -143,7 +145,7 @@ export async function POST(request) {
       );
     }
     
-    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !(process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET)) {
+    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
       return NextResponse.json(
         { 
           error: 'Google/Gmail configuration missing',
@@ -200,6 +202,13 @@ export async function POST(request) {
       );
     }
     
+    if (await isBlockedContact(db, userId, email)) {
+      return NextResponse.json(
+        { error: 'This contact opted out or the deal is marked Lost, so no more follow-ups are sent. (A Lost deal can be reopened; an opt-out cannot.)', code: 'DEAL_LOST' },
+        { status: 409, headers }
+      );
+    }
+
     const followUpCount = existingData.followUpCount ?? existingData.followUpSentCount ?? 0;
     if (followUpCount >= CONFIG.MAX_FOLLOW_UPS) {
       return NextResponse.json(
@@ -239,26 +248,27 @@ export async function POST(request) {
     const templatesToUse = customTemplates && customTemplates.length > 0 ? customTemplates : FOLLOW_UP_TEMPLATES;
     const template = templatesToUse[followUpIndex] || templatesToUse[templatesToUse.length - 1];
     
-    let subject = template.subject.replace('{{business_name}}', existingData.businessName || 'Contact');
-    let body = template.body
-      .replace('{{business_name}}', existingData.businessName || 'Contact')
-      .replace('{{sender_name}}', senderName || 'Team');
+    const vars = { businessName: existingData.businessName || 'Contact', firstName: existingData.contactName || '', senderName: senderName || 'Team' };
+    let subject = fillTemplate(template.subject, vars);
+    let body = fillTemplate(template.body, vars);
     
     const oauth2Client = new google.auth.OAuth2(
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      (process.env.GOOGLE_CLIENT_SECRET || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET),
+      process.env.GOOGLE_CLIENT_SECRET,
       process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || 'http://localhost:3000'
     );
     
     oauth2Client.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
+    const optOut = optOutFor(userId, email);
     const rawMessage = createMimeMessage({
       from: process.env.GMAIL_SENDER_EMAIL ? `${headerSafe(senderName) || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>` : '',
       to: email,
       subject,
-      body,
-      attachments
+      body: withTextFooter(body, optOut),
+      attachments,
+      extraHeaders: optOut?.headers || ''
     });
     
     const response = await gmail.users.messages.send({
