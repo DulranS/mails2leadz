@@ -1,5 +1,12 @@
 # Changelog
 
+## Lead inbox and autopilot hand-off
+- **Lead Inbox** (`/inbox`, `lib/lead-inbox.js`, `lead_inbox` collection): leads delivered by the external autopilot script wait here with status new / loaded / dismissed. "Load into the sender" turns the selection into CSV text and the dashboard imports it through the same `processCsvContent` as an uploaded file (hand-off via localStorage, ignored after 6 hours).
+- **Ingest API** `/api/lead-inbox/ingest`: authenticated by the owner's ingest key (`Bearer <uid>.<secret>`, only a SHA-256 hash stored), allowlisted fields, max 300 leads per request, idempotent document ids, skips opted-out, lost and already-emailed contacts. Needs the Firebase Admin service account (refuses otherwise). Listed as public in `proxy.js` because it checks its own key.
+- **Key management** `/api/lead-inbox/key` (create, replace, revoke) and an Account card. The key is shown once.
+- Rules and export/delete include `lead_inbox`. **Republish `firestore.rules`.** Sidebar: Lead Inbox.
+- Tests: `tests/lead-inbox.test.mjs`.
+
 ## BDR coverage pass: billing, customers, qualification, weekly KPI
 New (all human-approved; AI = DeepSeek by default, capped and cached like the rest)
 - **Billing** (`/billing`, `lib/billing.js`, `invoices` collection): invoice records with due dates, mark paid / void, aging buckets, cash collected, average days to pay, on-time rate, 6-month cash chart, and "Won but not invoiced". Overdue reminders via `/api/ai-deal-draft` (`kind: collection`): tone by lateness, one per 3 days (enforced server-side), amount verified in the draft, forbidden wording (legal action, fees, interest) rejected, plain template fallback when AI is unavailable or capped. Opens in the owner's own email app; logs the reminder.

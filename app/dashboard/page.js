@@ -95,6 +95,7 @@ import {
   debounce,
   normalizeContactKey,
 } from "../../lib/dashboard-utils.js";
+import { INBOX_HANDOFF_KEY } from "../../lib/lead-inbox.js";
 import { useContactTracking } from "../../hooks/useContactTracking.js";
 import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
 import { useLeadScoring } from "../../hooks/useLeadScoring.js";
@@ -5760,6 +5761,24 @@ function DashboardComponent() {
       setEnrichStatusMessage("");
     }
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
+
+  // Leads the owner picked in the Lead Inbox arrive as CSV text and go through the same import as an uploaded file.
+  useEffect(() => {
+    if (typeof window === "undefined" || !templateA || !templateB) return;
+    let pending = null;
+    try { pending = window.localStorage.getItem(INBOX_HANDOFF_KEY); } catch { return; }
+    if (!pending) return;
+    try { window.localStorage.removeItem(INBOX_HANDOFF_KEY); } catch { /* ignore */ }
+    try {
+      const { csv, count, at } = JSON.parse(pending);
+      if (!csv || Date.now() - Number(at || 0) > 6 * 60 * 60 * 1000) return; // stale hand-offs are ignored
+      processCsvContent(csv, "Lead inbox");
+      addNotification(`Loaded ${count} lead${count === 1 ? "" : "s"} from your inbox. Review, then send.`, "success");
+    } catch (error) {
+      console.error("Inbox hand-off failed:", error);
+      addNotification("Could not load the leads from your inbox.", "error");
+    }
+  }, [templateA, templateB, processCsvContent]);
 
   // ============================================================================
   // HANDLE CSV UPLOAD

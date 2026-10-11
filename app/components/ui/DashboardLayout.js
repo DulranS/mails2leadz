@@ -17,6 +17,7 @@ export const DashboardLayout = ({ children, title, subtitle }) => {
   const navigationItems = [
     { href: '/dashboard', icon: '📊', label: 'Dashboard' },
     { href: '/business', icon: '💰', label: 'Business Value' },
+    { href: '/inbox', icon: '📥', label: 'Lead Inbox' },
     { href: '/crm', icon: '💼', label: 'CRM & Deals' },
     { href: '/customers', icon: '🤝', label: 'Customers' },
     { href: '/billing', icon: '🧾', label: 'Billing' },

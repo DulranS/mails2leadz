@@ -1,0 +1,71 @@
+// app/api/lead-inbox/ingest/route.js
+// The lead autopilot (a script the owner runs) pushes batches of enriched leads here. Authenticated by the owner's
+// ingest key ("Authorization: Bearer <uid>.<secret>"), NOT by a browser session, so the proxy lets this path through
+// and this route checks the key itself. Needs the Firebase Admin SDK: without it the route refuses (secure by default).
+//
+// Leads are only stored in the inbox with status "new". Nothing is sent. Opted-out contacts, lost deals and people
+// who were already emailed are skipped, so the inbox only ever shows people who can still be contacted.
+import { NextResponse } from 'next/server';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, isAdminMode } from '../../../../lib/server-firestore.js';
+import { getDb, isBlockedContact, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { parseIngestKey, verifySecret, inboxDocId } from '../../../../lib/server/ingest-key.js';
+import { sanitizeLead, inboxKey, INBOX_STATUS, MAX_BATCH } from '../../../../lib/lead-inbox.js';
+
+export const maxDuration = 60;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const fail = (status, error) => NextResponse.json({ success: false, error }, { status, headers: NO_STORE });
+
+export async function POST(request) {
+  try {
+    if (!isAdminMode()) {
+      return fail(503, 'The lead inbox needs a server connection to the database. Set FIREBASE_SERVICE_ACCOUNT_JSON on the server first.');
+    }
+    const parsed = parseIngestKey(request.headers.get('authorization'));
+    const db = getDb();
+    let authorised = false;
+    if (parsed) {
+      const keyDoc = await getDoc(doc(db, 'users', parsed.uid, 'settings', 'ingest_key'));
+      authorised = keyDoc.exists() && !keyDoc.data().revokedAt && verifySecret(keyDoc.data().hash, parsed.secret);
+    }
+    if (!authorised) return fail(401, 'Invalid or revoked ingest key.');
+    const uid = parsed.uid;
+
+    if (Number(request.headers.get('content-length') || 0) > MAX_BODY_BYTES) return fail(413, 'Batch too large. Send at most 300 leads at a time.');
+    const body = await request.json().catch(() => null);
+    const incoming = Array.isArray(body?.leads) ? body.leads : null;
+    if (!incoming) return fail(400, 'Expected { "leads": [ ... ] }.');
+    if (incoming.length > MAX_BATCH) return fail(413, `Send at most ${MAX_BATCH} leads per request.`);
+
+    const batchId = String(body.batchId || '').slice(0, 60);
+    const source = String(body.source || 'autopilot').slice(0, 40);
+    const skipped = { invalid: 0, duplicate: 0, blocked: 0, contacted: 0 };
+    const unique = new Map();
+    for (const raw of incoming) {
+      const r = sanitizeLead(raw);
+      if (!r.ok) { skipped.invalid++; continue; }
+      const id = inboxDocId(uid, inboxKey(r.lead));
+      if (unique.has(id)) skipped.duplicate++;
+      else unique.set(id, r.lead);
+    }
+
+    let added = 0;
+    const entries = [...unique.entries()];
+    for (let i = 0; i < entries.length; i += 8) {
+      await Promise.all(entries.slice(i, i + 8).map(async ([id, lead]) => {
+        const ref = doc(db, 'lead_inbox', id);
+        if ((await getDoc(ref)).exists()) { skipped.duplicate++; return; } // already received (loaded and dismissed leads stay that way)
+        if (lead.email) {
+          if (await isBlockedContact(db, uid, lead.email)) { skipped.blocked++; return; }
+          const sent = await getDocs(query(collection(db, 'sent_emails'), where('userId', '==', uid), where('to', '==', lead.email)));
+          if (!sent.empty) { skipped.contacted++; return; }
+        }
+        await setDoc(ref, { ...lead, userId: uid, status: INBOX_STATUS.NEW, source, batchId, receivedAt: new Date().toISOString() });
+        added++;
+      }));
+    }
+    return NextResponse.json({ success: true, received: incoming.length, added, skipped }, { headers: NO_STORE });
+  } catch (error) {
+    console.error('lead-inbox ingest error:', error);
+    return fail(500, 'Could not store the leads right now.');
+  }
+}

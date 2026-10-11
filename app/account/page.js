@@ -23,6 +23,7 @@ export default function AccountPage() {
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
+  const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [termsDays, setTermsDays] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [bdrCost, setBdrCost] = useState("");
@@ -59,6 +60,33 @@ export default function AccountPage() {
       } catch { setMsg({ type: "error", text: "Could not load your settings." }); }
     })();
   }, [user?.uid]);
+
+  const refreshInboxKey = async () => {
+    try {
+      const res = await fetch("/api/lead-inbox/key");
+      const d = await res.json().catch(() => ({}));
+      setInboxKey((k) => ({ ...k, loading: false, exists: !!d.exists, adminMode: d.adminMode !== false, last4: d.last4 || "", error: res.ok ? "" : d.error || "" }));
+    } catch { setInboxKey((k) => ({ ...k, loading: false })); }
+  };
+  useEffect(() => { if (user?.uid) refreshInboxKey(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const createInboxKey = async () => {
+    if (inboxKey.exists && !window.confirm("This replaces your current key. The autopilot stops working until you paste the new one. Continue?")) return;
+    setInboxKey((k) => ({ ...k, busy: true, error: "", fresh: "" }));
+    try {
+      const res = await fetch("/api/lead-inbox/key", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setInboxKey((k) => ({ ...k, busy: false, error: d.error || "Could not create a key." })); return; }
+      setInboxKey((k) => ({ ...k, busy: false, exists: true, last4: d.last4, fresh: d.key }));
+    } catch { setInboxKey((k) => ({ ...k, busy: false, error: "Could not reach the server." })); }
+  };
+  const revokeInboxKey = async () => {
+    if (!window.confirm("Revoke the key? The autopilot will stop delivering leads.")) return;
+    setInboxKey((k) => ({ ...k, busy: true }));
+    try { await fetch("/api/lead-inbox/key", { method: "DELETE" }); } catch { /* shown by refresh */ }
+    setInboxKey((k) => ({ ...k, fresh: "" }));
+    await refreshInboxKey();
+    setInboxKey((k) => ({ ...k, busy: false }));
+  };
 
   const save = async () => {
     setBusy("save"); setMsg(null);
@@ -191,6 +219,26 @@ export default function AccountPage() {
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div><label className={label} htmlFor="pt">Payment terms (days)</label><input id="pt" type="number" min="0" max="180" inputMode="numeric" className={field} value={termsDays} onChange={(e) => setTermsDays(e.target.value)} placeholder="14" /><p className="text-xs text-gray-500 mt-1">How long customers have to pay. New invoices use this unless you change it.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="pi">How customers pay you</label><textarea id="pi" rows={3} maxLength={400} className={field} value={paymentInstructions} onChange={(e) => setPaymentInstructions(e.target.value)} placeholder="e.g. Bank transfer to Account 123456, Example Bank, or pay at https://..." /><p className="text-xs text-gray-500 mt-1">Added word for word to overdue-invoice reminders. The AI never makes up payment details.</p></div>
+          </div>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Lead inbox connection <span className="text-xs font-normal text-gray-500">· for the lead autopilot</span></h2>
+          <p className="text-xs text-gray-500 mt-1">The autopilot is a script on your computer that finds and checks new businesses on a schedule. This key lets it drop them in your Lead Inbox. It can only add leads to your inbox: it cannot read your data or send anything.</p>
+          {!inboxKey.adminMode && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so the inbox connection is switched off.</p>}
+          {inboxKey.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-2">{inboxKey.error}</p>}
+          {inboxKey.fresh && (
+            <div className="mt-3 rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 p-3">
+              <p className="text-xs text-green-900 dark:text-green-200">Copy this key now. It is shown once.</p>
+              <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{inboxKey.fresh}</code>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(inboxKey.fresh)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy key</button>
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:items-center">
+            <span className="text-sm text-gray-700 dark:text-gray-200">{inboxKey.loading ? "Checking..." : inboxKey.exists ? `Key active (ends in ${inboxKey.last4})` : "No key yet"}</span>
+            <span className="flex-1" />
+            <button type="button" disabled={inboxKey.busy || !inboxKey.adminMode} onClick={createInboxKey} className="min-h-[44px] px-4 rounded-lg text-sm bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50">{inboxKey.exists ? "Replace key" : "Create key"}</button>
+            {inboxKey.exists && <button type="button" disabled={inboxKey.busy} onClick={revokeInboxKey} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Revoke</button>}
           </div>
         </section>
 
