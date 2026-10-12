@@ -2909,13 +2909,57 @@ async def notify(webhook: str, text: str, title: str = "Lead autopilot") -> None
 # LOCK
 # ----------------------------------------------------------------------------
 
+def _pid_alive(pid: int) -> bool:
+    """Is a process with this id running right now? (Never os.kill(pid, 0) on Windows: there it KILLS the process.)"""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return kernel32.GetLastError() == 5  # access denied: it exists, we just may not look at it
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel32.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _lock_owner_pid(path: Path) -> Optional[int]:
+    try:
+        text = path.read_text().strip()
+        return int(text) if text.isdigit() else None
+    except (OSError, ValueError):
+        return None
+
+
 def acquire_lock(path: Path) -> bool:
+    """One run at a time. A lock left by a run that crashed or whose window was closed is cleared at once (its process
+    is gone); if the owner cannot be determined the old rule applies (stale after LOCK_MAX_AGE_HOURS)."""
     if path.exists():
-        age_h = (time.time() - path.stat().st_mtime) / 3600
-        if age_h < LOCK_MAX_AGE_HOURS:
-            return False
-        logger.warning("removing a stale lock (%.0f hours old)", age_h)
-        path.unlink(missing_ok=True)
+        pid = _lock_owner_pid(path)
+        if pid is not None and not _pid_alive(pid):
+            logger.warning("removing the lock left by an earlier run that is no longer running (pid %s)", pid)
+            path.unlink(missing_ok=True)
+        else:
+            try:
+                age_h = (time.time() - path.stat().st_mtime) / 3600
+            except FileNotFoundError:
+                age_h = LOCK_MAX_AGE_HOURS  # vanished meanwhile: treat as stale and take it
+            if age_h < LOCK_MAX_AGE_HOURS:
+                return False
+            logger.warning("removing a stale lock (%.0f hours old)", age_h)
+            path.unlink(missing_ok=True)
     try:
         fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(fd, str(os.getpid()).encode())
@@ -2990,7 +3034,7 @@ async def run_once(
     summary = RunSummary()
     lock = out_dir / ".lock"
     if not acquire_lock(lock):
-        summary.code, summary.message = 3, "another autopilot run is in progress (or crashed less than 6 hours ago): if you are sure, delete " + str(lock)
+        summary.code, summary.message = 3, "another autopilot run is still running (close its window first). If you are sure none is, delete " + str(lock)
         logger.warning(summary.message)
         return summary
     try:
@@ -3551,8 +3595,12 @@ def _prepare_windows() -> None:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    if sys.platform.startswith("win") and hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # avoids "Event loop is closed" noise
+    if sys.platform.startswith("win"):
+        import warnings
+        with warnings.catch_warnings():  # Python 3.14+ warns that policies are going away; the line still does its job
+            warnings.simplefilter("ignore", DeprecationWarning)
+            if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+                asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # avoids "Event loop is closed" noise
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

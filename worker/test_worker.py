@@ -11,7 +11,9 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from collections import Counter
@@ -252,6 +254,41 @@ class UnitTests(unittest.TestCase):
             ck2.write(2, "k2", {"a": 3})
             ck2.close()
             self.assertEqual(le.Checkpoint(ck.path).load(["k0", "k1", "k2"]), {0: {"a": 1}, 2: {"a": 3}})
+
+
+class LockTests(unittest.TestCase):
+    def _lock(self, content=None):
+        d = Path(tempfile.mkdtemp())
+        path = d / ".lock"
+        if content is not None:
+            path.write_text(content)
+        return path
+
+    def test_fresh_lock_is_taken_and_records_our_pid(self):
+        path = self._lock()
+        self.assertTrue(w.acquire_lock(path))
+        self.assertEqual(path.read_text(), str(os.getpid()))
+        self.assertFalse(w.acquire_lock(path))  # a second run while we are alive is refused
+
+    def test_lock_of_a_dead_process_is_cleared_at_once(self):
+        child = subprocess.Popen([sys.executable, "-c", "pass"])
+        child.wait()
+        path = self._lock(str(child.pid))  # brand new file, but its owner is gone (crash or closed window)
+        self.assertTrue(w.acquire_lock(path))
+        self.assertEqual(path.read_text(), str(os.getpid()))
+
+    def test_unreadable_owner_falls_back_to_the_age_rule(self):
+        path = self._lock("not a pid")
+        self.assertFalse(w.acquire_lock(path))  # fresh: could be a live run
+        old = time.time() - (w.LOCK_MAX_AGE_HOURS + 1) * 3600
+        os.utime(path, (old, old))
+        self.assertTrue(w.acquire_lock(path))  # stale
+
+    def test_live_owner_is_respected_however_old(self):
+        path = self._lock(str(os.getpid()))
+        old = time.time() - 2 * 3600
+        os.utime(path, (old, old))
+        self.assertFalse(w.acquire_lock(path))
 
 
 class CrawlTests(unittest.IsolatedAsyncioTestCase):

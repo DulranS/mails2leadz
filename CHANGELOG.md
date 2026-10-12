@@ -8,6 +8,7 @@
 - **Setup banner** on the dashboard now lists exactly what is still missing (what you sell, typical deal value, postal address).
 - **Hygiene:** the dashboard no longer sends the Firebase refresh token to the send route (it was not a Google token and the server could not use it).
 - README no longer says lead finding is excluded: it is the optional OpenStreetMap worker, and the README now says so.
+- **Worker lock heals itself.** If a run crashed or its window was closed, the next run now notices the old process is gone and carries on (before: it refused for 6 hours with "another autopilot run is in progress"). Checking the process is done in a Windows-safe way. The Python 3.14 `WindowsSelectorEventLoopPolicy` deprecation warnings no longer clutter the console. Tests: `LockTests` in `worker/test_worker.py`.
 - Checked: `npm test` (16 files), `worker/test_worker.py` (73), `next build`.
 
 ## Last day: Google Maps replaced by OpenStreetMap (free, no key, no card)

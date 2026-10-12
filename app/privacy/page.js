@@ -34,7 +34,7 @@ export default function PrivacyPage() {
         <p>When you send email or check replies, Google asks you to let the app use your Gmail. We request two permissions:</p>
         <Bullets items={[
           'Send email: to send the messages you approve, from your own address.',
-          'Read email: to find replies and “address not found” notices for conversations with leads you emailed, so follow-ups stop when someone replies and bad addresses are not contacted again. Reply detection looks at message headers (sender, recipient, subject, date). Message text is fetched only when you open a conversation inside the app.',
+          'Read email: to find replies and “address not found” notices for conversations with leads you emailed, so follow-ups stop when someone replies and bad addresses are not contacted again. Reply detection looks at message headers (sender, recipient, subject, date). For delivery-failure notices from mail systems it also reads Gmail\u2019s short preview line to see which address failed. Full message text is fetched only when you open a conversation inside the app.',
         ]} />
         <p>
           The access token Google gives your browser is short-lived. It is sent with each request so the server can act for you; we do not
@@ -73,9 +73,9 @@ export default function PrivacyPage() {
 
       <Section title="6. If you received an email sent through this service">
         <p>
-          Every email carries an opt-out link. Pressing it adds your address to that sender&apos;s do-not-contact list and the sender cannot
-          reopen it from the app. We keep that address on the list so the opt-out keeps working. To ask about data held on you, write to the
-          business that emailed you, or to <Contact />.
+          Every email carries an opt-out link. Pressing it adds your address to that sender&apos;s do-not-contact list, and the sender cannot
+          remove it from the app. The address stays on that list for as long as the sender&apos;s account exists (deleting the account deletes the
+          list). To ask about data held on you, write to the business that emailed you, or to <Contact />.
         </p>
       </Section>
 
