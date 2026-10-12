@@ -149,7 +149,7 @@ export default function InboxPage() {
           </ul>
         )}
         {shown.length > 300 && <p className="text-xs text-gray-500 dark:text-gray-400">Showing the best 300 of {shown.length}. Selecting these loads up to {MAX_LOAD}.</p>}
-        <p className="text-xs text-gray-500 dark:text-gray-400">Leads that opted out, are marked Lost, or were already emailed are filtered out before they reach this inbox. Everything you load still goes through your normal review and send step.</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">Leads that opted out, are marked Lost, or were already emailed are filtered out before they reach this inbox. Everything you load still goes through your normal review and send step. Business details come from OpenStreetMap contributors (openstreetmap.org/copyright).</p>
       </div>
     </DashboardLayout>
   );

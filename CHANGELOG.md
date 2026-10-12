@@ -1,11 +1,22 @@
 # Changelog
 
+## Last day: Google Maps replaced by OpenStreetMap (free, no key, no card)
+- **Lead finding no longer needs Google.** `worker/autoleads_worker.py` now searches OpenStreetMap: Nominatim finds the area, Overpass lists businesses (phone, website, email, Facebook, Instagram when mapped). Several public Overpass servers are tried in turn; areas that are too big are split into smaller ones automatically. Nothing to sign up for, nothing to pay.
+- Same hand-off as before: rows keep the same columns (`place_id` is now `osm:<type>/<id>`, plus `maps_url`), so the crawler, scoring, Lead Inbox, ingest and CSV import are unchanged. The `setup` wizard no longer asks for a key.
+- **Old installs keep working:** `--google-key`, `--api-key` and a `google_maps_api_key` in `autoleads.json` are accepted and ignored. `min_reviews` is ignored (OpenStreetMap has no ratings).
+- Politeness built in: about one request per second, a per-install User-Agent (set `AUTOLEADS_CONTACT` to your email), `NOMINATIM_URL` / `OVERPASS_URL` overrides if you ever host your own. The Lead Inbox footer credits "OpenStreetMap contributors" (ODbL).
+- Known limits: coverage is thinner than Google in some countries (check your area first with `search`), many results have a phone but no website (kept as phone-only leads), and OSM-only leads with just a gmail address and phone score below the default minimum, so the email is dropped and they stay phone-only. Use `enrich` to run your own CSV through the website crawler.
+- Tests: `worker/test_worker.py` search tests rewritten against a mock OpenStreetMap server (split, cap, budget, retries, servers down, heavy area, CLI, old flags).
+- UI: desktop sidebar no longer sits in the page flow (content was pushed right on CRM, Business, Customers, Billing, Account and Inbox); menu buttons have labels and 44 px tap targets; the active page is marked for screen readers.
+- Docs: `START_HERE.md` and `README.md` updated. Old scripts in `anemails/` are untouched and still Google-based: use the worker instead.
+
 ## Lead inbox and autopilot hand-off
 - **Lead Inbox** (`/inbox`, `lib/lead-inbox.js`, `lead_inbox` collection): leads delivered by the external autopilot script wait here with status new / loaded / dismissed. "Load into the sender" turns the selection into CSV text and the dashboard imports it through the same `processCsvContent` as an uploaded file (hand-off via localStorage, ignored after 6 hours).
 - **Ingest API** `/api/lead-inbox/ingest`: authenticated by the owner's ingest key (`Bearer <uid>.<secret>`, only a SHA-256 hash stored), allowlisted fields, max 300 leads per request, idempotent document ids, skips opted-out, lost and already-emailed contacts. Needs the Firebase Admin service account (refuses otherwise). Listed as public in `proxy.js` because it checks its own key.
 - **Key management** `/api/lead-inbox/key` (create, replace, revoke) and an Account card. The key is shown once.
 - Rules and export/delete include `lead_inbox`. **Republish `firestore.rules`.** Sidebar: Lead Inbox.
 - Tests: `tests/lead-inbox.test.mjs`.
+- **One worker file** `worker/autoleads_worker.py` replaces four scripts (crawler, Maps search, pipeline, autopilot): `setup` wizard (also installs missing packages and the daily schedule), `check`, `run`, `plan`, `status`, `schedule`, `find`, `enrich`, `search`. Keys live in `worker/autoleads.json` (git-ignored, mode 600), environment variables override. The Account page shows a ready-made `setup` command after creating the ingest key. Tests: `worker/test_worker.py` (56).
 
 ## BDR coverage pass: billing, customers, qualification, weekly KPI
 New (all human-approved; AI = DeepSeek by default, capped and cached like the rest)

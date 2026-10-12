@@ -42,3 +42,11 @@ next-env.d.ts
 
 # keep the template
 !.env.example
+
+# lead worker: holds API keys and collected leads, never commit
+/worker/autoleads.json
+/worker/autopilot_data/
+/worker/__pycache__/
+/worker/*_enriched.csv
+/worker/*_raw.csv
+/worker/seen_places.json

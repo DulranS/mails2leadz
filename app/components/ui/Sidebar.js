@@ -9,15 +9,16 @@ export const Sidebar = ({ isOpen, onToggle, children }) => {
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={onToggle}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700
-        transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        transform transition-transform duration-300 ease-in-out lg:translate-x-0
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex flex-col h-full">
@@ -28,7 +29,8 @@ export const Sidebar = ({ isOpen, onToggle, children }) => {
             </h2>
             <button
               onClick={onToggle}
-              className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+              aria-label="Close menu"
+              className="lg:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -60,8 +62,9 @@ export const SidebarItem = ({ href, icon, label, badge, isActive }) => {
   return (
     <Link
       href={href}
+      aria-current={active ? 'page' : undefined}
       className={`
-        flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200
+        flex items-center px-3 py-2.5 min-h-[44px] text-sm font-medium rounded-md transition-colors duration-200
         ${active
           ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
           : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white'

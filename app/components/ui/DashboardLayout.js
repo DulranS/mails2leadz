@@ -47,13 +47,14 @@ export const DashboardLayout = ({ children, title, subtitle }) => {
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Open menu"
+                className="lg:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              <div className="ml-4 lg:ml-0">
+              <div className="ml-2 lg:ml-0 min-w-0">
                 {title && <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h1>}
                 {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
               </div>
@@ -65,6 +66,7 @@ export const DashboardLayout = ({ children, title, subtitle }) => {
                 variant="ghost"
                 size="sm"
                 onClick={toggleTheme}
+                aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
                 className="p-2"
               >
                 {theme === 'light' ? '🌙' : '☀️'}

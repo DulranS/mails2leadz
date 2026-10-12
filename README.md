@@ -1,3 +1,5 @@
+> **New here? Read START_HERE.md first.** It covers the app, the worker and the daily routine in one page.
+
 # AutoLeads: controlled outreach + pipeline for small businesses
 
 Upload leads, send personalised email/SMS yourself, track replies, manage deals, and see what it's
@@ -13,7 +15,7 @@ worth. AI helps you write and prioritise; **you approve everything that gets sen
 | **Billing** | Invoice records (not tax invoices, no payments taken): owed, overdue, aging, cash collected, days to get paid, on-time rate, won-but-never-invoiced list. Overdue invoices get a polite AI reminder (friendly, firm, final by lateness, max one per 3 days, never threatens or invents payment details; falls back to a plain template if AI is off). You send it from your own email app |
 | **Qualification + closing** | CRM lead window: four answers (budget, decision maker, need, timeline) and an AI "next-step email" for deals from Qualified to Negotiation, written from the stage, notes and qualification |
 | **Weekly KPI** | Business Value: last 7 days vs the 7 days before (sent, replies, newly qualified, demos, won, revenue, lost, invoiced, collected, check-ins), a plain headline, "email this to me" and "copy as text" |
-| **Lead Inbox** | Businesses the lead autopilot (Python script, see PIPELINE.md) found on Google Maps, crawled, scored and filtered. Filter HOT/WARM/COLD, select, "Load into the sender" hands them to the normal CSV import. Nothing is sent from here. Opted-out, lost and already-emailed contacts never arrive |
+| **Lead Inbox** | Businesses the lead autopilot (Python worker in worker/, see START_HERE.md) found on OpenStreetMap (free, no key, no card), crawled, scored and filtered. Filter HOT/WARM/COLD, select, "Load into the sender" hands them to the normal CSV import. Nothing is sent from here. Opted-out, lost and already-emailed contacts never arrive |
 | **Account** | Profile, "what I sell" (drives AI), your currency, payment terms and how customers pay you, deal-value / cost / stage-chance settings, optional "versus hiring a rep" cost comparison, download my data, delete my data and account |
 
 Numbers come from the customer's own deals. Where a value is an estimate (a deal without a set value)

@@ -232,6 +232,9 @@ export default function AccountPage() {
               <p className="text-xs text-green-900 dark:text-green-200">Copy this key now. It is shown once.</p>
               <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{inboxKey.fresh}</code>
               <button type="button" onClick={() => navigator.clipboard?.writeText(inboxKey.fresh)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy key</button>
+              <p className="text-xs text-green-900 dark:text-green-200 mt-3">Easiest way to connect the worker: paste this in a terminal inside the worker folder, then answer the questions.</p>
+              <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{`python autoleads_worker.py setup --app-url ${typeof window !== "undefined" ? window.location.origin : ""} --ingest-key ${inboxKey.fresh}`}</code>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(`python autoleads_worker.py setup --app-url ${window.location.origin} --ingest-key ${inboxKey.fresh}`)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy setup command</button>
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:items-center">
