@@ -55,7 +55,15 @@ export default function AuthFetch() {
       } catch {
         /* send without a token; the server answers 401 and the user is told to sign in again */
       }
-      return readable(await original(input, finalInit));
+      const response = await original(input, finalInit);
+      // Invite-only deployment (ALLOWED_EMAILS): tell the person once, clearly, instead of a wall of failed requests.
+      if (response.status === 403) {
+        try {
+          const data = await response.clone().json();
+          if (data?.code === 'NO_ACCESS') window.dispatchEvent(new CustomEvent('autoleads:no-access', { detail: { message: data.error } }));
+        } catch { /* not JSON: nothing to announce */ }
+      }
+      return readable(response);
     };
   }, []);
   return null;

@@ -4,7 +4,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
-import { headerSafe, isBlockedContact, optOutFor } from '../../../lib/server/route-helpers.js';
+import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
 import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
@@ -160,7 +160,6 @@ export async function POST(request) {
       csvContent,
       fieldMappings,
       accessToken,
-      refreshToken,
       abTestMode,
       templateA,
       templateB,
@@ -209,7 +208,7 @@ export async function POST(request) {
       process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
       'https://developers.google.com/oauthplayground'
     );
-    oauth2Client.setCredentials({ access_token: accessToken, refresh_token: refreshToken });
+    oauth2Client.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const senderEmail = process.env.GMAIL_SENDER_EMAIL || oauth2Client.credentials.email;
     const senderMapping = fieldMappings?.sender_name || fieldMappings?.senderName || '';
@@ -217,6 +216,8 @@ export async function POST(request) {
     
     let successCount = 0, failCount = 0, skipCount = 0;
     const results = [];
+    
+    const senderAddress = await getSenderAddress(db, userId); // postal address for the footer, read once per request
     
     for (const row of dataRows) {
       if (remaining <= 0) {
@@ -282,7 +283,7 @@ export async function POST(request) {
       
       try {
         // Opt-out link + headers (null when they cannot work, e.g. no public https URL). The stored copy of the email stays without the footer.
-        const optOut = optOutFor(userId, email);
+        const optOut = optOutFor(userId, email, senderAddress);
         const rawMessage = createMimeMessage(email, subject, withTextFooter(body, optOut), senderEmail, senderName, replyToEmail, emailAttachments, optOut?.headers || '');
         const encoded = Buffer.from(rawMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         

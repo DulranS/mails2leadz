@@ -41,14 +41,19 @@ can only touch that user's data) and `firestore.rules`.
   current stage, so they are not used). Nothing changes until you click Apply.
 
 ## Not included on purpose
-Consciously left out: auto-replying, fully automatic sending, lead scraping, external compliance/governance
-integrations. Stage win-chances are never changed automatically: the app only *suggests* new ones from your own closed
+Consciously left out: auto-replying, fully automatic sending, scraping social networks or Google Maps, external compliance/governance
+integrations. (Lead finding is the optional worker: public OpenStreetMap data plus each business's own public website, results land in your Lead Inbox and nothing is sent from there.) Stage win-chances are never changed automatically: the app only *suggests* new ones from your own closed
 deals and you click Apply. Starter email/SMS wording is neutral and contains nothing about any particular business: customers
 add their own offer (Account → "Your business" feeds every AI draft). Not applicable to this product: multi-currency tax, payroll, accounting.
 
 ## Before you deploy a new version
 Publish `firestore.rules` (`firebase deploy --only firestore:rules`). **Required for Billing**: the rules now include the `invoices` collection; without them invoices cannot be saved. The rules now make AI usage counters
 read-only for customers; without republishing, the old rules still let a customer delete their own counters.
+
+## Access, public pages and the email footer
+- **Invite list** (`ALLOWED_EMAILS`, see `.env.example`): when set, only those people (and `ADMIN_EMAILS`) can use the app; everyone else sees a clear "no access yet" notice. Unset = open to any Google account (and to AI spend on your key). Account → Run connection check reports the mode.
+- **Public pages:** landing page (with a "Request access" button when `NEXT_PUBLIC_CONTACT_EMAIL` is set), `/privacy`, `/terms`, `robots.txt`, `sitemap.xml`.
+- **Postal address:** Account → Your business → "Business postal address" is printed above the opt-out link in every first email, follow-up and new-lead batch. The dashboard's setup banner lists what is still missing.
 
 ## Opt-out (unsubscribe) links
 Every email the app sends (first email, follow-ups, new-lead batches) ends with a one-click opt-out link and carries

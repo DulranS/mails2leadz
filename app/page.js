@@ -4,20 +4,25 @@ import Link from 'next/link';
 import { APP_NAME, APP_DESCRIPTION, CONTACT_EMAIL } from '../lib/brand.js';
 
 const STEPS = [
-  { n: '1', title: 'Add your leads', text: 'Upload a spreadsheet of prospects. Duplicates and invalid emails are skipped for you.' },
+  { n: '1', title: 'Add your leads', text: 'Upload a spreadsheet, or load the day\'s best finds from your Lead Inbox. Duplicates and invalid emails are skipped for you.' },
   { n: '2', title: 'Reach out', text: 'Email from your own Gmail, or use SMS, WhatsApp and calls. You choose who gets contacted and when.' },
   { n: '3', title: 'Follow up on time', text: 'See who needs a nudge today. Follow-ups stop the moment someone replies, and never go past three.' },
   { n: '4', title: 'See what it earns', text: 'Move replies into a pipeline and watch real numbers: deals, win rate, expected revenue and return on cost.' },
 ];
 
 const FEATURES = [
+  { title: 'Leads found for you', text: 'An optional free helper finds local businesses on OpenStreetMap, reads their public websites, scores them and drops the best in your Lead Inbox. Nothing is sent from there.' },
   { title: 'AI drafts you approve', text: 'The AI writes follow-ups and answers to replies from what you sell. You read, edit and send. Nothing goes out on its own.' },
   { title: 'Replies handled', text: 'Replies are picked up for you and sorted by what the person wants, so interested leads do not get lost in the inbox.' },
   { title: 'A pipeline that tells the truth', text: 'Only deals you have qualified count as pipeline. Forecasts come with an honest range and say so when there is too little data.' },
   { title: 'Look after customers too', text: 'After a sale, get timed reminders to check in: onboarding, first week, one month and every quarter.' },
   { title: 'Spend you can see', text: 'AI use is capped per day and per month, so there are no surprise bills. Cost and return sit side by side.' },
-  { title: 'Your data stays yours', text: 'Download everything or delete your account and data yourself, any time, from the Account page.' },
+  { title: 'Your data stays yours', text: 'Download everything or delete your account and data yourself, any time, from the Account page. Every email carries a one-click opt-out.' },
 ];
+
+const accessHref = CONTACT_EMAIL
+  ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} access`)}&body=${encodeURIComponent('Hi, I would like to try it. My business: \nMy Google account email: ')}`
+  : null;
 
 const CONTROL = [
   'Every message is sent because you pressed send.',
@@ -44,6 +49,11 @@ export default function Home() {
           <Link href="/dashboard" className="rounded-xl bg-blue-600 px-6 py-3 text-center font-medium text-white transition hover:bg-blue-700">
             Sign in with Google
           </Link>
+          {accessHref ? (
+            <a href={accessHref} className="rounded-xl border border-blue-500 px-6 py-3 text-center font-medium text-blue-300 transition hover:bg-blue-900/30">
+              Request access
+            </a>
+          ) : null}
           <a href="#how" className="rounded-xl border border-gray-600 px-6 py-3 text-center font-medium text-white transition hover:bg-gray-700">
             How it works
           </a>
@@ -105,6 +115,10 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-gray-800 px-4 py-6 text-center text-xs text-gray-500">
+        <nav className="mb-2 flex justify-center gap-4">
+          <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy</Link>
+          <Link href="/terms" className="underline-offset-4 hover:underline">Terms</Link>
+        </nav>
         © {new Date().getFullYear()} {APP_NAME}
       </footer>
     </main>

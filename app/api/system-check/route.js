@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode } from '../../../lib/server-firestore.js';
 import { aiConfig } from '../../../lib/ai-client.js';
+import { isRestricted } from '../../../lib/access.js';
 
 export const maxDuration = 30;
 
@@ -89,6 +90,12 @@ export async function GET(request) {
   add('optout', 'Opt-out links in emails', optOutOk,
     optOutOk ? 'Every email carries a one-click opt-out link and List-Unsubscribe headers.' : `Emails are sent WITHOUT an opt-out link. Missing: ${[!isAdminMode() && 'service account', !hasKey && 'secret', !httpsBase && 'https public URL'].filter(Boolean).join(', ')}.`,
     'Set NEXT_PUBLIC_BASE_URL (your https domain), UNSUBSCRIBE_SECRET (a long random string; WEBHOOK_SECRET is used if this is empty) and FIREBASE_SERVICE_ACCOUNT_JSON, then redeploy.');
+
+  // 6. Who can sign up: an open deployment lets any Google account spend your AI budget (per-account caps still apply).
+  const restricted = isRestricted();
+  add('access', 'Invite list (who can use the app)', restricted,
+    restricted ? 'Only invited people (and owners) can use the app.' : 'Open to anyone with a Google account: every new account can use AI paid from your key.',
+    'Set ALLOWED_EMAILS to a comma-separated list of customer emails or @company.com domains (owners in ADMIN_EMAILS are always allowed), then redeploy.');
 
   const blocking = checks.filter((c) => !c.ok && ['database', 'gmail'].includes(c.id));
   return NextResponse.json({ ok: blocking.length === 0, isAdmin, checks }, { headers: { 'Cache-Control': 'no-store' } });

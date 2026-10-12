@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { signUnsubToken, verifyUnsubToken, buildOptOut, withTextFooter } from '../lib/server/unsubscribe.js';
+import { signUnsubToken, verifyUnsubToken, buildOptOut, withTextFooter, cleanAddress } from '../lib/server/unsubscribe.js';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 const K = 'test-secret-key';
 
@@ -39,5 +39,15 @@ t('footer is added once and the body is untouched when opt-out is off', () => {
   assert.ok(once.startsWith('Hi there\n\n--\n') && once.endsWith(o.pageUrl));
   assert.equal(withTextFooter(once, o), once);
   assert.equal(withTextFooter('Hi', null), 'Hi');
+});
+t('sender postal address goes into both footers, one clean line, HTML-escaped; none = unchanged footer', () => {
+  const plain = buildOptOut('a', 'b@x.com', { key: K, base: 'https://x.com', production: true });
+  const withAddr = buildOptOut('a', 'b@x.com', { key: K, base: 'https://x.com', production: true, address: ' 12 Galle Rd\r\nColombo 03 <b> ' });
+  assert.equal(plain.textFooter.split('\n').length, 4); // "", "", "--", "Not interested..."
+  assert.ok(withAddr.textFooter.includes('--\n12 Galle Rd, Colombo 03 <b>\nNot interested?'));
+  assert.ok(withAddr.htmlFooter.includes('12 Galle Rd, Colombo 03 &lt;b&gt;<br>Not interested?'));
+  assert.ok(!/\r|\n/.test(cleanAddress('a\r\nb\u2028c')));
+  assert.equal(cleanAddress(undefined), '');
+  assert.equal(cleanAddress('x'.repeat(500)).length, 200);
 });
 console.log(`\n${n} passed`);

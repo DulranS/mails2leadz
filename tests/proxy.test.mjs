@@ -51,4 +51,25 @@ await t('unsubscribe is public (recipients are not users), other routes stay pri
   assert.ok(passes(await proxy(req('/api/unsubscribe?t=x', { method: 'POST' }))));
   assert.equal((await proxy(req('/api/send-email', { method: 'POST' }))).status, 401);
 });
+await t('invite list: off = everyone, on = only invited people, domains and admins', async () => {
+  const set = (v) => { if (v === undefined) delete process.env.ALLOWED_EMAILS; else process.env.ALLOWED_EMAILS = v; };
+  try {
+    set(undefined);
+    assert.ok(passes(await proxy(req('/api/deals', { token: tokens.alice }))), 'open when no list is set');
+    set('someone@else.com');
+    const denied = await proxy(req('/api/deals', { token: tokens.alice }));
+    assert.equal(denied.status, 403);
+    assert.equal((await denied.json()).code, 'NO_ACCESS');
+    assert.ok(passes(await proxy(req('/api/deals', { token: tokens.boss }))), 'admins always get in');
+    set('Alice@X.com');
+    assert.ok(passes(await proxy(req('/api/deals', { token: tokens.alice }))), 'exact address, any case');
+    set('@x.com');
+    assert.ok(passes(await proxy(req('/api/deals', { token: tokens.alice }))), 'whole domain');
+    set('@notx.com, bob@y.com');
+    assert.equal((await proxy(req('/api/deals', { token: tokens.alice }))).status, 403);
+    assert.ok(passes(await proxy(req('/api/health'))), 'health stays public');
+    assert.ok(passes(await proxy(req('/api/unsubscribe?t=x', { method: 'POST' }))), 'opt-out links stay public');
+    assert.ok(passes(await proxy(req('/api/call-webhook?key=sek', { method: 'POST' }))), 'provider webhooks are not affected');
+  } finally { set(undefined); }
+});
 console.log(`\n${n} passed`);

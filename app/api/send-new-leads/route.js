@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
-import { headerSafe, isBlockedContact, optOutFor } from '../../../lib/server/route-helpers.js';
+import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
 
 // ============================================================================
@@ -215,6 +215,7 @@ export async function POST(request) {
     let sentCount = 0;
     let failedCount = 0;
     let skippedCount = 0;
+    const senderAddress = await getSenderAddress(db, userId); // postal address for the footer, read once per request
     
     for (const recipient of recipientsToSend) {
       const email = recipient.email.trim().toLowerCase();
@@ -243,7 +244,7 @@ export async function POST(request) {
           body,
           images: emailImages,
           attachments: emailAttachments,
-          optOut: optOutFor(userId, email)
+          optOut: optOutFor(userId, email, senderAddress)
         });
         
         const response = await gmail.users.messages.send({

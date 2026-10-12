@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
-import { headerSafe, pickOriginal, isBlockedContact, optOutFor } from '../../../lib/server/route-helpers.js';
+import { headerSafe, pickOriginal, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
 import { fillTemplate } from '../../../lib/server/template-vars.js';
 
@@ -261,7 +261,7 @@ export async function POST(request) {
     oauth2Client.setCredentials({ access_token: accessToken });
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
-    const optOut = optOutFor(userId, email);
+    const optOut = optOutFor(userId, email, await getSenderAddress(db, userId));
     const rawMessage = createMimeMessage({
       from: process.env.GMAIL_SENDER_EMAIL ? `${headerSafe(senderName) || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>` : '',
       to: email,

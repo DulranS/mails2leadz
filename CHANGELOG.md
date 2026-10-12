@@ -1,5 +1,15 @@
 # Changelog
 
+## Final business-readiness pass
+- **Invite list.** `ALLOWED_EMAILS` (emails and `@domain` entries; `ADMIN_EMAILS` always allowed) is enforced in `proxy.js` for every signed-in API call, so strangers cannot spend your AI budget. Blocked people get a 403 with code `NO_ACCESS`; a banner explains it and offers sign-out (`AccessNotice`). Unset = open, as before. Webhooks, health, opt-out and ingest routes are unaffected. Connection check now reports open vs invite-only. Tests: `tests/proxy.test.mjs`.
+- **Postal address in every email.** New Account field (`profile.address`), printed above the opt-out link in first emails, follow-ups and new-lead batches (text and HTML, escaped, one clean line, read once per request, never blocks sending). Tests: `tests/unsubscribe.test.mjs`.
+- **Privacy Policy and Terms** pages (`/privacy`, `/terms`) written for what the app really does (Gmail scopes with the Google Limited Use statement, AI provider disclosure, deletion). Linked from the landing page footer. Have a lawyer read them before you charge.
+- **Landing page:** "Request access" button (when a contact email is set), a "Leads found for you" card (the optional worker), legal links, Open Graph/Twitter tags, `robots.txt`, `sitemap.xml`. A malformed `NEXT_PUBLIC_BASE_URL` can no longer break the layout.
+- **Setup banner** on the dashboard now lists exactly what is still missing (what you sell, typical deal value, postal address).
+- **Hygiene:** the dashboard no longer sends the Firebase refresh token to the send route (it was not a Google token and the server could not use it).
+- README no longer says lead finding is excluded: it is the optional OpenStreetMap worker, and the README now says so.
+- Checked: `npm test` (16 files), `worker/test_worker.py` (73), `next build`.
+
 ## Last day: Google Maps replaced by OpenStreetMap (free, no key, no card)
 - **Lead finding no longer needs Google.** `worker/autoleads_worker.py` now searches OpenStreetMap: Nominatim finds the area, Overpass lists businesses (phone, website, email, Facebook, Instagram when mapped). Several public Overpass servers are tried in turn; areas that are too big are split into smaller ones automatically. Nothing to sign up for, nothing to pay.
 - Same hand-off as before: rows keep the same columns (`place_id` is now `osm:<type>/<id>`, plus `maps_url`), so the crawler, scoring, Lead Inbox, ingest and CSV import are unchanged. The `setup` wizard no longer asks for a key.

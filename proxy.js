@@ -3,10 +3,12 @@
 //  1. Sign-in required: valid Firebase ID token in "Authorization: Bearer ...".
 //  2. Tenant isolation: a `userId` in the query string or JSON body must equal the token's uid.
 //  3. Provider webhooks (Twilio) can't send a Firebase token: they must carry ?key=WEBHOOK_SECRET.
+//  3b. Invite list: when ALLOWED_EMAILS is set, only those people (and ADMIN_EMAILS) get past this point (lib/access.js).
 //  4. Public: /api/health, /api/auth/callback, /api/unsubscribe (signed-link opt-out) and /api/lead-inbox/ingest (own ingest-key check).
 
 import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
+import { hasAccess, noAccessMessage } from './lib/access.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
@@ -16,7 +18,7 @@ const WEBHOOKS = new Set(['/api/call-webhook']);
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 
-const json = (status, error) => NextResponse.json({ error }, { status, headers: { 'Cache-Control': 'no-store' } });
+const json = (status, error, code) => NextResponse.json(code ? { error, code } : { error }, { status, headers: { 'Cache-Control': 'no-store' } });
 
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
@@ -43,6 +45,8 @@ async function gate(request) {
 
   const user = await verifyIdToken(extractBearer(request));
   if (!user) return json(401, 'Please sign in again (missing or expired session).');
+
+  if (!hasAccess(user.email)) return json(403, noAccessMessage(user.email), 'NO_ACCESS');
 
   if (ADMIN_ONLY.has(pathname)) {
     const admins = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);

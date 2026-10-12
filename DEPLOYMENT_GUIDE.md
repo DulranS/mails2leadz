@@ -20,6 +20,14 @@ Do these in order. The order matters: step 3 before step 4.
    - Open **Business Value**: your deal appears; set its value; mark it Won; see revenue and forecast update.
    - **Account > Download my data** works.
 
+## Who can sign in (set this before you share the link)
+- `ALLOWED_EMAILS` = customer emails and/or `@company.com` domains, comma separated. Anyone else who signs in sees "no access yet" with your `NEXT_PUBLIC_CONTACT_EMAIL`. `ADMIN_EMAILS` always get in. Leave it empty and the app is open to every Google account, each able to use AI paid from your key (per-account caps apply). Account → Run connection check shows which mode you are in.
+- To add a customer later: add their email to `ALLOWED_EMAILS` and redeploy (takes effect on the next request).
+
+## Public pages
+- `/privacy` and `/terms` are plain-language pages written for what the app does. Read them once, change anything that is not true for you, and have a lawyer look before you charge for the service. Put their URLs on the Google OAuth consent screen. Set `NEXT_PUBLIC_CONTACT_EMAIL` (shown on both pages and the landing page's "Request access" button).
+- Gmail permissions: the app uses `gmail.send` and `gmail.readonly`. Google treats `gmail.readonly` as a restricted scope: outside testing mode (100 manually added test users) the OAuth app must be verified, and restricted scopes can need an annual third-party security assessment. Check Google's current requirements before promising customers a public sign-up.
+
 ## Opt-out links
 - Set `NEXT_PUBLIC_BASE_URL` to your https domain, `UNSUBSCRIBE_SECRET` to a long random string (or rely on `WEBHOOK_SECRET`), and make sure `FIREBASE_SERVICE_ACCOUNT_JSON` is set. Without all three the app still sends, but without opt-out links; Account → Run connection check says so.
 - Do not change `UNSUBSCRIBE_SECRET` later: links already sent in old emails would stop working.

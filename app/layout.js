@@ -2,15 +2,22 @@
 import './globals.css';
 import ExtensionCleaner from './components/ExtensionCleaner';
 import AuthFetch from './components/AuthFetch';
+import AccessNotice from './components/AccessNotice';
 import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
 import ReduxProvider from '../components/ReduxProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import { APP_NAME, APP_DESCRIPTION } from '../lib/brand.js';
 
+// A malformed NEXT_PUBLIC_BASE_URL must never take the whole site down.
+const SITE_URL = (() => { try { return new URL(String(process.env.NEXT_PUBLIC_BASE_URL || '').trim()).origin; } catch { return ''; } })();
+
 export const metadata = {
+  ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: { default: APP_NAME, template: `%s | ${APP_NAME}` },
   description: APP_DESCRIPTION,
+  openGraph: { title: APP_NAME, description: APP_DESCRIPTION, siteName: APP_NAME, type: 'website' },
+  twitter: { card: 'summary', title: APP_NAME, description: APP_DESCRIPTION },
 };
 
 export default function RootLayout({ children }) {
@@ -30,6 +37,7 @@ export default function RootLayout({ children }) {
               <NotificationProvider>
                 <ExtensionCleaner />
                 <AuthFetch />
+                <AccessNotice />
                 {children}
               </NotificationProvider>
             </ThemeProvider>

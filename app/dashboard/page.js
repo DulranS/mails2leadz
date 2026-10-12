@@ -4654,8 +4654,7 @@ function DashboardComponent() {
           senderEmail,
           fieldMappings: { email: "email", business_name: "business_name", company: "business_name" },
           accessToken,
-          refreshToken: user?.refreshToken || "",
-          abTestMode: false,
+                    abTestMode: false,
           templateA: { subject: subject.trim(), body: body.trim() },
           templateToSend: "A",
           userId: user.uid,
@@ -6360,8 +6359,7 @@ function DashboardComponent() {
         senderEmail,
         fieldMappings,
         accessToken,
-        refreshToken: user?.refreshToken || "",
-        abTestMode,
+                abTestMode,
         templateA,
         templateB,
         templateToSend,
@@ -7064,15 +7062,22 @@ function DashboardComponent() {
           </div>
         )}
 
-        {/* FIRST-RUN: the AI and the forecasts need two minutes of setup */}
-        {user && bizLoaded && !bizSettings.profile?.offer && (
-          <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-indigo-950/40 border border-indigo-700/50 rounded-xl p-4">
-            <div className="flex-1 text-sm text-indigo-100">
-              <b>Finish setup (2 minutes):</b> tell the app what you sell so AI drafts talk about <i>your</i> business, and set a typical deal value so your forecasts mean something.
+        {/* FIRST-RUN: the AI, the forecasts and the email footer need two minutes of setup. Lists only what is still missing. */}
+        {user && bizLoaded && (() => {
+          const todo = [];
+          if (!bizSettings.profile?.offer) todo.push("what you sell (so AI drafts talk about your business)");
+          if (!(Number(bizSettings.avgDealValue) > 0)) todo.push("a typical deal value (so forecasts mean something)");
+          if (!String(bizSettings.profile?.address || "").trim()) todo.push("your postal address (shown under every email you send)");
+          if (todo.length === 0) return null;
+          return (
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-indigo-950/40 border border-indigo-700/50 rounded-xl p-4">
+              <div className="flex-1 text-sm text-indigo-100">
+                <b>Finish setup (2 minutes):</b> add {todo.join("; ")}.
+              </div>
+              <button onClick={() => router.push("/account")} className="shrink-0 min-h-[44px] bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Set up now</button>
             </div>
-            <button onClick={() => router.push("/account")} className="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-lg">Set up now</button>
-          </div>
-        )}
+          );
+        })()}
 
         {/* DASHBOARD STATS */}
         {whatsappLinks.length > 0 && (

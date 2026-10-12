@@ -17,7 +17,7 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 export default function AccountPage() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "" });
+  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
@@ -178,6 +178,9 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="vp">Main benefit to customers</label><input id="vp" placeholder="e.g. Saves 5 hours a week and avoids tax surprises" className={field} value={profile.valueProp} onChange={(e) => setProfile({ ...profile, valueProp: e.target.value })} /></div>
             <div><label className={label} htmlFor="au">Who do you help?</label><input id="au" placeholder="e.g. Independent restaurants with 5–30 staff" className={field} value={profile.audience} onChange={(e) => setProfile({ ...profile, audience: e.target.value })} /></div>
             <div><label className={label} htmlFor="ph">Your phone number <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="ph" type="tel" inputMode="tel" placeholder="e.g. +94 77 123 4567" className={field} value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} /><p className="text-xs text-gray-500 mt-1">Only used to connect "bridge" calls to you. It is never put into emails.</p></div>
+            <div><label className={label} htmlFor="ad">Business postal address <span className="text-xs font-normal text-gray-500">(printed at the bottom of every email you send)</span></label>
+              <input id="ad" maxLength={200} autoComplete="street-address" placeholder="e.g. 12 Galle Road, Colombo 03, Sri Lanka" className={field} value={profile.address || ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} />
+              <p className={`text-xs mt-1 ${profile.address?.trim() ? "text-gray-500" : "text-amber-600 dark:text-amber-400"}`}>{profile.address?.trim() ? "Shown with the opt-out link, so people can see who is writing to them." : "Recommended: many countries require a real postal address on commercial email. Without one your emails go out with only the opt-out link."}</p></div>
             <div><label className={label} htmlFor="tn">Tone</label>
               <select id="tn" className={field} value={profile.tone} onChange={(e) => setProfile({ ...profile, tone: e.target.value })}>
                 <option>friendly and professional</option><option>warm and casual</option><option>direct and concise</option><option>formal</option>
