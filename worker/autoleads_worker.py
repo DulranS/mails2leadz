@@ -4,11 +4,15 @@ autoleads_worker.py - the whole lead machine in one file.
 
     OpenStreetMap search (free, no key) -> website crawl -> score and filter -> your AutoLeads Lead Inbox, every morning.
 
+Double-click run.bat (or run it with no words) for a MENU: find leads for ANY business type and place, or bring your own
+CSV, or run your saved daily routine. The commands below are for scripts and the scheduler.
+
 You only need two commands:
     python autoleads_worker.py setup      # asks a few questions, checks the connections, can schedule itself
     python autoleads_worker.py run        # one run (the schedule does this for you every morning)
 
 Everything else is optional:
+    menu       the menu: new search of any kind, your own CSV, daily routine, tools
     check      test the free map servers, the AutoLeads connection and the webhook
     plan       show what the next run would do (calls nothing)
     status     budget used and which searches pay off
@@ -2513,8 +2517,23 @@ async def run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
-IMPORT_NAME_ALIASES = ("business_name", "name", "title", "company", "company_name", "business")
-IMPORT_PHONE_ALIASES = ("whatsapp_number", "phone", "phone_number", "phone_raw", "telephone", "mobile", "tel")
+IMPORT_NAME_ALIASES = ("business_name", "name", "title", "company", "company_name", "business", "organization", "organisation", "account_name")
+IMPORT_PHONE_ALIASES = ("whatsapp_number", "phone", "phone_number", "phone_raw", "telephone", "mobile", "tel", "mobile_number",
+                        "contact_number", "cell", "whatsapp", "phone_1")
+IMPORT_EMAIL_ALIASES = ("email", "e_mail", "email_address", "emails", "contact_email", "business_email", "work_email")
+
+
+def _col_key(name: Any) -> str:
+    """'Phone Number', 'phone-number' and 'PHONE_NUMBER' are the same column."""
+    return re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().lower()).strip("_")
+
+
+def column_guess(columns: Sequence[str]) -> Dict[str, str]:
+    """Which of the file's own columns will be read as name / phone / email / website ('' = none found)."""
+    lower = {_col_key(c): c for c in columns}
+    pick = lambda names: next((lower[n] for n in names if n in lower), "")  # noqa: E731
+    website = next((c for c in columns if c.lower() in WEBSITE_ALIASES and c != "website"), "") or ("website" if "website" in columns else "")
+    return {"name": pick(IMPORT_NAME_ALIASES), "phone": pick(IMPORT_PHONE_ALIASES), "email": pick(IMPORT_EMAIL_ALIASES), "website": website}
 
 
 def tidy_import_rows(rows: Sequence[Dict[str, Any]], columns: Sequence[str]) -> Tuple[List[Dict[str, Any]], List[str], int]:
@@ -2522,7 +2541,7 @@ def tidy_import_rows(rows: Sequence[Dict[str, Any]], columns: Sequence[str]) -> 
     Columns it does not understand (a scraper's own junk) are kept and ignored. Nothing is guessed: a row needs a name
     and at least a phone, an email or a website to stay."""
     cols = list(columns)
-    lower = {c.lower(): c for c in cols}
+    lower = {_col_key(c): c for c in cols}
 
     def alias(target: str, names: Sequence[str]) -> Optional[str]:
         if target in cols:
@@ -2534,6 +2553,7 @@ def tidy_import_rows(rows: Sequence[Dict[str, Any]], columns: Sequence[str]) -> 
 
     name_src = alias("business_name", IMPORT_NAME_ALIASES)
     phone_src = alias("whatsapp_number", IMPORT_PHONE_ALIASES)
+    email_src = alias("email", IMPORT_EMAIL_ALIASES)  # an address you already have is kept and merged with what the crawl finds
     if "website" not in cols:
         cols.append("website")
     kept: List[Dict[str, Any]] = []
@@ -2544,6 +2564,8 @@ def tidy_import_rows(rows: Sequence[Dict[str, Any]], columns: Sequence[str]) -> 
             r["business_name"] = r.get(name_src, "")
         if phone_src:
             r["whatsapp_number"] = r.get(phone_src, "")
+        if email_src:
+            r["email"] = r.get(email_src, "")
         has_contact = any(clean_text(r.get(k)) for k in ("whatsapp_number", "email", "email_primary", "phone_primary", "website"))
         if not clean_text(r.get("business_name")) or not has_contact:
             dropped += 1
@@ -3528,6 +3550,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--install-schedule", action="store_true", help="Also schedule the daily run without asking")
     p.add_argument("--time", default=DEFAULT_RUN_TIME, help="Daily run time, 24h (default 09:00)")
 
+    _common(sub.add_parser("menu", help="Pick what to do: find leads for ANY business type, use your own CSV, or run the daily routine"))
+
     p = sub.add_parser("check", help="Test the free map servers, the AutoLeads connection and the webhook")
     _common(p)
     p.add_argument("--api-base", default=API_BASE, help=argparse.SUPPRESS)
@@ -3603,18 +3627,359 @@ def _prepare_windows() -> None:
                 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # avoids "Event loop is closed" noise
 
 
+# ============================================================================
+# MENU: look for anything, or bring your own CSV (what you get when you double-click run.bat)
+# ============================================================================
+# Nothing here changes your saved daily routine unless you say so: every search is typed fresh, saved in its own folder
+# (searches/<date>_<what>-<where>/) and remembered, so the same business is never handed to you twice.
+
+MENU_SEARCH_REQUESTS = 60  # map requests for one typed search (the free servers are shared: this keeps us polite)
+EXCLUDED_CSV_PARTS = ("_enriched", "_app_import", "_review", "_cleaned", "_raw", "_checkpoint", "_batch", "seen_places")
+MENU_TEXT = """
+==============================================================
+  AUTOLEADS: what do you want to do?
+==============================================================
+  1  Find NEW leads: any kind of business, anywhere (type it now)
+  2  Use MY OWN CSV: clean it, read the websites, add to Lead Inbox
+  3  Run my daily routine now (the searches saved in autoleads.json)
+  4  Tools: set up, test connections, see the plan or results
+  q  Quit
+"""
+
+
+class _ProgressOnly(logging.Filter):
+    """During the menu, show crawl progress and problems, not one line per website."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING or record.getMessage().startswith("progress")
+
+
+def slugify(text: Any, limit: int = 40) -> str:
+    out = re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")[:limit].strip("-")
+    return out or "search"
+
+
+def parse_paths(text: str) -> List[str]:
+    """Paths typed or dragged into the window. Dragging gives "C:\\My Files\\list.csv" in quotes; several files give several
+    quoted paths; a pasted path with spaces and no quotes is one path."""
+    text = str(text or "").strip()
+    if not text:
+        return []
+    whole = os.path.expanduser(text.strip("\"'"))
+    if os.path.exists(whole):
+        return [text.strip("\"'")]
+    quoted = [a or b for a, b in re.findall(r'"([^"]+)"|\'([^\']+)\'', text)]
+    if quoted:
+        return [q.strip() for q in quoted if q.strip()]
+    parts = text.split()
+    if len(parts) > 1 and all(os.path.exists(os.path.expanduser(x)) for x in parts):
+        return parts
+    return [text.strip("\"'")]
+
+
+def csv_candidates(folders: Sequence[Path], limit: int = 8) -> List[Path]:
+    """CSV files lying around (newest first), without the files this program itself writes."""
+    found: Dict[Path, float] = {}
+    for folder in folders:
+        try:
+            for f in folder.glob("*.csv"):
+                if any(part in f.name.lower() for part in EXCLUDED_CSV_PARTS):
+                    continue
+                try:
+                    found[f.resolve()] = f.stat().st_mtime
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    return sorted(found, key=lambda x: -found[x])[:limit]
+
+
+def inspect_csv(path: str) -> Optional[Dict[str, Any]]:
+    """What is in a CSV, before any time is spent on it. None if it cannot be read."""
+    try:
+        rows, columns = read_csv(path)
+    except Exception:
+        return None
+    tidy, tidy_columns, dropped = tidy_import_rows(rows, columns)
+    emails = lambda r: split_list(r.get("email")) + split_list(r.get("email_primary"))  # noqa: E731
+    phones = lambda r: split_list(r.get("whatsapp_number")) + split_list(r.get("phone_primary"))  # noqa: E731
+    return {
+        "rows": len(rows), "usable": len(tidy), "dropped": dropped,
+        "with_site": sum(bool(prepare_website(r.get("website"))) for r in tidy),
+        "with_email": sum(any(normalise_email(e) for e in emails(r)) for r in tidy),
+        "with_phone": sum(any(clean_phone(x) for x in phones(r)) for r in tidy),
+        "enriched": looks_enriched(tidy), "mapping": column_guess(columns),
+    }
+
+
+def describe_csv(info: Mapping[str, Any]) -> List[str]:
+    m = info["mapping"]
+    seen = ", ".join(f"{k} <- \"{v}\"" for k, v in m.items() if v) or "nothing recognised"
+    lines = [f"  {info['rows']} rows, {info['usable']} usable" + (f" ({info['dropped']} skipped: no name or no way to reach them)" if info["dropped"] else ""),
+             f"  with a website    : {info['with_site']}   (these get read for emails, phones and owner names)",
+             f"  already an email  : {info['with_email']}",
+             f"  with a phone      : {info['with_phone']}",
+             f"  columns understood: {seen}"]
+    usable = max(1, info["usable"])
+    if not info["usable"]:
+        lines.append("  ! Nothing usable: each row needs a business name plus a phone, an email or a website.")
+    elif info["enriched"]:
+        lines.append("  Already enriched: the websites will not be read again, the leads are just filtered and added.")
+    elif not info["with_site"]:
+        lines.append("  ! No websites in this file, so there is nothing to read. Rows with an email or phone still go in; "
+                     "a list with a website column will give far better leads.")
+    elif info["with_site"] / usable < 0.3:
+        lines.append(f"  ! Only {100 * info['with_site'] // usable}% have a website: expect few new emails from this list.")
+    return lines
+
+
+def _inbox_credentials(cfg_path: str) -> Tuple[str, str]:
+    """(AutoLeads address, ingest key) from the environment or autoleads.json, '' when not set up."""
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        saved = saved if isinstance(saved, dict) and isinstance(saved.get("secrets", {}), dict) else {}
+    except (OSError, ValueError):
+        saved = {}
+    return secret(saved, os.environ, "autoleads_url"), secret(saved, os.environ, "autoleads_ingest_key")
+
+
+def _crawl_flags(cfg_path: str) -> List[str]:
+    """The crawl speed you chose in autoleads.json (defaults if there is none)."""
+    try:
+        en = load_config(cfg_path)["enrichment"]
+    except Exception:
+        return []
+    return ["--max-pages", str(en["max_pages"]), "--concurrency", str(en["concurrency"]), "--delay", str(en["delay"])]
+
+
+def save_search_as_campaign(cfg_path: str, queries: Sequence[str], locations: Sequence[str], require_website: bool,
+                            min_score: int = WARM_SCORE) -> Optional[str]:
+    """Add a typed search to the daily routine. Returns the campaign name, or None when there is no settings file yet."""
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    camps = raw.get("campaigns") if isinstance(raw.get("campaigns"), list) else []
+    taken = {str(c.get("name")) for c in camps if isinstance(c, dict)}
+    base = slugify(f"{queries[0]} {locations[0] if locations else ''}", 30)
+    name, i = base, 2
+    while name in taken:
+        name, i = f"{base}-{i}", i + 1
+    camps.append({"name": name, "queries": list(queries), "locations": list(locations), "region": "", "min_reviews": 0,
+                  "require_website": bool(require_website), "min_score": int(min_score), "min_score_phone_only": 0})
+    raw["campaigns"] = camps
+    validate_config(raw)  # never write a settings file the worker could not load again
+    write_config(Path(cfg_path), raw)
+    return name
+
+
+def _lead_summary(rows: Sequence[Mapping[str, Any]]) -> str:
+    hot = sum(clean_text(r.get("lead_quality")) == "HOT" for r in rows)
+    owner = sum(bool(clean_text(r.get("first_name"))) for r in rows)
+    emails = sum(bool(clean_text(r.get("email"))) for r in rows)
+    return f"{len(rows)} lead(s) ready: {emails} with an email, {len(rows) - emails} phone-only, {hot} HOT, {owner} with the owner's first name"
+
+
+def menu_find(base_dir: Path, cfg_path: str, ask: Callable[..., str], confirm: Callable[..., bool]) -> int:
+    """Type any kind of business and place: search, read the websites, score, and (if connected) add to the Lead Inbox."""
+    print("\nFIND NEW LEADS. Anything works: roofers, wedding photographers, dental clinics, yoga studios...")
+    typed = ask("What kind of business? (several: separate with commas. \"plumbers in Dubai, UAE\" works too)", "").strip()
+    here = re.match(r"^(.*?)\s+in\s+(.+)$", typed, re.I)
+    if here and len(re.findall(r"\sin\s", typed, re.I)) == 1 and split_list(here.group(1)):
+        queries, locations = split_list(here.group(1)), split_places(here.group(2))  # "roofers in Leeds, UK": the comma belongs to the place
+    elif len(re.findall(r"\sin\s", typed, re.I)) > 1:  # "plumbers in Dubai, UAE; electricians in Doha, Qatar": ; separates, each carries its place
+        queries, locations = [q.strip() for q in re.split(r"[;\n]", typed) if q.strip()], []
+    else:
+        queries, locations = split_list(typed), []
+    if not queries:
+        return 0
+    if not locations and not all(split_area_from_query(q)[1] for q in queries):
+        locations = split_places(ask("Where? A city or area, e.g. Dubai, UAE (several: separate with ;)", ""))
+        if not locations:
+            print("OpenStreetMap needs an area to search in (for example: Dubai, UAE). Back to the menu.")
+            return 0
+    require_website = confirm("Only keep businesses that list a website? (best for finding emails)", True, False)
+    url, key = _inbox_credentials(cfg_path)
+    push = False
+    if url and key:
+        push = confirm("Add the good ones to your Lead Inbox when done?", True, False)
+    else:
+        print("(Not connected to your Lead Inbox yet: the files are saved and you can upload them on the dashboard. Menu 4 sets that up.)")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    seen_file = str(base_dir / "searches" / "seen_places.json")
+    total_ready = 0
+    for place in (locations or [""]):
+        folder = base_dir / "searches" / f"{today}_{slugify(queries[0] + ' ' + place, 50)}"
+        folder.mkdir(parents=True, exist_ok=True)
+        base = str(folder / "leads")
+        argv = ["find", "--config", cfg_path, "--name", base, "--seen-file", seen_file,
+                "--max-requests", str(MENU_SEARCH_REQUESTS), "--min-score", str(WARM_SCORE)]
+        for q in queries:
+            argv += ["-q", q]
+        if place:
+            argv += ["--location", place]
+        if require_website:
+            argv.append("--require-website")
+        argv += _crawl_flags(cfg_path)
+        started = time.time()
+        print(f"\n>>> {', '.join(queries)}  in  {place or 'the area you typed'}")
+        try:
+            code = asyncio.run(run_pipeline(parse_args(argv)))
+        except KeyboardInterrupt:
+            print("\nStopped. Run the same search again to carry on where it stopped.")
+            return 130
+        import_path = f"{base}_app_import.csv"
+        if code != 0 or not os.path.exists(import_path) or os.path.getmtime(import_path) < started - 2:
+            continue  # nothing new for this place: the run already said why
+        rows, _ = read_csv(import_path)
+        total_ready += len(rows)
+        print("\n" + _lead_summary(rows))
+        print(f"Saved in: {folder}")
+        if rows and push:
+            batch = f"search-{slugify(queries[0], 30)}-{datetime.now().strftime('%m%d')}"[:60]
+            res = asyncio.run(push_rows(url, key, rows, batch, source="search"))
+            if res.ok:
+                print(f"Added {res.added} to your Lead Inbox ({res.skipped} skipped: already known, opted out or lost). "
+                      "Open AutoLeads, go to Lead Inbox: HOT leads with an owner's name first.")
+            else:
+                print(f"Could not reach your Lead Inbox ({res.error}). Upload {import_path} on the dashboard instead.")
+    if total_ready and Path(cfg_path).exists() and confirm("\nRepeat this search every morning in your daily routine?", False, False):
+        try:
+            name = save_search_as_campaign(cfg_path, queries, locations, require_website)
+            print(f"Added to your daily routine as '{name}'." if name else "No settings file to add it to yet (menu 4 sets it up).")
+        except ConfigError as exc:
+            print(f"Could not add it: {exc}")
+    return 0
+
+
+def menu_enrich(base_dir: Path, cfg_path: str, ask: Callable[..., str], confirm: Callable[..., bool]) -> int:
+    """Bring your own list: show what is in it, read the websites, score it, add the good leads to the Lead Inbox."""
+    inputs = base_dir / "inputs"
+    try:
+        inputs.mkdir(exist_ok=True)
+    except OSError:
+        pass
+    options = csv_candidates([inputs, base_dir, Path.cwd()])
+    print("\nUSE MY OWN CSV. Any list with business names plus a website, phone or email (Google Maps exports, scrapes, a CRM export).")
+    if options:
+        print("CSV files I can see:")
+        for i, f in enumerate(options, 1):
+            print(f"  {i}  {f.name}   ({f.parent})")
+    print(f"Drag your CSV into this window and press Enter, or type a number above. (You can also drop files in: {inputs})")
+    text = ask("CSV file(s)", "").strip()
+    if not text:
+        return 0
+    if re.fullmatch(r"\d+([\s,]+\d+)*", text):
+        paths = [str(options[int(n) - 1]) for n in re.split(r"[\s,]+", text) if 0 < int(n) <= len(options)]
+    else:
+        paths = parse_paths(text)
+    paths = [x for x in paths if x]
+    if not paths:
+        print("I did not get a file from that.")
+        return 0
+    url, key = _inbox_credentials(cfg_path)
+    push = False
+    if url and key:
+        push = confirm("Add the good leads to your Lead Inbox when done?", True, False)
+    else:
+        print("(Not connected to your Lead Inbox yet: you get a CSV to upload on the dashboard. Menu 4 sets that up.)")
+    worst = 0
+    for raw_path in paths:
+        path = os.path.expanduser(raw_path)
+        print(f"\n>>> {path}")
+        if not os.path.isfile(path):
+            print("  I cannot find that file.")
+            worst = max(worst, 2)
+            continue
+        info = inspect_csv(path)
+        if info is None:
+            print("  I could not read that file as a CSV.")
+            worst = max(worst, 2)
+            continue
+        print("\n".join(describe_csv(info)))
+        if not info["usable"] or not confirm("  Go ahead?", True, False):
+            continue
+        argv = ["import", path, "--config", cfg_path] + _crawl_flags(cfg_path) + ([] if push else ["--no-push"])
+        try:
+            worst = max(worst, asyncio.run(run_import(parse_args(argv))))
+        except KeyboardInterrupt:
+            print("\nStopped. Choose the same file again to carry on where it stopped.")
+            return 130
+    return worst
+
+
+def menu_tools(cfg_path: str, ask: Callable[..., str]) -> int:
+    print("\n  1  First-time setup (asks a few questions, saves your keys, can schedule the daily run)\n"
+          "  2  Test the connections\n  3  What would my daily routine do next\n  4  Results so far (which searches pay off)\n  5  Back")
+    choice = ask("Choose", "5").strip()
+    command = {"1": "setup", "2": "check", "3": "plan", "4": "status"}.get(choice)
+    if command == "setup" and Path(cfg_path).exists():
+        print(f"\nSetup is already done. Your settings live in {cfg_path}: open it in Notepad to change keys or searches, "
+              "or delete it and choose this again to start over.")
+        return 0
+    if command == "plan" or command == "status" or command == "check":
+        if not Path(cfg_path).exists():
+            print("\nNo settings yet: choose 1 first.")
+            return 0
+    return main([command, "--config", cfg_path]) if command else 0
+
+
+def run_menu(args: argparse.Namespace, ask: Callable[..., str] = _ask, confirm: Callable[..., bool] = _confirm) -> int:
+    cfg_path = str(Path(args.config))
+    base_dir = Path(cfg_path).resolve().parent
+    if not getattr(crawl_logger, "_menu_filter", None):
+        crawl_logger._menu_filter = _ProgressOnly()  # type: ignore[attr-defined]
+        crawl_logger.addFilter(crawl_logger._menu_filter)  # type: ignore[attr-defined]
+    while True:
+        crawl_logger.setLevel(logging.INFO)  # an earlier "daily routine" run quiets it; progress lines should come back
+        print(MENU_TEXT)
+        # Enter (or a closed window) means quit, so an unattended prompt can never loop on its own.
+        choice = ask("Choose 1-4, or q to quit", "q").strip().lower()
+        try:
+            if choice == "1":
+                menu_find(base_dir, cfg_path, ask, confirm)
+            elif choice == "2":
+                menu_enrich(base_dir, cfg_path, ask, confirm)
+            elif choice == "3":
+                if Path(cfg_path).exists():
+                    main(["run", "--config", cfg_path])
+                else:
+                    print("\nNo daily routine yet. Choose 4, then 1 to set it up.")
+            elif choice == "4":
+                menu_tools(cfg_path, ask)
+            elif choice in ("q", "quit", "exit", "0", ""):
+                return 0
+            else:
+                print("Please type 1, 2, 3, 4 or q.")
+        except ApiError as exc:
+            print(f"\n{exc}")
+        except KeyboardInterrupt:
+            print("\n(stopped)")
+
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     _prepare_windows()
     args = parse_args(argv)
     command = args.command
-    if command is None:  # double-clicked or run with no words: do the sensible thing
-        command = "run" if DEFAULT_CONFIG_PATH.exists() else "setup"
+    if command is None:  # double-clicked or run with no words
+        if sys.stdin is not None and sys.stdin.isatty():
+            command = "menu"  # a person is here: let them choose (new search, own CSV, daily routine)
+        else:  # a scheduler or a pipe: do the sensible unattended thing
+            command = "run" if DEFAULT_CONFIG_PATH.exists() else "setup"
         args = parse_args([command])
     if missing_dependencies() and not offer_install(getattr(args, "yes", False)):
         return 2
     cfg_path = Path(args.config)
     setup_logging(args.log_level, None)
 
+    if command == "menu":
+        return run_menu(args)
     if command == "setup":
         return run_setup(args)
     if command == "schedule":

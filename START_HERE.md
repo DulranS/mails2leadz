@@ -18,6 +18,18 @@ You need Python 3.9+ and nothing else: no account, no key, no card. Business dat
 
 It asks what to find (for example plumbers) and where (for example Colombo, Sri Lanka), saves autoleads.json, tests the connections, installs missing packages for you and offers to run itself every morning at 09:00.
 
+## The menu: look for ANYTHING, or bring your own list
+Double-click `worker/run.bat` (or run `python autoleads_worker.py` with no words). You get a menu:
+
+    1  Find NEW leads: type any kind of business and place (roofers in Leeds, UK / yoga studios in Dubai, UAE)
+    2  Use MY OWN CSV: drag the file in; it shows what it understood, reads the websites, adds the good leads to your Lead Inbox
+    3  Run my daily routine now
+    4  Tools: set up, test connections, see the plan or results
+
+Each typed search gets its own folder (`worker/searches/<date>_<what>-<where>/`) and is remembered, so the same business is never handed to you twice. It does not touch your saved daily routine unless you answer yes to "repeat this search every morning". The schedule itself is unchanged: it runs `run` on its own and never shows the menu.
+
+If the free map data is thin for a niche, use option 2 with a list from anywhere else: Google Maps exports, a purchased list, a CRM export. Columns like Business Name, E-mail, Phone Number and URL are understood; emails you already have are kept.
+
 ## 3. Every day
 Nothing to run. Open the app, Lead Inbox, filter HOT, select, "Load into the sender", review, Send.
 

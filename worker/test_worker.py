@@ -291,6 +291,213 @@ class LockTests(unittest.TestCase):
         self.assertFalse(w.acquire_lock(path))
 
 
+def scripted(answers):
+    it = iter(answers)
+    return (lambda prompt, default="", assume_yes=False: next(it, default)), (lambda prompt, default, assume_yes=False: next(it, default))
+
+
+class MenuTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.cfg = self.dir / "autoleads.json"
+
+    def _write_cfg(self, url="https://app.example.com", key="uid.secret"):
+        raw = json.loads(json.dumps(w.SAMPLE_CONFIG))
+        raw["secrets"] = {"autoleads_url": url, "autoleads_ingest_key": key, "webhook_url": ""}
+        self.cfg.write_text(json.dumps(raw))
+
+    def test_slugify_and_parse_paths(self):
+        self.assertEqual(w.slugify("Wedding Photographers!! in Dubai"), "wedding-photographers-in-dubai")
+        self.assertEqual(w.slugify("!!!"), "search")
+        spaced = self.dir / "my list.csv"
+        spaced.write_text("name\n")
+        other = self.dir / "b.csv"
+        other.write_text("name\n")
+        self.assertEqual(w.parse_paths(f'"{spaced}"'), [str(spaced)])  # dragged in: quotes, spaces
+        self.assertEqual(w.parse_paths(str(spaced)), [str(spaced)])  # pasted with spaces, no quotes
+        self.assertEqual(w.parse_paths(f'"{spaced}" "{other}"'), [str(spaced), str(other)])
+        self.assertEqual(w.parse_paths(f"{other} {other}"), [str(other), str(other)])
+        self.assertEqual(w.parse_paths(""), [])
+        self.assertEqual(w.parse_paths("nowhere.csv"), ["nowhere.csv"])
+
+    def test_raw_csv_columns_are_understood_and_existing_emails_kept(self):
+        f = self.dir / "scrape.csv"
+        f.write_text("Business Name;E-mail;Phone Number;URL;junk\nAcme Plumbing;info@acme.test;+94 77 123 4567;acme.test;x\n"
+                     "Ghost;;;;y\nPhone Only;;011 234 5678;;z\n", encoding="utf-8")
+        info = w.inspect_csv(str(f))
+        self.assertEqual((info["rows"], info["usable"], info["dropped"]), (3, 2, 1))
+        self.assertEqual((info["with_site"], info["with_email"], info["with_phone"]), (1, 1, 2))
+        self.assertEqual(info["mapping"], {"name": "Business Name", "phone": "Phone Number", "email": "E-mail", "website": "URL"})
+        rows, cols = w.read_csv(str(f))
+        tidy, _, _ = w.tidy_import_rows(rows, cols)
+        self.assertEqual(tidy[0]["business_name"], "Acme Plumbing")
+        self.assertEqual(tidy[0]["email"], "info@acme.test")  # not lost
+        self.assertEqual(tidy[0]["website"], "acme.test")
+        text = "\n".join(w.describe_csv(info))
+        self.assertIn("Business Name", text)
+
+    def test_advice_for_lists_that_cannot_be_enriched(self):
+        f = self.dir / "nosite.csv"
+        f.write_text("name,phone\nA,0112345678\nB,0112345679\n")
+        text = "\n".join(w.describe_csv(w.inspect_csv(str(f))))
+        self.assertIn("No websites", text)
+        junk = self.dir / "junk.csv"
+        junk.write_text("foo,bar\n1,2\n")
+        self.assertIn("Nothing usable", "\n".join(w.describe_csv(w.inspect_csv(str(junk)))))
+        self.assertIsNone(w.inspect_csv(str(self.dir / "missing.csv")))
+
+    def test_csv_candidates_skip_the_programs_own_files(self):
+        for name in ("leads.csv", "leads_enriched.csv", "leads_app_import.csv", "leads_review.csv", "mine.csv"):
+            (self.dir / name).write_text("a\n")
+        names = sorted(p.name for p in w.csv_candidates([self.dir]))
+        self.assertEqual(names, ["leads.csv", "mine.csv"])
+
+    def test_save_search_as_campaign(self):
+        self.assertIsNone(w.save_search_as_campaign(str(self.cfg), ["roofers"], ["Leeds, UK"], True))  # no settings file yet
+        self._write_cfg()
+        name = w.save_search_as_campaign(str(self.cfg), ["roofers", "gutters"], ["Leeds, UK"], True)
+        again = w.save_search_as_campaign(str(self.cfg), ["roofers"], ["Leeds, UK"], False)
+        self.assertEqual((name, again), ("roofers-leeds-uk", "roofers-leeds-uk-2"))
+        cfg = w.load_config(str(self.cfg))  # still a valid settings file
+        added = [c for c in cfg["campaigns"] if c["name"] == name][0]
+        self.assertEqual((added["queries"], added["locations"], added["require_website"]), (["roofers", "gutters"], ["Leeds, UK"], True))
+        self.assertEqual(cfg["secrets"]["autoleads_ingest_key"], "uid.secret")  # keys untouched
+
+    def test_find_anything_runs_fresh_search_and_pushes(self):
+        self._write_cfg()
+        seen_args, pushed = {}, {}
+
+        async def fake_pipeline(args):
+            seen_args["a"] = args
+            w.write_rows(f"{args.name}_app_import.csv",
+                         [{"email": "a@x.test", "business_name": "A", "lead_quality": "HOT", "first_name": "Jo"},
+                          {"email": "", "business_name": "B", "lead_quality": "WARM", "whatsapp_number": "+94771234567"}],
+                         ["email", "business_name", "whatsapp_number", "first_name", "lead_quality"])
+            return 0
+
+        async def fake_push(url, key, rows, batch, source="autopilot"):
+            pushed.update(url=url, key=key, n=len(rows), batch=batch, source=source)
+            return w.PushResult(True, len(rows), 0)
+
+        ask, confirm = scripted(["wedding photographers, florists", "Dubai, UAE", True, True, False])
+        with unittest.mock.patch.object(w, "run_pipeline", fake_pipeline), unittest.mock.patch.object(w, "push_rows", fake_push), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(w.menu_find(self.dir, str(self.cfg), ask, confirm), 0)
+        a = seen_args["a"]
+        self.assertEqual((a.query, a.location, a.require_website), (["wedding photographers", "florists"], "Dubai, UAE", True))
+        self.assertTrue(a.name.startswith(str(self.dir / "searches")))  # its own folder: nothing else is overwritten
+        self.assertTrue(a.seen_file.endswith("seen_places.json"))
+        self.assertEqual((pushed["n"], pushed["source"], pushed["url"]), (2, "search", "https://app.example.com"))
+        self.assertTrue(pushed["batch"].startswith("search-wedding-photographers"))
+        self.assertIn("1 HOT", out.getvalue())
+        # the saved daily routine was not touched
+        self.assertEqual([c["name"] for c in w.load_config(str(self.cfg))["campaigns"]], ["trades-colombo"])
+
+    def test_find_can_be_saved_to_the_daily_routine(self):
+        self._write_cfg()
+
+        async def fake_pipeline(args):
+            w.write_rows(f"{args.name}_app_import.csv", [{"email": "a@x.test", "business_name": "A", "lead_quality": "WARM"}],
+                         ["email", "business_name", "lead_quality"])
+            return 0
+
+        ask, confirm = scripted(["roofers", "Leeds, UK", True, False, True])  # website only, no push, yes: save it
+        with unittest.mock.patch.object(w, "run_pipeline", fake_pipeline), contextlib.redirect_stdout(io.StringIO()):
+            w.menu_find(self.dir, str(self.cfg), ask, confirm)
+        names = [c["name"] for c in w.load_config(str(self.cfg))["campaigns"]]
+        self.assertEqual(names, ["trades-colombo", "roofers-leeds-uk"])
+
+    def test_find_needs_a_place_and_empty_answers_return_to_menu(self):
+        ask, confirm = scripted([""])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(w.menu_find(self.dir, str(self.cfg), ask, confirm), 0)
+        ask, confirm = scripted(["roofers", "", ""])  # no place twice: back to the menu, nothing searched
+        with unittest.mock.patch.object(w, "run_pipeline", side_effect=AssertionError("must not search")), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(w.menu_find(self.dir, str(self.cfg), ask, confirm), 0)
+        ask, confirm = scripted(["roofers, gutters in Leeds, UK", True, False])  # "in <place>" is enough: no second question
+        seen = {}
+
+        async def fake_pipeline(args):
+            seen["q"], seen["loc"] = args.query, args.location
+            return 0
+        with unittest.mock.patch.object(w, "run_pipeline", fake_pipeline), contextlib.redirect_stdout(io.StringIO()):
+            w.menu_find(self.dir, str(self.cfg), ask, confirm)
+        self.assertEqual((seen["q"], seen["loc"]), (["roofers", "gutters"], "Leeds, UK"))  # the comma belongs to the place
+        ask, confirm = scripted(["plumbers in Dubai, UAE; electricians in Doha, Qatar", True, False])
+        with unittest.mock.patch.object(w, "run_pipeline", fake_pipeline), contextlib.redirect_stdout(io.StringIO()):
+            w.menu_find(self.dir, str(self.cfg), ask, confirm)
+        self.assertEqual((seen["q"], seen["loc"]), (["plumbers in Dubai, UAE", "electricians in Doha, Qatar"], ""))  # each carries its own place
+
+    def test_own_csv_flow_previews_then_imports(self):
+        self._write_cfg()
+        f = self.dir / "mine.csv"
+        f.write_text("name,website,email\nAcme,acme.test,\n")
+        got = {}
+
+        async def fake_import(args):
+            got.update(input=args.input, no_push=args.no_push, config=args.config, pages=args.max_pages)
+            return 0
+
+        ask, confirm = scripted([f'"{f}"', True, True])  # drag in, push to inbox, go ahead
+        with unittest.mock.patch.object(w, "run_import", fake_import), contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(w.menu_enrich(self.dir, str(self.cfg), ask, confirm), 0)
+        self.assertEqual((got["input"], got["no_push"], got["config"]), (str(f), False, str(self.cfg)))
+        self.assertIn("with a website    : 1", out.getvalue())
+        self.assertTrue((self.dir / "inputs").is_dir())  # a drop folder appears for next time
+
+    def test_own_csv_by_number_and_declined_or_missing_files(self):
+        (self.dir / "inputs").mkdir()
+        f = self.dir / "inputs" / "list.csv"
+        f.write_text("name,phone\nA,0112345678\n")
+        called = []
+
+        async def fake_import(args):
+            called.append(args.input)
+            return 0
+
+        ask, confirm = scripted(["1", False])  # number from the list, then "no" to going ahead
+        with unittest.mock.patch.object(w, "run_import", fake_import), contextlib.redirect_stdout(io.StringIO()):
+            w.menu_enrich(self.dir, str(self.cfg), ask, confirm)
+        self.assertEqual(called, [])
+        ask, confirm = scripted([str(self.dir / "nope.csv")])
+        with unittest.mock.patch.object(w, "run_import", fake_import), contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(w.menu_enrich(self.dir, str(self.cfg), ask, confirm), 2)
+        self.assertIn("cannot find", out.getvalue())
+        self.assertEqual(called, [])
+
+    def test_menu_quits_on_enter_and_never_loops_on_a_closed_window(self):
+        args = w.parse_args(["menu", "--config", str(self.cfg)])
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(w.run_menu(args, ask=lambda prompt, default="", assume_yes=False: default), 0)
+
+    def test_menu_dispatches_choices(self):
+        args = w.parse_args(["menu", "--config", str(self.cfg)])
+        calls = []
+        answers = iter(["1", "2", "x", "q"])
+        with unittest.mock.patch.object(w, "menu_find", lambda *a: calls.append("find")), \
+                unittest.mock.patch.object(w, "menu_enrich", lambda *a: calls.append("enrich")), contextlib.redirect_stdout(io.StringIO()) as out:
+            w.run_menu(args, ask=lambda prompt, default="", assume_yes=False: next(answers))
+        self.assertEqual(calls, ["find", "enrich"])
+        self.assertIn("Please type", out.getvalue())
+
+    def test_double_click_with_a_person_shows_the_menu_but_a_scheduler_still_runs(self):
+        seen = []
+        with unittest.mock.patch.object(w, "run_menu", lambda a, *x, **k: seen.append("menu") or 0), \
+                unittest.mock.patch.object(w, "missing_dependencies", lambda: []), \
+                unittest.mock.patch("sys.stdin") as stdin:
+            stdin.isatty.return_value = True
+            self.assertEqual(w.main([]), 0)
+        self.assertEqual(seen, ["menu"])
+        with unittest.mock.patch.object(w, "run_menu", lambda a, *x, **k: seen.append("menu") or 0), \
+                unittest.mock.patch.object(w, "missing_dependencies", lambda: []), \
+                unittest.mock.patch.object(w, "DEFAULT_CONFIG_PATH", self.dir / "none.json"), \
+                unittest.mock.patch.object(w, "run_setup", lambda a: seen.append("setup") or 0), \
+                unittest.mock.patch("sys.stdin") as stdin:
+            stdin.isatty.return_value = False
+            self.assertEqual(w.main([]), 0)
+        self.assertEqual(seen, ["menu", "setup"])  # not interactive: the old unattended behaviour
+
+
 class CrawlTests(unittest.IsolatedAsyncioTestCase):
     async def test_full_crawl(self):
         mock = MockSite()
