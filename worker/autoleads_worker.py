@@ -2413,7 +2413,7 @@ def funnel(raw: Sequence[Dict[str, Any]], enriched: Sequence[Dict[str, Any]], re
     pct = lambda c: f"{c:>4} ({100 * c / n:3.0f}%)"  # noqa: E731
     lines = [
         "", "=" * 60, "PIPELINE FUNNEL", "=" * 60,
-        f"Found on Maps        : {len(raw):>4}",
+        f"Businesses found    : {len(raw):>4}",
         f"  with a website     : {pct(with_site)}",
         f"  crawled OK         : {pct(crawled)}   ({', '.join(f'{k}={v}' for k, v in sorted(status.items()) if k != 'ok') or 'no failures'})",
         f"  with an email      : {pct(with_email)}",
@@ -2510,6 +2510,112 @@ async def run_pipeline(args: argparse.Namespace) -> int:
     write_rows(review_path, review, list(columns) + ["excluded_reason"])
     print(funnel(raw_rows, batch_rows, ready, reasons))
     print(f"\nImport this into AutoLeads : {import_path}   (this run only)\nWhat was left out and why  : {review_path}\nEverything ever collected  : {enriched_path}")
+    return 0
+
+
+IMPORT_NAME_ALIASES = ("business_name", "name", "title", "company", "company_name", "business")
+IMPORT_PHONE_ALIASES = ("whatsapp_number", "phone", "phone_number", "phone_raw", "telephone", "mobile", "tel")
+
+
+def tidy_import_rows(rows: Sequence[Dict[str, Any]], columns: Sequence[str]) -> Tuple[List[Dict[str, Any]], List[str], int]:
+    """Make a hand-made scrape usable: understand common column names, drop empty rows. Returns (rows, columns, dropped).
+    Columns it does not understand (a scraper's own junk) are kept and ignored. Nothing is guessed: a row needs a name
+    and at least a phone, an email or a website to stay."""
+    cols = list(columns)
+    lower = {c.lower(): c for c in cols}
+
+    def alias(target: str, names: Sequence[str]) -> Optional[str]:
+        if target in cols:
+            return None
+        found = next((lower[n] for n in names if n in lower), None)
+        if found:
+            cols.append(target)
+        return found
+
+    name_src = alias("business_name", IMPORT_NAME_ALIASES)
+    phone_src = alias("whatsapp_number", IMPORT_PHONE_ALIASES)
+    if "website" not in cols:
+        cols.append("website")
+    kept: List[Dict[str, Any]] = []
+    dropped = 0
+    for r in rows:
+        r = dict(r)
+        if name_src:
+            r["business_name"] = r.get(name_src, "")
+        if phone_src:
+            r["whatsapp_number"] = r.get(phone_src, "")
+        has_contact = any(clean_text(r.get(k)) for k in ("whatsapp_number", "email", "email_primary", "phone_primary", "website"))
+        if not clean_text(r.get("business_name")) or not has_contact:
+            dropped += 1
+            continue
+        kept.append(r)
+    return kept, cols, dropped
+
+
+def looks_enriched(rows: Sequence[Dict[str, Any]]) -> bool:
+    """True when most rows already carry a crawl result, so the websites are not crawled a second time."""
+    return bool(rows) and sum(bool(clean_text(r.get("enrichment_status"))) for r in rows) >= 0.8 * len(rows)
+
+
+async def run_import(args: argparse.Namespace) -> int:
+    """Take a CSV you scraped yourself (raw, or already enriched) and put it in the Lead Inbox."""
+    path = args.input
+    if not os.path.exists(path):
+        print(f"file not found: {path}")
+        return 2
+    try:
+        raw_rows, raw_columns = read_csv(path)
+    except Exception as exc:
+        print(f"could not read {path}: {exc}")
+        return 2
+    rows, columns, dropped = tidy_import_rows(raw_rows, raw_columns)
+    if not rows:
+        print("No usable businesses in that file. Each row needs a business name and a phone number, email or website.")
+        return 1
+    if dropped:
+        print(f"Skipped {dropped} empty or incomplete row(s).")
+    src = Path(path)
+    stem = src.with_name(re.sub(r"_enriched(_\d+(_\d+)?)?$", "", src.stem))
+    import_path, review_path = f"{stem}_app_import.csv", f"{stem}_review.csv"
+
+    if looks_enriched(rows):
+        print(f"{len(rows)} businesses, already enriched: not crawling again.")
+        enriched, enriched_columns = rows, columns
+    else:
+        cleaned = f"{stem}_cleaned.csv"
+        write_rows(cleaned, rows, columns)
+        with_site = sum(bool(prepare_website(r.get("website"))) for r in rows)
+        print(f"{len(rows)} businesses, {with_site} with a website. Reading the websites for emails and details (resumes if you stop it)...")
+        cfg_le = Config(max_pages=args.max_pages, concurrency=args.concurrency, delay=args.delay)
+        out = await run(cleaned, make_output_path(f"{stem}.csv"), resume=not args.no_resume, cfg=cfg_le)
+        if not out:
+            print("Reading the websites did not finish. Run the same command again to carry on where it stopped.")
+            return 1
+        enriched, enriched_columns = read_rows(out)
+        os.remove(cleaned)
+
+    ready, review, reasons = prepare_app_import(enriched, args.min_score, args.min_score_phone_only)
+    write_rows(import_path, ready, import_columns(enriched_columns))
+    write_rows(review_path, review, list(enriched_columns) + ["excluded_reason"])
+    print(funnel(enriched, enriched, ready, reasons))
+
+    url, key = "", ""
+    try:
+        with open(args.config, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        saved = {}
+    url, key = secret(saved, os.environ, "autoleads_url"), secret(saved, os.environ, "autoleads_ingest_key")
+    if ready and url and key and not args.no_push:
+        res = await push_rows(url, key, ready, f"{src.stem}_import", source="import")
+        if res.ok:
+            print(f"\nAdded {res.added} lead(s) to your Lead Inbox ({res.skipped} skipped: already known, opted out or lost). Open Lead Inbox in AutoLeads to review and load them.")
+        else:
+            print(f"\nCould not reach your Lead Inbox ({res.error}). Upload {import_path} on the dashboard instead.")
+    else:
+        why = "" if ready else "Nothing passed the filters. "
+        print(f"\n{why}Upload this on the AutoLeads dashboard: {import_path}" + ("" if url and key else "\n(To skip uploading by hand next time, run the setup command once so the worker knows your Lead Inbox.)"))
+    print(f"Left out and why: {review_path}")
     return 0
 
 
@@ -2758,13 +2864,13 @@ class PushResult:
     error: str = ""
 
 
-async def push_rows(url: str, key: str, rows: Sequence[Dict[str, Any]], batch_id: str) -> PushResult:
+async def push_rows(url: str, key: str, rows: Sequence[Dict[str, Any]], batch_id: str, source: str = "autopilot") -> PushResult:
     endpoint = url.rstrip("/") + "/api/lead-inbox/ingest"
     added = skipped = 0
     async with aiohttp.ClientSession() as session:
         for i in range(0, len(rows), PUSH_CHUNK):
             chunk = list(rows[i:i + PUSH_CHUNK])
-            body = {"source": "autopilot", "batchId": batch_id, "leads": chunk}
+            body = {"source": source, "batchId": batch_id, "leads": chunk}
             last_error = ""
             for attempt in range(3):
                 try:
@@ -3407,6 +3513,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--min-score", type=int, default=WARM_SCORE, help=f"Lowest score to import (default {WARM_SCORE}; HOT is {HOT_SCORE}+)")
     p.add_argument("--min-score-phone-only", type=int, default=0)
 
+    p = sub.add_parser("import", help="Put a CSV you scraped yourself (raw or already enriched) into your Lead Inbox")
+    _common(p)
+    _crawl_options(p)
+    p.add_argument("input", help="Your CSV: raw or already enriched")
+    p.add_argument("--min-score", type=int, default=WARM_SCORE, help=f"Lowest score to keep an email (default {WARM_SCORE}); weaker ones stay phone-only")
+    p.add_argument("--min-score-phone-only", type=int, default=0)
+    p.add_argument("--no-push", action="store_true", help="Only write the files, do not send them to the Lead Inbox")
+
     p = sub.add_parser("enrich", help="Crawl the websites in a CSV you already have")
     _common(p)
     p.add_argument("input", help="Input CSV (needs a website column)")
@@ -3474,7 +3588,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Mac / Linux (add with crontab -e):\n  " + cmds["cron_line"])
         return 0
 
-    if command in ("find", "enrich", "search"):
+    if command in ("find", "enrich", "search", "import"):
         return _run_oneoff(command, args, str(cfg_path))
 
     cfg = _load_cfg_or_explain(str(cfg_path))
@@ -3527,6 +3641,13 @@ def _run_oneoff(command: str, args: argparse.Namespace, cfg_path: str) -> int:
             logger.warning("interrupted; finished rows are saved, run the same command again to resume")
             return 130
         return 0 if out else 1
+
+    if command == "import":
+        try:
+            return asyncio.run(run_import(args))
+        except KeyboardInterrupt:
+            logger.warning("interrupted; run the same command again to resume")
+            return 130
 
     if command == "find":
         if args.query and args.input:

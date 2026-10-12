@@ -13,6 +13,7 @@ import re
 import subprocess
 import tempfile
 import unittest
+import unittest.mock
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1244,6 +1245,109 @@ class ConnectionCheckTests(unittest.IsolatedAsyncioTestCase):
         ok, msg = await w.ping_inbox("http://127.0.0.1:9", INGEST_KEY)
         self.assertFalse(ok)
         self.assertIn("could not reach", msg)
+
+
+class ImportCommandTests(unittest.IsolatedAsyncioTestCase):
+    """`import`: the owner scrapes a CSV by hand (raw, or already enriched) and gets it into the Lead Inbox."""
+
+    async def asyncSetUp(self):
+        self.site = MockSite()
+        await self.site.start(site_pages(self.site))
+        self.inbox = await MockInbox().start()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.env = {"AUTOLEADS_URL": self.inbox.url, "AUTOLEADS_INGEST_KEY": INGEST_KEY}
+
+    async def asyncTearDown(self):
+        await self.site.stop()
+        await self.inbox.stop()
+        self.tmp.cleanup()
+
+    def scrape(self, name="lanka.csv"):
+        # what a Google Maps scraper extension produces: odd column names, blank rows, businesses with no contact details
+        cols = ["place_id", "business_name", "rating", "reviews", "W4Efsd 2", "address", "website", "whatsapp_number", "Cw1rxd"]
+        rows = [
+            ["", "", "", "", "", "", "", "", ""],
+            ["https://maps.example/a", "Alpha Distributors", "4.1", "(7)", "·", "145 Lake Rd", self.site.url + "/", "076 359 7171", "\ue52e"],
+            ["https://maps.example/b", "Beta Traders", "4.5", "(12)", "·", "9 Main St", "", "077 111 2222", "\ue52e"],
+            ["https://maps.example/c", "Gamma With Nothing", "3.0", "(1)", "·", "1 Dead End", "", "", "\ue52e"],
+        ]
+        path = self.dir / name
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            wr = csv.writer(f)
+            wr.writerow(cols)
+            wr.writerows(rows)
+        return path
+
+    async def run_import(self, path, *extra, env=None):
+        args = w.parse_args(["import", str(path), "--config", str(self.dir / "none.json"), "--yes", "--delay", "0.02", *extra])
+        out = io.StringIO()
+        with unittest.mock.patch.dict(os.environ, env if env is not None else self.env, clear=True), contextlib.redirect_stdout(out):
+            code = await w.run_import(args)
+        return code, out.getvalue()
+
+    async def test_raw_scrape_is_cleaned_crawled_and_delivered(self):
+        code, text = await self.run_import(self.scrape())
+        self.assertEqual(code, 0, text)
+        self.assertEqual(self.site.hits["/"], 1)  # the one website was read
+        self.assertEqual(len(self.inbox.posts), 1)
+        body = self.inbox.posts[0]
+        self.assertEqual(body["source"], "import")
+        names = sorted(l["business_name"] for l in body["leads"])
+        self.assertEqual(names, ["Alpha Distributors", "Beta Traders"])  # blank row and the business with no contact are not sent
+        self.assertTrue(all(l["whatsapp_number"] for l in body["leads"]))
+        self.assertTrue((self.dir / "lanka_app_import.csv").exists())
+        self.assertTrue((self.dir / "lanka_review.csv").exists())
+        self.assertFalse((self.dir / "lanka_cleaned.csv").exists())  # temporary file is removed
+        self.assertIn("Added 2 lead(s)", text)
+
+    async def test_already_enriched_file_is_not_crawled_again(self):
+        code, _ = await self.run_import(self.scrape())
+        self.assertEqual(code, 0)
+        enriched = next(self.dir.glob("lanka_enriched*.csv"))
+        self.inbox.posts.clear()
+        self.site.hits.clear()
+        code, text = await self.run_import(enriched)
+        self.assertEqual(code, 0, text)
+        self.assertEqual(sum(self.site.hits.values()), 0)  # no second crawl
+        self.assertIn("already enriched", text)
+        self.assertEqual(len(self.inbox.posts[0]["leads"]), 2)
+        self.assertTrue((self.dir / "lanka_app_import.csv").exists())  # same names as the raw run, not lanka_enriched_app_import
+
+    async def test_without_a_connection_it_writes_the_file_and_says_where_to_upload_it(self):
+        code, text = await self.run_import(self.scrape(), env={})
+        self.assertEqual(code, 0, text)
+        self.assertEqual(self.inbox.posts, [])
+        self.assertIn("Upload this on the AutoLeads dashboard", text)
+        self.assertTrue((self.dir / "lanka_app_import.csv").exists())
+
+    async def test_no_push_flag_and_inbox_outage_never_lose_the_file(self):
+        code, text = await self.run_import(self.scrape(), "--no-push")
+        self.assertEqual((code, self.inbox.posts), (0, []))
+        self.inbox.status = 500
+        code, text = await self.run_import(self.scrape("again.csv"))
+        self.assertEqual(code, 0)
+        self.assertIn("Could not reach your Lead Inbox", text)
+        self.assertTrue((self.dir / "again_app_import.csv").exists())
+
+    async def test_bad_input_is_explained(self):
+        self.assertEqual((await self.run_import(self.dir / "missing.csv"))[0], 2)
+        empty = self.dir / "empty.csv"
+        empty.write_text("name,phone\n,\n", encoding="utf-8")
+        code, text = await self.run_import(empty)
+        self.assertEqual(code, 1)
+        self.assertIn("No usable businesses", text)
+
+    def test_common_column_names_are_understood(self):
+        rows = [{"Name": "Acme", "Phone": "077 123 4567", "x": "1"}, {"Name": "No Contact", "Phone": "", "x": "2"}, {"Name": "", "Phone": "1", "x": "3"}]
+        # headers are matched case-insensitively
+        kept, cols, dropped = w.tidy_import_rows(rows, ["Name", "Phone", "x"])
+        self.assertEqual([r["business_name"] for r in kept], ["Acme"])
+        self.assertEqual(kept[0]["whatsapp_number"], "077 123 4567")
+        self.assertEqual(dropped, 2)
+        self.assertIn("website", cols)
+        self.assertFalse(w.looks_enriched(kept))
+        self.assertTrue(w.looks_enriched([{"enrichment_status": "ok"}] * 4))
 
 
 if __name__ == "__main__":
