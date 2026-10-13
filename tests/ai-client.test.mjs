@@ -13,7 +13,7 @@ await t('defaults to cheap models and conservative caps', () => {
   process.env.OPENAI_API_KEY = 'x';
   const c = aiConfig();
   assert.equal(c.models.fast, 'gpt-4o-mini');
-  assert.equal(c.dailyCallLimit, 60);
+  assert.equal(c.dailyCallLimit, 100);
   assert.equal(c.monthlyBudgetUsd, 5);
   delete process.env.OPENAI_API_KEY; process.env.CLAUDE_API_KEY = 'y';
   assert.equal(aiConfig().provider, 'anthropic');

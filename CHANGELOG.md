@@ -1,5 +1,23 @@
 # Changelog
 
+## Last-day pass 3: the operating spine (find → draft → send → follow up → post → measure)
+**Bugs fixed**
+- **Leads emailed through the AI draft button never entered the follow-up queue.** The queue is built only from `follow_up_tasks`, and only the bulk CSV sender created them (plus a one-time migration that runs only when the queue is completely empty). The one-lead AI send now schedules the follow-ups too (`scheduleEmailFollowUps`, de-duplicated, same shape as the bulk sender). Tests: `tests/first-email-batch.test.mjs`.
+- **Run-rate dipped on the 1st of every month.** It averaged the last three calendar months, counting the month in progress as a full month; the annual figure multiplies it by 12. It is now the last 90 days of wins / 3, the same window as ROI. Test proves steady sales read steady across a month boundary.
+- **Funnel undercounted lost deals.** A deal lost after the demo no longer counted as having had a demo. Stages now count deals that are there or passed through (saved `reached` history); opt-outs excluded. Open pipeline is unchanged.
+- **AI first-email drafts for opted-out / Lost contacts** now stop before the AI call (the follow-up route already did this).
+
+**New (all human-approved, capped, DeepSeek by default)**
+- **Draft first emails with AI, approve together** (dashboard, next to Send Emails): up to 10 new leads per run, written from your business profile plus public facts (kind of business, location, website), two at a time, shown in one window to edit / untick / send once. Reads the loaded CSV, so email-only leads work (the on-screen contact list only holds rows with a phone number). Every server rule still applies (opt-out, Lost, 24h duplicate guard, daily cap). Sent leads get follow-up tasks automatically.
+- **Who should I look for?** (Lead Inbox): the AI reads "what I sell" and suggests 3 to 6 kinds of local business to target, each with a ready-to-run worker command. It can only suggest the 70 business types the worker recognises as real category searches (`lib/worker-categories.js`; `worker/test_worker.py` fails if the two ever drift), and every answer is validated before it is shown.
+- **Content** (`/content`, inbound): AI drafts a week of posts for LinkedIn / Instagram / Facebook / TikTok / X with a **design brief** for whoever makes the visuals; edit, schedule, post with one tap (copies the text and opens the network), mark posted, log reach / engagement / enquiries. Analytics by platform and theme name a leader only with 3+ posts with results on at least two of them; after 5 posts with results the AI is told (ids only, never text) which platform and theme work best. Posts live under `users/{uid}/content_posts`: **no Firestore rules republish needed**; included in "download / delete my data". The AI writes `[bracketed]` placeholders instead of inventing customers or results, and the page shows a warning on any post that still has one.
+- **Do this next** now shows hot leads waiting in the Lead Inbox (urgent when nothing is in play) and posts due / an empty content calendar.
+- Default `AI_DAILY_CALL_LIMIT` 60 → 100 (a draft costs ≈ $0.0004 at DeepSeek's peak price; the $5/month cap is the real guard).
+
+**Checked, no change needed:** Google Maps is fully gone (no Google API call anywhere; `place_id` is an OpenStreetMap id). DeepSeek model name `deepseek-flash` and the peak prices in `lib/ai-client.js` match DeepSeek's current official pricing page.
+**Not built on purpose:** posting to social networks automatically (each network needs its own approved developer app and verification, and unattended posting is the fastest way to lose an account), sending without you present, auto-replies.
+**Known limits:** `npm run lint` is not configured in the project (ESLint is not a dependency); a dry run with it shows only React-compiler style rules, no undefined variables or hook-order errors. Tests: `npm test` (22 files), `worker/test_worker.py` (92).
+
 ## Final business-readiness pass
 - **Invite list.** `ALLOWED_EMAILS` (emails and `@domain` entries; `ADMIN_EMAILS` always allowed) is enforced in `proxy.js` for every signed-in API call, so strangers cannot spend your AI budget. Blocked people get a 403 with code `NO_ACCESS`; a banner explains it and offers sign-out (`AccessNotice`). Unset = open, as before. Webhooks, health, opt-out and ingest routes are unaffected. Connection check now reports open vs invite-only. Tests: `tests/proxy.test.mjs`.
 - **Postal address in every email.** New Account field (`profile.address`), printed above the opt-out link in first emails, follow-ups and new-lead batches (text and HTML, escaped, one clean line, read once per request, never blocks sending). Tests: `tests/unsubscribe.test.mjs`.

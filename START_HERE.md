@@ -30,8 +30,15 @@ Each typed search gets its own folder (`worker/searches/<date>_<what>-<where>/`)
 
 If the free map data is thin for a niche, use option 2 with a list from anywhere else: Google Maps exports, a purchased list, a CRM export. Columns like Business Name, E-mail, Phone Number and URL are understood; emails you already have are kept.
 
-## 3. Every day
-Nothing to run. Open the app, Lead Inbox, filter HOT, select, "Load into the sender", review, Send.
+## 3. Every day (about 15 minutes)
+Nothing to run. Open Business Value and read "Do this next", then:
+
+1. **Find** (outbound): Lead Inbox → "Who should I look for?" tells you which businesses to search; run that search in the worker (it also runs by itself every morning).
+2. **Draft and send**: Lead Inbox, filter HOT, select, "Load into the sender". On the dashboard press **✨ Draft first emails with AI**, read the drafts, edit, press Send once. Sent leads automatically get follow-ups.
+3. **Follow up**: Dashboard → Pending Follow-Ups → **⚡ Draft all, approve together**.
+4. **Close**: turn replies into deals in the CRM; Customers and Billing handle onboarding and getting paid.
+5. **Inbound**: Content → **Draft my week**, post each one with one tap, log results once a week.
+
 
 ## Your own scraped list (Google Maps extension, any CSV): one command
 Scrape however you like, then:

@@ -30,6 +30,30 @@ export default function InboxPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [filter, setFilter] = useState("HOT"); // HOT | WARM | COLD | email | phone | all
   const [busy, setBusy] = useState(false);
+  // "Who should I look for?" (AI target finder)
+  const [place, setPlace] = useState("");
+  const [finding, setFinding] = useState(false);
+  const [targets, setTargets] = useState(null); // { customerProfile, targets: [{ term, why, command }] }
+  const [findError, setFindError] = useState("");
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => { try { setPlace(window.localStorage.getItem("autoleads.targetPlace") || ""); } catch { /* storage unavailable */ } }, []);
+
+  const findTargets = async () => {
+    setFinding(true); setFindError(""); setTargets(null);
+    try {
+      try { window.localStorage.setItem("autoleads.targetPlace", place); } catch { /* ignore */ }
+      const res = await fetch("/api/ai-targets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: place }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) { setFindError(data.error || "Could not suggest targets right now."); return; }
+      setTargets(data);
+    } catch { setFindError("Could not reach the server. Check your connection and try again."); }
+    finally { setFinding(false); }
+  };
+  const copyText = async (text, key) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(""), 2000); }
+    catch { setFindError("Could not copy automatically. Select the command and copy it by hand."); }
+  };
 
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
@@ -100,6 +124,37 @@ export default function InboxPage() {
       <div className="space-y-4 sm:space-y-6">
         {error && <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 rounded-lg p-3 text-sm">{error}</div>}
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
+
+        <section className={card} aria-labelledby="targets-title">
+          <h2 id="targets-title" className="text-base font-semibold text-gray-900 dark:text-white">Who should I look for?</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">The AI reads what you sell (Account → Your business) and picks the kinds of local business most likely to buy. Each one comes with a ready-made search for your lead worker.</p>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            <label className="flex-1 text-sm text-gray-700 dark:text-gray-200">
+              <span className="sr-only">Area to search</span>
+              <input value={place} onChange={(e) => setPlace(e.target.value)} maxLength={80} placeholder="Where? e.g. Colombo, Sri Lanka" className="w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+            </label>
+            <button type="button" onClick={findTargets} disabled={finding} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{finding ? "Thinking..." : "✨ Suggest who to target"}</button>
+          </div>
+          {findError && <p role="alert" className="text-sm text-red-700 dark:text-red-300 mt-3">{findError}{/profile|what you sell/i.test(findError) && <> <Link href="/account" className="underline">Open Account</Link></>}</p>}
+          {targets && (
+            <div className="mt-4 space-y-3">
+              {targets.customerProfile && <p className="text-sm text-gray-800 dark:text-gray-100"><span className="font-medium">Your ideal customer:</span> {targets.customerProfile}</p>}
+              <ul className="space-y-2">
+                {targets.targets.map((tg) => (
+                  <li key={tg.term} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{tg.term}</span>
+                      <button type="button" onClick={() => copyText(tg.command, tg.term)} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">{copied === tg.term ? "Copied ✓" : "Copy search"}</button>
+                    </div>
+                    {tg.why && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{tg.why}</p>}
+                    <code className="block text-xs mt-2 p-2 rounded bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{tg.command}</code>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Run a search in the worker folder (or open <code>run.bat</code>, choose 1, and type the business type). Results land here, checked and scored. Suggestions are a starting point: you decide what to search.</p>
+            </div>
+          )}
+        </section>
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           {[["Waiting", summary.total], ["Hot", summary.HOT], ["With an email", summary.withEmail], ["Phone only", summary.phoneOnly]].map(([label, value]) => (

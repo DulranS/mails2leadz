@@ -18,6 +18,7 @@ Do these in order. The order matters: step 3 before step 4.
    - Use the 🤖 button on a lead: review the draft, approve, confirm it arrives.
    - When a follow-up is due, press **✨ AI draft** in the follow-up queue, edit, approve; open a replied lead's 💬 Thread and press **✨ Analyze reply**.
    - Open **Business Value**: your deal appears; set its value; mark it Won; see revenue and forecast update.
+   - Lead Inbox → **Suggest who to target** returns a list; dashboard → **Draft first emails with AI** (with a CSV loaded) opens a review window; **Content → Draft my week** adds posts.
    - **Account > Download my data** works.
 
 ## Who can sign in (set this before you share the link)
@@ -47,7 +48,7 @@ Do these in order. The order matters: step 3 before step 4.
 
 ## Costs to expect
 - AI: with DeepSeek one draft costs a fraction of a cent (the app budgets at DeepSeek's peak-hour price to stay safe).
-  Each customer is capped by `AI_DAILY_CALL_LIMIT` and `AI_MONTHLY_BUDGET_USD`. Costs shown in the app are estimates.
+  Each customer is capped by `AI_DAILY_CALL_LIMIT` (default 100 calls a day) and `AI_MONTHLY_BUDGET_USD` (default $5). Costs shown in the app are estimates.
 - Gmail sending is limited by Google (consumer accounts roughly 500/day); the app's default daily cap respects this.
 
 ## Before you give the code to anyone

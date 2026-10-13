@@ -96,6 +96,7 @@ import {
   normalizeContactKey,
 } from "../../lib/dashboard-utils.js";
 import { INBOX_HANDOFF_KEY } from "../../lib/lead-inbox.js";
+import { pickFirstEmailCandidates, followUpTasksFor } from "../../lib/first-email-batch.js";
 import { useContactTracking } from "../../hooks/useContactTracking.js";
 import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
 import { useLeadScoring } from "../../hooks/useLeadScoring.js";
@@ -4671,11 +4672,144 @@ function DashboardComponent() {
       }
       addNotification(`✅ Email sent to ${contact.email}`, "success", 5000);
       await updateDealStage(contact.email, "contacted", { businessName: contact.business });
+      await scheduleEmailFollowUps([{ email: contact.email, name: contact.business, company: contact.business }]);
       setAiDraft(null);
       await refreshAllData();
     } catch (err) {
       addNotification(`❌ Not sent: ${err.message || err}`, "error", 6000);
       setAiDraft((d) => (d ? { ...d, busy: false } : d));
+    }
+  };
+
+  // Leads that were just emailed must enter the follow-up queue. The bulk CSV sender creates these tasks itself;
+  // the AI send paths (one lead, or the first-email batch) call this, otherwise those leads were never followed up.
+  const scheduleEmailFollowUps = async (recipients) => {
+    if (!user?.uid || !recipients?.length) return;
+    try {
+      let created = 0;
+      for (const task of followUpTasksFor(recipients, followUpTemplates)) {
+        const exists = await checkFollowUpTaskExists(user.uid, task.leadEmail, task.channel, task.followUpStage);
+        if (!exists) {
+          await createFollowUpTask(user.uid, task);
+          created++;
+        }
+      }
+      if (created > 0) setFollowUpTasks(await loadFollowUpTasks(user.uid));
+    } catch (e) {
+      console.error("Could not schedule follow-ups:", e); // never blocks the send that already happened
+    }
+  };
+
+  // ============================================================================
+  // "DRAFT FIRST EMAILS WITH AI, APPROVE TOGETHER": the first-email twin of the follow-up batch below.
+  // Reads the loaded CSV (email-only leads included), AI-drafts up to 10 emails from your business profile + public facts,
+  // shows them in ONE window; you edit / untick / press Send once. Every server rule (opt-out, Lost, duplicates, daily cap) still applies.
+  // ============================================================================
+  const startFirstEmailBatch = async () => {
+    if (!user?.uid || autoBatchBusy.current || aiBatchRef.current) return;
+    const { candidates, total } = pickFirstEmailCandidates(csvContent, { emailed: sentLeads.map((l) => l.email), qualityFilter: leadQualityFilter });
+    if (candidates.length === 0) {
+      addNotification("No new leads with an email to draft for. Load leads from the Lead Inbox or upload a CSV first.", "info", 6000);
+      return;
+    }
+    autoBatchBusy.current = true;
+    setAutoBatch({ kind: "first", phase: "preparing", note: `Writing ${candidates.length} first email${candidates.length === 1 ? "" : "s"}…`, skipped: [], items: [] });
+    try {
+      const items = [];
+      const skipped = [];
+      let stopReason = "";
+      let next = 0;
+      const worker = async () => {
+        while (next < candidates.length && !stopReason) {
+          const c = candidates[next++];
+          patchAutoBatch((b) => ({ ...b, note: `Writing first emails… ${Math.min(next, candidates.length)} of ${candidates.length}` }));
+          try {
+            const res = await fetch("/api/ai-smart-outreach", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ companyName: c.business, companyWebsite: c.website, contactEmail: c.email, contactName: c.contactName, senderName, category: c.category, location: c.address }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+              items.push({ id: c.email, email: c.email, business: c.business, quality: c.quality, subject: data.draft.subject, body: data.draft.body, selected: true, state: "draft" });
+            } else if (["NO_PROFILE", "AI_DAILY_LIMIT", "AI_BUDGET", "AI_NOT_CONFIGURED", "AI_AUTH"].includes(data.code) || res.status >= 500) {
+              stopReason = data.error || "The AI is not available right now.";
+            } else {
+              skipped.push(`${c.business} (${c.email}): ${data.error || "no draft"}`);
+            }
+          } catch { stopReason = "Could not reach the AI service."; }
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      if (stopReason) skipped.push(`Stopped early: ${stopReason}`);
+      if (total > candidates.length) skipped.push(`${total - candidates.length} more lead${total - candidates.length === 1 ? "" : "s"} are waiting: run this again after sending these.`);
+      items.sort((a, b) => candidates.findIndex((c) => c.email === a.email) - candidates.findIndex((c) => c.email === b.email));
+      if (items.length === 0) {
+        addNotification(stopReason || "Nothing to send: those leads were already emailed, opted out, or marked Lost.", stopReason ? "warning" : "info", 7000);
+        setAutoBatch(null);
+        return;
+      }
+      setAutoBatch({ kind: "first", phase: "review", note: "", skipped, items });
+    } finally {
+      autoBatchBusy.current = false;
+    }
+  };
+
+  const sendFirstEmailBatch = async () => {
+    if (autoBatchBusy.current || !autoBatch || autoBatch.phase !== "review" || autoBatch.kind !== "first") return;
+    const todo = autoBatch.items.filter((i) => i.selected && i.state === "draft" && i.subject.trim() && i.body.trim());
+    if (todo.length === 0) { addNotification("Nothing selected, or a subject / message is empty.", "warning"); return; }
+    autoBatchBusy.current = true;
+    try {
+      let token = "";
+      try { token = await requestGmailToken(); } catch { token = ""; }
+      if (!token) { addNotification("Gmail permission was not granted, so nothing was sent.", "warning", 6000); return; }
+      patchAutoBatch((b) => ({ ...b, phase: "sending" }));
+      const csvCell = (v) => `"${String(v || "").replace(/"/g, '""')}"`;
+      const sentOk = [];
+      for (let n = 0; n < todo.length; n++) {
+        const it = todo[n];
+        changeAutoItem(it.id, { state: "sending" });
+        let stop = false;
+        try {
+          const res = await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              csvContent: `email,business_name\n${csvCell(it.email)},${csvCell(it.business)}`,
+              senderName,
+              senderEmail,
+              fieldMappings: { email: "email", business_name: "business_name", company: "business_name" },
+              accessToken: token,
+              abTestMode: false,
+              templateA: { subject: it.subject.trim(), body: it.body.trim() },
+              templateToSend: "A",
+              userId: user.uid,
+              csvSource: "ai_batch",
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 429) { stop = true; throw new Error(data.error || "Daily email limit reached: continue tomorrow."); }
+          if (!res.ok) throw new Error(data.error || "Send failed");
+          if (!data.sent) throw new Error(data.results?.[0]?.reason || "Email was skipped");
+          await updateDealStage(it.email, "contacted", { businessName: it.business });
+          sentOk.push({ email: it.email, name: it.business, company: it.business });
+          changeAutoItem(it.id, { state: "sent" });
+        } catch (err) {
+          changeAutoItem(it.id, { state: "failed", error: String(err.message || err) });
+        }
+        if (stop) {
+          for (const rest of todo.slice(n + 1)) changeAutoItem(rest.id, { state: "failed", error: "Not sent: daily email limit reached. Continue tomorrow." });
+          break;
+        }
+        if (n < todo.length - 1) await new Promise((r) => setTimeout(r, 1500)); // gentle pacing between sends
+      }
+      await scheduleEmailFollowUps(sentOk);
+      invalidateCache("sent_emails");
+      await refreshAllData();
+      patchAutoBatch((b) => ({ ...b, phase: "done" }));
+    } finally {
+      autoBatchBusy.current = false;
     }
   };
 
@@ -7627,6 +7761,17 @@ function DashboardComponent() {
                   />
                 </div>
               )}
+
+              <button
+                type="button"
+                onClick={startFirstEmailBatch}
+                disabled={!csvContent || validEmails === 0 || Boolean(autoBatch)}
+                className={`w-full py-3 rounded-lg font-bold mt-4 transition ${!csvContent || validEmails === 0 || Boolean(autoBatch) ? "bg-gray-600 cursor-not-allowed text-gray-300" : "bg-indigo-600 hover:bg-indigo-500 text-white"}`}
+                title="AI writes a personal first email for up to 10 new leads from your business profile. You read and edit them, then approve once. Nothing is sent before you press Send."
+              >
+                ✨ Draft first emails with AI (up to 10)
+              </button>
+              <p className="mt-1 text-xs text-gray-400">Personal emails from your business profile, reviewed by you. The templates above are for sending to everyone at once.</p>
 
               {abTestMode ? (
                 <div className="space-y-2 mt-4">
@@ -11290,7 +11435,7 @@ function DashboardComponent() {
           </div>
         </div>
       )}
-      <AutoBatchModal batch={autoBatch} onChangeItem={changeAutoItem} onSend={sendAutoBatch} onClose={closeAutoBatch} />
+      <AutoBatchModal batch={autoBatch} onChangeItem={changeAutoItem} onSend={autoBatch?.kind === "first" ? sendFirstEmailBatch : sendAutoBatch} onClose={closeAutoBatch} />
       <LostReasonModal
         target={lostPrompt}
         onCancel={() => setLostPrompt(null)}

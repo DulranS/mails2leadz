@@ -50,4 +50,3 @@ next-env.d.ts
 /worker/*_enriched.csv
 /worker/*_raw.csv
 /worker/seen_places.json
-/worker/FIREBASE_SERVICE_ACCOUNT_JSON.json

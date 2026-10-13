@@ -16,6 +16,7 @@ import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWr
 import { makeMoney, currencySymbol } from "../../lib/currency.js";
 import { computeBilling, computeUnbilled } from "../../lib/billing.js";
 import { computeCustomers, countQualificationGaps } from "../../lib/customers.js";
+import { contentActionInfo, localDateStr } from "../../lib/content.js";
 import { computeWeeklyKpis, weeklyHeadline, weeklyReportText } from "../../lib/weekly-kpi.js";
 
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
@@ -58,7 +59,7 @@ export default function BusinessValuePage() {
   const [authReady, setAuthReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState({ deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
+  const [raw, setRaw] = useState({ inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
   const [coach, setCoach] = useState(null); // { loading } | { error } | { result }
@@ -80,7 +81,7 @@ export default function BusinessValuePage() {
       // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(2000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
@@ -90,6 +91,8 @@ export default function BusinessValuePage() {
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[1]}`)).catch(() => null),
         getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[2]}`)).catch(() => null),
         getDocs(query(collection(db, "invoices"), where("userId", "==", uid), limit(2000))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(db, "lead_inbox"), where("userId", "==", uid), limit(3000))).catch(() => ({ docs: [] })),
+        getDocs(collection(db, "users", uid, "content_posts")).catch(() => ({ docs: [] })),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -123,7 +126,10 @@ export default function BusinessValuePage() {
         if (repliedEmails.has(String(x.leadEmail || "").toLowerCase())) return false;
         const t = toMs(x.scheduledFor); return t && t <= Date.now();
       }).length;
+      const hotWithEmail = inboxSnap.docs.filter((d) => { const x = d.data(); return x.status === "new" && x.lead_quality === "HOT" && !!x.email; }).length;
+      const contentInfo = contentActionInfo(contentSnap.docs.map((d) => d.data()), localDateStr());
       setRaw({
+        inbox: { hotWithEmail }, content: contentInfo,
         deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
@@ -215,7 +221,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps });
+  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };

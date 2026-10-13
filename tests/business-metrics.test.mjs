@@ -248,4 +248,37 @@ t('stage chances: nothing suggested with too little data; shrunk toward current;
   assert.equal(by.proposal, undefined);
   for (const r of sug.rows) assert.ok(r.suggested >= 0.05 && r.suggested <= 0.95);
 });
+
+// ---- run-rate and funnel accuracy ----
+t('run-rate is the last 90 days / 3, so it does not dip when a new month starts', () => {
+  // One 3,000 win in each of Aug, Sep and Oct. The old calendar-month average read 3,000/month on 31 Oct but only
+  // 2,000/month the next morning (Aug dropped out, the empty Nov counted as a month). Steady sales must read steady.
+  const deals = [
+    { email: 'a@x.com', stage: 'closed_won', value: 3000, createdAt: '2026-08-01T10:00:00Z', closedAt: '2026-08-15T10:00:00Z', lastUpdate: '2026-08-15T10:00:00Z' },
+    { email: 'b@x.com', stage: 'closed_won', value: 3000, createdAt: '2026-09-01T10:00:00Z', closedAt: '2026-09-15T10:00:00Z', lastUpdate: '2026-09-15T10:00:00Z' },
+    { email: 'c@x.com', stage: 'closed_won', value: 3000, createdAt: '2026-10-01T10:00:00Z', closedAt: '2026-10-15T10:00:00Z', lastUpdate: '2026-10-15T10:00:00Z' },
+  ];
+  const lastDay = computeBusinessMetrics({ deals, now: Date.parse('2026-10-31T20:00:00Z') });
+  const firstDay = computeBusinessMetrics({ deals, now: Date.parse('2026-11-01T09:00:00Z') });
+  assert.equal(lastDay.future.monthlyRunRate, 3000);
+  assert.equal(firstDay.future.monthlyRunRate, 3000);
+  assert.equal(firstDay.roi.revenue, 9000); // same 90-day window as the ROI block
+  // a win older than 90 days is not part of the run-rate
+  const aged = computeBusinessMetrics({ deals, now: Date.parse('2026-12-01T09:00:00Z') });
+  assert.equal(aged.future.monthlyRunRate, 2000); // Sep 15 and Oct 15 are inside 90 days of 1 Dec; Aug 15 is not
+});
+t('funnel: a deal lost after the demo still counts as having reached the demo', () => {
+  const r = computeBusinessMetrics({ deals: [
+    { email: 'lost@x.com', stage: 'closed_lost', lostReason: 'price', reached: ['new', 'contacted', 'qualified', 'demo', 'closed_lost'], createdAt: d(40), closedAt: d(5), lastUpdate: d(5) },
+    { email: 'old@x.com', stage: 'closed_lost', lostReason: 'price', createdAt: d(40), closedAt: d(5), lastUpdate: d(5) },        // older deal: only its current stage is known
+    { email: 'now@x.com', stage: 'demo', createdAt: d(10), lastUpdate: d(1) },
+    { email: 'optout@x.com', stage: 'closed_lost', lostReason: 'unsubscribed', reached: ['new', 'contacted', 'closed_lost'], createdAt: d(10), lastUpdate: d(1) },
+  ], outreach: { sent: 50, replied: 5 }, now });
+  const f = Object.fromEntries(r.present.funnel.map((s) => [s.key, s.count]));
+  assert.equal(f.qualified, 2);   // the lost deal + the open demo; the legacy lost deal and the opt-out do not count
+  assert.equal(f.demo, 2);
+  assert.equal(f.proposal, 0);
+  assert.ok(r.present.funnel.every((s, i, a) => i < 2 || s.count <= a[i - 1].count)); // still monotonic
+  assert.equal(r.present.openCount, 1); // the open pipeline itself is unchanged
+});
 console.log('\nattribution ok');

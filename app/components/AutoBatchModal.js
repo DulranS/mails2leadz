@@ -12,7 +12,8 @@ const CHIP_TEXT = { sending: "Sending…", sent: "Sent", failed: "Not sent" };
 
 /**
  * "Draft all due follow-ups, approve together". Presentational only: the dashboard owns the state and the send loop.
- * batch = { phase: 'preparing'|'review'|'sending'|'done', note, skipped: [string], items: [...] }
+ * batch = { kind?: 'followup'|'first', phase: 'preparing'|'review'|'sending'|'done', note, skipped: [string], items: [...] }
+ * kind 'first' = first emails to new leads (AI-drafted, approved together); default 'followup'.
  */
 export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose }) {
   if (!batch) return null;
@@ -20,11 +21,12 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
   const selected = items.filter((i) => i.selected && i.state === "draft");
   const sent = items.filter((i) => i.state === "sent").length;
   const failed = items.filter((i) => i.state === "failed").length;
+  const first = batch.kind === "first";
   const busy = batch.phase === "preparing" || batch.phase === "sending";
   const field = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white";
 
   return (
-    <Modal isOpen onClose={busy ? () => {} : onClose} title="Today's follow-ups" size="xl" closeOnOverlayClick={false} showCloseButton={!busy}>
+    <Modal isOpen onClose={busy ? () => {} : onClose} title={first ? "First emails to review" : "Today's follow-ups"} size="xl" closeOnOverlayClick={false} showCloseButton={!busy}>
       {batch.phase === "preparing" && (
         <p className="text-sm text-gray-700 dark:text-gray-200" role="status">{batch.note || "Preparing…"}</p>
       )}
@@ -32,7 +34,7 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
       {batch.phase !== "preparing" && (
         <>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-            {batch.phase === "review" && "AI wrote these from what you actually sent. Edit anything, untick what you don't want, then send. Nothing goes out until you press Send."}
+            {batch.phase === "review" && (first ? "AI wrote these from your business profile and what is publicly known about each lead. Read them, edit anything, untick what you don't want, then send. Nothing goes out until you press Send." : "AI wrote these from what you actually sent. Edit anything, untick what you don't want, then send. Nothing goes out until you press Send.")}
             {batch.phase === "sending" && "Sending one at a time. Keep this window open."}
             {batch.phase === "done" && `Finished: ${sent} sent${failed ? `, ${failed} not sent` : ""}.`}
           </p>
@@ -46,7 +48,7 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
                     <span className="text-xs font-normal text-gray-500 dark:text-gray-400 truncate">{it.email}</span>
                   </label>
                   <div className="shrink-0 flex items-center gap-1 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">Follow-up #{it.number}{it.isFinal ? " · last" : ""}</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{first ? `First email${it.quality ? ` · ${it.quality}` : ""}` : `Follow-up #${it.number}${it.isFinal ? " · last" : ""}`}</span>
                     {CHIP_TEXT[it.state] && <span className={`px-2 py-0.5 rounded ${CHIP[it.state]}`}>{CHIP_TEXT[it.state]}</span>}
                   </div>
                 </div>

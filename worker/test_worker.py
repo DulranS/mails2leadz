@@ -1594,5 +1594,26 @@ class ImportCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(w.looks_enriched([{"enrichment_status": "ok"}] * 4))
 
 
+class TargetVocabularyTests(unittest.TestCase):
+    """The app's AI target finder (lib/worker-categories.js) may only suggest terms this worker understands."""
+
+    def _app_terms(self):
+        text = (Path(__file__).resolve().parent.parent / "lib" / "worker-categories.js").read_text(encoding="utf-8")
+        block = text.split("WORKER_SEARCH_TERMS = [", 1)[1].split("];", 1)[0]
+        return re.findall(r"'([^']+)'", block)
+
+    def test_every_suggested_term_is_a_real_category_search(self):
+        terms = self._app_terms()
+        self.assertGreaterEqual(len(terms), 60)
+        for term in terms:
+            tags, _stems = w.category_filters(term)
+            self.assertTrue(tags, f"worker does not know {term!r} as a category (it would fall back to name matching)")
+
+    def test_every_worker_category_is_offered_to_the_ai(self):
+        terms = set(self._app_terms())
+        for words, _tags, _stems in w.CATEGORIES:
+            self.assertIn(words[0], terms, f"worker category {words[0]!r} is missing from lib/worker-categories.js")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
