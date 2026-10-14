@@ -33,7 +33,7 @@ If the free map data is thin for a niche, use option 2 with a list from anywhere
 ## 3. Every day (about 15 minutes)
 Nothing to run. Open Business Value and read "Do this next", then:
 
-1. **Find** (outbound): Lead Inbox → "Who should I look for?" tells you which businesses to search; run that search in the worker (it also runs by itself every morning).
+1. **Find** (outbound): Lead Inbox → "Who should I look for?" tells you which businesses to search. Press **Copy: add all to the daily routine** and paste it in the worker folder once; from then on it searches by itself every morning (run `schedule --install` one time to turn that on).
 2. **Draft and send**: Lead Inbox, filter HOT, select, "Load into the sender". On the dashboard press **✨ Draft first emails with AI**, read the drafts, edit, press Send once. Sent leads automatically get follow-ups.
 3. **Follow up**: Dashboard → Pending Follow-Ups → **⚡ Draft all, approve together**.
 4. **Close**: turn replies into deals in the CRM; Customers and Billing handle onboarding and getting paid.

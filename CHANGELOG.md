@@ -1,5 +1,15 @@
 # Changelog
 
+## Pass 5: closing the loop on outbound automation
+**Bug fixed (pre-existing, affected every sender with more than 50 emails)**
+- **Replies to most of your emails were never detected.** `/api/check-replies` loaded every unreplied sent email and checked only `slice(0, 50)` in storage order: a fixed, arbitrary 50. Most recipients never reply, so those same 50 were re-checked forever and a reply to any other email was missed, so follow-ups kept going to people who had answered and the reply never became a deal. Now each call picks never-checked emails first (newest first), then the one checked longest ago, only from the last 60 days, and stamps `replyCheckedAt` on every email it looked at, so repeated calls cover everything and progress survives a timeout. The response reports `eligible` and `waiting`; the "Draft all, approve together" follow-up step keeps checking (max 3 rounds) while emails are waiting. `maxDuration` is now 60s for the route. Tests: `tests/reply-check-order.test.mjs` (200 emails are fully covered in 4 calls; the old behaviour would see the same 50 forever).
+
+**New: AI suggestions now become a daily routine that runs by itself**
+- Worker command `python autoleads_worker.py add -q "dentists, opticians" --location "Leeds, UK"` adds a search to the daily routine without the menu or editing `autoleads.json` (uses the existing validated writer, recognises a search that is already there, never writes a file the worker could not load again).
+- "Who should I look for?" now offers, per suggestion, **Copy: search once** and **Copy: add to daily routine**, plus **one command that adds all of them**. With the worker scheduled (`schedule --install`), the loop is: AI picks who to target -> worker searches every morning, rests searches that stop finding new businesses -> leads land in the Lead Inbox, scored. The add commands appear only when a place was typed (the worker needs one). Tests: JS (`worker-categories`) and Python (every term's `add` command is accepted by the worker's real parser; end to end through `main()`: no settings file, missing words, missing place, duplicates, file still loads, the next planned run includes the new search).
+
+**Still by design a human step:** approving what is sent (3 gates: first emails, follow-ups, closing). The single "Send Email" button in the follow-up queue relies on the last reply check; the batch flow always checks first.
+
 ## Pass 4: found by actually rendering the app in a browser (nothing had ever been looked at before)
 **Bugs fixed (all pre-existing)**
 - **Every AI draft window showed as a solid grey screen.** The shared `Modal` put its dialog underneath its own `position: fixed` overlay, and the overlay used `bg-opacity-75`, a Tailwind v3 class that Tailwind v4 removed (so the overlay was fully opaque). Affected: the single AI draft, "Draft all, approve together" follow-ups, the CRM dialogs, the Lost-reason prompt and the new first-email batch. Fixed (`bg-gray-500/75`, dialog `relative z-10`, `role="dialog"`, 44px close button). Verified in a real browser: the dialog is now the top element.
@@ -28,7 +38,7 @@
 
 **Checked, no change needed:** Google Maps is fully gone (no Google API call anywhere; `place_id` is an OpenStreetMap id). DeepSeek model name `deepseek-flash` and the peak prices in `lib/ai-client.js` match DeepSeek's current official pricing page.
 **Not built on purpose:** posting to social networks automatically (each network needs its own approved developer app and verification, and unattended posting is the fastest way to lose an account), sending without you present, auto-replies.
-**Known limits:** `npm run lint` is not configured in the project (ESLint is not a dependency); a dry run with it shows only React-compiler style rules, no undefined variables or hook-order errors. Tests: `npm test` (23 files), `worker/test_worker.py` (92).
+**Known limits:** `npm run lint` is not configured in the project (ESLint is not a dependency); a dry run with it shows only React-compiler style rules, no undefined variables or hook-order errors. Tests: `npm test` (24 files), `worker/test_worker.py` (94).
 
 ## Final business-readiness pass
 - **Invite list.** `ALLOWED_EMAILS` (emails and `@domain` entries; `ADMIN_EMAILS` always allowed) is enforced in `proxy.js` for every signed-in API call, so strangers cannot spend your AI budget. Blocked people get a 403 with code `NO_ACCESS`; a banner explains it and offers sign-out (`AccessNotice`). Unset = open, as before. Webhooks, health, opt-out and ingest routes are unaffected. Connection check now reports open vs invite-only. Tests: `tests/proxy.test.mjs`.

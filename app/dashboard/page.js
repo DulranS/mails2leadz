@@ -4962,11 +4962,18 @@ function DashboardComponent() {
       }
       // 1) fresh replies (a reply ends the sequence; the draft route also refuses anyone who replied)
       try {
-        const rr = await retryFetch("/api/check-replies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.uid, accessToken: token, senderEmail }) }, 2);
-        if (rr.ok) {
+        // One call looks at up to 50 emails; keep going (max 3 rounds) while the server says more are waiting, so a lead who
+        // already answered is never chased just because the check ran out of room.
+        let found = 0;
+        for (let round = 0; round < 3; round++) {
+          const rr = await retryFetch("/api/check-replies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.uid, accessToken: token, senderEmail }) }, 2);
+          if (!rr.ok) break;
           const rd = await rr.json().catch(() => ({}));
-          if (rd.replyCount > 0) { addNotification(`📬 ${rd.replyCount} new repl${rd.replyCount === 1 ? "y" : "ies"} found: those leads are skipped.`, "success", 6000); await loadRepliedAndFollowUp(); }
+          found += rd.replyCount || 0;
+          if (!(rd.waiting > 0 && rd.checked > 0)) break;
+          patchAutoBatch((b) => ({ ...b, note: `Checking for replies… ${(round + 1) * (rd.checked || 0)} emails so far` }));
         }
+        if (found > 0) { addNotification(`📬 ${found} new repl${found === 1 ? "y" : "ies"} found: those leads are skipped.`, "success", 6000); await loadRepliedAndFollowUp(); }
       } catch { /* drafting still refuses leads that replied */ }
 
       // 2) AI drafts, two at a time

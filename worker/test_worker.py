@@ -363,6 +363,40 @@ class MenuTests(unittest.TestCase):
         self.assertEqual((added["queries"], added["locations"], added["require_website"]), (["roofers", "gutters"], ["Leeds, UK"], True))
         self.assertEqual(cfg["secrets"]["autoleads_ingest_key"], "uid.secret")  # keys untouched
 
+    def test_add_command_puts_a_search_in_the_daily_routine(self):
+        """`add` is what turns the app's target suggestions into a recurring campaign (no menu, no hand-edited JSON)."""
+        import contextlib, io
+
+        def run(*argv):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = w.main(["add", "--config", str(self.cfg), *argv])
+            return code, out.getvalue()
+
+        code, text = run("-q", "dentists", "--location", "Leeds, UK")
+        self.assertEqual(code, 2)
+        self.assertIn("setup", text)                       # no settings file yet: says what to run first
+        self._write_cfg()
+        before = len(w.load_config(str(self.cfg))["campaigns"])
+        self.assertEqual(run("--location", "Leeds, UK")[0], 2)          # nothing to look for
+        self.assertEqual(run("-q", "dentists")[0], 2)                   # nowhere to look
+        code, text = run("-q", "dentists, opticians", "--location", "Leeds, UK")
+        self.assertEqual(code, 0)
+        self.assertIn("Added to your daily routine", text)
+        cfg = w.load_config(str(self.cfg))                              # the file is still one the worker can load
+        added = [c for c in cfg["campaigns"] if "dentists" in c["queries"]][0]
+        self.assertEqual((added["queries"], added["locations"]), (["dentists", "opticians"], ["Leeds, UK"]))
+        self.assertEqual(len(cfg["campaigns"]), before + 1)
+        # the same search again (different case / order) is recognised, not duplicated
+        code, text = run("-q", "Opticians,DENTISTS", "--location", "leeds, uk")
+        self.assertEqual(code, 0)
+        self.assertIn("Already in your daily routine", text)
+        self.assertEqual(len(w.load_config(str(self.cfg))["campaigns"]), before + 1)
+        self.assertEqual(cfg["secrets"]["autoleads_ingest_key"], "uid.secret")  # keys untouched
+        # ...and the next unattended run would now include it
+        keys = [c.key for c in w.plan_run(w.load_config(str(self.cfg)), w.empty_state(), datetime.now(timezone.utc)).combos]
+        self.assertIn("dentists-leeds-uk|dentists|Leeds, UK", keys)   # in the very next run; the rest follow within the daily budget
+
     def test_find_anything_runs_fresh_search_and_pushes(self):
         self._write_cfg()
         seen_args, pushed = {}, {}
@@ -1608,6 +1642,15 @@ class TargetVocabularyTests(unittest.TestCase):
         for term in terms:
             tags, _stems = w.category_filters(term)
             self.assertTrue(tags, f"worker does not know {term!r} as a category (it would fall back to name matching)")
+
+    def test_daily_routine_command_is_accepted_by_the_real_parser(self):
+        """The app tells people to run `add -q "<terms>" --location "<place>"`: the worker's own parser must take it."""
+        for term in self._app_terms():
+            args = w.parse_args(["add", "-q", term, "--location", "Colombo, Sri Lanka"])
+            self.assertEqual((args.command, args.query, args.location), ("add", term, "Colombo, Sri Lanka"))
+        args = w.parse_args(["add", "-q", "dentist, optician, air conditioning", "--location", "Leeds, UK"])
+        self.assertEqual(w.split_list(args.query), ["dentist", "optician", "air conditioning"])
+        self.assertEqual(w.split_places(args.location), ["Leeds, UK"])
 
     def test_every_worker_category_is_offered_to_the_ai(self):
         terms = set(self._app_terms())

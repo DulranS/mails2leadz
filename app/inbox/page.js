@@ -149,14 +149,24 @@ export default function InboxPage() {
                   <li key={tg.term} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{tg.term}</span>
-                      <button type="button" onClick={() => copyText(tg.command, tg.term)} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">{copied === tg.term ? "Copied ✓" : "Copy search"}</button>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => copyText(tg.command, tg.term)} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200" title="Run this search once, now">{copied === tg.term ? "Copied ✓" : "Copy: search once"}</button>
+                        {tg.addCommand && <button type="button" onClick={() => copyText(tg.addCommand, `${tg.term}-add`)} className="min-h-[44px] px-3 rounded-lg text-sm border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300" title="Put this search in the worker's daily routine">{copied === `${tg.term}-add` ? "Copied ✓" : "Copy: add to daily routine"}</button>}
+                      </div>
                     </div>
                     {tg.why && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{tg.why}</p>}
                     <code className="block text-xs mt-2 p-2 rounded bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{tg.command}</code>
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Run a search in the worker folder (or open <code>run.bat</code>, choose 1, and type the business type). Results land here, checked and scored. Suggestions are a starting point: you decide what to search.</p>
+              {targets.addAllCommand ? (
+                <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-3 space-y-2">
+                  <p className="text-sm text-indigo-900 dark:text-indigo-100"><span className="font-medium">Set it and forget it:</span> add all {targets.targets.length} to the worker's daily routine. It then searches by itself every morning, drops searches that stop finding new businesses, and the leads land here ready to review.</p>
+                  <button type="button" onClick={() => copyText(targets.addAllCommand, "all-add")} className="min-h-[44px] px-4 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white">{copied === "all-add" ? "Copied ✓" : `Copy: add all ${targets.targets.length} to the daily routine`}</button>
+                  <code className="block text-xs p-2 rounded bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{targets.addAllCommand}</code>
+                </div>
+              ) : <p className="text-xs text-amber-700 dark:text-amber-300">Type a place above and suggest again to also get the one command that adds these to your daily routine.</p>}
+              <p className="text-xs text-gray-500 dark:text-gray-400">Paste a command in the worker folder (or open <code>run.bat</code>, choose 1, and type the business type). Results land here, checked and scored. Suggestions are a starting point: you decide what to search. First time? Run <code>python autoleads_worker.py setup</code> once, then <code>schedule --install</code> so it runs every morning.</p>
             </div>
           )}
                   </div>

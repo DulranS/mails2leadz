@@ -3572,6 +3572,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--remove", action="store_true")
     p.add_argument("--time", default=DEFAULT_RUN_TIME)
 
+    p = sub.add_parser("add", help="Add a search to the daily routine (no menu, no editing the settings file)")
+    _common(p)
+    p.add_argument("-q", "--query", default="", help="What to look for; several with commas, e.g. \"dentists, opticians\"")
+    p.add_argument("--location", default="", help="Where, e.g. \"Leeds, UK\"")
+    p.add_argument("--require-website", action="store_true", help="Only keep businesses that have a website")
+
     p = sub.add_parser("find", help="One-off: search + crawl + import file for a single query")
     _common(p)
     _search_options(p)
@@ -3775,6 +3781,44 @@ def save_search_as_campaign(cfg_path: str, queries: Sequence[str], locations: Se
     validate_config(raw)  # never write a settings file the worker could not load again
     write_config(Path(cfg_path), raw)
     return name
+
+
+def campaign_already_saved(cfg_path: str, queries: Sequence[str], locations: Sequence[str]) -> Optional[str]:
+    """Name of an existing campaign with exactly these search words and places (any order, any capitalisation)."""
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return None
+    norm = lambda items: sorted(str(x).strip().lower() for x in items if str(x).strip())
+    for c in (raw.get("campaigns") if isinstance(raw, dict) and isinstance(raw.get("campaigns"), list) else []):
+        if isinstance(c, dict) and norm(c.get("queries") or []) == norm(queries) and norm(c.get("locations") or []) == norm(locations):
+            return str(c.get("name"))
+    return None
+
+
+def run_add(args: argparse.Namespace, cfg_path: str) -> int:
+    """`add -q "dentists, opticians" --location "Leeds, UK"`: put a search in the daily routine without the menu or editing JSON.
+    This is what turns the app's "who should I look for?" suggestions into something that runs by itself every morning."""
+    queries = split_list(args.query)
+    locations = split_places(args.location)
+    if not queries:
+        print("Say what to look for:  add -q \"dentists\" --location \"Leeds, UK\"")
+        return 2
+    if not locations and not all(split_area_from_query(q)[1] for q in queries):
+        print("Say where (a city is enough):  add -q \"dentists\" --location \"Leeds, UK\"")
+        return 2
+    same = campaign_already_saved(cfg_path, queries, locations)
+    if same:
+        print(f"Already in your daily routine (as \"{same}\"). Nothing changed.")
+        return 0
+    name = save_search_as_campaign(cfg_path, queries, locations, bool(args.require_website))
+    if name is None:
+        print("No settings file yet. Run first:  python autoleads_worker.py setup")
+        return 2
+    print(f"Added to your daily routine as \"{name}\": {', '.join(queries)} in {', '.join(locations) or 'the area you typed'}.")
+    print("See what the next run will do (calls nothing):  python autoleads_worker.py plan")
+    return 0
 
 
 def _lead_summary(rows: Sequence[Mapping[str, Any]]) -> str:
@@ -4000,6 +4044,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Windows (Command Prompt):\n  " + subprocess.list2cmdline(cmds["windows_create"]) + "\n")
         print("Mac / Linux (add with crontab -e):\n  " + cmds["cron_line"])
         return 0
+
+    if command == "add":
+        return run_add(args, str(cfg_path))
 
     if command in ("find", "enrich", "search", "import"):
         return _run_oneoff(command, args, str(cfg_path))

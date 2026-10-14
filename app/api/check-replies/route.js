@@ -5,7 +5,9 @@ import { getFirestore, collection, query, where, getDocs, updateDoc, isAdminMode
 import { hardBounceRecipients } from '../../../lib/server/bounces.js';
 import { suppressContact } from '../../../lib/server/suppress.js';
 import { google } from 'googleapis';
-import { cancelPendingFollowUps } from '../../../lib/reply-sync.js';
+import { cancelPendingFollowUps, pickEmailsToCheck, REPLY_CHECK_BATCH } from '../../../lib/reply-sync.js';
+
+export const maxDuration = 60; // up to REPLY_CHECK_BATCH Gmail look-ups per call
 
 // ============================================================================
 // FIREBASE CONFIGURATION
@@ -34,7 +36,7 @@ try {
 // CONFIGURATION
 // ============================================================================
 const CONFIG = {
-  MAX_EMAILS_TO_CHECK: 50, // Limit to avoid rate limiting
+  MAX_EMAILS_TO_CHECK: REPLY_CHECK_BATCH, // Limit per call to avoid rate limiting; successive calls rotate through the rest
   RATE_LIMIT_DELAY_MS: 100, // Delay between Gmail API calls
   MAX_RETRIES: 2 // Retry failed Gmail API calls
 };
@@ -110,9 +112,18 @@ export async function POST(request) {
       return NextResponse.json({ replyCount: 0 }, { headers });
     }
 
-    // Limit the number of emails to check to avoid rate limiting
-    const emailsToCheck = snapshot.docs.slice(0, CONFIG.MAX_EMAILS_TO_CHECK);
-    console.log(`[Check Replies] Checking ${emailsToCheck.length} emails (limited from ${snapshot.docs.length})`);
+    // Limit the number of emails per call (rate limits), but ROTATE: never-checked and longest-ago-checked first, newest first,
+    // last 60 days only. (Taking the first 50 in storage order re-checked the same 50 forever and never saw other replies.)
+    const { picked, eligible, waiting } = pickEmailsToCheck(
+      snapshot.docs.map((d) => ({ d, sentAt: d.data().sentAt, replyCheckedAt: d.data().replyCheckedAt })),
+      Date.now(),
+      { max: CONFIG.MAX_EMAILS_TO_CHECK }
+    );
+    const emailsToCheck = picked.map((x) => x.d);
+    console.log(`[Check Replies] Checking ${emailsToCheck.length} emails (${eligible} eligible, ${waiting} waiting for the next call)`);
+    if (emailsToCheck.length === 0) {
+      return NextResponse.json({ replyCount: 0, checked: 0, eligible: 0, waiting: 0 }, { headers });
+    }
 
     // Set up Gmail API
     const oauth2Client = new google.auth.OAuth2(
@@ -229,6 +240,8 @@ export async function POST(request) {
             });
           } else {
             console.log(`[Check Replies] No reply found for ${toEmail}`);
+            // Remember we looked, so the next call moves on to emails that have not been looked at (best effort).
+            try { await updateDoc(doc.ref, { replyCheckedAt: new Date().toISOString() }); } catch { /* never fails the check */ }
           }
 
           success = true;
@@ -278,6 +291,8 @@ export async function POST(request) {
     return NextResponse.json({
       replyCount,
       checked: emailsToCheck.length,
+      eligible,
+      waiting, // unreplied emails from the last 60 days that this call did not get to: call again to continue
       errors: errorCount,
       bounced,
       replies: newReplies

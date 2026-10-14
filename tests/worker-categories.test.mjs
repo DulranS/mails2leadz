@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { WORKER_SEARCH_TERMS, cleanLocation, searchCommand, validateTargets } from '../lib/worker-categories.js';
+import { WORKER_SEARCH_TERMS, cleanLocation, searchCommand, addCommand, validateTargets } from '../lib/worker-categories.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 
@@ -36,6 +36,17 @@ t('AI answer: unknown terms, duplicates, junk and instructions are dropped; capp
   assert.equal(r.customerProfile, 'A small clinic owner');
   assert.ok(r.targets[1].why.length <= 220);
   assert.equal(r.targets[0].command, 'python autoleads_worker.py find -q "dentist" --location "Leeds, UK"');
+});
+t('daily-routine command: documented syntax, needs a place, only real search words', () => {
+  assert.equal(addCommand(['dentist', 'optician'], 'Leeds, UK'), 'python autoleads_worker.py add -q "dentist, optician" --location "Leeds, UK"');
+  assert.equal(addCommand('dentist', 'Leeds, UK'), 'python autoleads_worker.py add -q "dentist" --location "Leeds, UK"');
+  assert.equal(addCommand(['dentist'], ''), '');                       // the worker would refuse it, so none is offered
+  assert.equal(addCommand(['hedge fund', 'dentist; rm -rf /'], 'Leeds'), '');
+  assert.equal(addCommand(['dentist', 'hedge fund'], 'Leeds'), 'python autoleads_worker.py add -q "dentist" --location "Leeds"');
+  const r = validateTargets({ targets: [{ term: 'dentist', why: 'a' }, { term: 'salon', why: 'b' }] }, 'Leeds, UK');
+  assert.equal(r.targets[0].addCommand, 'python autoleads_worker.py add -q "dentist" --location "Leeds, UK"');
+  assert.equal(r.addAllCommand, 'python autoleads_worker.py add -q "dentist, salon" --location "Leeds, UK"');
+  assert.equal(validateTargets({ targets: [{ term: 'dentist' }] }, '').addAllCommand, '');
 });
 t('garbage in, nothing out (never throws)', () => {
   for (const bad of [null, undefined, 'x', {}, { targets: 'nope' }, { targets: [] }]) assert.deepEqual(validateTargets(bad).targets, []);
