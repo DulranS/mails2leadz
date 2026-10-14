@@ -385,7 +385,7 @@ export default function CRMPage() {
 
   return (
     <DashboardLayout
-      title="Customer Relationship Management"
+      title="CRM & Deals"
       subtitle="Manage leads, deals, and customer interactions"
     >
       <CRM

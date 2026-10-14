@@ -2,7 +2,7 @@
 // Content: the inbound side. AI drafts a week of posts (with a visual brief for your designer), you edit and schedule them,
 // post with one tap (copy + open the network), then log how each did. Nothing is posted for you: each network needs its own
 // approved developer app, and a person pressing "post" keeps your accounts safe.
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, getDocs, addDoc, setDoc, deleteDoc, doc } from "firebase/firestore";
@@ -24,6 +24,9 @@ function PostCard({ p, today, onSave, onDelete, onNotice }) {
   const [body, setBody] = useState(p.body || "");
   const [date, setDate] = useState(p.scheduledFor || today);
   const [res, setRes] = useState({ reach: p.results?.reach ?? "", engagement: p.results?.engagement ?? "", leads: p.results?.leads ?? "" });
+  const taRef = useRef(null);
+  // The box grows to fit the whole post, so nothing is hidden before you approve it (matters most on a phone).
+  useEffect(() => { const el = taRef.current; if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight + 2}px`; } }, [body]);
   const dirty = body !== (p.body || "") || date !== (p.scheduledFor || today);
   const open = p.status === "scheduled";
   const warn = open && hasPlaceholders(body);
@@ -50,7 +53,7 @@ function PostCard({ p, today, onSave, onDelete, onNotice }) {
         ) : <span className="text-xs text-gray-500 dark:text-gray-400">{p.status === "posted" ? `Posted ${p.postedOn || ""}` : "Skipped"}</span>}
       </div>
 
-      <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={Math.min(10, Math.max(4, Math.ceil(body.length / 70)))} readOnly={!open} aria-label={`${platformLabel(p.platform)} post text`} className={`${field} leading-relaxed`} />
+      <textarea ref={taRef} value={body} onChange={(e) => setBody(e.target.value)} rows={3} readOnly={!open} aria-label={`${platformLabel(p.platform)} post text`} className={`${field} leading-relaxed`} />
       {p.hashtags?.length > 0 && <p className="text-xs text-blue-700 dark:text-blue-300 break-words">{p.hashtags.join(" ")}</p>}
       {p.visual && <p className="text-xs rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 p-2"><b>Design brief:</b> {p.visual}</p>}
       {warn && <p role="alert" className="text-xs rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 p-2">Fill in the [bracketed] part with something real before you post. The AI never invents customers or results.</p>}
@@ -208,7 +211,7 @@ export default function ContentPage() {
             {tile("Due today", stats.dueToday + stats.overdue, stats.overdue ? `${stats.overdue} overdue` : "")}
             {tile("Planned, next 7 days", stats.scheduledNext7)}
             {tile("Posted this week", stats.postedThisWeek)}
-            {tile("Enquiries logged", stats.totalLeads, stats.withResults ? `from ${stats.withResults} posts with results` : "log results after posting")}
+            {tile("Enquiries logged", stats.totalLeads, stats.withResults ? `from ${stats.withResults} post${stats.withResults === 1 ? "" : "s"} with results` : "log results after posting")}
           </div>
         )}
 

@@ -40,13 +40,14 @@ export const Modal = ({
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         {/* Overlay */}
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+          className="fixed inset-0 bg-gray-500/75 transition-opacity" aria-hidden="true"
           onClick={closeOnOverlayClick ? onClose : undefined}
         />
 
         {/* Modal */}
-        <div className={`
-          inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizes[size]} w-full
+        {/* relative z-10: the overlay above is position:fixed, so without this the dialog paints UNDER it (a solid grey screen). */}
+        <div role="dialog" aria-modal="true" aria-label={title || undefined} className={`
+          relative z-10 inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizes[size]} w-full
         `}>
           {/* Header */}
           {title && (
@@ -56,8 +57,10 @@ export const Modal = ({
               </h3>
               {showCloseButton && (
                 <button
+                  type="button"
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  aria-label="Close"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

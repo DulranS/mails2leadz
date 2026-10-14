@@ -13,12 +13,14 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState('dark'); // Default to dark for this app
+  const [theme, setTheme] = useState('dark');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem('theme') || 'dark';
+    // First visit: follow the device's own setting. After that, the person's choice (the toggle) wins.
+    const prefersDark = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)').matches : true;
+    const savedTheme = localStorage.getItem('theme') || (prefersDark ? 'dark' : 'light');
     setTheme(savedTheme);
   }, []);
 

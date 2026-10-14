@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind v4 ignores tailwind.config.js, so `darkMode: 'class'` there did nothing and every dark: style followed the OS
+   setting while the theme toggle changed a class nothing listened to. This makes dark: follow the .dark class that
+   ThemeProvider sets, so the toggle and the page always agree. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --primary: #3b82f6;
   --primary-dark: #2563eb;

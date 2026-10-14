@@ -108,11 +108,11 @@ export const CRM = ({
       key: "company",
       label: "Company",
       render: (value, lead) => (
-        <div>
-          <div className="font-medium text-gray-900 dark:text-white">
+        <div className="max-w-[6.5rem] md:max-w-none">
+          <div className="font-medium text-gray-900 dark:text-white truncate md:whitespace-normal">
             {value}
           </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
+          <div className="text-sm text-gray-500 dark:text-gray-400 truncate md:whitespace-normal" title={lead.email}>
             {lead.email}
           </div>
         </div>
@@ -120,6 +120,7 @@ export const CRM = ({
     },
     {
       key: "score",
+      hideOnMobile: true,
       label: "Score",
       render: (value) => (
         <div className="flex items-center space-x-2">
@@ -144,7 +145,7 @@ export const CRM = ({
         <select
           value={normalizeStage(value)}
           onChange={(e) => onUpdateLead?.(lead.email, { stage: e.target.value })}
-          className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700"
+          className="text-xs md:text-sm max-w-[6.5rem] md:max-w-none border border-gray-300 dark:border-gray-600 rounded px-1 md:px-2 py-1 bg-white dark:bg-gray-700"
         >
           <StageOptions />
         </select>
@@ -152,18 +153,21 @@ export const CRM = ({
     },
     {
       key: "lastContact",
+      hideOnMobile: true, // below 1360px: keep Company, Stage and Actions on screen; the rest is in "View"
       label: "Last Contact",
       render: (value) =>
         value ? new Date(value).toLocaleDateString() : "Never",
     },
     {
       key: "nextFollowUp",
+      hideOnMobile: true, // below 1360px: keep Company, Stage and Actions on screen; the rest is in "View"
       label: "Next Follow-up",
       render: (value) =>
         value ? new Date(value).toLocaleDateString() : "None",
     },
     {
       key: "value",
+      hideOnMobile: true, // below 1360px: keep Company, Stage and Actions on screen; the rest is in "View"
       label: "Value",
       render: (value, lead) => (
         <label className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200">
@@ -189,7 +193,7 @@ export const CRM = ({
       key: "actions",
       label: "Actions",
       render: (value, lead) => (
-        <div className="flex space-x-2">
+        <div className="flex flex-col md:flex-row gap-2 md:gap-0 md:space-x-2">
           <Button
             size="sm"
             variant="outline"
@@ -205,7 +209,7 @@ export const CRM = ({
             variant="outline"
             onClick={() => onScheduleFollowUp?.(lead.email)}
           >
-            Remind me in 3 days
+            <span className="md:hidden">Remind 3d</span><span className="hidden md:inline">Remind me in 3 days</span>
           </Button>
         </div>
       ),

@@ -1,5 +1,17 @@
 # Changelog
 
+## Pass 4: found by actually rendering the app in a browser (nothing had ever been looked at before)
+**Bugs fixed (all pre-existing)**
+- **Every AI draft window showed as a solid grey screen.** The shared `Modal` put its dialog underneath its own `position: fixed` overlay, and the overlay used `bg-opacity-75`, a Tailwind v3 class that Tailwind v4 removed (so the overlay was fully opaque). Affected: the single AI draft, "Draft all, approve together" follow-ups, the CRM dialogs, the Lost-reason prompt and the new first-email batch. Fixed (`bg-gray-500/75`, dialog `relative z-10`, `role="dialog"`, 44px close button). Verified in a real browser: the dialog is now the top element.
+- **The dark/light toggle only half worked.** Tailwind v4 ignores `tailwind.config.js`, so `dark:` styles followed the device setting while the toggle changed a class nothing listened to (dark page with white cards, or light page with dark cards). `globals.css` now declares `@custom-variant dark (&:where(.dark, .dark *))`, and the first-visit default follows the device setting (the saved choice wins afterwards). All four device x toggle combinations checked.
+- **The follow-up queue opened on every visit, even empty.** A brand-new customer's first screen was a blank "0 pending" window. Tasks are now read at sign-in (so the header badge is right) and the queue opens by itself only when something is due.
+- **New customers saw no "Finish setup" guidance for 10 seconds.** The business settings arrived with the deferred deals load. They are now read at sign-in.
+- CRM leads table: Last contact / Next follow-up / Value and Score are hidden below 1360px screens so Company, Stage and Actions fit phones and tablets (`hideOnMobile` option on `DataTable`). The CRM title no longer wraps to three lines.
+- Content page: the post box grows to show the whole text, "1 post" plural, "X (Twitter)". Lead Inbox: the target-finder card folds away once leads are waiting.
+
+**Tests:** `tests/ui-guards.test.mjs` fails if v3-only opacity utilities come back, if the Modal dialog loses its stacking, if the dark variant is removed, if the queue opens unconditionally again, or if an AI send path stops scheduling follow-ups.
+**How it was checked:** a throwaway copy of the app with in-memory Firebase mocks and seeded data was driven with headless Chrome at 390px and 1280px: no horizontal overflow and no JavaScript errors on 8 pages, and the bulk first-email flow was run end to end (4 leads drafted, 1 already-emailed lead skipped, 3 sent, 9 follow-up tasks created, deals set to Contacted, queue badge updated). Gmail, the AI and sending were stubbed in that run, so a live smoke test with your own accounts is still needed.
+
 ## Last-day pass 3: the operating spine (find → draft → send → follow up → post → measure)
 **Bugs fixed**
 - **Leads emailed through the AI draft button never entered the follow-up queue.** The queue is built only from `follow_up_tasks`, and only the bulk CSV sender created them (plus a one-time migration that runs only when the queue is completely empty). The one-lead AI send now schedules the follow-ups too (`scheduleEmailFollowUps`, de-duplicated, same shape as the bulk sender). Tests: `tests/first-email-batch.test.mjs`.
@@ -16,7 +28,7 @@
 
 **Checked, no change needed:** Google Maps is fully gone (no Google API call anywhere; `place_id` is an OpenStreetMap id). DeepSeek model name `deepseek-flash` and the peak prices in `lib/ai-client.js` match DeepSeek's current official pricing page.
 **Not built on purpose:** posting to social networks automatically (each network needs its own approved developer app and verification, and unattended posting is the fastest way to lose an account), sending without you present, auto-replies.
-**Known limits:** `npm run lint` is not configured in the project (ESLint is not a dependency); a dry run with it shows only React-compiler style rules, no undefined variables or hook-order errors. Tests: `npm test` (22 files), `worker/test_worker.py` (92).
+**Known limits:** `npm run lint` is not configured in the project (ESLint is not a dependency); a dry run with it shows only React-compiler style rules, no undefined variables or hook-order errors. Tests: `npm test` (23 files), `worker/test_worker.py` (92).
 
 ## Final business-readiness pass
 - **Invite list.** `ALLOWED_EMAILS` (emails and `@domain` entries; `ADMIN_EMAILS` always allowed) is enforced in `proxy.js` for every signed-in API call, so strangers cannot spend your AI budget. Blocked people get a 403 with code `NO_ACCESS`; a banner explains it and offers sign-out (`AccessNotice`). Unset = open, as before. Webhooks, health, opt-out and ingest routes are unaffected. Connection check now reports open vs invite-only. Tests: `tests/proxy.test.mjs`.

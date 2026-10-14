@@ -90,7 +90,8 @@ export const DataTable = ({
                 <th
                   key={column.key}
                   className={`
-                    px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider
+                    px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider
+                    ${column.hideOnMobile ? 'hidden min-[1360px]:table-cell' : ''}
                     ${sortable && column.sortable !== false ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600' : ''}
                   `}
                   onClick={() => handleSort(column.key)}
@@ -109,7 +110,7 @@ export const DataTable = ({
             {paginatedData.map((row, index) => (
               <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                 {columns.map((column) => (
-                  <td key={column.key} className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                  <td key={column.key} className={`px-2 md:px-4 py-3 text-sm text-gray-900 dark:text-white ${column.hideOnMobile ? 'hidden min-[1360px]:table-cell' : ''}`}>
                     {column.render ? column.render(row[column.key], row) : row[column.key]}
                   </td>
                 ))}

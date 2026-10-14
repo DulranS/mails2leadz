@@ -392,7 +392,7 @@ function DashboardComponent() {
     completed: [],
   });
   const [loadingFollowUpTasks, setLoadingFollowUpTasks] = useState(false);
-  const [showFollowUpQueue, setShowFollowUpQueue] = useState(true);
+  const [showFollowUpQueue, setShowFollowUpQueue] = useState(false); // opens by itself only when a follow-up is due (see the effect below)
   const [leadNotes, setLeadNotes] = useState({});
   const [leadStates, setLeadStates] = useState({});
   const [showLeadNotesModal, setShowLeadNotesModal] = useState(false);
@@ -2589,6 +2589,39 @@ function DashboardComponent() {
     setNextBestActions(newNextActions);
     setFollowUpRecommendations(newFollowUpRecs);
   }, [sentLeads]);
+
+  // The first-run "Finish setup" banner needs the business settings. They used to arrive only with loadDeals (deferred 10s
+  // after sign-in), so a brand-new customer saw no guidance at all at first. One small document: read it straight away.
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    let cancelled = false;
+    getDoc(doc(db, "users", user.uid, "settings", "business"))
+      .then((snap) => {
+        if (cancelled) return;
+        setBizSettings(snap?.exists?.() ? snap.data() : {});
+        setBizLoaded(true);
+      })
+      .catch(() => { /* loadDeals sets these again later */ });
+    return () => { cancelled = true; };
+  }, [user?.uid]);
+
+  // On sign-in, read the follow-up tasks once so the header badge is right, and open the queue ONLY if something is due.
+  // (It used to open on every visit, even empty: a new customer's first screen was a blank "0 pending" window.)
+  const queuePrefetched = useRef(false);
+  useEffect(() => {
+    if (!user?.uid || queuePrefetched.current) return;
+    queuePrefetched.current = true;
+    (async () => {
+      try {
+        const tasks = await loadFollowUpTasks(user.uid);
+        setFollowUpTasks(tasks);
+        const dueNow = (tasks.pending || []).some((t) => !t.scheduledFor || new Date(t.scheduledFor) <= new Date());
+        if (dueNow) setShowFollowUpQueue(true);
+      } catch (error) {
+        console.error("Follow-up prefetch error:", error);
+      }
+    })();
+  }, [user?.uid]);
 
   // ============================================================================
   // LOAD FOLLOW-UP TASKS FROM FIREBASE (PHASE 2) - OPTIMIZED: LAZY LOAD

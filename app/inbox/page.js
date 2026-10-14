@@ -36,6 +36,7 @@ export default function InboxPage() {
   const [targets, setTargets] = useState(null); // { customerProfile, targets: [{ term, why, command }] }
   const [findError, setFindError] = useState("");
   const [copied, setCopied] = useState("");
+  const [targetsOpen, setTargetsOpen] = useState(null); // null = automatic: open when nothing is waiting, folded away once leads are
 
   useEffect(() => { try { setPlace(window.localStorage.getItem("autoleads.targetPlace") || ""); } catch { /* storage unavailable */ } }, []);
 
@@ -126,7 +127,11 @@ export default function InboxPage() {
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
 
         <section className={card} aria-labelledby="targets-title">
-          <h2 id="targets-title" className="text-base font-semibold text-gray-900 dark:text-white">Who should I look for?</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="targets-title" className="text-base font-semibold text-gray-900 dark:text-white">Who should I look for?</h2>
+            <button type="button" onClick={() => setTargetsOpen(!(targetsOpen ?? leads.length === 0))} aria-expanded={targetsOpen ?? leads.length === 0} aria-controls="targets-body" className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">{(targetsOpen ?? leads.length === 0) ? "Hide" : "Show"}</button>
+          </div>
+          <div id="targets-body" hidden={!(targetsOpen ?? leads.length === 0)}>
           <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">The AI reads what you sell (Account → Your business) and picks the kinds of local business most likely to buy. Each one comes with a ready-made search for your lead worker.</p>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             <label className="flex-1 text-sm text-gray-700 dark:text-gray-200">
@@ -154,6 +159,7 @@ export default function InboxPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400">Run a search in the worker folder (or open <code>run.bat</code>, choose 1, and type the business type). Results land here, checked and scored. Suggestions are a starting point: you decide what to search.</p>
             </div>
           )}
+                  </div>
         </section>
 
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
