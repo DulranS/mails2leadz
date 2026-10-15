@@ -22,6 +22,15 @@ Do these in order. The order matters: step 3 before step 4.
    - **Account > Download my data** works.
    - Account → **Drafts prepared overnight**: switch on, press **Prepare now**; the dashboard shows the ready drafts; open them, send one, confirm it arrives. Reply to it from another address with "Sounds good, tell me more": **Check replies** should say the deal moved forward.
 
+## Automatic reply checking while you are away (optional)
+Replies are normally found when you press Check replies. This makes it happen every night as well, and leaves a "while you were away" note on the dashboard. **Read-only**: the server can read replies, never send or change mail. Sending still needs you, in the browser.
+1. Set `TOKEN_ENC_KEY` (`openssl rand -hex 32`). It encrypts the saved access key. **Keep it:** if it changes, every owner must reconnect. Also needs `GOOGLE_CLIENT_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON` and `CRON_SECRET`.
+2. Google Cloud console → APIs & Services → Credentials → your OAuth client → **Authorized redirect URIs**: add `https://YOUR-DOMAIN/api/gmail-offline/callback` (Account → "Replies checked for you" shows the exact address).
+3. OAuth consent screen: keep the `gmail.readonly` scope and set the publishing status to **In production**. While it says **Testing**, Google ends the saved access after **7 days** (the app then shows "Gmail access expired" and asks to reconnect). A production app that Google has not verified shows an "unverified app" warning on connect; that is normal for your own mailbox. **Check Google's current rules in the console:** sources differ on when verification becomes mandatory, and it is Google's decision, not ours.
+4. **Republish the Firestore rules** (`reply_notices` is new; `gmail_offline` is deliberately not readable from any browser).
+5. Schedule: `vercel.json` runs the reply check at 00:30 UTC and the drafts at 01:30 UTC, so overnight drafts already know who replied. Vercel's free plan allows daily jobs only; for a more frequent check (a hot reply found within hours is worth money) use Vercel Pro or an outside scheduler that calls `GET /api/cron/check-replies` with the header `Authorization: Bearer <CRON_SECRET>`.
+6. Test once: Account → Connect Gmail (read-only) → reply to one of your own emails from another address → `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/check-replies` → open the dashboard: the "While you were away" note appears and the deal moves.
+
 ## Drafts prepared overnight (optional)
 - Set `CRON_SECRET` to a long random string. `vercel.json` schedules `/api/cron/prepare-drafts` daily at 01:30 UTC and Vercel sends the secret itself. On another host, call `GET /api/cron/prepare-drafts` once a day with the header `Authorization: Bearer <CRON_SECRET>`.
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key. **Republish the Firestore rules** (`draft_queue` and `autopilot_users` are new).

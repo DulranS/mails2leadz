@@ -11,6 +11,7 @@ function Form() {
   const key = params.get("k") || "";
   const src = params.get("src") || "";
   const [name, setName] = useState("");
+  const [booking, setBooking] = useState("");
   const [state, setState] = useState({ status: "idle", error: "", business: "" });
   const [f, setF] = useState({ name: "", email: "", phone: "", message: "", company_site: "" });
 
@@ -18,7 +19,7 @@ function Form() {
     let live = true;
     if (!key) { setState((s) => ({ ...s, status: "invalid" })); return undefined; }
     fetch(`/api/inbound?k=${encodeURIComponent(key)}`)
-      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!live) return; if (!r.ok) setState((s) => ({ ...s, status: "invalid" })); else setName(d.name || ""); })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!live) return; if (!r.ok) setState((s) => ({ ...s, status: "invalid" })); else { setName(d.name || ""); setBooking(typeof d.bookingLink === "string" && d.bookingLink.startsWith("https://") ? d.bookingLink : ""); } })
       .catch(() => {});
     return () => { live = false; };
   }, [key]);
@@ -40,6 +41,7 @@ function Form() {
     <div className="text-center" role="status">
       <h1 className="text-xl font-semibold text-gray-900">Thank you!</h1>
       <p className="text-gray-700 mt-2">{name ? `${name} has` : "We have"} your message and will reply by email soon.</p>
+      {booking && <p className="mt-4"><a className="inline-block min-h-[44px] px-4 py-3 rounded-lg bg-indigo-600 text-white font-semibold" href={booking} target="_blank" rel="noopener noreferrer">Prefer to talk now? Book a time</a></p>}
     </div>
   );
   return (

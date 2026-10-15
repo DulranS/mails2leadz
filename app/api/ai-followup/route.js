@@ -7,6 +7,8 @@ import { callAI, AiError, getBusinessProfile, profileBlock, SALES_GUARDRAILS } f
 import { getDb, uidFromRequest, clip, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { draftFollowUp, DraftError } from '../../../lib/server/draft-core.js';
 import { POST_SALE_STAGES } from '../../../lib/default-templates.js';
+import { buildReferralLink } from '../../../lib/inbound.js';
+import { doc, getDoc } from '../../../lib/server-firestore.js';
 
 export const maxDuration = 45;
 // Check-ins to people who ALREADY bought (they are customers, not prospects: no sales-sequence limits apply).
@@ -15,7 +17,20 @@ const POST_SALE_BRIEF = {
   delivery_check: 'A short check-in about a week in. Ask how things are going, invite honest feedback, and offer to fix anything that is not right.',
   upsell_opportunity: 'A one-month check-in. Ask what is working and what is not. Only if it fits the business profile, mention ONE relevant way you could help further, softly. No pressure, no discounts.',
   quarterly_review: 'A friendly quarterly review invitation. Offer a short call to look at how things are going and plan the next quarter together.',
+  referral_ask: 'A short, warm, personal note to a customer who is doing well. Thank them genuinely, then ask for ONE introduction to someone who has the same need (the kind of business in "Who we help"). Make it easy: if a personal link is given, say they can simply pass it on or forward the email. No incentives, no pressure, no guilt; say you will look after anyone they send. Do not mention results or numbers that are not provided.',
 };
+
+// The personal enquiry link a customer can pass on: it carries a ref-<customer> tag so the introduction is credited to them. Built here, never taken from the request.
+async function referralLinkFor(db, uid, request, customerName) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid, 'settings', 'inbound_key'));
+    const d = snap.exists() ? snap.data() : null;
+    if (!d || d.revokedAt || !d.key) return '';
+    const envBase = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();
+    const origin = /^https:\/\//.test(envBase) ? new URL(envBase).origin : request.nextUrl.origin;
+    return buildReferralLink({ origin, key: d.key, customerName });
+  } catch { return ''; }
+}
 
 export async function POST(request) {
   try {
@@ -31,7 +46,8 @@ export async function POST(request) {
         return NextResponse.json({ success: false, code: 'NO_PROFILE', error: 'Tell the AI what you sell first: Account → "Your business".' }, { status: 422, headers: NO_STORE });
       }
       const system = `You write short, warm customer-care emails for a small business to a customer who has ALREADY bought.\n${SALES_GUARDRAILS.replace('one clear low-pressure call to action (e.g. a short reply or a quick call)', 'one easy question or next step')}\n${POST_SALE_BRIEF[purpose]}\nNever invent project details, results, dates or numbers; if you would need them, keep the wording general.\nReturn JSON only: {"subject": string, "body": string}. The body is plain text with a greeting and a sign-off.`;
-      const prompt = `${profileBlock(profile)}\n\nCustomer: ${clip(businessName || to, 100)}\nSign off as: ${clip(senderName || profile.businessName || 'the sender', 80)}\n\nWrite the email.`;
+      const refLink = purpose === 'referral_ask' ? await referralLinkFor(getDb(), uid, request, businessName || to) : '';
+      const prompt = `${profileBlock(profile)}\n\nCustomer: ${clip(businessName || to, 100)}\n${purpose === 'referral_ask' ? (refLink ? `Personal link the customer can pass on (the ONLY link you may include, exactly as written): ${refLink}\n` : 'No link is available: ask them to reply with an introduction.\n') : ''}Sign off as: ${clip(senderName || profile.businessName || 'the sender', 80)}\n\nWrite the email.`;
       const ai = await callAI({ uid, feature: 'customer_checkin', tier: 'fast', system, prompt, maxTokens: 400 });
       const subject = clip(ai.data?.subject, 150).replace(/[\r\n]+/g, ' ');
       const text = String(ai.data?.body || '').trim();

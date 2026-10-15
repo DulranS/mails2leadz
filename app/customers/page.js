@@ -119,6 +119,18 @@ export default function CustomersPage() {
     finally { setBusy(""); }
   };
 
+  // A happy customer is the cheapest, warmest lead there is. The draft carries THEIR personal enquiry link, so anyone they send is credited to them.
+  const askReferral = async (c) => {
+    setBusy(c.email); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/ai-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: c.email, purpose: "referral_ask", businessName: c.businessName, senderName: user?.displayName || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setError(d.error || "Could not create the referral ask right now."); return; }
+      setDraft({ kind: "referral", customer: c, to: c.email, title: `Referral ask: ${c.businessName || c.email}`, subject: d.draft.subject, body: d.draft.body, source: "ai", note: "Read it as if it came from you. No incentives are promised; edit anything you would not say." });
+    } catch { setError("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
+
   const askSupportReply = async () => {
     if (!reply) return;
     const c = data.customers.find((x) => lower(x.email) === lower(reply.email));
@@ -144,7 +156,7 @@ export default function CustomersPage() {
     const c = dr.customer;
     const stepFor = { onboarding: "welcome", delivery_check: "checkin" };
     try {
-      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
+      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "referral" ? { referralAsked: true } : {}), ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
       if (dr.kind === "checkin") {
         const match = tasks.filter((t) => lower(t.leadEmail) === lower(c.email) && t.followUpStage === c.checkin.purpose);
         for (const t of match) await completeFollowUpTask(user.uid, t.id, { completedBy: user.email, method: "email_manual" }).catch(() => {});
@@ -204,6 +216,7 @@ export default function CustomersPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                       <button type="button" disabled={busy === c.email} onClick={() => askCheckin(c)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === c.email ? "Working..." : `Draft check-in`}</button>
+                      {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
                       <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>

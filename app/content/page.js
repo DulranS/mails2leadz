@@ -11,6 +11,7 @@ import { db, auth } from "../../lib/firebase-client.js";
 import {
   PLATFORMS, PILLARS, localDateStr, isDateStr, platformLabel, platformUrl, pillarLabel, hasPlaceholders,
   sanitizeResults, summarizeContent, performanceHint, groupPosts, MIN_PER_GROUP, MIN_POSTS_TO_LEARN,
+  LINK_PLATFORMS, withEnquiryLink,
 } from "../../lib/content.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
@@ -20,7 +21,10 @@ const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 r
 const postsRef = (uid) => collection(db, "users", uid, "content_posts");
 const fullText = (p) => `${p.body}${p.hashtags?.length ? `\n\n${p.hashtags.join(" ")}` : ""}`;
 
-function PostCard({ p, today, onSave, onDelete, onNotice }) {
+function PostCard({ p, today, onSave, onDelete, onNotice, linkFor }) {
+  const link = linkFor ? linkFor(p.platform) : ""; // this owner's enquiry link, tagged with this platform
+  const inlineLinks = LINK_PLATFORMS.includes(p.platform);
+  const [addLink, setAddLink] = useState(true);
   const [body, setBody] = useState(p.body || "");
   const [date, setDate] = useState(p.scheduledFor || today);
   const [res, setRes] = useState({ reach: p.results?.reach ?? "", engagement: p.results?.engagement ?? "", leads: p.results?.leads ?? "" });
@@ -33,8 +37,9 @@ function PostCard({ p, today, onSave, onDelete, onNotice }) {
 
   const postNow = () => {
     window.open(platformUrl(p.platform), "_blank", "noopener"); // opened first: browsers only allow it straight after the tap
-    navigator.clipboard.writeText(fullText({ ...p, body })).then(
-      () => onNotice(`Copied. Paste it into ${platformLabel(p.platform)}, then come back and press "Mark as posted".`),
+    const r = link && addLink ? withEnquiryLink(body, link, p.platform) : { text: body, mode: "bio" };
+    navigator.clipboard.writeText(fullText({ ...p, body: r.text })).then(
+      () => onNotice(`Copied${r.mode === "inline" ? " with your enquiry link" : ""}. Paste it into ${platformLabel(p.platform)}, then come back and press "Mark as posted".${r.mode === "too_long" ? " (The link did not fit in 280 characters: put it in your profile instead.)" : ""}`),
       () => onNotice("Could not copy automatically: select the text above and copy it by hand."),
     );
   };
@@ -56,6 +61,12 @@ function PostCard({ p, today, onSave, onDelete, onNotice }) {
       <textarea ref={taRef} value={body} onChange={(e) => setBody(e.target.value)} rows={3} readOnly={!open} aria-label={`${platformLabel(p.platform)} post text`} className={`${field} leading-relaxed`} />
       {p.hashtags?.length > 0 && <p className="text-xs text-blue-700 dark:text-blue-300 break-words">{p.hashtags.join(" ")}</p>}
       {p.visual && <p className="text-xs rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 p-2"><b>Design brief:</b> {p.visual}</p>}
+      {open && link && inlineLinks && (
+        <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={addLink} onChange={(e) => setAddLink(e.target.checked)} />Add my enquiry link to this post (enquiries it brings are credited to {platformLabel(p.platform)})</label>
+      )}
+      {open && link && !inlineLinks && (
+        <p className="text-xs rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 p-2">Links in {platformLabel(p.platform)} posts are not clickable. Put this link in your {platformLabel(p.platform)} bio once, and every enquiry from it is credited to {platformLabel(p.platform)}: <button type="button" className="underline" onClick={() => navigator.clipboard.writeText(link).then(() => onNotice("Bio link copied."), () => onNotice("Could not copy automatically."))}>copy bio link</button></p>
+      )}
       {warn && <p role="alert" className="text-xs rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 p-2">Fill in the [bracketed] part with something real before you post. The AI never invents customers or results.</p>}
 
       {open ? (
@@ -130,6 +141,10 @@ export default function ContentPage() {
   const [mDate, setMDate] = useState("");
 
   useEffect(() => { const d = localDateStr(); setToday(d); setMDate(d); }, []);
+  // The owner's enquiry link (Account → Enquiry form), tagged per platform, so a post can carry it and the enquiry is credited to that platform.
+  const [enquiryKey, setEnquiryKey] = useState("");
+  useEffect(() => { if (!user?.uid) return; fetch("/api/inbound-key").then((r) => r.json()).then((d) => setEnquiryKey(d?.key || "")).catch(() => {}); }, [user?.uid]);
+  const linkFor = useCallback((platformId) => (enquiryKey && typeof window !== "undefined" ? `${window.location.origin}/enquire?k=${enquiryKey}&src=${platformId}` : ""), [enquiryKey]);
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
     return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
@@ -256,10 +271,10 @@ export default function ContentPage() {
         {loading ? <section className={card}><p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p></section> : (
           <>
             {posts.length === 0 && <section className={card}><p className="text-sm text-gray-700 dark:text-gray-200">No posts yet. Press “Draft my week” to get your first ones.</p></section>}
-            <Group title="Overdue" tone="text-red-700 dark:text-red-300" posts={groups.overdue} today={today} onSave={save} onDelete={remove} onNotice={flash} />
-            <Group title="Today" posts={groups.today} today={today} onSave={save} onDelete={remove} onNotice={flash} />
-            <Group title="Coming up" posts={groups.upcoming} today={today} onSave={save} onDelete={remove} onNotice={flash} />
-            <Group title="Posted & skipped" posts={groups.done} today={today} onSave={save} onDelete={remove} onNotice={flash} />
+            <Group title="Overdue" tone="text-red-700 dark:text-red-300" posts={groups.overdue} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
+            <Group title="Today" posts={groups.today} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
+            <Group title="Coming up" posts={groups.upcoming} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
+            <Group title="Posted & skipped" posts={groups.done} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
           </>
         )}
 

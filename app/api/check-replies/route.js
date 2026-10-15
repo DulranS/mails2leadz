@@ -8,7 +8,8 @@ import { google } from 'googleapis';
 import { cancelPendingFollowUps, pickEmailsToCheck, REPLY_CHECK_BATCH } from '../../../lib/reply-sync.js';
 import { triageReply } from '../../../lib/server/reply-triage.js';
 import { loadAutopilot } from '../../../lib/server/prepare-drafts.js';
-import { quickIntent } from '../../../lib/reply-intents.js';
+import { quickIntent, ownWords } from '../../../lib/reply-intents.js';
+import { extractPlainText } from '../../../lib/gmail-text.js';
 
 export const maxDuration = 60; // up to REPLY_CHECK_BATCH Gmail look-ups per call
 
@@ -185,8 +186,7 @@ export async function POST(request) {
             const messageDetails = await gmail.users.messages.get({
               userId: 'me',
               id: replyMessage.id,
-              format: 'metadata',
-              metadataHeaders: ['from', 'to', 'subject', 'date']
+              format: 'full' // the whole message, so the reply is READ properly instead of guessed from Gmail's ~200 character preview
             });
 
             // Extract reply details
@@ -199,7 +199,8 @@ export async function POST(request) {
 
             // An out-of-office / automatic answer is not a reply: do not stop the follow-ups or inflate the reply rate.
             // The message is remembered so the next check does not pick it up again; a REAL reply later is a different message.
-            const snippet = String(messageDetails.data.snippet || '');
+            // What the person wrote THEMSELVES (the quoted original, which contains our own footer, is cut off); the preview is the fallback.
+            const snippet = ownWords(extractPlainText(messageDetails.data.payload)).trim() || ownWords(String(messageDetails.data.snippet || '')).trim();
             const stampChecked = () => updateDoc(doc.ref, { replyCheckedAt: new Date().toISOString() }).catch(() => {}); // so the rotation moves on
             if (sentEmail.autoReplyMessageId === replyMessage.id) { await stampChecked(); success = true; break; }
             if (quickIntent(`${headers.subject || ''} ${snippet}`) === 'out_of_office') {

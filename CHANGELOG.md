@@ -1,5 +1,30 @@
 # Changelog
 
+## Pass 9: replies found while you are away, read in full; posts carry the tagged link
+Nothing here sends anything. The server's Gmail access is **read-only**.
+
+**Replies checked every night (opt-in).** Account → *Replies checked for you* → **Connect Gmail (read-only)**. Google asks once for `gmail.readonly` with long-term access; the app keeps that key **encrypted** (AES-256-GCM, `TOKEN_ENC_KEY`) in a collection no browser can read or write. A nightly job (00:30 UTC, `/api/cron/check-replies`) runs the same reply check as the button for every connected owner: opt-outs recorded, positive replies move the deal forward, out-of-office ignored, bounces suppressed, and the dashboard shows **"While you were away"** with what happened. Disconnect revokes the key at Google and deletes it; deleting the account does the same. If Google stops honouring the key (revoked, or the 7-day limit of an app in *Testing* mode) the owner gets a "reconnect" notice instead of silent failure. Overnight drafts (01:30) now run after the reply check, so nobody who just replied is nudged.
+**Replies are read in full** (button and overnight): the matching message is fetched in full and only what the person wrote themselves is used (the quoted original, which contains our own footer, is cut off), instead of guessing from Gmail's ~200-character preview. We keep the short summary and the result, not the text.
+**Content planner:** each post can carry **your enquiry link tagged with its platform** (LinkedIn, Facebook, X: appended to the post; X counts a link as 23 characters; Instagram and TikTok: "put this in your bio" with a copy button), so enquiries from posts are credited to the platform in Business Value without any manual tagging.
+**Privacy page updated** to say exactly this (full reply read, optional long-term read-only key, how to revoke).
+
+**Deploy notes:** set `TOKEN_ENC_KEY`; register `https://YOUR-DOMAIN/api/gmail-offline/callback` as an authorized redirect URI in Google Cloud; publish the consent screen (**Testing = 7-day expiry**); republish the Firestore rules (`reply_notices`). Full steps: DEPLOYMENT_GUIDE.md.
+**Tests:** `tests/gmail-offline.test.mjs` (message text extraction, encryption round-trip and tamper/wrong-key failure, OAuth state forgery/expiry, notices, tagged post links). Full suite and `next build` pass. **Not run live:** the Google consent and callback, the nightly job and the full-message read against a real mailbox (no Google credentials here). Run the test in DEPLOYMENT_GUIDE step 6 before relying on it.
+**Known limits:** one Gmail connection per owner; Vercel's free plan runs jobs once a day; the reply check still looks at one latest message per sent email; Google's consent-screen rules (verification, 7-day testing limit) are Google's and change.
+
+## Pass 8: the learning loop + a salesperson's toolkit (sales kit, angle test, referrals, speed-to-lead, activity planner)
+Nothing here sends anything. Everything below uses only what the owner entered or achieved: no invented benchmarks, no invented proof.
+
+**Sales kit (Account → Your business)**: a **booking link** (https only), up to 3 **real results** you can stand behind, and your **honest answers to common objections**. Drafts offer the booking link as the one-click next step, may cite only your proof points, and replies / enquiry answers / closing nudges use your objection answers when one truly fits. The enquiry thank-you page shows the booking button. The kit is re-validated on the server when it is read (the browser writes the profile), so a bad link or odd text never reaches a prompt.
+**Message-angle test (cold email)**: each new lead is assigned one of six honest angles (saves time, more customers, saves money, fewer mistakes, small first step, curious question), evenly and stably per lead, so the comparison is fair. The sent email remembers its angle; **Business Value → "which message angle gets replies"** shows reply rate per angle and only names a leader with 15+ leads on two angles and an 8-point gap. Optional: **Lean on this angle** (6 in 10 new leads get it; the rest keep rotating).
+**Referral loop (Customers)**: a happy customer (activated, healthy, 30+ days in, nothing open or overdue, not asked in 90 days) gets an **Ask for a referral** draft carrying **their own tagged enquiry link**. Anyone who uses it becomes a **Referral deal credited to that customer**, with a reply drafted at once. Business Value lists referral revenue per customer; Do-this-next suggests who to ask.
+**Speed-to-lead**: Business Value shows the median time to first answer on enquiries and the share answered within the hour.
+**Activity planner**: **"What it takes to hit your goal (cold email)"** works backwards from your own reply, qualify and win rates to the emails per week you need, next to what you send now. It refuses to plan until there are 50+ leads emailed, 5+ replies, 3+ qualified and 1+ win, and says what is missing.
+
+**Changed:** AI rules gained two lines (use only the booking link / proof points provided). Changing them changes the 24h response-cache key, so old cached drafts are not reused.
+**Tests:** `tests/sales-kit.test.mjs` (link safety, kit parsing, angle assignment fairness and stats, planner maths, referral eligibility and link, referral metrics, response time, next action). Full suite and `next build` pass. **Not run live:** the AI prompts with the new kit and angles (no keys here), the referral draft end to end, and the new pages in a browser. Read the first few drafts before trusting them.
+**Known limits:** the angle test needs volume (about 90+ emails before the table means anything); referral links use an ASCII-only tag (accents are dropped from the customer's name in the tag); the planner covers cold email only (inbound and referrals come on top).
+
 ## Pass 7: inbound + outbound as one system (enquiry form, instant reply draft, channel ROI) and the strategy note
 Nothing here sends anything. Strategy, status and the "if we ever sell it" checklist: **STRATEGY.md**.
 

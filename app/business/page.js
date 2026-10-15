@@ -9,7 +9,9 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
-import { computeTemplateStats, suggestStageChances } from "../../lib/attribution.js";
+import { computeTemplateStats, computeAngleStats, suggestStageChances } from "../../lib/attribution.js";
+import { computeOutboundPlan } from "../../lib/plan.js";
+import { angleLabel } from "../../lib/angles.js";
 import { buildNextActions } from "../../lib/next-actions.js";
 import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
@@ -103,7 +105,7 @@ export default function BusinessValuePage() {
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
-        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
+        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, angle: x.angle || "", replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
@@ -144,6 +146,8 @@ export default function BusinessValuePage() {
 
   const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90, emailed: (raw.emailRows || []).map((r) => r.to) }), [raw]);
   const tplStats = useMemo(() => computeTemplateStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])) }), [raw, m]);
+  const angleStats = useMemo(() => computeAngleStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])), labelOf: angleLabel }), [raw, m]);
+  const plan = useMemo(() => computeOutboundPlan({ emailRows: raw.emailRows || [], deals: m.deals || [], goal: Number(raw.settings?.monthlyGoal) || 0, avgDealValue: m.settings.avgDealValue }), [raw, m]);
   const chanceTip = useMemo(() => suggestStageChances({ deals: raw.deals || [], current: m.settings.probabilities }), [raw, m]);
   const [dismissedTip, setDismissedTip] = useState(false);
 
@@ -416,7 +420,42 @@ export default function BusinessValuePage() {
                 ))}</tbody>
               </table>
             </div>
+            {m.past.inboundResponse.answered > 0 && (
+              <p className="text-sm mt-2 text-gray-800 dark:text-gray-100">First answer takes a median of <b>{m.past.inboundResponse.medianHours} h</b>; <b>{m.past.inboundResponse.withinHourPct}%</b> were answered within the hour ({m.past.inboundResponse.answered} answered). The sooner an enquiry is answered, the likelier it becomes a sale.</p>
+            )}
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Tag each link you share (Account → Enquiry form) with where it is posted, e.g. <code>instagram</code> or <code>qr</code>. Do more of what shows revenue; stop what only shows enquiries. Small numbers are a hint, not proof.</p>
+          </Card>
+        )}
+
+        {angleStats.active && (
+          <Card title="Cold email: which message angle gets replies">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Angle</th><th className="py-1 text-right">Leads</th><th className="py-1 text-right">Replied</th><th className="py-1 text-right">Reply rate</th><th className="py-1 text-right">Won</th></tr></thead>
+                <tbody>{angleStats.rows.map((r) => (
+                  <tr key={r.angle} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">{r.label}{!r.enough && <span className="text-xs text-gray-500"> (too few yet)</span>}</td><td className="py-1.5 text-right">{r.leads}</td><td className="py-1.5 text-right">{r.replied}</td><td className="py-1.5 text-right">{r.replyRate === null ? "n/a" : `${Math.round(r.replyRate * 100)}%`}</td><td className="py-1.5 text-right">{r.won}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2 text-gray-800 dark:text-gray-100">{angleStats.verdict ? <><b>{angleStats.verdict.label}</b> is ahead by {angleStats.verdict.gapPoints} points of reply rate. You can lean on it in Account → Your business → "Lean on this angle".</> : `Too early to call: it needs ${angleStats.minPerAngle}+ leads on at least two angles and a clear gap.`}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each lead is given an angle evenly, so this is a fair comparison. Replies are the signal; sales per angle are too few to judge. A hint, not proof.</p>
+          </Card>
+        )}
+
+        {raw.settings !== undefined && (
+          <Card title="What it takes to hit your goal (cold email)">
+            {plan.ready ? (
+              <>
+                <p className="text-sm text-gray-800 dark:text-gray-100">To bring in <b>{money(goal)}</b> a month at your own results, you need about <b>{plan.monthly.wins}</b> win{plan.monthly.wins === 1 ? "" : "s"} → <b>{plan.monthly.qualified}</b> real conversations → <b>{plan.monthly.replies}</b> replies → <b>{plan.monthly.sends}</b> emails a month: roughly <b>{plan.weekly.sends} a week</b> ({plan.perWorkingDay.sends} per working day).</p>
+                <p className="text-sm mt-1 text-gray-800 dark:text-gray-100">You are sending about {plan.sendsPerWeekNow} new leads a week now{plan.gapPerWeek > 0 ? <>: <b>{plan.gapPerWeek} more a week</b> would close the gap (or raise your reply rate / referrals / inbound).</> : <>: enough to reach this, if your rates hold.</>}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Your rates so far: {Math.round(plan.rates.reply * 100)}% reply, {Math.round(plan.rates.qualify * 100)}% of replies qualify, {Math.round(plan.rates.win * 100)}% of qualified win; average win {money(plan.avgWon)}{plan.avgWonIsDefault ? " (your default deal value: too few real wins yet)" : ""}. Assumes the same mix as so far; inbound and referrals come on top.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-800 dark:text-gray-100">Not enough results yet to plan honestly from. It needs:</p>
+                <ul className="list-disc pl-5 text-sm text-gray-700 dark:text-gray-200 mt-1">{plan.missing.map((x) => <li key={x}>{x}</li>)}</ul>
+              </>
+            )}
           </Card>
         )}
 

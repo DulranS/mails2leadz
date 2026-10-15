@@ -47,6 +47,13 @@ await t('a client cannot spoof the identity headers the server trusts', async ()
   assert.equal(out.headers.get('x-middleware-request-x-user-email'), 'alice@x.com');
 });
 await t('health is public', async () => assert.ok(passes(await proxy(req('/api/health')))));
+await t('Gmail offline: the Google redirect and the scheduler are public (each checks its own secret/state); connecting and notices need a sign-in', async () => {
+  assert.ok(passes(await proxy(req('/api/gmail-offline/callback?code=x&state=y'))));
+  assert.ok(passes(await proxy(req('/api/cron/check-replies'))));
+  assert.equal((await proxy(req('/api/gmail-offline', { method: 'POST' }))).status, 401);
+  assert.equal((await proxy(req('/api/gmail-offline'))).status, 401);
+  assert.equal((await proxy(req('/api/notices'))).status, 401);
+});
 await t('the public enquiry endpoint needs no sign-in, but its key-management route does (and the enquiry key cannot be used to reach other routes)', async () => {
   assert.ok(passes(await proxy(req('/api/inbound', { method: 'POST', body: { k: 'x', email: 'a@b.com' } }))));
   assert.ok(passes(await proxy(req('/api/inbound?k=x'))));

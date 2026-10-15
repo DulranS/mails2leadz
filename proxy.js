@@ -16,7 +16,9 @@ import { hasAccess, noAccessMessage } from './lib/access.js';
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
 // /api/cron/prepare-drafts is called by the host's scheduler, not a browser: it authenticates itself with CRON_SECRET.
 // /api/inbound is called by website visitors (not users): it authenticates with the owner's write-only enquiry key.
-const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/inbound']);
+// /api/cron/check-replies is the scheduler (CRON_SECRET). /api/gmail-offline/callback is Google's redirect after the owner's read-only
+// consent: it carries no sign-in, so it trusts ONLY the signed, 10-minute `state` created when the owner pressed Connect.
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/gmail-offline/callback', '/api/inbound']);
 const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);

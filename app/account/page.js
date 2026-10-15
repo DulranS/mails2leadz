@@ -9,6 +9,8 @@ import { db, auth } from "../../lib/firebase-client.js";
 import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
+import { ANGLES } from "../../lib/angles.js";
+import { safeHttpsUrl, parseProofPoints, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const label = "block text-sm font-medium text-gray-700 dark:text-gray-200";
@@ -17,7 +19,7 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 export default function AccountPage() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
-  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "" });
+  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
@@ -26,6 +28,7 @@ export default function AccountPage() {
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
+  const [gm, setGm] = useState({ loading: true, available: false, connected: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [termsDays, setTermsDays] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [bdrCost, setBdrCost] = useState("");
@@ -88,6 +91,36 @@ export default function AccountPage() {
     setInboxKey((k) => ({ ...k, fresh: "" }));
     await refreshInboxKey();
     setInboxKey((k) => ({ ...k, busy: false }));
+  };
+
+  // Automatic reply checking: read-only Gmail access kept encrypted on the server, so replies are found while you are away.
+  const refreshGmail = async () => {
+    try {
+      const res = await fetch("/api/gmail-offline");
+      const d = await res.json().catch(() => ({}));
+      setGm((g) => ({ ...g, loading: false, available: !!d.available, connected: !!d.connected, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
+    } catch { setGm((g) => ({ ...g, loading: false })); }
+  };
+  useEffect(() => {
+    if (!user?.uid) return;
+    refreshGmail();
+    const r = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gmail") : "";
+    const text = { connected: "Gmail connected: replies will be checked for you overnight.", denied: "You did not give access, so nothing was connected.", no_refresh: "Google did not hand over long-term access. Remove this app at myaccount.google.com/permissions and connect again.", scope: "Read-only access was not granted. Connect again and tick the Gmail box.", unavailable: "Not set up on the server yet.", error: "Could not connect. Please try again." }[r || ""];
+    if (text) setGm((g) => ({ ...g, msg: text }));
+  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const connectGmail = async () => {
+    setGm((g) => ({ ...g, busy: true, msg: "" }));
+    try {
+      const res = await fetch("/api/gmail-offline", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.url) { window.location.href = d.url; return; }
+      setGm((g) => ({ ...g, busy: false, msg: d.error || "Could not start the connection." }));
+    } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
+  };
+  const disconnectGmail = async () => {
+    if (typeof window !== "undefined" && !window.confirm("Disconnect Gmail? Replies will be checked only when you press Check replies.")) return;
+    setGm((g) => ({ ...g, busy: true, msg: "" }));
+    try { await fetch("/api/gmail-offline", { method: "DELETE" }); setGm((g) => ({ ...g, busy: false, connected: false, expired: false, msg: "Disconnected. The saved access was revoked and deleted." })); } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
   };
 
   // Enquiry form: one write-only key; links are tagged with where they are shared so we learn which channel brings business.
@@ -198,6 +231,7 @@ export default function AccountPage() {
     if (confirmText !== "DELETE") return;
     setBusy("delete"); setMsg(null);
     try {
+      try { await fetch("/api/gmail-offline", { method: "DELETE" }); } catch { /* the server copy of the Gmail token goes too; if this fails the owner can still revoke it at myaccount.google.com */ }
       const n = await deleteAllData(db, user.uid);
       try { await deleteUser(auth.currentUser); }
       catch (e) {
@@ -245,6 +279,27 @@ export default function AccountPage() {
               <select id="tn" className={field} value={profile.tone} onChange={(e) => setProfile({ ...profile, tone: e.target.value })}>
                 <option>friendly and professional</option><option>warm and casual</option><option>direct and concise</option><option>formal</option>
               </select></div>
+            <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sales kit <span className="text-xs font-normal text-gray-500">· what makes replies likelier. The AI may use only what you write here.</span></h3>
+              <div className="mt-2 space-y-3">
+                <div><label className={label} htmlFor="bk">Booking link <span className="text-xs font-normal text-gray-500">(optional; https only, e.g. your calendar page)</span></label>
+                  <input id="bk" type="url" maxLength={KIT_LIMITS.link} placeholder="https://cal.com/your-name/15min" className={field} value={profile.bookingLink || ""} onChange={(e) => setProfile({ ...profile, bookingLink: e.target.value })} />
+                  {profile.bookingLink?.trim() && !safeHttpsUrl(profile.bookingLink) && <p className="text-xs mt-1 text-amber-600 dark:text-amber-400">This is not used: it must be a full https:// address.</p>}
+                  <p className="text-xs text-gray-500 mt-1">Offered as the one-click next step in drafts and on the enquiry thank-you page.</p></div>
+                <div><label className={label} htmlFor="pf">Real results you can stand behind <span className="text-xs font-normal text-gray-500">(one per line, up to {KIT_LIMITS.proofCount}; true and specific)</span></label>
+                  <textarea id="pf" rows={3} maxLength={600} placeholder={"Helped 12 cafes cut no-shows by about a third\nOnboarded in under a week"} className={field} value={profile.proofText || ""} onChange={(e) => setProfile({ ...profile, proofText: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">{parseProofPoints(profile.proofText).length} in use. Never write a result you cannot prove: the AI quotes these as given.</p></div>
+                <div><label className={label} htmlFor="ob">Your honest answers to common objections <span className="text-xs font-normal text-gray-500">(one per line: objection = answer)</span></label>
+                  <textarea id="ob" rows={3} maxLength={1200} placeholder={"It is too expensive = We start with a small fixed-price pilot\nWe already have someone = Fine: we complement them, not replace them"} className={field} value={profile.objectionsText || ""} onChange={(e) => setProfile({ ...profile, objectionsText: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">{parseObjections(profile.objectionsText).length} in use (max {KIT_LIMITS.objCount}). Used only when a reply or enquiry truly raises one.</p></div>
+                <div><label className={label} htmlFor="la">Lean on this message angle <span className="text-xs font-normal text-gray-500">(after Business Value shows a winner)</span></label>
+                  <select id="la" className={field} value={profile.leanAngle || ""} onChange={(e) => setProfile({ ...profile, leanAngle: e.target.value })}>
+                    <option value="">No preference: test all angles evenly</option>
+                    {ANGLES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">With a preference, 6 in 10 new leads get that angle; the rest keep rotating so learning continues.</p></div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -275,6 +330,23 @@ export default function AccountPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">Start with the defaults and adjust once you've closed a few deals.</p>
           </details>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Replies checked for you <span className="text-xs font-normal text-gray-500">· read-only Gmail, even when you are away</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Connect once and the app looks for replies every night: opt-outs are recorded, positive replies move the deal forward, and the dashboard tells you what happened while you were away. It can only <b>read</b> your mail: it can never send, delete or change anything. Sending still needs you, in the browser. The saved access is encrypted, and you can disconnect (which revokes it) at any time.</p>
+          {!gm.available && !gm.loading && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not set up on the server yet: it needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY (see the deployment guide).</p>}
+          {gm.available && !gm.connected && gm.redirectUri && <p className="text-xs text-gray-500 mt-2">One-time setup in Google Cloud (Credentials → your OAuth client → Authorized redirect URIs): <code className="break-all select-all">{gm.redirectUri}</code>. Also publish the OAuth consent screen (&quot;In production&quot;): while it says &quot;Testing&quot;, Google ends this access after 7 days.</p>}
+          {gm.expired && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Gmail access expired{gm.lastError ? `: ${gm.lastError}` : ""} Connect again.</p>}
+          {gm.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{gm.msg}</p>}
+          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
+          {gm.connected && (
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px] mt-1"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoReplyCheck !== false} disabled={!ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoReplyCheck: e.target.checked })} />Check for replies for me every night</label>
+          )}
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={connectGmail} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{gm.busy ? "Opening Google…" : gm.expired ? "Reconnect Gmail (read-only)" : "Connect Gmail (read-only)"}</button>}
+            {gm.connected && <button type="button" disabled={gm.busy} onClick={disconnectGmail} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Disconnect</button>}
+          </div>
         </section>
 
         <section className={card}>

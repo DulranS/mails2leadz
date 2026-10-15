@@ -7,6 +7,7 @@ import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
 import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
+import { isAngleId } from '../../../lib/angles.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
@@ -168,8 +169,10 @@ export async function POST(request) {
       emailAttachments = [],
       userId,
       csvSource,
+      angle: angleInput,
       senderName: typedSenderName,
     } = requestData;
+    const angle = isAngleId(angleInput) ? angleInput : ''; // which message angle this email tested (see lib/angles.js)
 
     // CSV-based email sending
     if (!userId || !accessToken || !csvContent) {
@@ -315,7 +318,8 @@ export async function POST(request) {
           followUpDates: [],
           messageId: response.data.id,
           threadId: response.data.threadId,
-          csvSource: csvSource || 'unknown'
+          csvSource: csvSource || 'unknown',
+          ...(angle ? { angle } : {}),
         };
         
         await addDoc(collection(db, 'sent_emails'), emailData);

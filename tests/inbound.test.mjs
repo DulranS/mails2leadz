@@ -80,7 +80,7 @@ t('metrics: inbound by channel counts enquiries, real opportunities and revenue 
     deal('a@x.com', 'new'), deal('b@x.com', 'qualified'), deal('c@x.com', 'closed_won', { value: 3000, reached: ['new', 'qualified', 'closed_won'] }),
     deal('d@x.com', 'closed_lost', { reached: ['new', 'qualified', 'closed_lost'], lostReason: 'price' }),
     deal('e@x.com', 'new', { sourceDetail: 'qr' }), deal('f@x.com', 'new', { sourceDetail: '' }),
-    deal('g@x.com', 'new', { source: 'referral' }), deal('h@x.com', 'closed_lost', { lostReason: 'unsubscribed', reached: ['new', 'closed_lost'] }),
+    deal('g@x.com', 'new', { source: 'referral', sourceDetail: '' }), deal('h@x.com', 'closed_lost', { lostReason: 'unsubscribed', reached: ['new', 'closed_lost'] }),
   ] });
   const ig = m.past.inboundByChannel.find((r) => r.channel === 'instagram');
   assert.deepEqual([ig.enquiries, ig.qualified, ig.won, ig.revenue], [4, 3, 1, 3000]);
