@@ -97,6 +97,13 @@ export async function GET(request) {
     restricted ? 'Only invited people (and owners) can use the app.' : 'Open to anyone with a Google account: every new account can use AI paid from your key.',
     'Set ALLOWED_EMAILS to a comma-separated list of customer emails or @company.com domains (owners in ADMIN_EMAILS are always allowed), then redeploy.');
 
+  // 7. Reply watch: timed reply checks through the owner's optional read-only Gmail connection
+  const keyOk = String(process.env.GMAIL_TOKEN_KEY || '').length >= 24;
+  const watchOk = isAdminMode() && keyOk && !!process.env.CRON_SECRET && gid && gsec;
+  add('replywatch', 'Reply watch (timed reply checks)', watchOk,
+    watchOk ? 'Ready: owners can connect Gmail (read-only) in Account and replies are found on the schedule.' : `Off. Missing: ${[!isAdminMode() && 'service account', !keyOk && 'GMAIL_TOKEN_KEY (24+ characters)', !process.env.CRON_SECRET && 'CRON_SECRET', !(gid && gsec) && 'Google client'].filter(Boolean).join(', ')}. Replies are still found when you check from the dashboard.`,
+    'Set GMAIL_TOKEN_KEY (a long random string; it encrypts the stored Gmail key), CRON_SECRET and FIREBASE_SERVICE_ACCOUNT_JSON, then redeploy. If the connection keeps expiring weekly, set your Google app to "In production" (OAuth consent screen).');
+
   const blocking = checks.filter((c) => !c.ok && ['database', 'gmail'].includes(c.id));
   return NextResponse.json({ ok: blocking.length === 0, isAdmin, checks }, { headers: { 'Cache-Control': 'no-store' } });
 }

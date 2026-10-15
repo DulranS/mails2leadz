@@ -28,7 +28,7 @@ export default function AccountPage() {
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
-  const [gm, setGm] = useState({ loading: true, available: false, connected: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
+  const [rw, setRw] = useState({ loading: true, available: false, keyConfigured: true, cronConfigured: true, connected: false, busy: "", msg: "" });
   const [termsDays, setTermsDays] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [bdrCost, setBdrCost] = useState("");
@@ -93,36 +93,6 @@ export default function AccountPage() {
     setInboxKey((k) => ({ ...k, busy: false }));
   };
 
-  // Automatic reply checking: read-only Gmail access kept encrypted on the server, so replies are found while you are away.
-  const refreshGmail = async () => {
-    try {
-      const res = await fetch("/api/gmail-offline");
-      const d = await res.json().catch(() => ({}));
-      setGm((g) => ({ ...g, loading: false, available: !!d.available, connected: !!d.connected, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
-    } catch { setGm((g) => ({ ...g, loading: false })); }
-  };
-  useEffect(() => {
-    if (!user?.uid) return;
-    refreshGmail();
-    const r = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gmail") : "";
-    const text = { connected: "Gmail connected: replies will be checked for you overnight.", denied: "You did not give access, so nothing was connected.", no_refresh: "Google did not hand over long-term access. Remove this app at myaccount.google.com/permissions and connect again.", scope: "Read-only access was not granted. Connect again and tick the Gmail box.", unavailable: "Not set up on the server yet.", error: "Could not connect. Please try again." }[r || ""];
-    if (text) setGm((g) => ({ ...g, msg: text }));
-  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
-  const connectGmail = async () => {
-    setGm((g) => ({ ...g, busy: true, msg: "" }));
-    try {
-      const res = await fetch("/api/gmail-offline", { method: "POST" });
-      const d = await res.json().catch(() => ({}));
-      if (res.ok && d.url) { window.location.href = d.url; return; }
-      setGm((g) => ({ ...g, busy: false, msg: d.error || "Could not start the connection." }));
-    } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
-  };
-  const disconnectGmail = async () => {
-    if (typeof window !== "undefined" && !window.confirm("Disconnect Gmail? Replies will be checked only when you press Check replies.")) return;
-    setGm((g) => ({ ...g, busy: true, msg: "" }));
-    try { await fetch("/api/gmail-offline", { method: "DELETE" }); setGm((g) => ({ ...g, busy: false, connected: false, expired: false, msg: "Disconnected. The saved access was revoked and deleted." })); } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
-  };
-
   // Enquiry form: one write-only key; links are tagged with where they are shared so we learn which channel brings business.
   const refreshInbound = async () => {
     try {
@@ -148,6 +118,53 @@ export default function AccountPage() {
   };
   const inqTag = (inq.custom || inq.src || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
   const inqLink = typeof window !== "undefined" && inq.key ? `${window.location.origin}/enquire?k=${inq.key}${inqTag ? `&src=${inqTag}` : ""}` : "";
+
+  // Reply watch: an optional READ-ONLY Gmail connection so the server can look for replies on a timer. It can never send or change mail.
+  const refreshRw = async () => {
+    try {
+      const res = await fetch("/api/gmail-connect");
+      const d = await res.json().catch(() => ({}));
+      setRw((r) => ({ ...r, ...(res.ok ? d : {}), loading: false }));
+    } catch { setRw((r) => ({ ...r, loading: false })); }
+  };
+  useEffect(() => { if (user?.uid) refreshRw(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const connectGmail = () => {
+    const g = typeof window !== "undefined" ? window.google?.accounts?.oauth2 : null;
+    if (!g || !rw.clientId) { setRw((r) => ({ ...r, msg: "Google sign-in is not loaded yet. Wait a moment and try again." })); return; }
+    setRw((r) => ({ ...r, busy: "connect", msg: "" }));
+    const client = g.initCodeClient({
+      client_id: rw.clientId,
+      scope: "https://www.googleapis.com/auth/gmail.readonly",
+      ux_mode: "popup",
+      prompt: "consent", // makes Google hand out the long-lived key every time
+      ...(rw.email || user?.email ? { login_hint: rw.email || user.email } : {}),
+      callback: async (resp) => {
+        if (!resp?.code) { setRw((r) => ({ ...r, busy: "", msg: "Google did not give permission." })); return; }
+        try {
+          const res = await fetch("/api/gmail-connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: resp.code }) });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) { setRw((r) => ({ ...r, busy: "", msg: d.error || "Could not connect." })); return; }
+          setRw((r) => ({ ...r, ...d, busy: "", msg: "Connected. Replies are now checked on a schedule." }));
+        } catch { setRw((r) => ({ ...r, busy: "", msg: "Could not reach the server." })); }
+      },
+      error_callback: () => setRw((r) => ({ ...r, busy: "", msg: "The Google window was closed before it finished." })),
+    });
+    client.requestCode();
+  };
+  const rwCall = async (busy, method, body, okMsg) => {
+    setRw((r) => ({ ...r, busy, msg: "" }));
+    try {
+      const res = await fetch("/api/gmail-connect", { method, headers: { "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.success === false) { setRw((r) => ({ ...r, busy: "", msg: d.error || "That did not work." })); if (d.code === "NEEDS_RECONNECT") refreshRw(); return; }
+      setRw((r) => ({ ...r, busy: "", msg: typeof okMsg === "function" ? okMsg(d) : okMsg }));
+      await refreshRw();
+    } catch { setRw((r) => ({ ...r, busy: "", msg: "Could not reach the server." })); }
+  };
+  const checkNowRw = () => rwCall("check", "POST", { action: "check" }, (d) => `Checked ${d.checked} email${d.checked === 1 ? "" : "s"}: ${d.replies} new repl${d.replies === 1 ? "y" : "ies"}${d.autoReplies ? `, ${d.autoReplies} out-of-office ignored` : ""}${d.waiting ? `. ${d.waiting} more will be checked next time` : ""}.`);
+  const toggleRw = () => rwCall("toggle", "PATCH", { enabled: !rw.enabled }, rw.enabled ? "Paused. Nothing is checked until you resume." : "Resumed.");
+  const disconnectRw = () => { if (window.confirm("Disconnect Gmail? Google is told to cancel the key and it is deleted from the server. Replies are then only found when you check from the dashboard.")) rwCall("disconnect", "DELETE", null, "Disconnected and deleted."); };
+  const ago = (iso) => { const t = Date.parse(iso || ""); if (!Number.isFinite(t)) return "never"; const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`; };
 
   // Overnight drafts: switches only. The server prepares DRAFTS; you still review and press Send.
   const refreshAutopilot = async () => {
@@ -231,7 +248,7 @@ export default function AccountPage() {
     if (confirmText !== "DELETE") return;
     setBusy("delete"); setMsg(null);
     try {
-      try { await fetch("/api/gmail-offline", { method: "DELETE" }); } catch { /* the server copy of the Gmail token goes too; if this fails the owner can still revoke it at myaccount.google.com */ }
+      try { await fetch("/api/gmail-connect", { method: "DELETE" }); } catch { /* nothing connected, or offline: the rest is deleted anyway */ }
       const n = await deleteAllData(db, user.uid);
       try { await deleteUser(auth.currentUser); }
       catch (e) {
@@ -333,23 +350,6 @@ export default function AccountPage() {
         </section>
 
         <section className={card}>
-          <h2 className="font-semibold text-gray-900 dark:text-white">Replies checked for you <span className="text-xs font-normal text-gray-500">· read-only Gmail, even when you are away</span></h2>
-          <p className="text-xs text-gray-500 mt-1">Connect once and the app looks for replies every night: opt-outs are recorded, positive replies move the deal forward, and the dashboard tells you what happened while you were away. It can only <b>read</b> your mail: it can never send, delete or change anything. Sending still needs you, in the browser. The saved access is encrypted, and you can disconnect (which revokes it) at any time.</p>
-          {!gm.available && !gm.loading && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not set up on the server yet: it needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY (see the deployment guide).</p>}
-          {gm.available && !gm.connected && gm.redirectUri && <p className="text-xs text-gray-500 mt-2">One-time setup in Google Cloud (Credentials → your OAuth client → Authorized redirect URIs): <code className="break-all select-all">{gm.redirectUri}</code>. Also publish the OAuth consent screen (&quot;In production&quot;): while it says &quot;Testing&quot;, Google ends this access after 7 days.</p>}
-          {gm.expired && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Gmail access expired{gm.lastError ? `: ${gm.lastError}` : ""} Connect again.</p>}
-          {gm.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{gm.msg}</p>}
-          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
-          {gm.connected && (
-            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px] mt-1"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoReplyCheck !== false} disabled={!ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoReplyCheck: e.target.checked })} />Check for replies for me every night</label>
-          )}
-          <div className="flex flex-col sm:flex-row gap-2 mt-3">
-            {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={connectGmail} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{gm.busy ? "Opening Google…" : gm.expired ? "Reconnect Gmail (read-only)" : "Connect Gmail (read-only)"}</button>}
-            {gm.connected && <button type="button" disabled={gm.busy} onClick={disconnectGmail} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Disconnect</button>}
-          </div>
-        </section>
-
-        <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white">Enquiry form <span className="text-xs font-normal text-gray-500">· inbound: people contact you</span></h2>
           <p className="text-xs text-gray-500 mt-1">A page where anyone can send you an enquiry (put the link in your Instagram/LinkedIn bio, a QR code, your website or an email signature). Each enquiry becomes a deal, tagged with where it came from, and a reply is drafted straight away for you to review and send. You see which channel brings real business under Business Value.</p>
           {!inq.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so this is switched off.</p>}
@@ -395,6 +395,36 @@ export default function AccountPage() {
             <span className="flex-1" />
             <button type="button" disabled={ap.busy === "prepare" || !ap.available || ap.loading} onClick={prepareNow} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{ap.busy === "prepare" ? "Preparing…" : "Prepare now"}</button>
           </div>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Reply watch <span className="text-xs font-normal text-gray-500">· finds replies for you, even when the app is closed</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Connect your Gmail once, read-only. On a schedule the server looks for answers to your emails, reads each reply in full, stops follow-ups to anyone who replied, moves interested leads forward in your pipeline and records opt-outs. It cannot send, delete or change any email, nothing is sent for you, and you can disconnect at any time (the stored key is then deleted and cancelled at Google).</p>
+          {!rw.loading && !rw.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not available yet: the server needs {[!rw.adminMode && "FIREBASE_SERVICE_ACCOUNT_JSON", !rw.keyConfigured && "GMAIL_TOKEN_KEY", !rw.googleConfigured && "the Google client id and secret"].filter(Boolean).join(", ") || "its setup finished"} (see the deployment guide).</p>}
+          {rw.available && !rw.cronConfigured && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The schedule needs CRON_SECRET on the server. Until then, use "Check now".</p>}
+          {rw.msg && <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{rw.msg}</p>}
+          {rw.connected ? (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm text-gray-800 dark:text-gray-100">Watching <b>{rw.email}</b> · {rw.enabled ? "on" : "paused"} · last check {ago(rw.lastCheckAt)}{rw.lastResult ? ` (${rw.lastResult.replies} repl${rw.lastResult.replies === 1 ? "y" : "ies"} found, ${rw.lastResult.checked} emails looked at)` : ""}</p>
+              {rw.status === "needs_reconnect" && <p role="alert" className="text-sm rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 p-2">Google cancelled or expired the connection, so nothing is being checked. Connect again below. If this keeps happening about once a week, your Google app is in "Testing" mode: set its publishing status to "In production" in Google Cloud (OAuth consent screen) and it stops.</p>}
+              {rw.status === "error" && rw.lastError && <p className="text-xs text-amber-700 dark:text-amber-300">{rw.lastError}</p>}
+              {rw.recent?.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-white">Found by the watch</h3>
+                  <ul className="mt-1 space-y-1">{rw.recent.slice(0, 8).map((r, i) => <li key={`${r.email}-${r.at}-${i}`} className="text-xs text-gray-700 dark:text-gray-200">{ago(r.at)}: <b>{r.email}</b>{r.label ? ` · ${r.label}` : ""}{r.summary ? ` · ${r.summary}` : ""}{r.action ? ` (${r.action})` : ""}</li>)}</ul>
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" disabled={!!rw.busy || rw.status === "needs_reconnect"} onClick={checkNowRw} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{rw.busy === "check" ? "Checking…" : "Check now"}</button>
+                {rw.status === "needs_reconnect" && <button type="button" disabled={!!rw.busy} onClick={connectGmail} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Connect again</button>}
+                <button type="button" disabled={!!rw.busy} onClick={toggleRw} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{rw.enabled ? "Pause" : "Resume"}</button>
+                <span className="flex-1" />
+                <button type="button" disabled={!!rw.busy} onClick={disconnectRw} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Disconnect</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" disabled={rw.loading || !rw.available || !!rw.busy} onClick={connectGmail} className="mt-3 min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{rw.busy === "connect" ? "Connecting…" : "Connect Gmail (read-only)"}</button>
+          )}
         </section>
 
         <section className={card}>

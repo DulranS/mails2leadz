@@ -499,7 +499,6 @@ function DashboardComponent() {
   const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
   const [autoBatch, setAutoBatch] = useState(null); // "Draft all, approve together": { phase, note, skipped, items }
   const autoBatchBusy = useRef(false);
-  const [notices, setNotices] = useState([]); // "while you were away": what the overnight reply check found (see /api/notices)
   const [readyQueue, setReadyQueue] = useState({ items: [], summary: { first: 0, followup: 0, inbound: 0, total: 0 } }); // drafts prepared ahead of time (see /api/draft-queue)
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
@@ -3654,6 +3653,7 @@ function DashboardComponent() {
   // What the reply check found AND what the app already did about it (deal moved, opt-out recorded, auto-replies ignored).
   const announceReplyCheck = (rd) => {
     if (!rd) return;
+    if (rd.code === "GMAIL_AUTH") { addNotification("Gmail permission ran out, so replies could not be checked. Press the button again and allow Gmail.", "warning", 8000); return; }
     const lines = (rd.triage || []).filter((t) => t.action).map((t) => `${t.email}: ${String(t.label || "").toLowerCase()}, ${t.action}`);
     if (lines.length) addNotification(`🤖 ${lines.join("; ")}`, "info", 10000);
     if (rd.autoReplies > 0) addNotification(`${rd.autoReplies} out-of-office auto-repl${rd.autoReplies === 1 ? "y" : "ies"} ignored: follow-ups carry on.`, "info", 6000);
@@ -4972,20 +4972,6 @@ function DashboardComponent() {
       setReadyQueue({ items: d.items || [], summary: d.summary || { first: 0, followup: 0, total: 0 } });
     } catch { /* the banner simply stays hidden */ }
   };
-  const loadNotices = async () => {
-    if (!user?.uid) return;
-    try {
-      const res = await fetch("/api/notices");
-      if (!res.ok) return;
-      const d = await res.json().catch(() => ({}));
-      setNotices(d.notices || []);
-    } catch { /* no banner */ }
-  };
-  const dismissNotices = async () => {
-    const ids = notices.map((n) => n.id);
-    setNotices([]);
-    try { await fetch("/api/notices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen", ids }) }); } catch { /* shown again next time */ }
-  };
   const resolveReadyQueue = async ({ sent = [], dismissed = [] }) => {
     if (sent.length === 0 && dismissed.length === 0) return;
     try {
@@ -5208,7 +5194,7 @@ function DashboardComponent() {
     const isMine = (m) => !!me && String(m.from || "").toLowerCase().includes(me);
     const inbound = [...msgs].reverse().find((m) => !isMine(m));
     const stripQuoted = (t) => String(t || "").split(/\n\s*On .{5,140}wrote:|\n\s*-{2,}\s*Original Message|\n\s*>/i)[0].trim();
-    const text = inbound ? stripQuoted(inbound.body || inbound.snippet) : "";
+    const text = inbound ? (inbound.text || stripQuoted(inbound.body || inbound.snippet)) : "";
     if (!text) {
       addNotification("There is no reply from them in this thread yet.", "warning");
       return;
@@ -6039,7 +6025,7 @@ function DashboardComponent() {
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
 
   // Drafts prepared ahead of time: look once the dashboard opens.
-  useEffect(() => { if (user?.uid) { loadReadyQueue(); loadNotices(); } }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user?.uid) loadReadyQueue(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leads the owner picked in the Lead Inbox arrive as CSV text and go through the same import as an uploaded file.
   useEffect(() => {
@@ -7305,18 +7291,6 @@ function DashboardComponent() {
       </header>
 
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        {/* WHILE YOU WERE AWAY: what the overnight reply check found and did */}
-        {notices.length > 0 && (
-          <div role="region" aria-label="While you were away" className="mb-4 p-4 rounded-xl border border-emerald-700 bg-emerald-900/30 text-emerald-100">
-            {notices.map((n) => (
-              <div key={n.id} className="mb-2 last:mb-0">
-                <div className="font-semibold text-sm sm:text-base">{n.type === "gmail_expired" ? "⚠️ Gmail access for automatic reply checking expired. Reconnect it in Account." : `📬 While you were away: ${n.replies} new repl${n.replies === 1 ? "y" : "ies"}`}</div>
-                {n.type !== "gmail_expired" && n.lines.length > 0 && <ul className="list-disc pl-5 text-xs mt-1 opacity-90">{n.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>}
-              </div>
-            ))}
-            <button type="button" onClick={dismissNotices} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">Got it</button>
-          </div>
-        )}
         {/* DRAFTS READY FOR REVIEW (prepared ahead of time; nothing is sent until you press Send in the review window) */}
         {readyQueue.summary.total > 0 && !autoBatch && (
           <div role="region" aria-label="Drafts ready for review" className="mb-4 p-4 rounded-xl border border-indigo-700 bg-indigo-900/30 text-indigo-100">

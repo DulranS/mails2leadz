@@ -34,15 +34,15 @@ export default function PrivacyPage() {
         <p>When you send email or check replies, Google asks you to let the app use your Gmail. We request two permissions:</p>
         <Bullets items={[
           'Send email: to send the messages you approve, from your own address.',
-          'Read email: to find replies and “address not found” notices for conversations with leads you emailed, so follow-ups stop when someone replies and bad addresses are not contacted again. To find a reply we search for messages from the lead; when one is found we read that single message so the app can tell what it means (for example an out-of-office notice, a request to stop emailing, or interest). We read only what the person wrote, and we keep a short summary and the result (such as “interested”), not the full text. For delivery-failure notices from mail systems we also read Gmail\u2019s short preview line to see which address failed. We do not read your other mail.',
+          'Read email: to find replies and “address not found” notices for conversations with leads you emailed, so follow-ups stop when someone replies and bad addresses are not contacted again. When someone replies to an email you sent, the app reads that one reply in full (the sender\u2019s own words, without the quoted earlier messages), keeps that text with the email so you and the AI reply assistant can read it, and uses it to tell an automatic out-of-office from a real answer and to suggest what the reply means. For delivery-failure notices from mail systems it reads Gmail\u2019s short preview line to see which address failed. Other mail is not read or stored.',
         ]} />
         <p>
           The access token Google gives your browser is short-lived. It is sent with each request so the server can act for you; we do not
-          store it. <b>Optional:</b> if you choose &quot;Connect Gmail (read-only)&quot; in Account, we also keep a long-term read-only
-          access key so replies can be checked while you are away. It can only read mail: it can never send, delete or change anything.
-          It is stored encrypted, used only for that reply check, and revoked and deleted when you disconnect it or delete your account.
-          Sending always needs you. We do not use your mail for advertising, sell it, or let people read it except where you ask for
-          support, it is needed for security or abuse investigation, or the law requires it.
+          store it. <b>Optional “Reply watch”:</b> if you turn it on in Account, you give a separate, read-only permission and we store Google&apos;s
+          long-lived key for it, encrypted, so the server can look for replies on a schedule while you are away. It can only read, never send,
+          delete or change mail. You can pause it, or disconnect at any time: the key is then cancelled at Google and deleted from our servers
+          (so is everything when you delete your account). We do not use your mail for advertising, sell it, or let people read it except where you ask for support,
+          it is needed for security or abuse investigation, or the law requires it.
         </p>
         <p>
           {APP_NAME}&apos;s use and transfer of information received from Google APIs will adhere to the{' '}

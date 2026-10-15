@@ -10,6 +10,7 @@ function Form() {
   const params = useSearchParams();
   const key = params.get("k") || "";
   const src = params.get("src") || "";
+  const campaign = params.get("c") || ""; // which post's link was used (set by the content planner)
   const [name, setName] = useState("");
   const [booking, setBooking] = useState("");
   const [state, setState] = useState({ status: "idle", error: "", business: "" });
@@ -28,7 +29,7 @@ function Form() {
     e.preventDefault();
     setState((s) => ({ ...s, status: "sending", error: "" }));
     try {
-      const res = await fetch("/api/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, k: key, src }) });
+      const res = await fetch("/api/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, k: key, src, campaign }) });
       const d = await res.json().catch(() => ({}));
       if (res.ok) setState((s) => ({ ...s, status: "done" }));
       else setState((s) => ({ ...s, status: "idle", error: d.error || "Something went wrong. Please try again." }));
