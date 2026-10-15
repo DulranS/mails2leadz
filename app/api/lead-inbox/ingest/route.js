@@ -5,11 +5,13 @@
 //
 // Leads are only stored in the inbox with status "new". Nothing is sent. Opted-out contacts, lost deals and people
 // who were already emailed are skipped, so the inbox only ever shows people who can still be contacted.
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb, isBlockedContact, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { parseIngestKey, verifySecret, inboxDocId } from '../../../../lib/server/ingest-key.js';
 import { sanitizeLead, inboxKey, INBOX_STATUS, MAX_BATCH } from '../../../../lib/lead-inbox.js';
+import { loadAutopilot, prepareDraftsForUser } from '../../../../lib/server/prepare-drafts.js';
+import { QUEUE_KINDS } from '../../../../lib/draft-queue.js';
 
 export const maxDuration = 60;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -62,6 +64,18 @@ export async function POST(request) {
         await setDoc(ref, { ...lead, userId: uid, status: INBOX_STATUS.NEW, source, batchId, receivedAt: new Date().toISOString() });
         added++;
       }));
+    }
+    // Overnight drafts: when the owner switched it on, write first-email drafts for the new HOT leads right away
+    // (after the response, so the worker is not kept waiting). Drafts only: nothing is sent.
+    if (added > 0) {
+      after(async () => {
+        try {
+          const settings = await loadAutopilot(db, uid);
+          if (settings.enabled) await prepareDraftsForUser(db, uid, { settings, kinds: [QUEUE_KINDS.FIRST], deadline: Date.now() + 50000 });
+        } catch (e) {
+          console.warn('[ingest] draft preparation skipped:', e?.message);
+        }
+      });
     }
     return NextResponse.json({ success: true, received: incoming.length, added, skipped }, { headers: NO_STORE });
   } catch (error) {

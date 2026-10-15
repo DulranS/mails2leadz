@@ -4,7 +4,7 @@ const base = () => { try { return new URL(String(process.env.NEXT_PUBLIC_BASE_UR
 export default function robots() {
   const origin = base();
   return {
-    rules: [{ userAgent: '*', allow: ['/', '/privacy', '/terms'], disallow: ['/api/', '/dashboard', '/crm', '/business', '/customers', '/billing', '/account', '/inbox', '/unsubscribe'] }],
+    rules: [{ userAgent: '*', allow: ['/', '/privacy', '/terms'], disallow: ['/api/', '/dashboard', '/crm', '/business', '/customers', '/billing', '/account', '/inbox', '/unsubscribe', '/enquire'] }],
     ...(origin ? { sitemap: `${origin}/sitemap.xml` } : {}),
   };
 }

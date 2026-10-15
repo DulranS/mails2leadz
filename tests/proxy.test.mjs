@@ -47,6 +47,13 @@ await t('a client cannot spoof the identity headers the server trusts', async ()
   assert.equal(out.headers.get('x-middleware-request-x-user-email'), 'alice@x.com');
 });
 await t('health is public', async () => assert.ok(passes(await proxy(req('/api/health')))));
+await t('the public enquiry endpoint needs no sign-in, but its key-management route does (and the enquiry key cannot be used to reach other routes)', async () => {
+  assert.ok(passes(await proxy(req('/api/inbound', { method: 'POST', body: { k: 'x', email: 'a@b.com' } }))));
+  assert.ok(passes(await proxy(req('/api/inbound?k=x'))));
+  assert.equal((await proxy(req('/api/inbound-key', { method: 'POST' }))).status, 401);
+  assert.equal((await proxy(req('/api/inbound-key'))).status, 401);
+  assert.equal((await proxy(req('/api/draft-queue'))).status, 401);
+});
 await t('unsubscribe is public (recipients are not users), other routes stay private', async () => {
   assert.ok(passes(await proxy(req('/api/unsubscribe?t=x', { method: 'POST' }))));
   assert.equal((await proxy(req('/api/send-email', { method: 'POST' }))).status, 401);

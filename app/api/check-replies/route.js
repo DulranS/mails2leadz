@@ -6,6 +6,9 @@ import { hardBounceRecipients } from '../../../lib/server/bounces.js';
 import { suppressContact } from '../../../lib/server/suppress.js';
 import { google } from 'googleapis';
 import { cancelPendingFollowUps, pickEmailsToCheck, REPLY_CHECK_BATCH } from '../../../lib/reply-sync.js';
+import { triageReply } from '../../../lib/server/reply-triage.js';
+import { loadAutopilot } from '../../../lib/server/prepare-drafts.js';
+import { quickIntent } from '../../../lib/reply-intents.js';
 
 export const maxDuration = 60; // up to REPLY_CHECK_BATCH Gmail look-ups per call
 
@@ -137,7 +140,10 @@ export async function POST(request) {
 
     let replyCount = 0;
     let errorCount = 0;
+    let autoReplies = 0;
     const newReplies = [];
+    const triage = []; // what each new reply means and what the app did about it (see lib/server/reply-triage.js)
+    const apSettings = isAdminMode() ? await loadAutopilot(db, userId) : null;
 
     // Check each sent email for replies with retry logic
     for (const doc of emailsToCheck) {
@@ -191,6 +197,18 @@ export async function POST(request) {
 
             console.log(`[Check Replies] Found reply from ${toEmail}:`, headers.from);
 
+            // An out-of-office / automatic answer is not a reply: do not stop the follow-ups or inflate the reply rate.
+            // The message is remembered so the next check does not pick it up again; a REAL reply later is a different message.
+            const snippet = String(messageDetails.data.snippet || '');
+            const stampChecked = () => updateDoc(doc.ref, { replyCheckedAt: new Date().toISOString() }).catch(() => {}); // so the rotation moves on
+            if (sentEmail.autoReplyMessageId === replyMessage.id) { await stampChecked(); success = true; break; }
+            if (quickIntent(`${headers.subject || ''} ${snippet}`) === 'out_of_office') {
+              await updateDoc(doc.ref, { autoReplyMessageId: replyMessage.id, autoReplyAt: new Date().toISOString(), replyCheckedAt: new Date().toISOString() });
+              autoReplies++;
+              success = true;
+              break;
+            }
+
             // Found a reply - update Firebase
             await updateDoc(doc.ref, {
               replied: true,
@@ -220,6 +238,12 @@ export async function POST(request) {
 
             // Stop chasing: cancel pending follow-up reminders for this lead.
             await cancelPendingFollowUps(db, userId, toEmail);
+
+            // Read the reply: opt-out wording is suppressed, a positive reply moves the deal forward (never sends anything).
+            if (isAdminMode()) {
+              const t = await triageReply(db, { uid: userId, sentRef: doc.ref, email: toEmail, businessName: sentEmail.businessName, replyText: `${headers.subject || ''}\n${snippet}`, originalSubject: subject, settings: apSettings });
+              if (t) triage.push(t);
+            }
 
             // Track company reply (non-blocking; forward the caller's token, /api is auth-gated)
             const authHeader = request.headers.get('authorization');
@@ -295,6 +319,8 @@ export async function POST(request) {
       waiting, // unreplied emails from the last 60 days that this call did not get to: call again to continue
       errors: errorCount,
       bounced,
+      autoReplies,
+      triage,
       replies: newReplies
     }, { headers });
 

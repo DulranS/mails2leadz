@@ -20,6 +20,18 @@ Do these in order. The order matters: step 3 before step 4.
    - Open **Business Value**: your deal appears; set its value; mark it Won; see revenue and forecast update.
    - Lead Inbox → **Suggest who to target** returns a list; dashboard → **Draft first emails with AI** (with a CSV loaded) opens a review window; **Content → Draft my week** adds posts.
    - **Account > Download my data** works.
+   - Account → **Drafts prepared overnight**: switch on, press **Prepare now**; the dashboard shows the ready drafts; open them, send one, confirm it arrives. Reply to it from another address with "Sounds good, tell me more": **Check replies** should say the deal moved forward.
+
+## Drafts prepared overnight (optional)
+- Set `CRON_SECRET` to a long random string. `vercel.json` schedules `/api/cron/prepare-drafts` daily at 01:30 UTC and Vercel sends the secret itself. On another host, call `GET /api/cron/prepare-drafts` once a day with the header `Authorization: Bearer <CRON_SECRET>`.
+- Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key. **Republish the Firestore rules** (`draft_queue` and `autopilot_users` are new).
+- Each customer switches it on in Account → "Drafts prepared overnight". The job only writes drafts: it never sends and needs no Gmail access.
+- Test it once: Account → **Prepare now**, then open the dashboard: the "drafts ready for your review" banner appears. To test the schedule itself: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/prepare-drafts`.
+
+## Enquiry form (inbound, optional)
+- Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key; **republish the Firestore rules** (`inbound_enquiries` is new).
+- Account → *Enquiry form* → create the link, tag it per place you share it. `/api/inbound` is public on purpose (visitors are not users); it only accepts enquiries for the key's owner.
+- Test once after deploying: open the link in a private window, send an enquiry, then check the dashboard banner "Reply to 1 new enquiry" and Business Value → "Inbound".
 
 ## Who can sign in (set this before you share the link)
 - `ALLOWED_EMAILS` = customer emails and/or `@company.com` domains, comma separated. Anyone else who signs in sees "no access yet" with your `NEXT_PUBLIC_CONTACT_EMAIL`. `ADMIN_EMAILS` always get in. Leave it empty and the app is open to every Google account, each able to use AI paid from your key (per-account caps apply). Account → Run connection check shows which mode you are in.

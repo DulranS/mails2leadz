@@ -26,7 +26,7 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
   const field = "w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white";
 
   return (
-    <Modal isOpen onClose={busy ? () => {} : onClose} title={first ? "First emails to review" : "Today's follow-ups"} size="xl" closeOnOverlayClick={false} showCloseButton={!busy}>
+    <Modal isOpen onClose={busy ? () => {} : onClose} title={first ? (items[0]?.inbound ? "Replies to new enquiries" : "First emails to review") : "Today's follow-ups"} size="xl" closeOnOverlayClick={false} showCloseButton={!busy}>
       {batch.phase === "preparing" && (
         <p className="text-sm text-gray-700 dark:text-gray-200" role="status">{batch.note || "Preparing…"}</p>
       )}
@@ -34,7 +34,7 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
       {batch.phase !== "preparing" && (
         <>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-            {batch.phase === "review" && (first ? "AI wrote these from your business profile and what is publicly known about each lead. Read them, edit anything, untick what you don't want, then send. Nothing goes out until you press Send." : "AI wrote these from what you actually sent. Edit anything, untick what you don't want, then send. Nothing goes out until you press Send.")}
+            {batch.phase === "review" && (first ? (items[0]?.inbound ? "AI wrote each reply from what the person asked and your business profile. Check any facts, edit anything, untick what you don't want, then send. Nothing goes out until you press Send." : "AI wrote these from your business profile and what is publicly known about each lead. Read them, edit anything, untick what you don't want, then send. Nothing goes out until you press Send.") : "AI wrote these from what you actually sent. Edit anything, untick what you don't want, then send. Nothing goes out until you press Send.")}
             {batch.phase === "sending" && "Sending one at a time. Keep this window open."}
             {batch.phase === "done" && `Finished: ${sent} sent${failed ? `, ${failed} not sent` : ""}.`}
           </p>
@@ -48,10 +48,11 @@ export default function AutoBatchModal({ batch, onChangeItem, onSend, onClose })
                     <span className="text-xs font-normal text-gray-500 dark:text-gray-400 truncate">{it.email}</span>
                   </label>
                   <div className="shrink-0 flex items-center gap-1 text-xs">
-                    <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{first ? `First email${it.quality ? ` · ${it.quality}` : ""}` : `Follow-up #${it.number}${it.isFinal ? " · last" : ""}`}</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{first ? (it.inbound ? "Reply to enquiry" : `First email${it.quality ? ` · ${it.quality}` : ""}`) : `Follow-up #${it.number}${it.isFinal ? " · last" : ""}`}</span>
                     {CHIP_TEXT[it.state] && <span className={`px-2 py-0.5 rounded ${CHIP[it.state]}`}>{CHIP_TEXT[it.state]}</span>}
                   </div>
                 </div>
+                {it.inbound && it.context && <p className="text-xs mb-2 p-2 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100">{it.context}</p>}
                 {it.state === "draft" && batch.phase === "review" ? (
                   <>
                     <input aria-label={`Subject for ${it.email}`} className={`${field} mb-2`} value={it.subject} onChange={(e) => onChangeItem(it.id, { subject: e.target.value })} />

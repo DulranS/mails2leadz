@@ -4,7 +4,9 @@
 //  2. Tenant isolation: a `userId` in the query string or JSON body must equal the token's uid.
 //  3. Provider webhooks (Twilio) can't send a Firebase token: they must carry ?key=WEBHOOK_SECRET.
 //  3b. Invite list: when ALLOWED_EMAILS is set, only those people (and ADMIN_EMAILS) get past this point (lib/access.js).
-//  4. Public: /api/health, /api/auth/callback, /api/unsubscribe (signed-link opt-out) and /api/lead-inbox/ingest (own ingest-key check).
+//  4. Public: /api/health, /api/auth/callback, /api/unsubscribe (signed-link opt-out), /api/lead-inbox/ingest (own ingest-key check)
+//     /api/cron/prepare-drafts (the scheduler's CRON_SECRET check; it only writes drafts) and /api/inbound (the public enquiry
+//     form: its own write-only key, the owner comes from the key, spam-checked and rate-limited).
 
 import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
@@ -12,7 +14,9 @@ import { hasAccess, noAccessMessage } from './lib/access.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
-const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest']);
+// /api/cron/prepare-drafts is called by the host's scheduler, not a browser: it authenticates itself with CRON_SECRET.
+// /api/inbound is called by website visitors (not users): it authenticates with the owner's write-only enquiry key.
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/inbound']);
 const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);

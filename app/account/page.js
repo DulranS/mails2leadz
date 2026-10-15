@@ -24,6 +24,8 @@ export default function AccountPage() {
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
+  const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
+  const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
   const [termsDays, setTermsDays] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [bdrCost, setBdrCost] = useState("");
@@ -86,6 +88,64 @@ export default function AccountPage() {
     setInboxKey((k) => ({ ...k, fresh: "" }));
     await refreshInboxKey();
     setInboxKey((k) => ({ ...k, busy: false }));
+  };
+
+  // Enquiry form: one write-only key; links are tagged with where they are shared so we learn which channel brings business.
+  const refreshInbound = async () => {
+    try {
+      const res = await fetch("/api/inbound-key");
+      const d = await res.json().catch(() => ({}));
+      setInq((q) => ({ ...q, loading: false, available: d.adminMode !== false, key: d.exists && d.key ? d.key : "" }));
+    } catch { setInq((q) => ({ ...q, loading: false })); }
+  };
+  useEffect(() => { if (user?.uid) refreshInbound(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const makeInboundKey = async () => {
+    if (inq.key && typeof window !== "undefined" && !window.confirm("Links you already shared stop working and need replacing. Make a new key?")) return;
+    setInq((q) => ({ ...q, busy: true, msg: "" }));
+    try {
+      const res = await fetch("/api/inbound-key", { method: "POST" });
+      const d = await res.json().catch(() => ({}));
+      setInq((q) => ({ ...q, busy: false, key: res.ok ? d.key : q.key, msg: res.ok ? d.note : d.error || "Could not create the link." }));
+    } catch { setInq((q) => ({ ...q, busy: false, msg: "Could not reach the server." })); }
+  };
+  const revokeInboundKey = async () => {
+    if (typeof window !== "undefined" && !window.confirm("Switch the enquiry form off? Every link you shared stops working.")) return;
+    setInq((q) => ({ ...q, busy: true, msg: "" }));
+    try { await fetch("/api/inbound-key", { method: "DELETE" }); setInq((q) => ({ ...q, busy: false, key: "", msg: "Switched off." })); } catch { setInq((q) => ({ ...q, busy: false, msg: "Could not reach the server." })); }
+  };
+  const inqTag = (inq.custom || inq.src || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  const inqLink = typeof window !== "undefined" && inq.key ? `${window.location.origin}/enquire?k=${inq.key}${inqTag ? `&src=${inqTag}` : ""}` : "";
+
+  // Overnight drafts: switches only. The server prepares DRAFTS; you still review and press Send.
+  const refreshAutopilot = async () => {
+    try {
+      const res = await fetch("/api/autopilot");
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) setAp((a) => ({ ...a, loading: false, available: d.available !== false, cronConfigured: !!d.cronConfigured, settings: { ...a.settings, ...d.settings } }));
+      else setAp((a) => ({ ...a, loading: false }));
+    } catch { setAp((a) => ({ ...a, loading: false })); }
+  };
+  useEffect(() => { if (user?.uid) refreshAutopilot(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const saveAutopilot = async (patch) => {
+    const next = { ...ap.settings, ...patch };
+    if (!next.senderName && user?.displayName) next.senderName = user.displayName;
+    setAp((a) => ({ ...a, settings: next, busy: "save", msg: "" }));
+    try {
+      const res = await fetch("/api/autopilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setAp((a) => ({ ...a, busy: "", msg: d.error || "Could not save." })); return; }
+      setAp((a) => ({ ...a, busy: "", settings: d.settings, msg: "Saved." }));
+    } catch { setAp((a) => ({ ...a, busy: "", msg: "Could not reach the server." })); }
+  };
+  const prepareNow = async () => {
+    setAp((a) => ({ ...a, busy: "prepare", msg: "" }));
+    try {
+      const res = await fetch("/api/draft-queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "prepare", senderName: ap.settings.senderName || user?.displayName || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setAp((a) => ({ ...a, busy: "", msg: d.error || "Could not prepare drafts." })); return; }
+      const why = d.stopped === "queue_full" ? " Your review queue is full: send or dismiss some first." : d.stopped === "NO_PROFILE" ? " Fill in \"Your business\" above first." : d.stopped ? " Stopped early (AI limit or setup): it will try again tomorrow." : "";
+      setAp((a) => ({ ...a, busy: "", msg: `Prepared ${d.first || 0} first email${d.first === 1 ? "" : "s"} and ${d.followup || 0} follow-up${d.followup === 1 ? "" : "s"}. Open the dashboard to review them.${why}` }));
+    } catch { setAp((a) => ({ ...a, busy: "", msg: "Could not reach the server." })); }
   };
 
   const save = async () => {
@@ -215,6 +275,54 @@ export default function AccountPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">Start with the defaults and adjust once you've closed a few deals.</p>
           </details>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Enquiry form <span className="text-xs font-normal text-gray-500">· inbound: people contact you</span></h2>
+          <p className="text-xs text-gray-500 mt-1">A page where anyone can send you an enquiry (put the link in your Instagram/LinkedIn bio, a QR code, your website or an email signature). Each enquiry becomes a deal, tagged with where it came from, and a reply is drafted straight away for you to review and send. You see which channel brings real business under Business Value.</p>
+          {!inq.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so this is switched off.</p>}
+          {inq.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{inq.msg}</p>}
+          {inq.key ? (
+            <div className="mt-3 space-y-2">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div><label className={label} htmlFor="inqsrc">Where will you share this link?</label>
+                  <select id="inqsrc" className={field} value={inq.src} onChange={(e) => setInq((q) => ({ ...q, src: e.target.value, custom: "" }))}>
+                    {["instagram", "linkedin", "facebook", "tiktok", "x", "youtube", "whatsapp", "website", "qr", "email"].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select></div>
+                <div><label className={label} htmlFor="inqcustom">…or your own tag (e.g. spring-flyer)</label><input id="inqcustom" className={field} maxLength={40} value={inq.custom} onChange={(e) => setInq((q) => ({ ...q, custom: e.target.value }))} /></div>
+              </div>
+              <code className="block break-all text-xs p-2 rounded bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white select-all">{inqLink}</code>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button type="button" onClick={() => navigator.clipboard?.writeText(inqLink)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy link</button>
+                <button type="button" onClick={() => navigator.clipboard?.writeText(`<iframe src="${inqLink.replace(/&src=[^&]*$/, "&src=website")}" width="100%" height="560" style="border:0;max-width:480px" title="Enquiry form"></iframe>`)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy website embed</button>
+                <span className="flex-1" />
+                <button type="button" disabled={inq.busy} onClick={makeInboundKey} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">New key</button>
+                <button type="button" disabled={inq.busy} onClick={revokeInboundKey} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Switch off</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" disabled={inq.busy || inq.loading || !inq.available} onClick={makeInboundKey} className="mt-3 min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{inq.busy ? "Creating…" : "Create my enquiry form link"}</button>
+          )}
+        </section>
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Drafts prepared overnight <span className="text-xs font-normal text-gray-500">· you still approve every send</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Each night the app writes first emails for your best new leads and the follow-ups that are due, so you open the dashboard to a ready pile and only review and press Send. Nothing is ever sent without you, and every opt-out, Lost-deal and reply rule still applies.</p>
+          {!ap.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so this is switched off.</p>}
+          {ap.available && !ap.cronConfigured && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The nightly schedule needs CRON_SECRET on the server (see the deployment guide). Until then, drafts are prepared when new leads arrive and when you press "Prepare now".</p>}
+          <div className="mt-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.enabled} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ enabled: e.target.checked })} />Prepare drafts for me every night</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.includeWarm} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ includeWarm: e.target.checked })} />Include WARM leads (default: HOT only)</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoDeals !== false} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoDeals: e.target.checked })} />When a lead replies positively, move their deal forward for me (never to Won or Lost)</label>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 mt-2">
+            <div><label className={label} htmlFor="apsn">Sign-off name on prepared drafts</label><input id="apsn" className={field} maxLength={80} value={ap.settings.senderName || ""} onChange={(e) => setAp((a) => ({ ...a, settings: { ...a.settings, senderName: e.target.value } }))} onBlur={() => ap.available && saveAutopilot({ senderName: ap.settings.senderName })} placeholder={user?.displayName || "Your name"} /></div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:items-center">
+            <span className="text-xs text-gray-600 dark:text-gray-300" role="status">{ap.msg}</span>
+            <span className="flex-1" />
+            <button type="button" disabled={ap.busy === "prepare" || !ap.available || ap.loading} onClick={prepareNow} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{ap.busy === "prepare" ? "Preparing…" : "Prepare now"}</button>
+          </div>
         </section>
 
         <section className={card}>

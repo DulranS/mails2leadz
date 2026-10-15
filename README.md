@@ -1,13 +1,13 @@
-> **New here? Read START_HERE.md first.** It covers the app, the worker and the daily routine in one page.
+> **New here? Read START_HERE.md first.** Where this is headed and what is/isn't built: **STRATEGY.md**. It covers the app, the worker and the daily routine in one page.
 
 # AutoLeads: controlled outreach + pipeline for small businesses
 
 Upload leads, send personalised email/SMS yourself, track replies, manage deals, and see what it's
-worth. AI helps you write and prioritise; **you approve everything that gets sent**.
+worth. AI helps you write and prioritise; **you approve everything that gets sent**. The app does the preparation around that button: leads found, scored, drafted overnight and waiting for your review; replies read and deals moved forward for you.
 
 | Area | What you get |
 |---|---|
-| **Dashboard** | CSV upload, templates + A/B test, email/SMS/WhatsApp/call outreach with daily limits and duplicate protection, reply detection, follow-up queue ("review all due with AI", or **⚡ Draft all, approve together**: checks replies, AI-drafts every due follow-up and lets you approve and send them in one go), lead scoring |
+| **Dashboard** | CSV upload, templates + A/B test, email/SMS/WhatsApp/call outreach with daily limits and duplicate protection, reply detection, follow-up queue ("review all due with AI", or **⚡ Draft all, approve together**: checks replies, AI-drafts every due follow-up and lets you approve and send them in one go), lead scoring, **drafts ready for review** (first emails and follow-ups written ahead of time; you review and press Send), **replies read on detection** (opt-outs suppressed, positive replies move the deal forward, out-of-office ignored) |
 | **AI** (DeepSeek by default) | **Draft** the first email (one lead, or **up to 10 at once, approved together**), the next **follow-up** (written from what you actually sent, a different job each time), a **customer check-in** after a deal is won, and **analyse a reply** (what they want, the deal stage that fits, a suggested answer). A "pipeline coach" explains your numbers in plain language and suggests three actions. **Every AI output is a draft: you edit and approve, nothing is sent or changed on its own.** The best send time is learned from your own replies. Cheap model, cached, capped per customer per day and per month, usage shown to the customer |
 | **CRM & Deals** | One deal per lead, shared stages everywhere (New → Contacted → Qualified → Demo → Proposal → Negotiation → Won/Lost → Delivery/Retention/Expansion) |
 | **Business Value** | A "Do this next" list (replies with no deal, due follow-ups, quiet deals, goal gap) and monthly-goal progress. Past (won revenue by month, win rate, time to win, why deals are lost, where deals come from, email A/B results), present (open/weighted pipeline, funnel, deals needing attention), future (30/60/90-day forecast with a range), ROI, AI cost |
@@ -17,6 +17,7 @@ worth. AI helps you write and prioritise; **you approve everything that gets sen
 | **Weekly KPI** | Business Value: last 7 days vs the 7 days before (sent, replies, newly qualified, demos, won, revenue, lost, invoiced, collected, check-ins), a plain headline, "email this to me" and "copy as text" |
 | **Lead Inbox** | Businesses the lead autopilot (Python worker in worker/, see START_HERE.md) found on OpenStreetMap (free, no key, no card), crawled, scored and filtered. Filter HOT/WARM/COLD, select, "Load into the sender" hands them to the normal CSV import. Nothing is sent from here. Opted-out, lost and already-emailed contacts never arrive |
 | **Target finder** | Lead Inbox → "Who should I look for?": the AI reads what you sell and suggests which kinds of local business to search, each with a ready-to-run worker command (only business types the worker really understands) |
+| **Enquiry form** (inbound) | A public link/QR/website embed where people contact you. Each enquiry becomes a deal tagged with its channel, and a reply is drafted at once for you to review and send. Business Value shows which channel brings enquiries that turn into sales |
 | **Content** (inbound) | AI drafts a week of posts for LinkedIn / Instagram / Facebook / TikTok / X with a design brief, you schedule and post with one tap, log results; analytics by platform and theme, and the AI learns what works for you. Never invents customers or results |
 | **Account** | Profile, "what I sell" (drives AI), your currency, payment terms and how customers pay you, deal-value / cost / stage-chance settings, optional "versus hiring a rep" cost comparison, download my data, delete my data and account |
 

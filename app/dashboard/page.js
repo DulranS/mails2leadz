@@ -499,6 +499,7 @@ function DashboardComponent() {
   const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
   const [autoBatch, setAutoBatch] = useState(null); // "Draft all, approve together": { phase, note, skipped, items }
   const autoBatchBusy = useRef(false);
+  const [readyQueue, setReadyQueue] = useState({ items: [], summary: { first: 0, followup: 0, inbound: 0, total: 0 } }); // drafts prepared ahead of time (see /api/draft-queue)
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
   const [predictiveScores, setPredictiveScores] = useState({});
@@ -3649,6 +3650,14 @@ function DashboardComponent() {
   // ============================================================================
   // REPLY CHECKING - MANUAL ONLY TO AVOID INITIALIZATION ISSUES
   // ============================================================================
+  // What the reply check found AND what the app already did about it (deal moved, opt-out recorded, auto-replies ignored).
+  const announceReplyCheck = (rd) => {
+    if (!rd) return;
+    const lines = (rd.triage || []).filter((t) => t.action).map((t) => `${t.email}: ${String(t.label || "").toLowerCase()}, ${t.action}`);
+    if (lines.length) addNotification(`🤖 ${lines.join("; ")}`, "info", 10000);
+    if (rd.autoReplies > 0) addNotification(`${rd.autoReplies} out-of-office auto-repl${rd.autoReplies === 1 ? "y" : "ies"} ignored: follow-ups carry on.`, "info", 6000);
+  };
+
   const checkForReplies = async () => {
     if (!user?.uid) return;
 
@@ -3676,6 +3685,8 @@ function DashboardComponent() {
           );
           await loadRepliedAndFollowUp();
         }
+        announceReplyCheck(responseData);
+        loadReadyQueue();
       }
     } catch (error) {
       console.error("Error checking for replies:", error);
@@ -4800,6 +4811,7 @@ function DashboardComponent() {
       patchAutoBatch((b) => ({ ...b, phase: "sending" }));
       const csvCell = (v) => `"${String(v || "").replace(/"/g, '""')}"`;
       const sentOk = [];
+      const sentQueueIds = []; // prepared drafts that went out, closed in the queue afterwards
       for (let n = 0; n < todo.length; n++) {
         const it = todo[n];
         changeAutoItem(it.id, { state: "sending" });
@@ -4827,6 +4839,7 @@ function DashboardComponent() {
           if (!data.sent) throw new Error(data.results?.[0]?.reason || "Email was skipped");
           await updateDealStage(it.email, "contacted", { businessName: it.business });
           sentOk.push({ email: it.email, name: it.business, company: it.business });
+          if (it.queueId) sentQueueIds.push(it.queueId);
           changeAutoItem(it.id, { state: "sent" });
         } catch (err) {
           changeAutoItem(it.id, { state: "failed", error: String(err.message || err) });
@@ -4837,6 +4850,7 @@ function DashboardComponent() {
         }
         if (n < todo.length - 1) await new Promise((r) => setTimeout(r, 1500)); // gentle pacing between sends
       }
+      await resolveReadyQueue({ sent: sentQueueIds, dismissed: autoBatch.items.filter((i) => i.queueId && !i.selected).map((i) => i.queueId) });
       await scheduleEmailFollowUps(sentOk);
       invalidateCache("sent_emails");
       await refreshAllData();
@@ -4943,6 +4957,75 @@ function DashboardComponent() {
   const changeAutoItem = (id, patch) => patchAutoBatch((b) => ({ ...b, items: b.items.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
   const closeAutoBatch = () => { if (!autoBatchBusy.current) setAutoBatch(null); };
 
+  // ============================================================================
+  // DRAFTS PREPARED AHEAD OF TIME: written overnight (or when new leads arrive); you review them in the same window as
+  // "Draft all, approve together" and press Send. Opening one re-checks everything (replies, opt-outs, already emailed).
+  // ============================================================================
+  const loadReadyQueue = async () => {
+    if (!user?.uid) return;
+    try {
+      const res = await fetch("/api/draft-queue");
+      if (!res.ok) return;
+      const d = await res.json().catch(() => ({}));
+      setReadyQueue({ items: d.items || [], summary: d.summary || { first: 0, followup: 0, total: 0 } });
+    } catch { /* the banner simply stays hidden */ }
+  };
+  const resolveReadyQueue = async ({ sent = [], dismissed = [] }) => {
+    if (sent.length === 0 && dismissed.length === 0) return;
+    try {
+      await fetch("/api/draft-queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resolve", sent, dismissed }) });
+    } catch { /* the next load re-checks every draft anyway */ }
+    loadReadyQueue();
+  };
+  const openReadyFirst = () => {
+    if (autoBatchBusy.current || autoBatch) return;
+    const items = readyQueue.items.filter((i) => i.kind === "first" && !i.inbound).map(({ kind, ...i }) => i);
+    if (items.length === 0) return;
+    setAutoBatch({ kind: "first", phase: "review", note: "", skipped: [], items });
+  };
+  // Enquiries people sent YOU: replies drafted the moment they arrived. Same review window, same Send button.
+  const openReadyInbound = () => {
+    if (autoBatchBusy.current || autoBatch) return;
+    const items = readyQueue.items.filter((i) => i.kind === "first" && i.inbound).map(({ kind, ...i }) => i);
+    if (items.length === 0) return;
+    setAutoBatch({ kind: "first", phase: "review", note: "", skipped: [], items });
+  };
+  const openReadyFollowUps = async () => {
+    if (!user?.uid || autoBatchBusy.current || aiBatchRef.current || autoBatch) return;
+    autoBatchBusy.current = true;
+    setAutoBatch({ phase: "preparing", note: "Checking for new replies first, so nobody who answered gets a nudge…", skipped: [], items: [] });
+    try {
+      let token = "";
+      try { token = await requestGmailToken(); } catch { token = ""; }
+      if (!token) {
+        addNotification("Gmail permission was not granted, so nothing was opened.", "warning", 6000);
+        setAutoBatch(null);
+        return;
+      }
+      try {
+        const rr = await retryFetch("/api/check-replies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.uid, accessToken: token, senderEmail }) }, 2);
+        if (rr.ok) {
+          const rd = await rr.json().catch(() => ({}));
+          announceReplyCheck(rd);
+          if (rd.replyCount > 0) await loadRepliedAndFollowUp();
+        }
+      } catch { /* the queue below drops anyone who replied, and the send route refuses them too */ }
+      const res = await fetch("/api/draft-queue");
+      const d = await res.json().catch(() => ({}));
+      const all = d.items || [];
+      setReadyQueue({ items: all, summary: d.summary || { first: 0, followup: 0, total: 0 } });
+      const items = all.filter((i) => i.kind === "followup").map(({ kind, ...i }) => i);
+      if (items.length === 0) {
+        addNotification("Those follow-ups are no longer needed (replies came in, or they were already sent).", "info", 7000);
+        setAutoBatch(null);
+        return;
+      }
+      setAutoBatch({ phase: "review", note: "", skipped: [], items, token });
+    } finally {
+      autoBatchBusy.current = false;
+    }
+  };
+
   const startAutoBatch = async () => {
     if (!user?.uid || autoBatchBusy.current || aiBatchRef.current) return;
     const due = getDueEmailTasks().filter((t) => !POST_SALE_STAGES.includes(t.followUpStage)).slice(0, 10);
@@ -4969,6 +5052,7 @@ function DashboardComponent() {
           const rr = await retryFetch("/api/check-replies", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: user.uid, accessToken: token, senderEmail }) }, 2);
           if (!rr.ok) break;
           const rd = await rr.json().catch(() => ({}));
+          announceReplyCheck(rd);
           found += rd.replyCount || 0;
           if (!(rd.waiting > 0 && rd.checked > 0)) break;
           patchAutoBatch((b) => ({ ...b, note: `Checking for replies… ${(round + 1) * (rd.checked || 0)} emails so far` }));
@@ -5020,6 +5104,7 @@ function DashboardComponent() {
     patchAutoBatch((b) => ({ ...b, phase: "sending" }));
     try {
       let token = autoBatch.token;
+      const sentQueueIds = []; // prepared drafts that went out, closed in the queue afterwards
       try { token = await requestGmailToken(); } catch { /* keep the one from earlier */ }
       for (let n = 0; n < todo.length; n++) {
         const it = todo[n];
@@ -5029,12 +5114,14 @@ function DashboardComponent() {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || "Follow-up failed");
           if (it.task?.id) await completeFollowUpTask(user.uid, it.task.id, { completedBy: user.email, method: "email" }).catch(() => {});
+          if (it.queueId) sentQueueIds.push(it.queueId);
           changeAutoItem(it.id, { state: "sent" });
         } catch (err) {
           changeAutoItem(it.id, { state: "failed", error: String(err.message || err) });
         }
         if (n < todo.length - 1) await new Promise((r) => setTimeout(r, 1500)); // gentle pacing between sends
       }
+      await resolveReadyQueue({ sent: sentQueueIds, dismissed: autoBatch.items.filter((i) => i.queueId && !i.selected).map((i) => i.queueId) });
       invalidateCache("sent_emails");
       await refreshAllData();
       patchAutoBatch((b) => ({ ...b, phase: "done" }));
@@ -5934,6 +6021,9 @@ function DashboardComponent() {
       setEnrichStatusMessage("");
     }
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
+
+  // Drafts prepared ahead of time: look once the dashboard opens.
+  useEffect(() => { if (user?.uid) loadReadyQueue(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leads the owner picked in the Lead Inbox arrive as CSV text and go through the same import as an uploaded file.
   useEffect(() => {
@@ -7199,6 +7289,24 @@ function DashboardComponent() {
       </header>
 
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {/* DRAFTS READY FOR REVIEW (prepared ahead of time; nothing is sent until you press Send in the review window) */}
+        {readyQueue.summary.total > 0 && !autoBatch && (
+          <div role="region" aria-label="Drafts ready for review" className="mb-4 p-4 rounded-xl border border-indigo-700 bg-indigo-900/30 text-indigo-100">
+            <div className="font-semibold text-sm sm:text-base">📝 {readyQueue.summary.total} draft{readyQueue.summary.total === 1 ? "" : "s"} ready for your review</div>
+            <p className="text-xs mt-1 opacity-80">Written for you ahead of time. You read, edit and untick as you like; nothing is sent until you press Send.</p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+              {readyQueue.summary.inbound > 0 && (
+                <button type="button" onClick={openReadyInbound} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-gray-900 transition">⚡ Reply to {readyQueue.summary.inbound} new enquir{readyQueue.summary.inbound === 1 ? "y" : "ies"}</button>
+              )}
+              {readyQueue.summary.followup > 0 && (
+                <button type="button" onClick={openReadyFollowUps} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition">Review {readyQueue.summary.followup} follow-up{readyQueue.summary.followup === 1 ? "" : "s"}</button>
+              )}
+              {readyQueue.summary.first > 0 && (
+                <button type="button" onClick={openReadyFirst} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition">Review {readyQueue.summary.first} first email{readyQueue.summary.first === 1 ? "" : "s"}</button>
+              )}
+            </div>
+          </div>
+        )}
         {/* STATUS BAR */}
         {status && (
           <div

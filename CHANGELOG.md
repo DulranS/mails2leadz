@@ -1,5 +1,43 @@
 # Changelog
 
+## Pass 7: inbound + outbound as one system (enquiry form, instant reply draft, channel ROI) and the strategy note
+Nothing here sends anything. Strategy, status and the "if we ever sell it" checklist: **STRATEGY.md**.
+
+**New: inbound**
+- **Enquiry form.** Account → *Enquiry form* makes a link (`/enquire?k=…&src=…`) for your Instagram/LinkedIn bio, a QR code, an email signature or a website (copy-paste iframe embed). Tag each link with where it is shared. The key is write-only: it can only submit an enquiry to you.
+- **Each enquiry becomes a deal** ("Inbound enquiry", with its channel) and **a reply is drafted at once** into the review queue (banner: "⚡ Reply to N new enquiries"). You see what they asked above the draft, edit, press Send. A person who is already a deal keeps their stage; someone you already emailed gets no first-reply draft.
+- **"Do this next" puts unanswered enquiries first**, oldest first, with their age in hours.
+- **Business Value: "Inbound: which channel brings enquiries that turn into sales"**: enquiries -> real opportunities -> won -> revenue per channel (small numbers are labelled as a hint).
+- Protection for a public endpoint: honeypot + link-stuffing checks (bots get a normal 200 and nothing is stored), field limits, one enquiry per person per day, per-IP and per-key rate brakes, **20 AI-drafted replies per owner per day** (the enquiry is still stored beyond that), opted-out contacts are never drafted for. The owner always comes from the key, never from the request.
+
+**Deploy notes:** republish the Firestore rules (`inbound_enquiries`, server-written); `/api/inbound` is public by design (proxy allow-list) and answers cross-origin so a website embed works; `/enquire` is disallowed in `robots.txt`.
+**Tests:** `tests/inbound.test.mjs` (cleaning, spam, tags, ids, queue, channel metrics, waiting list, next action) and a proxy test (public endpoint vs signed-in key route). Full suite and `next build` pass. **Not run live:** the public endpoint against real Firebase/DeepSeek, and the hosted page in a browser (no keys / no display here), so submit one test enquiry after deploying.
+
+## Pass 6: closing the gaps below "you approve every send" (drafts prepared overnight, replies read, out-of-office fixed)
+Nothing here sends anything. A human still presses Send on every email. This pass removes the manual steps *around* that button.
+
+**New**
+- **Drafts ready for review.** Switch on **Account → Drafts prepared overnight**. The server then writes first emails for your best new leads (HOT; WARM optional) and the follow-ups that are due, parks them in a queue, and the dashboard shows "N drafts ready for your review". Open one and you get the same review window as "Draft all, approve together": edit, untick, press Send once.
+  - When it runs: right after the lead worker delivers new leads (first emails), every night at 01:30 UTC (`vercel.json` cron → `/api/cron/prepare-drafts`, needs `CRON_SECRET`), and on demand with **Prepare now**.
+  - Caps: 10 first emails + 10 follow-ups per run, 30 unreviewed drafts at most; drafts older than 5 days go stale. The cron needs **no Gmail access**: it only writes drafts.
+  - Opening follow-up drafts first checks for replies (same as "Draft all"). The queue also re-checks every draft before showing it: replied, opted out, Lost, already emailed, or that follow-up already sent -> dropped.
+  - Unticked drafts are dismissed (not re-drafted tomorrow); drafts that failed to send stay ready. Sent first emails are marked loaded in the Lead Inbox.
+- **Replies are read the moment they are detected** (`lib/server/reply-triage.js`): explicit opt-out wording ("stop emailing me", "unsubscribe") is added to the do-not-contact list at once; an interested / meeting / pricing / question reply creates or moves the deal **forward** (never backwards, never to Won, never to Lost; switch off with "move their deal forward for me" in Account); "not interested" and AI-read opt-outs only store a suggestion. The dashboard says what it did.
+- **Out-of-office replies no longer count as replies** (bug, pre-existing): an automatic answer used to mark the lead as replied, cancel the follow-ups and inflate the reply rate. It is now remembered and ignored; a real reply later is picked up normally.
+
+**Changed**
+- The first-email and follow-up AI drafting rules moved to `lib/server/draft-core.js` and are used by both the buttons and the overnight job (one copy of the prompts and safety checks). `ai-smart-outreach` and `ai-followup` answer exactly as before.
+
+**Deploy notes:** set `CRON_SECRET` (any long random string) on the host; **republish the Firestore rules** (`draft_queue` and `autopilot_users` are new, server-written collections); `vercel.json` is new (other hosts: call `GET /api/cron/prepare-drafts` daily with `Authorization: Bearer <CRON_SECRET>`).
+**Tests:** `tests/draft-queue.test.mjs` (settings, queue ids, who gets drafted, due follow-ups, staleness, out-of-office / opt-out wording, forward-only deal moves). The full suite and `next build` pass. **Not run:** the new routes against a live Firebase / DeepSeek / Gmail (no keys in the build environment), so the first overnight run needs a live check.
+
+**Merged with Pass 5 (reply-check rotation + worker `add` command), which was made separately on the same base.** The two touch `check-replies` and the follow-up batch together: rotation picks which emails are checked, then this pass reads each reply that is found.
+
+**Still NOT built, on purpose or by constraint**
+- *Consciously left out:* unattended sending, automatic replies to prospects, automatic Won / Lost on a reply.
+- *Not yet built (constraint):* checking replies on a timer or from the server. Gmail access is a one-hour token the browser grants on click; a server job would need stored offline Gmail access, which changes the sign-in consent and what you tell customers. Replies are checked when you press Check replies or open the follow-up drafts.
+- *Known limit:* reply reading uses Gmail's short preview (about 200 characters) of the reply, not the full text; enough for intent, thin for edge cases, which is why only clear intents act on their own.
+
 ## Pass 5: closing the loop on outbound automation
 **Bug fixed (pre-existing, affected every sender with more than 50 emails)**
 - **Replies to most of your emails were never detected.** `/api/check-replies` loaded every unreplied sent email and checked only `slice(0, 50)` in storage order: a fixed, arbitrary 50. Most recipients never reply, so those same 50 were re-checked forever and a reply to any other email was missed, so follow-ups kept going to people who had answered and the reply never became a deal. Now each call picks never-checked emails first (newest first), then the one checked longest ago, only from the last 60 days, and stamps `replyCheckedAt` on every email it looked at, so repeated calls cover everything and progress survives a timeout. The response reports `eligible` and `waiting`; the "Draft all, approve together" follow-up step keeps checking (max 3 rounds) while emails are waiting. `maxDuration` is now 60s for the route. Tests: `tests/reply-check-order.test.mjs` (200 emails are fully covered in 4 calls; the old behaviour would see the same 50 forever).

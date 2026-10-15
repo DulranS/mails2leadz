@@ -406,6 +406,20 @@ export default function BusinessValuePage() {
           </div>
         )}
 
+        {(m.past.inboundByChannel || []).length > 0 && (
+          <Card title="Inbound: which channel brings enquiries that turn into sales">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Channel</th><th className="py-1 text-right">Enquiries</th><th className="py-1 text-right">Became real opportunities</th><th className="py-1 text-right">Won</th><th className="py-1 text-right">Revenue</th></tr></thead>
+                <tbody>{m.past.inboundByChannel.map((r) => (
+                  <tr key={r.channel || "none"} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">{r.label}</td><td className="py-1.5 text-right">{r.enquiries}</td><td className="py-1.5 text-right">{r.qualified}</td><td className="py-1.5 text-right">{r.won}</td><td className="py-1.5 text-right">{money(r.revenue)}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Tag each link you share (Account → Enquiry form) with where it is posted, e.g. <code>instagram</code> or <code>qr</code>. Do more of what shows revenue; stop what only shows enquiries. Small numbers are a hint, not proof.</p>
+          </Card>
+        )}
+
         {(m.past.bySource.length > 0 || tplStats.active) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {m.past.bySource.length > 0 && (
