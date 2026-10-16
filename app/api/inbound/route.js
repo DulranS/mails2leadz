@@ -17,6 +17,8 @@ import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
 import { queueDocId, QUEUE_KINDS, QUEUE_STATUS } from '../../../lib/draft-queue.js';
 import { draftInboundReply, DraftError } from '../../../lib/server/draft-core.js';
 import { loadAutopilot } from '../../../lib/server/prepare-drafts.js';
+import { getEntitlement } from '../../../lib/server/tenant.js';
+import { featureAllowed } from '../../../lib/tenant.js';
 
 export const maxDuration = 30;
 
@@ -85,6 +87,8 @@ export async function POST(request) {
     const db = getDb();
     const uid = await ownerFromKey(db, rawKey);
     if (!uid) return out(401, { error: 'This link is not active.' });
+    const ent = await getEntitlement(db, uid);
+    if (ent.mode === 'suspended') return out(503, { error: 'This enquiry form is not available.' });
     if (tooMany(`key:${uid}`, INBOUND_PER_KEY_PER_HOUR)) return out(429, { error: 'Too many requests. Please try again later.' });
 
     const parsed = sanitizeEnquiry(body);
@@ -118,7 +122,9 @@ export async function POST(request) {
         const sentBefore = await getDocs(query(collection(db, 'sent_emails'), where('userId', '==', uid), where('to', '==', e.email)));
         if (!sentBefore.empty) return; // already in a conversation with them: the owner answers from their inbox, nothing to "first-reply"
         const today = await getDocs(query(collection(db, 'inbound_enquiries'), where('userId', '==', uid), where('day', '==', day)));
-        if (today.docs.filter((d) => d.data().drafted === true).length >= INBOUND_DRAFTS_PER_DAY) return; // daily AI cap: the enquiry is stored, the owner writes this one
+        if (!featureAllowed(ent, 'inbound')) return; // unpaid / plan without it: the enquiry is stored for when they return, no AI reply is written
+        const draftCap = Math.min(INBOUND_DRAFTS_PER_DAY, ent.limits.enquiryDraftsPerDay ?? INBOUND_DRAFTS_PER_DAY);
+        if (today.docs.filter((d) => d.data().drafted === true).length >= draftCap) return; // daily AI cap: the enquiry is stored, the owner writes this one
         const settings = await loadAutopilot(db, uid);
         const r = await draftInboundReply({ db, uid, enquiry: e, senderName: settings.senderName });
         await setDoc(doc(db, 'draft_queue', queueDocId(uid, QUEUE_KINDS.FIRST, e.email)), {

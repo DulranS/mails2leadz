@@ -1,5 +1,7 @@
 // app/api/send-new-leads/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
@@ -153,10 +155,13 @@ export async function POST(request) {
       fieldMappings,
       accessToken,
       template,
-      userId,
+      userId: claimedUserId,
       emailImages = [],
       emailAttachments = []
     } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
     
     if (!userId || !accessToken || !recipients || !Array.isArray(recipients)) {
       return NextResponse.json(
@@ -165,16 +170,20 @@ export async function POST(request) {
       );
     }
     
+    const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
+    if (gate.response) return gate.response;
+    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS); // the plan can only LOWER the safety cap
+
     // Daily limit (dates are compared as ISO strings, see lib/server/daily-count.js)
     const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
-    const remainingQuota = CONFIG.MAX_DAILY_EMAILS - (sentToday ?? 0);
+    const remainingQuota = emailCap - (sentToday ?? 0);
 
     if (remainingQuota <= 0) {
       return NextResponse.json(
         {
           error: 'Daily email limit reached',
           dailyCount: sentToday,
-          limit: CONFIG.MAX_DAILY_EMAILS,
+          limit: emailCap,
           remainingToday: 0
         },
         { status: 429, headers }
@@ -293,8 +302,8 @@ export async function POST(request) {
       skipped: skippedCount,
       total: recipientsToSend.length,
       dailyCount: newDailyCount,
-      limit: CONFIG.MAX_DAILY_EMAILS,
-      remainingToday: CONFIG.MAX_DAILY_EMAILS - newDailyCount
+      limit: emailCap,
+      remainingToday: emailCap - newDailyCount
     }, { headers });
     
   } catch (error) {

@@ -1,8 +1,11 @@
 // app/api/cache-clear/route.js
 import { NextResponse } from 'next/server';
+import { requireAdmin } from '../../../lib/server/route-helpers.js';
 import { clearAllCache, invalidateCache } from '../../../lib/firebase-cache.js';
 
 export async function POST(request) {
+  const admin = requireAdmin(request); // server-wide diagnostics: the operator only, never a tenant
+  if (admin.response) return admin.response;
   try {
     const { collection } = await request.json();
 

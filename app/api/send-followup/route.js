@@ -1,5 +1,7 @@
 // app/api/send-followup/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
@@ -160,7 +162,9 @@ export async function POST(request) {
     const { accessToken, senderName, attachments = [] } = payload;
     const email = String(payload.email || '').trim().toLowerCase();
     // The verified user (set by proxy.js) wins over anything in the body.
-    const userId = request.headers.get('x-user-id') || payload.userId;
+    const who = identify(request, payload.userId);
+    if (who.response) return who.response;
+    const userId = who.uid;
     // Approved AI/custom wording: plain strings only, bounded size.
     const customTemplates = Array.isArray(payload.customTemplates)
       ? payload.customTemplates
@@ -176,6 +180,9 @@ export async function POST(request) {
       );
     }
     
+    const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
+    if (gate.response) return gate.response;
+
     const existingQuery = query(
       collection(db, 'sent_emails'),
       where('userId', '==', userId),

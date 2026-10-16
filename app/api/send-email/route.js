@@ -1,5 +1,7 @@
 // app/api/send-email/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
@@ -167,11 +169,14 @@ export async function POST(request) {
       templateToSend,
       emailImages = [],
       emailAttachments = [],
-      userId,
+      userId: claimedUserId,
       csvSource,
       angle: angleInput,
       senderName: typedSenderName,
     } = requestData;
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
     const angle = isAngleId(angleInput) ? angleInput : ''; // which message angle this email tested (see lib/angles.js)
 
     // CSV-based email sending
@@ -179,13 +184,17 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
+    if (gate.response) return gate.response;
+    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS); // the plan can only LOWER the safety cap
+
     // Daily safety limit (protects the customer's Gmail account from being flagged for bulk sending).
     // If today's count cannot be read at all we continue, but the limit is also enforced inside the loop below.
     const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
-    let remaining = CONFIG.MAX_DAILY_EMAILS - (sentToday ?? 0);
+    let remaining = emailCap - (sentToday ?? 0);
     if (remaining <= 0) {
       return NextResponse.json(
-        { error: 'Daily email limit reached', dailyCount: sentToday, limit: CONFIG.MAX_DAILY_EMAILS },
+        { error: 'Daily email limit reached', dailyCount: sentToday, limit: emailCap },
         { status: 429 }
       );
     }
@@ -225,7 +234,7 @@ export async function POST(request) {
     for (const row of dataRows) {
       if (remaining <= 0) {
         skipCount++;
-        results.push({ email: parseCsvRow(row)[emailIndex]?.trim(), status: 'skipped', reason: `Daily limit of ${CONFIG.MAX_DAILY_EMAILS} reached: continue tomorrow` });
+        results.push({ email: parseCsvRow(row)[emailIndex]?.trim(), status: 'skipped', reason: `Daily limit of ${emailCap} reached: continue tomorrow` });
         continue;
       }
       const values = parseCsvRow(row);

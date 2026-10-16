@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { getDb, uidFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { signState } from '../../../lib/server/token-vault.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { OFFLINE_SCOPE, offlineConfigured, redirectUriFor, oauthClient, loadConnection, removeConnection } from '../../../lib/server/gmail-offline.js';
 
 const reply = (status, body) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -28,6 +29,8 @@ export async function POST(request) {
   const uid = uidFromRequest(request);
   if (!uid) return reply(401, { error: 'Please sign in again.' });
   if (!isAdminMode() || !offlineConfigured()) return reply(503, { error: 'Not set up on the server yet: needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' });
+  const gate = await guardTenant(getDb(), uid, { feature: 'offlineGmail' }); // plan / trial / suspension (SAAS_MODE only)
+  if (gate.response) return gate.response;
   const url = oauthClient(redirectUriFor(request)).generateAuthUrl({
     access_type: 'offline', // a refresh token, so the check can run while nobody is signed in
     prompt: 'consent', // Google only returns a refresh token on a fresh consent

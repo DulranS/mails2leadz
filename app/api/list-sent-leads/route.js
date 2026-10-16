@@ -1,5 +1,6 @@
 // app/api/list-sent-leads/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, orderBy, deleteDoc, doc, limit } from '../../../lib/server-firestore.js';
 
@@ -75,7 +76,10 @@ export async function POST(request) {
       );
     }
 
-    const { userId, limit: limitParam = 50, skipCleanup = false } = await request.json();
+    const { userId: claimedUserId, limit: limitParam = 50, skipCleanup = false } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!userId) {
       return NextResponse.json(

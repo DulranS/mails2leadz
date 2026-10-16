@@ -1,10 +1,13 @@
 // app/api/email-debug/route.js
 import { NextResponse } from 'next/server';
+import { requireAdmin } from '../../../lib/server/route-helpers.js';
 
 // ============================================================================
 // COMPREHENSIVE EMAIL SYSTEM DEBUG
 // ============================================================================
 export async function POST(request) {
+  const admin = requireAdmin(request); // server-wide diagnostics: the operator only, never a tenant
+  if (admin.response) return admin.response;
   try {
     const debugInfo = {
       timestamp: new Date().toISOString(),

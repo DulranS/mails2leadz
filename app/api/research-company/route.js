@@ -1,5 +1,6 @@
 // app/api/research-company/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc } from '../../../lib/server-firestore.js';
 import { callAI, AiError, getBusinessProfile, profileBlock, SALES_GUARDRAILS } from '../../../lib/ai-client.js';
@@ -26,7 +27,9 @@ const db = getFirestore(app);
 export async function POST(request) {
   try {
     const { companyName, companyWebsite, defaultEmailTemplate, userId: bodyUserId } = await request.json();
-    const userId = request.headers.get('x-user-id') || bodyUserId; // the verified user wins over the body
+    const who = identify(request, bodyUserId); // the verified user, never the body
+    if (who.response) return who.response;
+    const userId = who.uid;
     if (!companyName || !userId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }

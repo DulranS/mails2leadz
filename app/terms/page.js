@@ -3,6 +3,8 @@ import LegalPage, { Section, Bullets, Contact } from '../components/LegalPage';
 import { APP_NAME } from '../../lib/brand.js';
 
 export const metadata = { title: 'Terms of Service' };
+export const dynamic = 'force-dynamic'; // reads SAAS_MODE when requested, not when built
+const SAAS = String(process.env.SAAS_MODE || '').trim().toLowerCase() === 'on';
 
 export default function TermsPage() {
   return (
@@ -60,7 +62,19 @@ export default function TermsPage() {
       </Section>
 
       <Section title="7. Fees">
-        <p>If the service is paid for your account, the price and billing terms are agreed with you before you are charged. Nothing is charged through this app automatically.</p>
+        {SAAS ? (
+          <>
+            <p>New accounts start with a free trial. After it, using the service for sending, AI and background jobs needs a paid plan; until then your data stays available to read and export.</p>
+            <Bullets items={[
+              'Plans, their limits and prices are shown when you choose one. Payments are taken by Stripe on its own pages; we never see your card details.',
+              'A subscription renews each period until you cancel. You can cancel at any time in Account → Manage billing; access then continues until the end of the period you paid for.',
+              'If a payment fails we pause sending and AI after a short grace period until the card is fixed. Nothing is deleted when an account is paused.',
+              'We may change prices or plan limits with notice before your next renewal.',
+            ]} />
+          </>
+        ) : (
+          <p>If the service is paid for your account, the price and billing terms are agreed with you before you are charged. Nothing is charged through this app automatically.</p>
+        )}
       </Section>
 
       <Section title="8. Ending">

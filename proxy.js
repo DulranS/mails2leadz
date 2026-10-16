@@ -5,22 +5,28 @@
 //  3. Provider webhooks (Twilio) can't send a Firebase token: they must carry ?key=WEBHOOK_SECRET.
 //  3b. Invite list: when ALLOWED_EMAILS is set, only those people (and ADMIN_EMAILS) get past this point (lib/access.js).
 //  4. Public: /api/health, /api/auth/callback, /api/unsubscribe (signed-link opt-out), /api/lead-inbox/ingest (own ingest-key check)
-//     /api/cron/prepare-drafts (the scheduler's CRON_SECRET check; it only writes drafts), /api/cron/check-replies (same CRON_SECRET check; read-only Gmail, sends nothing) and /api/inbound (the public enquiry
+//     /api/cron/prepare-drafts (the scheduler's CRON_SECRET check; it only writes drafts) and /api/inbound (the public enquiry
 //     form: its own write-only key, the owner comes from the key, spam-checked and rate-limited).
 
 import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 import { hasAccess, noAccessMessage } from './lib/access.js';
+import { makeLimiter } from './lib/rate-limit.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
-// /api/cron/prepare-drafts and /api/cron/check-replies are called by the host's scheduler, not a browser: they authenticate themselves with CRON_SECRET.
+// /api/cron/prepare-drafts is called by the host's scheduler, not a browser: it authenticates itself with CRON_SECRET.
 // /api/inbound is called by website visitors (not users): it authenticates with the owner's write-only enquiry key.
-const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/inbound']);
+// /api/stripe/webhook is Stripe: it carries no sign-in but must carry a valid Stripe signature over the raw body (verified in the route).
+// /api/cron/check-replies is the scheduler (CRON_SECRET). /api/gmail-offline/callback is Google's redirect after the owner's read-only
+// consent: it carries no sign-in, so it trusts ONLY the signed, 10-minute `state` created when the owner pressed Connect.
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/gmail-offline/callback', '/api/stripe/webhook', '/api/inbound']);
 const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
-const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear']);
+const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear', '/api/cache-stats', '/api/admin/tenants']);
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
+// Per-account request brake (API_RATE_LIMIT_PER_MIN, default 600, 0 = off): stops a runaway script, never a normal session.
+const limiter = makeLimiter({ limit: process.env.API_RATE_LIMIT_PER_MIN === undefined ? 600 : Number(process.env.API_RATE_LIMIT_PER_MIN) });
 
 const json = (status, error, code) => NextResponse.json(code ? { error, code } : { error }, { status, headers: { 'Cache-Control': 'no-store' } });
 
@@ -51,6 +57,9 @@ async function gate(request) {
   if (!user) return json(401, 'Please sign in again (missing or expired session).');
 
   if (!hasAccess(user.email)) return json(403, noAccessMessage(user.email), 'NO_ACCESS');
+
+  const rate = limiter.hit(user.uid);
+  if (!rate.ok) { const r = json(429, 'Too many requests. Please slow down and try again in a moment.', 'RATE_LIMITED'); r.headers.set('Retry-After', String(rate.retryAfterSec)); return r; }
 
   if (ADMIN_ONLY.has(pathname)) {
     const admins = (process.env.ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);

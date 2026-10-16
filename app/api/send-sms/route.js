@@ -1,5 +1,7 @@
 // app/api/send-sms/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
@@ -41,7 +43,10 @@ const formatForDialing = normalizePhone;
 // ============================================================================
 export async function POST(request) {
   try {
-    const { phone, message, businessName, userId } = await request.json();
+    const { phone, message, businessName, userId: claimedUserId } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
     
     if (!phone || !message || !userId) {
       return NextResponse.json(
@@ -50,6 +55,9 @@ export async function POST(request) {
       );
     }
     
+    const gate = await guardTenant(db, userId);
+    if (gate.response) return gate.response;
+
     const formattedPhone = formatForDialing(phone);
     if (!formattedPhone) {
       return NextResponse.json(

@@ -22,25 +22,33 @@ Do these in order. The order matters: step 3 before step 4.
    - **Account > Download my data** works.
    - Account → **Drafts prepared overnight**: switch on, press **Prepare now**; the dashboard shows the ready drafts; open them, send one, confirm it arrives. Reply to it from another address with "Sounds good, tell me more": **Check replies** should say the deal moved forward.
 
+## Selling it (SAAS_MODE): optional, off by default
+Read **COMMERCIAL_READINESS.md** first (what is built, what is not, what is outside our control). With `SAAS_MODE` unset nothing below applies and our own use is unchanged.
+1. **Before** turning it on, set `INTERNAL_EMAILS` (and `ADMIN_EMAILS`) to your own accounts so they are never trialled or limited.
+2. Stripe: create two recurring **prices** (Starter, Growth) and put their ids in `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_GROWTH`. Put the secret key in `STRIPE_SECRET_KEY`.
+3. Stripe → Developers → Webhooks → add `https://YOUR-DOMAIN/api/stripe/webhook` with the events `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.paid`. Put its signing secret in `STRIPE_WEBHOOK_SECRET`. In Stripe settings also enable the **customer portal** and the payment-failure emails.
+4. Decide who may sign up: for open sign-ups leave `ALLOWED_EMAILS` empty (an invite list blocks everyone else).
+5. Set `SAAS_MODE=on`, redeploy, republish the Firestore rules (`tenants` and `admin_audit` are server-only).
+6. Open `/admin` (as an `ADMIN_EMAILS` account): the configuration check should be all ticked. Then run the six live checks at the end of COMMERCIAL_READINESS.md **with Stripe test keys** before using live keys.
+
+## Automatic reply checking while you are away (optional)
+Replies are normally found when you press Check replies. This makes it happen every night as well, and leaves a "while you were away" note on the dashboard. **Read-only**: the server can read replies, never send or change mail. Sending still needs you, in the browser.
+1. Set `TOKEN_ENC_KEY` (`openssl rand -hex 32`). It encrypts the saved access key. **Keep it:** if it changes, every owner must reconnect. Also needs `GOOGLE_CLIENT_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON` and `CRON_SECRET`.
+2. Google Cloud console → APIs & Services → Credentials → your OAuth client → **Authorized redirect URIs**: add `https://YOUR-DOMAIN/api/gmail-offline/callback` (Account → "Replies checked for you" shows the exact address).
+3. OAuth consent screen: keep the `gmail.readonly` scope and set the publishing status to **In production**. While it says **Testing**, Google ends the saved access after **7 days** (the app then shows "Gmail access expired" and asks to reconnect). A production app that Google has not verified shows an "unverified app" warning on connect; that is normal for your own mailbox. **Check Google's current rules in the console:** sources differ on when verification becomes mandatory, and it is Google's decision, not ours.
+4. **Republish the Firestore rules** (`reply_notices` is new; `gmail_offline` is deliberately not readable from any browser).
+5. Schedule: `vercel.json` runs the reply check at 00:30 UTC and the drafts at 01:30 UTC, so overnight drafts already know who replied. Vercel's free plan allows daily jobs only; for a more frequent check (a hot reply found within hours is worth money) use Vercel Pro or an outside scheduler that calls `GET /api/cron/check-replies` with the header `Authorization: Bearer <CRON_SECRET>`.
+6. Test once: Account → Connect Gmail (read-only) → reply to one of your own emails from another address → `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/check-replies` → open the dashboard: the "While you were away" note appears and the deal moves.
+
 ## Drafts prepared overnight (optional)
 - Set `CRON_SECRET` to a long random string. `vercel.json` schedules `/api/cron/prepare-drafts` daily at 01:30 UTC and Vercel sends the secret itself. On another host, call `GET /api/cron/prepare-drafts` once a day with the header `Authorization: Bearer <CRON_SECRET>`.
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key. **Republish the Firestore rules** (`draft_queue` and `autopilot_users` are new).
 - Each customer switches it on in Account → "Drafts prepared overnight". The job only writes drafts: it never sends and needs no Gmail access.
 - Test it once: Account → **Prepare now**, then open the dashboard: the "drafts ready for your review" banner appears. To test the schedule itself: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/prepare-drafts`.
 
-## Reply watch (timed reply checks, optional)
-Finds replies while the app is closed: reads each one in full, stops follow-ups to anyone who replied, moves interested leads forward, records opt-outs. Read-only: it cannot send, delete or change any email, and it sends nothing.
-- Set `GMAIL_TOKEN_KEY` (a long random string, 24+ characters; it encrypts the stored Google key) plus `CRON_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON` and the Google client id/secret you already have. **Never change `GMAIL_TOKEN_KEY` later**: stored connections stop working and owners must connect again. **Republish the Firestore rules** (a comment documents the new server-only `gmail_connections` collection; no rule change is needed, browsers are denied by default).
-- In Google Cloud, the OAuth client must list your site under **Authorized JavaScript origins** (it already does if sign-in works). No new redirect URI is needed.
-- Each owner turns it on at Account → **Reply watch → Connect Gmail (read-only)**; that is one extra Google consent screen asking only to *read* email. Pause, Check now and Disconnect (cancels the key at Google and deletes it) are on the same card. Deleting the account does the same.
-- **Schedule.** `vercel.json` runs `/api/cron/check-replies` once a day at 01:00 UTC (just before the 01:30 overnight drafts, so drafts are never prepared for someone who already replied). This works on every Vercel plan. To check more often: on Vercel Pro change the schedule to e.g. `*/15 * * * *`; on the free plan use a free pinger (cron-job.org, GitHub Actions) that calls `GET /api/cron/check-replies` with the header `Authorization: Bearer <CRON_SECRET>` every 15-30 minutes. The job never re-checks one owner more often than every 8 minutes, and does up to 4 x 50 emails per owner per run.
-- **Google "Testing" mode expires the connection every 7 days** (Google's rule for unpublished apps). Account shows "Connect again" when that happens. To stop it, set the OAuth consent screen's publishing status to **In production**. For your own use and up to 100 users an unverified app works (users click through Google's warning). Selling to more people needs Google's verification for the restricted `gmail.readonly` scope (see "Public pages" below), so treat this as a feature for you and a small first group.
-- Test once: connect in Account, press **Check now**; then `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/check-replies` should answer `{"success":true,...}`. Account → Run connection check shows a "Reply watch" line.
-
 ## Enquiry form (inbound, optional)
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key; **republish the Firestore rules** (`inbound_enquiries` is new).
 - Account → *Enquiry form* → create the link, tag it per place you share it. `/api/inbound` is public on purpose (visitors are not users); it only accepts enquiries for the key's owner.
-- **Content planner links.** With the enquiry link created, Content automatically adds your tagged link to every post it drafts (LinkedIn, Facebook, X: a clickable link; Instagram, TikTok: a "link in bio" line plus the tagged link to set once as your profile link). Each post's own link is tagged with the post, so Content shows enquiries per post and per platform, and the planner learns from them without you typing numbers in. Switch it off, or change the line before the link, on the Content page.
 - Test once after deploying: open the link in a private window, send an enquiry, then check the dashboard banner "Reply to 1 new enquiry" and Business Value → "Inbound".
 
 ## Who can sign in (set this before you share the link)

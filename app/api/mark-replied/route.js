@@ -1,5 +1,6 @@
 // app/api/mark-replied/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { cancelPendingFollowUps } from '../../../lib/reply-sync.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc } from '../../../lib/server-firestore.js';
@@ -76,7 +77,10 @@ export async function POST(request) {
       );
     }
 
-    const { userId, email } = await request.json();
+    const { userId: claimedUserId, email } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!userId || !email) {
       return NextResponse.json(

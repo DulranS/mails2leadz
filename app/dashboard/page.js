@@ -499,6 +499,8 @@ function DashboardComponent() {
   const aiBatchRef = useRef(null); // "Review all due" run: { queue: [task], total, position }
   const [autoBatch, setAutoBatch] = useState(null); // "Draft all, approve together": { phase, note, skipped, items }
   const autoBatchBusy = useRef(false);
+  const [tenantInfo, setTenantInfo] = useState(null); // plan standing + first-steps progress (see /api/tenant)
+  const [notices, setNotices] = useState([]); // "while you were away": what the overnight reply check found (see /api/notices)
   const [readyQueue, setReadyQueue] = useState({ items: [], summary: { first: 0, followup: 0, inbound: 0, total: 0 } }); // drafts prepared ahead of time (see /api/draft-queue)
   const [aiReplyAssist, setAiReplyAssist] = useState(null); // { loading } | { error } | { result }
   const [interestedLeadsList, setInterestedLeadsList] = useState([]);
@@ -3653,7 +3655,6 @@ function DashboardComponent() {
   // What the reply check found AND what the app already did about it (deal moved, opt-out recorded, auto-replies ignored).
   const announceReplyCheck = (rd) => {
     if (!rd) return;
-    if (rd.code === "GMAIL_AUTH") { addNotification("Gmail permission ran out, so replies could not be checked. Press the button again and allow Gmail.", "warning", 8000); return; }
     const lines = (rd.triage || []).filter((t) => t.action).map((t) => `${t.email}: ${String(t.label || "").toLowerCase()}, ${t.action}`);
     if (lines.length) addNotification(`🤖 ${lines.join("; ")}`, "info", 10000);
     if (rd.autoReplies > 0) addNotification(`${rd.autoReplies} out-of-office auto-repl${rd.autoReplies === 1 ? "y" : "ies"} ignored: follow-ups carry on.`, "info", 6000);
@@ -4972,6 +4973,28 @@ function DashboardComponent() {
       setReadyQueue({ items: d.items || [], summary: d.summary || { first: 0, followup: 0, total: 0 } });
     } catch { /* the banner simply stays hidden */ }
   };
+  const loadTenantInfo = async () => {
+    if (!user?.uid) return;
+    try {
+      const res = await fetch("/api/tenant");
+      if (!res.ok) return;
+      setTenantInfo(await res.json().catch(() => null));
+    } catch { /* no banner */ }
+  };
+  const loadNotices = async () => {
+    if (!user?.uid) return;
+    try {
+      const res = await fetch("/api/notices");
+      if (!res.ok) return;
+      const d = await res.json().catch(() => ({}));
+      setNotices(d.notices || []);
+    } catch { /* no banner */ }
+  };
+  const dismissNotices = async () => {
+    const ids = notices.map((n) => n.id);
+    setNotices([]);
+    try { await fetch("/api/notices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "seen", ids }) }); } catch { /* shown again next time */ }
+  };
   const resolveReadyQueue = async ({ sent = [], dismissed = [] }) => {
     if (sent.length === 0 && dismissed.length === 0) return;
     try {
@@ -5194,7 +5217,7 @@ function DashboardComponent() {
     const isMine = (m) => !!me && String(m.from || "").toLowerCase().includes(me);
     const inbound = [...msgs].reverse().find((m) => !isMine(m));
     const stripQuoted = (t) => String(t || "").split(/\n\s*On .{5,140}wrote:|\n\s*-{2,}\s*Original Message|\n\s*>/i)[0].trim();
-    const text = inbound ? (inbound.text || stripQuoted(inbound.body || inbound.snippet)) : "";
+    const text = inbound ? stripQuoted(inbound.body || inbound.snippet) : "";
     if (!text) {
       addNotification("There is no reply from them in this thread yet.", "warning");
       return;
@@ -6025,7 +6048,7 @@ function DashboardComponent() {
   }, [templateA, templateB, whatsappTemplate, smsTemplate, instagramTemplate, twitterTemplate, linkedinTemplate, followUpTemplates, emailImages, leadQualityFilter, calculateScore, parseMultipleEmails, formatForDialing, extractTemplateVariables, generateId]);
 
   // Drafts prepared ahead of time: look once the dashboard opens.
-  useEffect(() => { if (user?.uid) loadReadyQueue(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (user?.uid) { loadReadyQueue(); loadNotices(); loadTenantInfo(); } }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leads the owner picked in the Lead Inbox arrive as CSV text and go through the same import as an uploaded file.
   useEffect(() => {
@@ -7291,6 +7314,35 @@ function DashboardComponent() {
       </header>
 
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {/* PLAN STANDING (SaaS mode only): paused accounts are told how to fix it; warnings are shown early */}
+        {tenantInfo?.saas && (tenantInfo.mode !== "full" || tenantInfo.warning || (tenantInfo.status === "trialing" && tenantInfo.trialDaysLeft != null && tenantInfo.trialDaysLeft <= 3)) && (
+          <div role="alert" className={`mb-4 p-4 rounded-xl border text-sm ${tenantInfo.mode !== "full" ? "border-red-700 bg-red-900/30 text-red-100" : "border-amber-600 bg-amber-900/30 text-amber-100"}`}>
+            <div className="font-semibold">{tenantInfo.mode !== "full" ? tenantInfo.message : tenantInfo.warning || `Your free trial ends in ${tenantInfo.trialDaysLeft} day${tenantInfo.trialDaysLeft === 1 ? "" : "s"}.`}</div>
+            {tenantInfo.mode !== "suspended" && <a href="/account" className="inline-block mt-2 min-h-[44px] leading-[44px] px-4 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">{tenantInfo.mode !== "full" || tenantInfo.status === "past_due" ? "Fix this in Account" : "Choose a plan"}</a>}
+          </div>
+        )}
+        {/* FIRST STEPS: until the required steps are done, the one thing to do next */}
+        {tenantInfo?.saas && tenantInfo?.onboarding && !tenantInfo.onboarding.complete && (
+          <div role="region" aria-label="First steps" className="mb-4 p-4 rounded-xl border border-indigo-700 bg-indigo-900/20 text-indigo-100">
+            <div className="flex items-center justify-between gap-2"><div className="font-semibold text-sm sm:text-base">🚀 Getting started: {tenantInfo.onboarding.percent}%</div><div className="text-xs opacity-80">{tenantInfo.onboarding.doneCount} of {tenantInfo.onboarding.total} done</div></div>
+            <div className="h-2 rounded bg-indigo-950 mt-2" aria-hidden="true"><div className="h-2 rounded bg-indigo-400" style={{ width: `${tenantInfo.onboarding.percent}%` }} /></div>
+            <ul className="mt-3 space-y-1 text-sm">
+              {tenantInfo.onboarding.steps.map((s) => <li key={s.id} className={s.done ? "opacity-60" : ""}>{s.done ? "✅" : "⬜"} {s.done ? <span className="line-through">{s.label}</span> : <a className="underline" href={s.href}>{s.label}</a>}{s.optional && !s.done ? <span className="text-xs opacity-70"> (optional)</span> : null}{!s.done && tenantInfo.onboarding.next?.id === s.id ? <span className="block text-xs opacity-80 ml-6">{s.help}</span> : null}</li>)}
+            </ul>
+          </div>
+        )}
+        {/* WHILE YOU WERE AWAY: what the overnight reply check found and did */}
+        {notices.length > 0 && (
+          <div role="region" aria-label="While you were away" className="mb-4 p-4 rounded-xl border border-emerald-700 bg-emerald-900/30 text-emerald-100">
+            {notices.map((n) => (
+              <div key={n.id} className="mb-2 last:mb-0">
+                <div className="font-semibold text-sm sm:text-base">{n.type === "gmail_expired" ? "⚠️ Gmail access for automatic reply checking expired. Reconnect it in Account." : `📬 While you were away: ${n.replies} new repl${n.replies === 1 ? "y" : "ies"}`}</div>
+                {n.type !== "gmail_expired" && n.lines.length > 0 && <ul className="list-disc pl-5 text-xs mt-1 opacity-90">{n.lines.map((l, i) => <li key={i}>{l}</li>)}</ul>}
+              </div>
+            ))}
+            <button type="button" onClick={dismissNotices} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">Got it</button>
+          </div>
+        )}
         {/* DRAFTS READY FOR REVIEW (prepared ahead of time; nothing is sent until you press Send in the review window) */}
         {readyQueue.summary.total > 0 && !autoBatch && (
           <div role="region" aria-label="Drafts ready for review" className="mb-4 p-4 rounded-xl border border-indigo-700 bg-indigo-900/30 text-indigo-100">

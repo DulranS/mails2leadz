@@ -43,7 +43,6 @@ export async function POST(request) {
     const system = `You write social media posts for a small business so that the right people find it and get in touch (inbound enquiries).
 Rules:
 - Use ONLY the facts given about the business. Never invent customers, testimonials, results, statistics, prices, offers, awards or news. If a real example would make a post stronger, write a bracketed placeholder such as [add one real example from a recent customer] for the owner to fill in.
-- Never write a web address, "link in bio" or a sign-up line yourself: the app adds the owner's real enquiry link afterwards. End each post with the idea, not a call to click.
 - No guarantees, no hype, no false urgency. Plain, human language. Useful first, promotional second.
 - Write each post for its platform:
 ${platforms.map((p) => `  * ${STYLE[p]}`).join('\n')}

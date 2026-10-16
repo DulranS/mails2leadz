@@ -4,6 +4,7 @@
 // send pipeline (duplicate protection, logging, tracking, follow-up tasks).
 // The drafting rules live in lib/server/draft-core.js (shared with the overnight draft preparation).
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { AiError } from '../../../lib/ai-client.js';
 import { getDb } from '../../../lib/server/route-helpers.js';
 import { draftFirstEmail, DraftError } from '../../../lib/server/draft-core.js';
@@ -14,7 +15,9 @@ export async function POST(request) {
     try { db = getDb(); } catch (err) { console.error('Firebase init failed:', err.message); }
     if (!db) return NextResponse.json({ error: 'Database not initialised' }, { status: 500 });
     const { companyName, companyWebsite, contactEmail, contactName, userId: bodyUserId, senderName, category, location } = await request.json();
-    const userId = request.headers.get('x-user-id') || bodyUserId; // the verified user wins over the body
+    const who = identify(request, bodyUserId); // the verified user, never the body
+    if (who.response) return who.response;
+    const userId = who.uid;
     if (!companyName || !userId) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
 
     const r = await draftFirstEmail({ db, uid: userId, companyName, companyWebsite, contactEmail, contactName, senderName, category, location });

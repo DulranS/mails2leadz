@@ -1,5 +1,7 @@
 // app/api/make-call/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, setDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
@@ -84,7 +86,9 @@ export async function POST(request) {
   try {
     const payload = await request.json();
     const { toPhone, businessName, callType = 'direct' } = payload;
-    const userId = request.headers.get('x-user-id') || payload.userId; // verified user wins
+    const who = identify(request, payload.userId); // the verified user, never the body
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!toPhone || !userId) {
       return NextResponse.json(
@@ -92,6 +96,9 @@ export async function POST(request) {
         { status: 400 }
       );
     }
+
+    const gate = await guardTenant(db, userId);
+    if (gate.response) return gate.response;
 
     const client = getTwilio();
     if (!client) {

@@ -1,5 +1,6 @@
 // app/api/track-company/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc, setDoc } from '../../../lib/server-firestore.js';
 
@@ -67,7 +68,7 @@ export async function POST(request) {
     }
 
     const {
-      userId,
+      userId: claimedUserId,
       companyName,
       domain,
       email,
@@ -76,6 +77,9 @@ export async function POST(request) {
       campaignId,
       action = 'contact' // 'contact', 'followup', 'reply'
     } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!userId || !companyName) {
       return NextResponse.json(
@@ -250,7 +254,9 @@ export async function GET(request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const who = identify(request, searchParams.get('userId'));
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!userId) {
       return NextResponse.json(

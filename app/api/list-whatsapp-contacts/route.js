@@ -1,5 +1,6 @@
 // app/api/list-whatsapp-contacts/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, limit } from '../../../lib/server-firestore.js';
 
@@ -71,7 +72,10 @@ export async function POST(request) {
       throw new Error(`Invalid JSON body: ${err?.message || 'unknown error'}`);
     });
 
-    const { userId, limit: limitParam = 50 } = body || {};
+    const { userId: claimedUserId, limit: limitParam = 50 } = body || {};
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
 
     if (!userId || typeof userId !== 'string' || !userId.trim()) {
       return NextResponse.json(

@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { listAutopilotUsers, prepareDraftsForUser, loadAutopilot } from '../../../../lib/server/prepare-drafts.js';
+import { getEntitlement } from '../../../../lib/server/tenant.js';
+import { featureAllowed } from '../../../../lib/tenant.js';
 
 export const maxDuration = 300;
 
@@ -31,6 +33,7 @@ export async function GET(request) {
     try {
       const settings = await loadAutopilot(db, uid);
       if (!settings.enabled) continue;
+      if (!featureAllowed(await getEntitlement(db, uid), 'autopilot')) continue; // unpaid / suspended / plan without it (SAAS_MODE only)
       const r = await prepareDraftsForUser(db, uid, { settings, deadline });
       summary.first += r.first; summary.followup += r.followup; summary.skipped += r.skipped;
     } catch (e) {

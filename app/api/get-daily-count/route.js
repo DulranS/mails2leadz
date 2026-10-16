@@ -1,5 +1,6 @@
 // app/api/get-daily-count/route.js
 import { NextResponse } from 'next/server';
+import { identify } from '../../../lib/server/route-helpers.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from '../../../lib/server-firestore.js';
 import { countToday, startOfTomorrowIso } from '../../../lib/server/daily-count.js';
@@ -31,7 +32,10 @@ const CONFIG = {
 export async function POST(request) {
   const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' };
   try {
-    const { userId } = await request.json();
+    const { userId: claimedUserId } = await request.json();
+    const who = identify(request, claimedUserId);
+    if (who.response) return who.response;
+    const userId = who.uid;
     if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400, headers });
 
     const [emails, whatsapp, sms, calls] = await Promise.all([

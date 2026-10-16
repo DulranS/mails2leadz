@@ -9,6 +9,7 @@ import { getDb, uidFromRequest, pickOriginal, isBlockedContact, NO_STORE } from 
 import { loadAutopilot, readyDrafts, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS, QUEUE_STATUS, isDraftStale, toReviewItem, summarizeQueue } from '../../../lib/draft-queue.js';
 import { MAX_FOLLOW_UPS } from '../../../lib/server/draft-core.js';
+import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { inboxDocId } from '../../../lib/server/ingest-key.js';
 import { inboxKey, INBOX_STATUS } from '../../../lib/lead-inbox.js';
 
@@ -51,6 +52,8 @@ export async function POST(request) {
   const body = await request.json().catch(() => ({}));
 
   if (body.action === 'prepare') {
+    const gate = await guardTenant(db, uid, { feature: 'autopilot' }); // plan / trial / suspension (SAAS_MODE only)
+    if (gate.response) return gate.response;
     const settings = await loadAutopilot(db, uid);
     if (typeof body.senderName === 'string' && body.senderName.trim()) settings.senderName = body.senderName.trim().slice(0, 80);
     // Manual "prepare now" works even when the nightly switch is off: the owner asked for it.

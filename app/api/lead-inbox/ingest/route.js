@@ -12,6 +12,8 @@ import { parseIngestKey, verifySecret, inboxDocId } from '../../../../lib/server
 import { sanitizeLead, inboxKey, INBOX_STATUS, MAX_BATCH } from '../../../../lib/lead-inbox.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../../lib/draft-queue.js';
+import { getEntitlement } from '../../../../lib/server/tenant.js';
+import { featureAllowed } from '../../../../lib/tenant.js';
 
 export const maxDuration = 60;
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -31,6 +33,8 @@ export async function POST(request) {
     }
     if (!authorised) return fail(401, 'Invalid or revoked ingest key.');
     const uid = parsed.uid;
+    const ent = await getEntitlement(db, uid); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
+    if (ent.mode !== 'full') return fail(ent.mode === 'suspended' ? 403 : 402, ent.message);
 
     if (Number(request.headers.get('content-length') || 0) > MAX_BODY_BYTES) return fail(413, 'Batch too large. Send at most 300 leads at a time.');
     const body = await request.json().catch(() => null);
@@ -71,7 +75,7 @@ export async function POST(request) {
       after(async () => {
         try {
           const settings = await loadAutopilot(db, uid);
-          if (settings.enabled) await prepareDraftsForUser(db, uid, { settings, kinds: [QUEUE_KINDS.FIRST], deadline: Date.now() + 50000 });
+          if (settings.enabled && featureAllowed(ent, 'autopilot')) await prepareDraftsForUser(db, uid, { settings, kinds: [QUEUE_KINDS.FIRST], deadline: Date.now() + 50000 });
         } catch (e) {
           console.warn('[ingest] draft preparation skipped:', e?.message);
         }
