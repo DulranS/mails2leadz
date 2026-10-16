@@ -1,16 +1,16 @@
 # AutoLeads: start here
 
-One app, one worker file, one guide.
+One app, one guide. Finding leads is built into the app; the Python worker is now optional.
 
-- The app (this folder): CRM, sending, follow-ups, customers, billing, weekly report, Lead Inbox. Deploy it as in DEPLOYMENT_GUIDE.md.
-- The worker (worker/autoleads_worker.py): finds businesses on OpenStreetMap every morning (free: no key, no card, no billing), checks their websites, scores them and drops the good ones in your Lead Inbox.
+- The app (this folder): CRM, sending, follow-ups, customers, billing, weekly report, Lead Inbox, and the lead finder: it looks up businesses on OpenStreetMap (free: no key, no card, no billing), reads their websites for a contact, scores them and drops the good ones in your Lead Inbox. Press **Find leads** on the Lead Inbox page, or switch on **Search nightly**. Deploy it as in DEPLOYMENT_GUIDE.md.
+- The worker (worker/autoleads_worker.py): OPTIONAL. The same finder for big, slow runs on your own computer, plus cleaning your own CSV lists (`import`). Skip section 2 unless you want it.
 - You: open the Lead Inbox, pick leads, review the emails, press Send. That one step stays manual on purpose (sender reputation, and Gmail signs in from your browser).
 
 ## 1. The app (once)
-1. Deploy it (DEPLOYMENT_GUIDE.md), set FIREBASE_SERVICE_ACCOUNT_JSON on the server, run: firebase deploy --only firestore:rules
+1. Deploy it (DEPLOYMENT_GUIDE.md), set FIREBASE_SERVICE_ACCOUNT_JSON on the server (the lead finder needs it) and CRON_SECRET (for the nightly routine), set NEXT_PUBLIC_CONTACT_EMAIL (the free map servers ask who is calling), and run: firebase deploy --only firestore:rules (republish: this version adds a `finder_jobs` rule)
 2. Sign in. Account: fill in what you sell, then "Lead inbox connection", Create key. The page shows a ready-made setup command: copy it.
 
-## 2. The worker (once, about 5 minutes)
+## 2. The worker (optional, about 5 minutes; skip it to use only the built-in finder)
 You need Python 3.9+ and nothing else: no account, no key, no card. Business data comes from OpenStreetMap through two free public servers.
 
     cd worker
@@ -33,7 +33,7 @@ If the free map data is thin for a niche, use option 2 with a list from anywhere
 ## 3. Every day (about 15 minutes)
 Nothing to run. Open Business Value and read "Do this next", then:
 
-1. **Find** (outbound): Lead Inbox → "Who should I look for?" tells you which businesses to search. Press **Copy: add all to the daily routine** and paste it in the worker folder once; from then on it searches by itself every morning (run `schedule --install` one time to turn that on).
+1. **Find** (outbound): Lead Inbox → "Who should I look for?" tells you which businesses to search. Press **🔎 Find now** on one, or **Add all to the nightly routine**: your saved searches then take turns, one a night, and the leads wait in the inbox (no computer needed). Type your own search in **Find leads now** any time. Keep the page open while it runs; a search reads a few websites at a time. The free hosting plan allows about a minute of work per request, which is why a search runs in steps.
 2. **Draft and send**: Lead Inbox, filter HOT, select, "Load into the sender". On the dashboard press **✨ Draft first emails with AI**, read the drafts, edit, press Send once. Sent leads automatically get follow-ups.
 3. **Follow up**: Dashboard → Pending Follow-Ups → **⚡ Draft all, approve together**.
 4. **Close**: turn replies into deals in the CRM; Customers and Billing handle onboarding and getting paid.

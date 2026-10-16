@@ -1,5 +1,13 @@
 # Changelog
 
+## Pass 13: the lead finder is inside the app (no separate worker needed)
+**One flow.** Lead Inbox → **Find leads now** searches OpenStreetMap, reads each business's website, scores it with the worker's own formula and fills the inbox; **Search nightly** runs your saved searches (up to 5, one a night) before the overnight drafts, in the existing nightly job (no extra scheduled job, so it stays inside the free plan). The AI target suggestions now have **Find now** / **Every night** buttons instead of commands to paste. Nothing is sent: leads land in the inbox as "new".
+**Built for the free hosting plan.** A search is a resumable job (`finder_jobs`): one quick map request queues the businesses, then time-boxed steps (about 50 s each) read a few websites at a time. The page keeps stepping while it is open; the nightly run continues anything unfinished. Phone-only businesses go first so results appear at once. Repeat searches only find what is new.
+**Safe to run on our server.** Websites come from a public map, so the fetcher refuses anything that is not a public web address (private/loopback/link-local ranges, odd ports, credentials, internal names, DNS answers pointing inside), re-checks every redirect hop, honours robots.txt, caps page size and time, and reads HTML only. Per-account daily limits (12 searches, 500 websites; `FINDER_DAILY_SEARCHES` / `FINDER_DAILY_SITES`). `finder_jobs` is server-written (no browser can edit what the server fetches), included in export and deletion.
+**What it does not do (the worker still does):** decision-maker names and company size from team pages, own-CSV `import`, very large slow crawls. The in-app version scores without a decision-maker bonus (max 82 instead of 100; HOT still reachable at 70).
+**Also:** the ingest route and the finder now share one inbox writer (`lib/server/inbox-store.js`); the obfuscated-email reader no longer swallows the next word after a sentence-ending dot. **Republish the Firestore rules** (`finder_jobs`).
+**Tests:** `lead-finder` (19: category parity with the AI target list, query safety, extraction, scoring, inbox selection, address guard incl. redirects to internal addresses, robots, crawl, map search, job steps/cancel/limits, nightly turns). Full suite, worker tests and `next build` pass. Not run live (needs the real map servers and a deployed app).
+
 ## Pass 10: built to be sold as SaaS (dormant unless SAAS_MODE=on): plans, billing, operator console, onboarding, isolation hardening
 Our own use is **unchanged**: with `SAAS_MODE` unset every account is internal and unlimited. Full status, gaps and live checks: **COMMERCIAL_READINESS.md**; running it: **OPERATIONS.md**.
 

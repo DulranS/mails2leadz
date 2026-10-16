@@ -41,10 +41,10 @@ service cloud.firestore {
           'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
           'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
           'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'lead_inbox', 'suppressions',
-          'draft_queue', 'autopilot_users', 'inbound_enquiries', 'reply_notices'
+          'draft_queue', 'autopilot_users', 'inbound_enquiries', 'reply_notices', 'finder_jobs'
         ] && ownsExisting(docId);
 
-      // 'suppressions' (opt-outs), 'draft_queue' (prepared drafts), 'autopilot_users' and 'inbound_enquiries' (public form submissions) and 'reply_notices', 'tenants' (plan standing) and 'admin_audit' (operator actions) are deliberately NOT in the create/update lists below: only the server writes them.
+      // 'suppressions' (opt-outs), 'draft_queue' (prepared drafts), 'autopilot_users' and 'inbound_enquiries' (public form submissions) and 'reply_notices', 'finder_jobs' (the lead finder's queue: the server fetches from it, so no browser may edit it), 'tenants' (plan standing) and 'admin_audit' (operator actions) are deliberately NOT in the create/update lists below: only the server writes them.
       allow create: if coll in [
           'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
           'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, query, where, getDocs, setDoc, doc, limit } from "firebase/firestore";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
+import { useLeadFinder, FindLeadsPanel } from "../components/FindLeads";
 import { db, auth } from "../../lib/firebase-client.js";
 import { INBOX_STATUS, INBOX_HANDOFF_KEY, summarizeInbox, leadsToCsv } from "../../lib/lead-inbox.js";
 
@@ -61,21 +62,24 @@ export default function InboxPage() {
     return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet = false } = {}) => {
     if (!user?.uid || !db) return;
-    setLoading(true); setError("");
+    if (!quiet) { setLoading(true); setError(""); }
     try {
       const snap = await getDocs(query(collection(db, "lead_inbox"), where("userId", "==", user.uid), limit(3000)));
       const all = snap.docs.map((d) => ({ _id: d.id, ...d.data() })).filter((l) => l.status === INBOX_STATUS.NEW);
       all.sort((a, b) => Number(b.lead_quality_score) - Number(a.lead_quality_score));
       setLeads(all);
-      setSelected(new Set());
+      if (!quiet) setSelected(new Set());
     } catch (e) {
       console.error(e);
       setError("Could not load your inbox. Check your connection and try again.");
-    } finally { setLoading(false); }
+    } finally { if (!quiet) setLoading(false); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  const finder = useLeadFinder({ enabled: !!user, onAdded: () => load({ quiet: true }) });
+  const finderBusy = finder.running || finder.job.status === "running";
+  const placeOk = place.trim().length >= 2;
 
   const summary = useMemo(() => summarizeInbox(leads), [leads]);
   const shown = useMemo(() => leads.filter((l) => (
@@ -126,13 +130,15 @@ export default function InboxPage() {
         {error && <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 rounded-lg p-3 text-sm">{error}</div>}
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
 
+        <FindLeadsPanel finder={finder} place={place} setPlace={setPlace} />
+
         <section className={card} aria-labelledby="targets-title">
           <div className="flex items-center justify-between gap-2">
             <h2 id="targets-title" className="text-base font-semibold text-gray-900 dark:text-white">Who should I look for?</h2>
             <button type="button" onClick={() => setTargetsOpen(!(targetsOpen ?? leads.length === 0))} aria-expanded={targetsOpen ?? leads.length === 0} aria-controls="targets-body" className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">{(targetsOpen ?? leads.length === 0) ? "Hide" : "Show"}</button>
           </div>
           <div id="targets-body" hidden={!(targetsOpen ?? leads.length === 0)}>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">The AI reads what you sell (Account → Your business) and picks the kinds of local business most likely to buy. Each one comes with a ready-made search for your lead worker.</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">The AI reads what you sell (Account → Your business) and picks the kinds of local business most likely to buy. Each one has a button that searches for it right now, or every night.</p>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             <label className="flex-1 text-sm text-gray-700 dark:text-gray-200">
               <span className="sr-only">Area to search</span>
@@ -150,23 +156,28 @@ export default function InboxPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{tg.term}</span>
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => copyText(tg.command, tg.term)} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200" title="Run this search once, now">{copied === tg.term ? "Copied ✓" : "Copy: search once"}</button>
-                        {tg.addCommand && <button type="button" onClick={() => copyText(tg.addCommand, `${tg.term}-add`)} className="min-h-[44px] px-3 rounded-lg text-sm border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300" title="Put this search in the worker's daily routine">{copied === `${tg.term}-add` ? "Copied ✓" : "Copy: add to daily routine"}</button>}
+                        <button type="button" onClick={() => finder.start(tg.term, place.trim())} disabled={finderBusy || !placeOk} title={placeOk ? "Search the map for this now" : "Type a place above first"} className="min-h-[44px] px-3 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">🔎 Find now</button>
+                        <button type="button" onClick={() => finder.addNightly(tg.term, place.trim())} disabled={!placeOk || finder.settings.searches.length >= 5} title={placeOk ? "Add this search to the nightly routine" : "Type a place above first"} className="min-h-[44px] px-3 rounded-lg text-sm border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 disabled:opacity-50">Every night</button>
                       </div>
                     </div>
                     {tg.why && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{tg.why}</p>}
-                    <code className="block text-xs mt-2 p-2 rounded bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{tg.command}</code>
                   </li>
                 ))}
               </ul>
-              {targets.addAllCommand ? (
-                <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-3 space-y-2">
-                  <p className="text-sm text-indigo-900 dark:text-indigo-100"><span className="font-medium">Set it and forget it:</span> add all {targets.targets.length} to the worker's daily routine. It then searches by itself every morning, drops searches that stop finding new businesses, and the leads land here ready to review.</p>
-                  <button type="button" onClick={() => copyText(targets.addAllCommand, "all-add")} className="min-h-[44px] px-4 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white">{copied === "all-add" ? "Copied ✓" : `Copy: add all ${targets.targets.length} to the daily routine`}</button>
-                  <code className="block text-xs p-2 rounded bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{targets.addAllCommand}</code>
-                </div>
-              ) : <p className="text-xs text-amber-700 dark:text-amber-300">Type a place above and suggest again to also get the one command that adds these to your daily routine.</p>}
-              <p className="text-xs text-gray-500 dark:text-gray-400">Paste a command in the worker folder (or open <code>run.bat</code>, choose 1, and type the business type). Results land here, checked and scored. Suggestions are a starting point: you decide what to search. First time? Run <code>python autoleads_worker.py setup</code> once, then <code>schedule --install</code> so it runs every morning.</p>
+              <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 p-3 space-y-2">
+                <p className="text-sm text-indigo-900 dark:text-indigo-100"><span className="font-medium">Set it and forget it:</span> add all {targets.targets.length} to the nightly routine. Your saved searches take turns, one a night, and the leads land here ready to review (up to 5 searches).</p>
+                <button type="button" onClick={() => finder.addNightly(targets.targets.map((tg) => tg.term).slice(0, Math.max(0, 5 - finder.settings.searches.length)), place.trim())} disabled={!placeOk || finder.settings.searches.length >= 5} className="min-h-[44px] px-4 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Add all {targets.targets.length} to the nightly routine</button>
+                {!placeOk && <p className="text-xs text-amber-700 dark:text-amber-300">Type a place above first.</p>}
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Suggestions are a starting point: you decide what to search. Results land in your inbox below, checked and scored.</p>
+              {targets.addAllCommand && (
+                <details className="text-xs text-gray-600 dark:text-gray-300">
+                  <summary className="cursor-pointer min-h-[44px] flex items-center">Bigger runs on your own computer (optional Python worker)</summary>
+                  <p className="mt-1">The worker in the <code>worker</code> folder does slower, deeper crawls and can clean your own CSV lists. Its results land in the same inbox.</p>
+                  <button type="button" onClick={() => copyText(targets.addAllCommand, "all-add")} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 mt-1">{copied === "all-add" ? "Copied ✓" : "Copy: add all to the worker's daily routine"}</button>
+                  <code className="block p-2 mt-1 rounded bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{targets.addAllCommand}</code>
+                </details>
+              )}
             </div>
           )}
                   </div>

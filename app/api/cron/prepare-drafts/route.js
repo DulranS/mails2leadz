@@ -6,6 +6,8 @@ import { isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { listAutopilotUsers, prepareDraftsForUser, loadAutopilot } from '../../../../lib/server/prepare-drafts.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
+import { defaultCtx } from '../../../../lib/server/lead-finder-io.js';
+import { listFinderUsers, runNightly } from '../../../../lib/server/lead-finder-job.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 
 export const maxDuration = 300;
@@ -26,8 +28,31 @@ export async function GET(request) {
 
   const db = getDb();
   const deadline = Date.now() + 270000;
+  const summary = { owners: 0, first: 0, followup: 0, skipped: 0, ownersStopped: 0, finderOwners: 0, finderAdded: 0 };
+
+  // Phase 1: owners with a saved nightly search find new leads first (so phase 2 can write drafts for them the same night).
+  // Time-boxed per owner and overall; it only fills the Lead Inbox. It never sends anything.
+  const finderDeadline = Date.now() + 120000;
+  try {
+    const finders = await listFinderUsers(db);
+    const ctx = defaultCtx();
+    for (const uid of finders) {
+      if (Date.now() > finderDeadline - 15000) break;
+      try {
+        if (!featureAllowed(await getEntitlement(db, uid), 'autopilot')) continue;
+        const r = await runNightly(db, uid, { ctx, deadline: Math.min(finderDeadline, Date.now() + 60000) });
+        summary.finderOwners++; summary.finderAdded += r.added || 0;
+      } catch (e) {
+        console.error('[cron find-leads] owner failed:', uid, e?.message);
+      }
+    }
+  } catch (e) {
+    console.error('[cron find-leads] skipped:', e?.message);
+  }
+
+  // Phase 2: drafts.
   const users = await listAutopilotUsers(db);
-  const summary = { owners: users.length, first: 0, followup: 0, skipped: 0, ownersStopped: 0 };
+  summary.owners = users.length;
   for (const uid of users) {
     if (Date.now() > deadline) { summary.ownersStopped++; continue; }
     try {

@@ -6,10 +6,11 @@
 // Leads are only stored in the inbox with status "new". Nothing is sent. Opted-out contacts, lost deals and people
 // who were already emailed are skipped, so the inbox only ever shows people who can still be contacted.
 import { NextResponse, after } from 'next/server';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, isAdminMode } from '../../../../lib/server-firestore.js';
-import { getDb, isBlockedContact, NO_STORE } from '../../../../lib/server/route-helpers.js';
-import { parseIngestKey, verifySecret, inboxDocId } from '../../../../lib/server/ingest-key.js';
-import { sanitizeLead, inboxKey, INBOX_STATUS, MAX_BATCH } from '../../../../lib/lead-inbox.js';
+import { doc, getDoc, isAdminMode } from '../../../../lib/server-firestore.js';
+import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { storeLeads } from '../../../../lib/server/inbox-store.js';
+import { parseIngestKey, verifySecret } from '../../../../lib/server/ingest-key.js';
+import { MAX_BATCH } from '../../../../lib/lead-inbox.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../../lib/draft-queue.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
@@ -44,31 +45,7 @@ export async function POST(request) {
 
     const batchId = String(body.batchId || '').slice(0, 60);
     const source = String(body.source || 'autopilot').slice(0, 40);
-    const skipped = { invalid: 0, duplicate: 0, blocked: 0, contacted: 0 };
-    const unique = new Map();
-    for (const raw of incoming) {
-      const r = sanitizeLead(raw);
-      if (!r.ok) { skipped.invalid++; continue; }
-      const id = inboxDocId(uid, inboxKey(r.lead));
-      if (unique.has(id)) skipped.duplicate++;
-      else unique.set(id, r.lead);
-    }
-
-    let added = 0;
-    const entries = [...unique.entries()];
-    for (let i = 0; i < entries.length; i += 8) {
-      await Promise.all(entries.slice(i, i + 8).map(async ([id, lead]) => {
-        const ref = doc(db, 'lead_inbox', id);
-        if ((await getDoc(ref)).exists()) { skipped.duplicate++; return; } // already received (loaded and dismissed leads stay that way)
-        if (lead.email) {
-          if (await isBlockedContact(db, uid, lead.email)) { skipped.blocked++; return; }
-          const sent = await getDocs(query(collection(db, 'sent_emails'), where('userId', '==', uid), where('to', '==', lead.email)));
-          if (!sent.empty) { skipped.contacted++; return; }
-        }
-        await setDoc(ref, { ...lead, userId: uid, status: INBOX_STATUS.NEW, source, batchId, receivedAt: new Date().toISOString() });
-        added++;
-      }));
-    }
+    const { added, skipped } = await storeLeads(db, uid, incoming, { source, batchId });
     // Overnight drafts: when the owner switched it on, write first-email drafts for the new HOT leads right away
     // (after the response, so the worker is not kept waiting). Drafts only: nothing is sent.
     if (added > 0) {
