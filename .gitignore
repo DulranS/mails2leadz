@@ -50,3 +50,6 @@ next-env.d.ts
 /worker/*_enriched.csv
 /worker/*_raw.csv
 /worker/seen_places.json
+
+# older-release leftovers moved aside by the prebuild cleanup
+/_stale/

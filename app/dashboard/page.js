@@ -6772,7 +6772,12 @@ function DashboardComponent() {
           setAbResults(newResults);
 
           if (db) {
-            await setDoc(doc(db, "ab_results", user.uid), newResults);
+            // The rules only accept a document that names its owner (userId): without it this write was silently refused.
+            try {
+              await setDoc(doc(db, "ab_results", user.uid), { ...newResults, userId: user.uid });
+            } catch (e) {
+              console.warn("A/B results not saved:", e?.message);
+            }
           }
         }
 

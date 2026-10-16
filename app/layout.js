@@ -3,6 +3,7 @@ import './globals.css';
 import ExtensionCleaner from './components/ExtensionCleaner';
 import AuthFetch from './components/AuthFetch';
 import AccessNotice from './components/AccessNotice';
+import ConnectionBanner from './components/ConnectionBanner';
 import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
 import ReduxProvider from '../components/ReduxProvider';
@@ -38,6 +39,7 @@ export default function RootLayout({ children }) {
                 <ExtensionCleaner />
                 <AuthFetch />
                 <AccessNotice />
+                <ConnectionBanner />
                 {children}
               </NotificationProvider>
             </ThemeProvider>

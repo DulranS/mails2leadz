@@ -4,12 +4,19 @@
 // (which name configuration variables) are shown only to ADMIN_EMAILS.
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode } from '../../../lib/server-firestore.js';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode, adminReason } from '../../../lib/server-firestore.js';
 import { aiConfig } from '../../../lib/ai-client.js';
 import { isRestricted } from '../../../lib/access.js';
 
 export const maxDuration = 30;
 
+// Plain-language reason the server is not in full-access mode (the cause, not just the symptom).
+const WHY = {
+  no_credentials: 'FIREBASE_SERVICE_ACCOUNT_JSON is not set on the server.',
+  bad_credentials: 'FIREBASE_SERVICE_ACCOUNT_JSON is set but cannot be read. Paste the whole downloaded JSON key (or its base64) on ONE line, with no extra quotes.',
+  module_missing: 'The firebase-admin package could not be loaded on the server.',
+  init_failed: 'The service account was rejected by Firebase (wrong project or a deleted key).',
+};
 const withTimeout = (p, ms, label) =>
   Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms))]);
 
@@ -46,14 +53,14 @@ export async function GET(request) {
     add('database', 'Database (server access)', ok, ok ? (isAdminMode() ? 'Working (full server access).' : 'Working (limited mode).') : 'Wrote but could not read back.',
       'Check the Firestore project id and that rules are deployed.');
     if (ok && !isAdminMode()) {
-      add('admin', 'Server credentials', false, 'Running without a service account. This is the less secure mode.',
+      add('admin', 'Server credentials', false, `Running without server credentials. ${WHY[adminReason()] || ''}`.trim(),
         'Set FIREBASE_SERVICE_ACCOUNT_JSON in your hosting environment variables (Firebase console > Project settings > Service accounts > Generate new private key), then redeploy.');
     } else if (ok) {
       add('admin', 'Server credentials', true, 'Service account active.');
     }
   } catch (e) {
     const denied = /permission|insufficient/i.test(e.message || '');
-    add('database', 'Database (server access)', false, denied ? 'The server is not allowed to write to your database.' : e.message,
+    add('database', 'Database (server access)', false, denied ? `The server is not allowed to write to your database. ${isAdminMode() ? '' : (WHY[adminReason()] || '')}`.trim() : e.message,
       denied
         ? 'Your Firestore rules are locked down but the server has no service account. Set FIREBASE_SERVICE_ACCOUNT_JSON in your hosting environment variables (paste the downloaded JSON key), then redeploy.'
         : 'Check the NEXT_PUBLIC_FIREBASE_* variables match your Firebase project.');

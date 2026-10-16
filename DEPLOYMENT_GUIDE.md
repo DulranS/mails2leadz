@@ -83,3 +83,10 @@ Replies are normally found when you press Check replies. This makes it happen ev
 
 ## Before you give the code to anyone
 Delete the `_archive/` folder (old experiments and sample lead CSVs) and never commit `.env*`.
+
+
+## If the build fails with "export X was not found in ..."
+That is a file left over from an older release (unzipping over an old project does not delete what the new release dropped). `npm run build` now moves such files to `_stale/` by itself and prints each one (`[cleanup] moved leftover file ...`). If you still see the error, run `npm run check:imports` locally: it names the exact file and the missing name. The cleanest fix is always to deploy from a fresh copy of the release instead of unzipping over the old one.
+
+## If nothing is being saved
+Open the app signed in: a red banner at the top means the server cannot write to the database (Account → Run connection check says why). Almost always `FIREBASE_SERVICE_ACCOUNT_JSON` is missing or unreadable on the host (paste the whole key JSON on one line), or the Firestore rules were not republished (`firebase deploy --only firestore:rules`). Redeploy after changing environment variables.

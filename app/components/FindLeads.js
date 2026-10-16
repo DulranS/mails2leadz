@@ -84,7 +84,8 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
   const st = job.stats || {};
   const left = Object.entries(st.left || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${LEFT_LABELS[k] || k}`);
   const go = () => finder.start(what.trim(), place.trim());
-  const canGo = !running && what.trim().length >= 3 && place.trim().length >= 2;
+  // "plumbers in Colombo" typed in the first box is enough: the server splits it into what and where.
+  const canGo = !running && what.trim().length >= 3 && (place.trim().length >= 2 || /\sin\s+\S{2,}/i.test(what));
   const saveThis = () => finder.saveSettings({ enabled: true, searches: [...settings.searches, { term: what.trim(), location: place.trim() }] });
   const removeAt = (i) => finder.saveSettings({ enabled: settings.enabled, searches: settings.searches.filter((_, x) => x !== i) });
 
@@ -95,7 +96,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
 
       <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-2 mt-3">
         <label className="text-sm text-gray-700 dark:text-gray-200"><span className="sr-only">What to look for</span>
-          <input value={what} onChange={(e) => setWhat(e.target.value)} maxLength={60} placeholder="What? e.g. dentist, travel agency" className={input} />
+          <input value={what} onChange={(e) => setWhat(e.target.value)} maxLength={60} placeholder="What? e.g. plumbers (or: plumbers in Colombo)" className={input} />
         </label>
         <label className="text-sm text-gray-700 dark:text-gray-200"><span className="sr-only">Where to look</span>
           <input value={place} onChange={(e) => setPlace(e.target.value)} maxLength={80} placeholder="Where? e.g. Colombo, Sri Lanka" className={input} />
