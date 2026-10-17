@@ -136,6 +136,7 @@ lib/onboarding.js
 lib/phone.js
 lib/plan.js
 lib/rate-limit.js
+lib/recurring.js
 lib/redis.js
 lib/redux/hooks.js
 lib/redux/slices/followUpHistorySlice.js
@@ -154,6 +155,7 @@ lib/sales-kit.js
 lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
+lib/server-login.js
 lib/server/bounces.js
 lib/server/daily-count.js
 lib/server/draft-core.js

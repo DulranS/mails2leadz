@@ -4,7 +4,7 @@
 // (which name configuration variables) are shown only to ADMIN_EMAILS.
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode, adminReason } from '../../../lib/server-firestore.js';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode, adminReason, serverMode, serverLoginProblem } from '../../../lib/server-firestore.js';
 import { aiConfig } from '../../../lib/ai-client.js';
 import { isRestricted } from '../../../lib/access.js';
 
@@ -12,7 +12,7 @@ export const maxDuration = 30;
 
 // Plain-language reason the server is not in full-access mode (the cause, not just the symptom).
 const WHY = {
-  no_credentials: 'FIREBASE_SERVICE_ACCOUNT_JSON is not set on the server.',
+  no_credentials: 'Neither FIREBASE_SERVICE_ACCOUNT_JSON nor FIREBASE_SERVER_EMAIL + FIREBASE_SERVER_PASSWORD is set on the server.',
   bad_credentials: 'FIREBASE_SERVICE_ACCOUNT_JSON is set but cannot be read. Paste the whole downloaded JSON key (or its base64) on ONE line, with no extra quotes.',
   module_missing: 'The firebase-admin package could not be loaded on the server.',
   init_failed: 'The service account was rejected by Firebase (wrong project or a deleted key).',
@@ -50,20 +50,23 @@ export async function GET(request) {
     const back = await withTimeout(getDoc(ref), 8000, 'Database read');
     await withTimeout(deleteDoc(ref), 8000, 'Database cleanup').catch(() => {});
     const ok = back.exists();
-    add('database', 'Database (server access)', ok, ok ? (isAdminMode() ? 'Working (full server access).' : 'Working (limited mode).') : 'Wrote but could not read back.',
+    const mode = serverMode();
+    add('database', 'Database (server access)', ok, ok ? (mode === 'admin' ? 'Working (full server access).' : mode === 'login' ? 'Working (server login).' : 'Working (limited mode).') : 'Wrote but could not read back.',
       'Check the Firestore project id and that rules are deployed.');
-    if (ok && !isAdminMode()) {
+    if (ok && mode === 'none') {
       add('admin', 'Server credentials', false, `Running without server credentials. ${WHY[adminReason()] || ''}`.trim(),
-        'Set FIREBASE_SERVICE_ACCOUNT_JSON in your hosting environment variables (Firebase console > Project settings > Service accounts > Generate new private key), then redeploy.');
+        'Either set FIREBASE_SERVICE_ACCOUNT_JSON (Firebase console > Project settings > Service accounts > Generate new private key), or, if your project does not allow keys, use server login: see DEPLOYMENT_GUIDE.md ("Server login"). Then redeploy.');
     } else if (ok) {
-      add('admin', 'Server credentials', true, 'Service account active.');
+      add('admin', 'Server credentials', true, mode === 'admin' ? 'Service account active.' : 'Server login active (no service-account key).');
     }
   } catch (e) {
     const denied = /permission|insufficient/i.test(e.message || '');
-    add('database', 'Database (server access)', false, denied ? `The server is not allowed to write to your database. ${isAdminMode() ? '' : (WHY[adminReason()] || '')}`.trim() : e.message,
+    add('database', 'Database (server access)', false, denied ? `The server is not allowed to write to your database. ${serverMode() === 'login' ? 'Server login is set, but the rules do not recognise the server user yet.' : (WHY[adminReason()] || '')}`.trim() : (serverLoginProblem() || e.message),
       denied
-        ? 'Your Firestore rules are locked down but the server has no service account. Set FIREBASE_SERVICE_ACCOUNT_JSON in your hosting environment variables (paste the downloaded JSON key), then redeploy.'
-        : 'Check the NEXT_PUBLIC_FIREBASE_* variables match your Firebase project.');
+        ? (serverMode() === 'login'
+          ? 'Paste the server user\'s UID into firestore.rules (isServer) and republish them: firebase deploy --only firestore:rules.'
+          : 'Your Firestore rules are locked down but the server has no credentials. Set FIREBASE_SERVICE_ACCOUNT_JSON (paste the downloaded JSON key) or use server login (DEPLOYMENT_GUIDE.md), then redeploy.')
+        : 'Check the NEXT_PUBLIC_FIREBASE_* variables, the server login email/password, and that Email/Password sign-in is enabled in Firebase Authentication.');
   }
 
   // 2. Gmail sending (Google sign-in client)

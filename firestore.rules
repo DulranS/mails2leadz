@@ -7,6 +7,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
+
+    // The server's own identity when it runs WITHOUT a service-account key ("server login", DEPLOYMENT_GUIDE.md): paste the
+    // Firebase Authentication user id (UID) of the dedicated server user between the quotes, then republish these rules.
+    // Left as it is, it matches nobody, so the rules stay exactly as locked down as before.
+    function isServer() { return request.auth != null && request.auth.uid == 'PASTE_SERVER_USER_UID_HERE'; }
     function uid() { return request.auth.uid; }
 
     // A document belongs to the caller if it says so, or its id is "<uid>_<something>".
@@ -23,6 +28,11 @@ service cloud.firestore {
         request.resource.data.get('createdBy', '') == uid() ||
         docId.matches('^' + uid() + '_.*')
       );
+    }
+
+    // The dedicated server user (server login) may read and write everything. Nobody else gets anything from this.
+    match /{document=**} {
+      allow read, write: if isServer();
     }
 
     // Everything under users/{uid}/... (settings, follow-up tasks, notes, contacts)

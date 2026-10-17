@@ -9,6 +9,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeCustomers } from "../../lib/customers.js";
+import { computeRecurring } from "../../lib/recurring.js";
 import { STAGE_LABELS } from "../../lib/deal-utils.js";
 import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
@@ -82,6 +83,7 @@ export default function CustomersPage() {
 
   const money = makeMoney(normalizeCurrency(settings.currency));
   const data = useMemo(() => computeCustomers({ deals, invoices, avgDealValue: settings.avgDealValue }), [deals, invoices, settings.avgDealValue]);
+  const rec = useMemo(() => computeRecurring({ deals }), [deals]);
   const list = data.customers.filter((c) => (filter === "all" ? true : filter === "action" ? c.health === "at_risk" || c.health === "attention" : c.health === filter));
   const counts = { action: data.atRisk.count + data.attention.count, onboarding: data.customers.filter((c) => c.health === "onboarding").length, healthy: data.customers.filter((c) => c.health === "healthy").length, all: data.total };
 
@@ -97,6 +99,16 @@ export default function CustomersPage() {
     } catch (e) { console.error(e); setError("Could not save that change."); return null; }
     finally { setBusy(""); }
   };
+
+  // Subscription facts for the customer whose panel is open, and the three things you can do with them.
+  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "" });
+  const saveSub = (c) => saveExtras(c.email, { recurringMonthly: sub.amount === "" ? 0 : sub.amount, renewalAt: sub.renewal || null }, "Subscription saved.");
+  const markChurned = async (c) => {
+    if (!window.confirm(`Mark ${c.businessName || c.email} as churned? The deal stays Won (a customer who leaves is not a lost deal) and their recurring revenue stops counting.`)) return;
+    const ok = await saveExtras(c.email, { churn: true, churnReason: sub.reason }, "Marked as churned. You can reactivate them from the list at the bottom.");
+    if (ok) setOpen(null);
+  };
+  const reactivate = (e) => saveExtras(e.email, { churn: false }, "Reactivated: they are an active customer again.");
 
   const toggleStep = (c, stepId, done) => saveExtras(c.email, (d) => ({ onboardingDone: setOnboardingStep(d.onboardingDone, stepId, done) }));
   const logContact = (c) => saveExtras(c.email, { touch: true }, `Logged: you were in touch with ${c.businessName || c.email} today.`);
@@ -183,6 +195,17 @@ export default function CustomersPage() {
         </div>
         {data.touchedLast30 !== null && <p className="text-xs text-gray-500 dark:text-gray-400">You were in touch with {Math.round(data.touchedLast30 * 100)}% of customers in the last 30 days. A customer with no contact for 45 days is flagged.</p>}
 
+        {rec.any && (
+          <section className={card} aria-label="Recurring revenue">
+            <p className="text-sm text-gray-800 dark:text-gray-100">
+              <b>{money(rec.mrr)}</b> a month from {rec.subscribers} subscriber{rec.subscribers === 1 ? "" : "s"} ({money(rec.arr)} a year)
+              {rec.renewals.dueSoon.count > 0 ? ` · ${rec.renewals.dueSoon.count} renewing in 30 days (${money(rec.renewals.dueSoon.mrr)}/month)` : ""}
+              {rec.renewals.lapsed.count > 0 ? ` · ${rec.renewals.lapsed.count} renewal date${rec.renewals.lapsed.count === 1 ? "" : "s"} passed` : ""}.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Churn, lifetime value and the monthly trend are on the Business Value page.</p>
+          </section>
+        )}
+
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Customer filter">
           {[["action", "Needs action"], ["onboarding", "Onboarding"], ["healthy", "Healthy"], ["all", "All"]].map(([k, l]) => (
             <button key={k} role="tab" aria-selected={filter === k} onClick={() => setFilter(k)} className={`min-h-[44px] px-4 rounded-lg text-sm border ${filter === k ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"}`}>{l} ({counts[k]})</button>
@@ -207,7 +230,7 @@ export default function CustomersPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${h.cls}`}>{h.label}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{STAGE_LABELS[c.stage]}</span>
                       </div>
-                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.estimated ? " (estimate)" : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
+                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.estimated ? " (estimate)" : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
                       {c.reasons.length > 0 && <ul className="mt-1 text-xs text-gray-700 dark:text-gray-200 list-disc pl-4">{c.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                       <div className="mt-2 flex items-center gap-2">
                         <div className="h-2 w-32 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(c.onboarding.pct * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Onboarding progress"><div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.onboarding.pct * 100}%` }} /></div>
@@ -218,7 +241,7 @@ export default function CustomersPage() {
                       <button type="button" disabled={busy === c.email} onClick={() => askCheckin(c)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === c.email ? "Working..." : `Draft check-in`}</button>
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
-                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
+                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
@@ -271,12 +294,46 @@ export default function CustomersPage() {
                         </div>
                         {c.overdue && <p className="text-xs text-amber-700 dark:text-amber-300 mt-3">{c.overdue.count} overdue invoice{c.overdue.count === 1 ? "" : "s"}, {money(c.overdue.amount)}. <Link href="/billing" className="underline">Open billing</Link></p>}
                       </div>
+                      <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Subscription (only if they pay you every month)</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <label className="block text-xs text-gray-600 dark:text-gray-300">Monthly amount ({"yearly plan: price ÷ 12"})
+                            <input type="number" inputMode="decimal" min="0" step="any" value={sub.email === c.email ? sub.amount : ""} onChange={(e) => setSub({ ...sub, email: c.email, amount: e.target.value })} placeholder="0 = one-off customer" className={`${field} mt-1 min-h-[44px]`} />
+                          </label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-300">Next renewal date (optional)
+                            <input type="date" value={sub.email === c.email ? sub.renewal : ""} onChange={(e) => setSub({ ...sub, email: c.email, renewal: e.target.value })} className={`${field} mt-1 min-h-[44px]`} />
+                          </label>
+                          <div className="flex items-end">
+                            <button type="button" disabled={busy === c.email} onClick={() => saveSub(c)} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Save subscription</button>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                          <input value={sub.email === c.email ? sub.reason : ""} onChange={(e) => setSub({ ...sub, email: c.email, reason: e.target.value })} maxLength={120} placeholder="If they left: why? (optional)" aria-label="Why did they leave" className={`${field} min-h-[44px] flex-1`} />
+                          <button type="button" disabled={busy === c.email} onClick={() => markChurned(c)} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 disabled:opacity-50">This customer left (churned)</button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </li>
               );
             })}
           </ul>
+        )}
+        {data.churnedList.length > 0 && (
+          <details className={card}>
+            <summary className="cursor-pointer text-sm font-semibold text-gray-700 dark:text-gray-200 min-h-[44px] flex items-center">Customers who left ({data.churnedList.length})</summary>
+            <ul className="mt-3 space-y-2">
+              {data.churnedList.map((e) => (
+                <li key={e.email} className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{e.businessName || e.email}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Left {e.churnedAt.slice(0, 10)}{e.recurringMonthly > 0 ? ` · was ${money(e.recurringMonthly)}/month` : ""}{e.reason ? ` · ${e.reason}` : ""}</div>
+                  </div>
+                  <button type="button" disabled={busy === e.email} onClick={() => reactivate(e)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Reactivate</button>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400">When a customer replies by email, use the Replies panel on the dashboard: the AI reads the message and suggests what to do. Log anything that needs a proper fix here as an issue so it is not forgotten.</p>
       </div>

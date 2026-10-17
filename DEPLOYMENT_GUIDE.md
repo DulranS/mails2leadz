@@ -90,3 +90,13 @@ That is a file left over from an older release (unzipping over an old project do
 
 ## If nothing is being saved
 Open the app signed in: a red banner at the top means the server cannot write to the database (Account → Run connection check says why). Almost always `FIREBASE_SERVICE_ACCOUNT_JSON` is missing or unreadable on the host (paste the whole key JSON on one line), or the Firestore rules were not republished (`firebase deploy --only firestore:rules`). Redeploy after changing environment variables.
+
+
+## Server login (no service-account key)
+Use this when you cannot or do not want to create a service-account key (some Google Cloud organisations block key creation). The server uses the normal Firebase package, signed in as **one dedicated user** that only your rules recognise. Do **either** this **or** `FIREBASE_SERVICE_ACCOUNT_JSON`; if both are set, the service account is used.
+1. Firebase console → **Authentication → Sign-in method** → enable **Email/Password** (Google sign-in stays on for customers).
+2. **Authentication → Users → Add user**: an email that is yours (for example `server@yourdomain.com`) and a long random password (`openssl rand -base64 24`). Copy the user's **UID**.
+3. Open `firestore.rules` and replace `PASTE_SERVER_USER_UID_HERE` with that UID. Republish: `firebase deploy --only firestore:rules`.
+4. On the host set `FIREBASE_SERVER_EMAIL` and `FIREBASE_SERVER_PASSWORD`, then redeploy.
+5. Sign in and press **Account → Run connection check**: "Database" should say *Working (server login)*.
+**Good to know.** The server user can read and write everything, exactly like a service account would, so keep its password only in the host's environment variables. Nobody else gets anything from the rule (it matches that one UID). If your Firebase web API key has a "websites" (HTTP referrer) restriction, the server's sign-in is refused: remove the restriction (or use a key without one). Each new server instance signs in once (a fraction of a second).

@@ -9,6 +9,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
+import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeTemplateStats, computeAngleStats, suggestStageChances } from "../../lib/attribution.js";
 import { computeOutboundPlan } from "../../lib/plan.js";
 import { angleLabel } from "../../lib/angles.js";
@@ -153,6 +154,8 @@ export default function BusinessValuePage() {
 
   const billing = useMemo(() => computeBilling({ invoices: raw.invoices }), [raw]);
   const unbilled = useMemo(() => computeUnbilled({ deals: m.deals, invoices: raw.invoices }), [m, raw]);
+  const rec = useMemo(() => computeRecurring({ deals: raw.deals }), [raw]);
+  const subsDue = useMemo(() => computeSubscriptionsDue({ deals: raw.deals, invoices: raw.invoices }), [raw]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
   const weekly = useMemo(() => computeWeeklyKpis({ emailRows: raw.emailRows || [], deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
@@ -225,7 +228,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content });
+  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };
@@ -380,6 +383,32 @@ export default function BusinessValuePage() {
           <Stat label="Won to date" value={money(m.past.wonRevenue)} hint={`${m.past.wonCount} deal${m.past.wonCount === 1 ? "" : "s"}`} />
           <Stat label="Win rate" value={pct(m.past.winRate)} hint={m.past.winRate === null ? "needs a won or lost deal" : `${m.past.wonCount} won · ${m.past.lostCount} lost`} />
         </div>
+
+        {/* RECURRING REVENUE: appears only once a customer has a monthly amount (Customers > open a customer > Subscription) */}
+        {!loading && rec.any && (
+          <Card title="Recurring revenue (subscriptions)">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <Stat label="Monthly recurring (MRR)" value={money(rec.mrr)} hint={`${rec.subscribers} subscriber${rec.subscribers === 1 ? "" : "s"} · ${money(rec.arpa)} each`} />
+              <Stat label="Yearly run-rate (ARR)" value={money(rec.arr)} hint="MRR × 12" />
+              <Stat label="Net new MRR, 30 days" value={`${rec.netNewMrr30 >= 0 ? "+" : "-"}${money(Math.abs(rec.netNewMrr30))}`} hint={`${money(rec.newMrr30)} new · ${money(rec.churnedMrr30)} lost`} />
+              <Stat label="Monthly churn" value={rec.churn.monthlyRate === null ? "n/a" : pct(rec.churn.monthlyRate)} hint={rec.churn.monthlyRate === null ? "needs a subscriber older than 90 days" : `${rec.churn.lost} of ${rec.churn.base} left in 90 days${rec.churn.confidence === "rough" ? " (few customers: rough guide)" : ""}`} />
+            </div>
+            <p className="text-sm text-gray-800 dark:text-gray-100 mt-3">
+              {rec.ltv ? `A typical subscriber is worth about ${money(rec.ltv.value)} over ${rec.ltv.months} months${rec.ltv.capped ? " (capped at 5 years)" : ""}.` : rec.churn.base > 0 && rec.churn.lost === 0 ? "Nobody has left in the last 90 days, so lifetime value can't be measured yet (it would be unlimited). It appears after the first churn." : "Lifetime value appears once there is 90 days of history."}
+            </p>
+            <div className="mt-3">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">MRR at the end of each month</div>
+              {(() => { const max = Math.max(...rec.mrrByMonth.map((x) => x.mrr), 0); return rec.mrrByMonth.map((x) => <Bar key={x.month} value={x.mrr} max={max} label={x.month} right={money(x.mrr)} />); })()}
+              <p className="text-xs text-gray-500 dark:text-gray-400">Rebuilt from start and leave dates using today's monthly amounts (a price change is not tracked).</p>
+            </div>
+            {(rec.renewals.dueSoon.count > 0 || rec.renewals.lapsed.count > 0) && (
+              <ul className="mt-3 text-sm text-gray-800 dark:text-gray-100 list-disc pl-5">
+                {rec.renewals.dueSoon.count > 0 && <li>{rec.renewals.dueSoon.count} renewing in the next 30 days ({money(rec.renewals.dueSoon.mrr)}/month): {rec.renewals.dueSoon.list.slice(0, 3).map((r) => r.businessName || r.email).join(", ")}.</li>}
+                {rec.renewals.lapsed.count > 0 && <li>{rec.renewals.lapsed.count} renewal date{rec.renewals.lapsed.count === 1 ? "" : "s"} passed with no record of the customer leaving ({money(rec.renewals.lapsed.mrr)}/month): confirm they renewed, or mark them as churned. <Link href="/customers" className="underline">Open customers</Link></li>}
+              </ul>
+            )}
+          </Card>
+        )}
 
         {/* FUTURE */}
         <Card title="What to expect (forecast)">

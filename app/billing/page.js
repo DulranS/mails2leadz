@@ -9,6 +9,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
+import { computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeBilling, computeUnbilled, buildInvoiceWrite, canRemind, dunningLevel, DEFAULT_PAYMENT_TERMS_DAYS } from "../../lib/billing.js";
 import { setOnboardingStep } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
@@ -95,6 +96,7 @@ export default function BillingPage() {
   const metrics = useMemo(() => computeBusinessMetrics({ deals, settings }), [deals, settings]);
   const billing = useMemo(() => computeBilling({ invoices }), [invoices]);
   const unbilled = useMemo(() => computeUnbilled({ deals: metrics.deals, invoices }), [metrics, invoices]);
+  const subsDue = useMemo(() => computeSubscriptionsDue({ deals, invoices }), [deals, invoices]);
   const customers = useMemo(() => metrics.deals.filter((d) => ["closed_won", "delivery", "retention", "expansion"].includes(d.stage)), [metrics]);
   const maxCash = Math.max(1, ...billing.cashByMonth.map((m) => Math.max(m.collected, m.invoiced)));
   const maxAging = Math.max(1, ...billing.aging.map((a) => a.amount));
@@ -202,6 +204,23 @@ export default function BillingPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-medium text-gray-900 dark:text-white">{money(d.value)}{d.estimated ? <span className="text-xs font-normal text-gray-500"> estimate</span> : null}</span>
                     <button type="button" onClick={() => startInvoice({ email: d.email, businessName: d.businessName, amount: d.estimated ? "" : String(d.value) })} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white`}>Invoice</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
+        {subsDue.count > 0 && !loading && (
+          <Card title={`Subscriptions to invoice: ${money(subsDue.amount)}`}>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">These subscribers pay you every month and their last invoice is about a month old or older. Raise this month's invoice so the recurring revenue turns into cash.</p>
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+              {subsDue.list.slice(0, 8).map((d) => (
+                <li key={d.email} className="py-2 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                  <div className="min-w-0"><div className="truncate text-sm text-gray-900 dark:text-white">{d.businessName || d.email}</div><div className="truncate text-xs text-gray-500 dark:text-gray-400">{d.email} · last invoiced {d.daysSince} days ago</div></div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{money(d.amount)}</span>
+                    <button type="button" onClick={() => startInvoice({ email: d.email, businessName: d.businessName, amount: String(d.amount), note: `Subscription, ${new Date().toLocaleString("en", { month: "long", year: "numeric" })}` })} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white`}>Invoice</button>
                   </div>
                 </li>
               ))}
