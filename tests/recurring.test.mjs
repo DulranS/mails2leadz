@@ -3,6 +3,7 @@ import { buildDealWrite } from '../lib/deal-utils.js';
 import { computeRecurring, computeSubscriptionsDue } from '../lib/recurring.js';
 import { computeBusinessMetrics } from '../lib/business-metrics.js';
 import { buildNextActions } from '../lib/next-actions.js';
+import { computeWeeklyKpis, weeklyReportText } from '../lib/weekly-kpi.js';
 import { computeCustomers } from '../lib/customers.js';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 
@@ -128,5 +129,12 @@ t('Do this next: subscription invoices and renewals are surfaced, and stay silen
   assert.ok(ids.includes('subsdue')); assert.ok(ids.includes('renewals_lapsed')); assert.ok(ids.includes('renewals_soon'));
   const quiet = buildNextActions({ metrics, subsDue: { count: 0, amount: 0, list: [] }, recurring: { any: false } }).map((a) => a.id);
   for (const id of ['subsdue', 'renewals_lapsed', 'renewals_soon']) assert.ok(!quiet.includes(id), id);
+});
+t('weekly report: a recurring-revenue line appears only for subscription businesses', () => {
+  const kpis = computeWeeklyKpis({ now: NOW });
+  const money = (v) => `$${Math.round(v)}`;
+  const withMrr = weeklyReportText({ kpis, snapshot: { mrr: 130, subscribers: 2, netNewMrr30: -20, renewalsSoon: 1 }, money, now: NOW });
+  assert.match(withMrr, /- Recurring revenue: \$130 a month from 2 subscribers, net new this month -\$20, 1 renewing within 30 days/);
+  assert.ok(!/Recurring revenue/.test(weeklyReportText({ kpis, snapshot: {}, money, now: NOW })));
 });
 console.log(`recurring: ${n} passed`);
