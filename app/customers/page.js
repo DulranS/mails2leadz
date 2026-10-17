@@ -143,6 +143,18 @@ export default function CustomersPage() {
     finally { setBusy(""); }
   };
 
+  // A customer who left is the warmest lapsed lead there is, and the honest reply to "why did you go?" is the best churn research.
+  const askWinback = async (e) => {
+    setBusy(e.email); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/ai-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: e.email, purpose: "churn_winback", businessName: e.businessName, senderName: user?.displayName || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setError(d.error || "Could not create the note right now."); return; }
+      setDraft({ kind: "winback", customer: e, to: e.email, title: `Win back: ${e.businessName || e.email}`, subject: d.draft.subject, body: d.draft.body, source: "ai", note: "No discount and no pressure. Their answer tells you why customers leave." });
+    } catch { setError("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
+
   const askSupportReply = async () => {
     if (!reply) return;
     const c = data.customers.find((x) => lower(x.email) === lower(reply.email));
@@ -329,6 +341,7 @@ export default function CustomersPage() {
                     <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{e.businessName || e.email}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Left {e.churnedAt.slice(0, 10)}{e.recurringMonthly > 0 ? ` · was ${money(e.recurringMonthly)}/month` : ""}{e.reason ? ` · ${e.reason}` : ""}</div>
                   </div>
+                  <button type="button" disabled={busy === e.email} onClick={() => askWinback(e)} className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}>Draft win-back note</button>
                   <button type="button" disabled={busy === e.email} onClick={() => reactivate(e)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Reactivate</button>
                 </li>
               ))}

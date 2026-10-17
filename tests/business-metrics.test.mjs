@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { computeBusinessMetrics } from '../lib/business-metrics.js';
+import { computeUnbilled } from '../lib/billing.js';
 import { dealDocId, normalizeStage, buildDealWrite } from '../lib/deal-utils.js';
 
 const now = Date.parse('2026-10-05T12:00:00Z');
@@ -280,5 +281,14 @@ t('funnel: a deal lost after the demo still counts as having reached the demo', 
   assert.equal(f.proposal, 0);
   assert.ok(r.present.funnel.every((s, i, a) => i < 2 || s.count <= a[i - 1].count)); // still monotonic
   assert.equal(r.present.openCount, 1); // the open pipeline itself is unchanged
+});
+t('a customer who left stays Won but is flagged, so billing never asks to invoice them', () => {
+  const x = computeBusinessMetrics({ deals: [
+    { email: 'gone@x.com', stage: 'closed_won', value: 600, valueIsEstimate: false, createdAt: d(200), closedAt: d(190), lastUpdate: d(20), churnedAt: d(20) },
+    { email: 'stay@x.com', stage: 'closed_won', value: 900, valueIsEstimate: false, createdAt: d(50), closedAt: d(40), lastUpdate: d(40) },
+  ], now });
+  assert.equal(x.deals.find((q) => q.email === 'gone@x.com').stage, 'closed_won');
+  const u = computeUnbilled({ deals: x.deals, invoices: [] });
+  assert.deepEqual(u.list.map((q) => q.email), ['stay@x.com']);
 });
 console.log('\nattribution ok');

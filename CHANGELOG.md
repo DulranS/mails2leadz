@@ -1,5 +1,11 @@
 # Changelog
 
+## Pass 17 - churn win-back
+- Customers who left now have a "Draft win-back note" button: an honest, no-discount, no-pressure AI note that asks what would have made it better (new post-sale purpose `churn_winback`; never enters the prospect sequence).
+
+## Pass 16 - found by actually running the pages
+- A customer who had left (churned) still appeared under "Won but not invoiced" and in "Do this next", asking you to invoice someone who is gone. Churned customers are now excluded (business metrics carry `churnedAt` through; `computeUnbilled` skips them). Two tests added.
+
 ## Pass 15: subscription business value (MRR, churn, lifetime value, renewals)
 **The gap.** Every number assumed a sale is a one-off amount. A subscription business (or the software itself) lives on monthly recurring revenue, who renews and who leaves; marking a leaver "Lost" would also have wrongly lowered the win rate.
 **Customers → open a customer → Subscription:** a monthly amount (a yearly plan: price ÷ 12; 0 = one-off), an optional next renewal date, and **"This customer left (churned)"** with an optional reason. A churned customer stays a Won deal (revenue earned is still revenue), leaves the active list and its health counts, and sits under **Customers who left** with a **Reactivate** button. A renewal within 30 days, or a date that passed with no record of them leaving, flags the customer "Needs attention" with the reason.

@@ -90,6 +90,10 @@ t('unbilled: won deals with no invoice, voided invoices do not count as billed',
   assert.equal(u.amount, 1700);
   assert.equal(u.estimatedCount, 1);
 });
+t('unbilled: a customer who has left is not nagged for an invoice', () => {
+  const u = computeUnbilled({ deals: [{ email: 'x@x.com', stage: 'closed_won', value: 600, churnedAt: '2026-09-27T00:00:00.000Z' }, { email: 'y@x.com', stage: 'closed_won', value: 100 }], invoices: [] });
+  assert.deepEqual(u.list.map((x) => x.email), ['y@x.com']);
+});
 t('fallback drafts carry amount, due date, payment info; never threaten', () => {
   for (const level of [1, 2, 3]) {
     const d = dunningFallbackDraft({ level, name: 'Acme', number: 'INV-7', amountText: '$1,000.00', dueText: '1 Oct', senderName: 'Sam', paymentInfo: 'Bank X 123', daysOverdue: 9 });

@@ -99,6 +99,7 @@ t('referral deal write stamps referralAskedAt; "referral_ask" is a post-sale pur
   assert.ok(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'closed_won', existing: { stage: 'closed_won' }, referralAsked: true }).referralAskedAt);
   assert.equal(buildDealWrite({ uid: 'u', email: 'a@x.com', stage: 'closed_won', existing: { stage: 'closed_won' } }).referralAskedAt, undefined);
   assert.ok(POST_SALE_STAGES.includes('referral_ask'));
+  assert.ok(POST_SALE_STAGES.includes('churn_winback')); // customers who left are never put through the prospect sequence
 });
 
 t('referral link: built from the app origin + key, credits the customer, https only', () => {
