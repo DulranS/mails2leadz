@@ -5,6 +5,7 @@
 - **Learn from replies**: autopilot favours the cold-email angle with the best reply rate, but only once at least two angles have 15+ leads and a clear gap. Your own choice in Account always wins. Switch it off and it stops being used.
 - **Post now** opens X and LinkedIn with your post already filled in (the text is still copied); other networks open as before.
 - Cron order changed so the brief reports what Autosend just did: Autosend 04:00 UTC, daily job 05:30 UTC.
+- Export and delete now include `autosend_log` (the Autosend daily counter). **Republish `firestore.rules`.**
 - New switches in Account -> Autopilot (also turned on by "Run my business on autopilot"). 5 new unit tests files/cases and 2 new server scenarios (14 total).
 
 ## Pass 18 - Autopilot (the operating spine runs itself, inside limits)
