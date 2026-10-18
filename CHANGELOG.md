@@ -1,5 +1,11 @@
 # Changelog
 
+## Pass 19c - map search that survives busy free servers
+- A busy server's "504" used to be read as "area too big": the search split the area and gave up instead of trying the next server. It now tries the next server.
+- A search is now a grid of small tiles (middle of the city first, at most 4 x 4), two quick tries per tile. A tile the servers cannot answer is skipped and remembered; the other tiles' leads are still returned with a note ("only part of the area was searched"), and the next search of the same thing resumes where it stopped. Only when nothing at all can be fetched is it an error, and then it stops after a couple of tiles instead of burning the whole time.
+- A search the map could not answer no longer uses up the daily allowance of 12.
+- The server that answered last is tried first. Tests: tiles, 504 handling, skipped tiles, resume, allowance (23 lead-finder tests).
+
 ## Pass 19b - Lead Inbox "free map servers are busy"
 - Cause: the business-name search asked the free OpenStreetMap (Overpass) servers to match a regex across every key of every object in the area. City-sized searches could not finish and timed out. It now uses the indexed form (the cheap `shop`/`craft`/... key filter first, then the name match) and a lighter server-side timeout.
 - Each attempt is shorter (22 s) so a slow server is dropped for the next one instead of using the whole budget; a fourth public mirror was added.

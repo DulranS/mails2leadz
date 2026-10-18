@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { WORKER_SEARCH_TERMS } from '../lib/worker-categories.js';
 import {
-  categoryFilters, overpassQuery, rectFromNominatim, splitRect, extractEmails, extractPhonesFromText, normaliseEmail, emailAcceptable,
+  categoryFilters, overpassQuery, rectFromNominatim, splitRect, tileRect, extractEmails, extractPhonesFromText, normaliseEmail, emailAcceptable,
   parsePage, candidateFromElement, calculateLeadScore, selectForInbox, sanitizeSearch, sanitizeFinderSettings, splitAreaFromQuery,
   prepareWebsite, socialFromUrl, buildRow, choosePrimaryEmail, decodeCfEmail,
 } from '../lib/lead-finder.js';
@@ -248,6 +248,53 @@ await t('searching the map: if the name search is too heavy for the free servers
   assert.ok(queries.length >= 2 && /"name"~"/.test(queries[0]) && !/"name"~"/.test(queries[queries.length - 1]));
 });
 
+await t('tiles: a big area becomes small tiles, the middle first; a small area stays one; never more than 4 x 4', () => {
+  const big = tileRect({ south: 6.8, west: 79.8, north: 7.0, east: 80.0 });
+  assert.equal(big.length, 16);
+  const mid = (t) => [(t.south + t.north) / 2, (t.west + t.east) / 2];
+  const d = (t) => Math.hypot(mid(t)[0] - 6.9, mid(t)[1] - 79.9);
+  assert.ok(d(big[0]) <= d(big[15])); assert.ok(d(big[3]) <= d(big[12]));
+  assert.equal(tileRect({ south: 6.9, west: 79.9, north: 6.94, east: 79.95 }).length, 1);
+  assert.equal(tileRect({ south: 0, west: 0, north: 20, east: 20 }).length, 16);
+  const area = (r) => (r.north - r.south) * (r.east - r.west);
+  assert.ok(Math.abs(big.reduce((a, r) => a + area(r), 0) - 0.04) < 1e-9); // the tiles cover the area exactly
+});
+
+await t('searching the map: a busy server (504) is skipped for the next one, and a tile nobody answers is skipped, not fatal', async () => {
+  // two servers: the first always answers 504 (busy), the second works
+  const two = makeCtx(ACME, {
+    fetch: async (url) => (url.startsWith('https://busy.test') ? new Response('gateway timeout', { status: 504 }) : null),
+    elements: ELEMENTS.slice(0, 2),
+  });
+  two.overpass = ['https://busy.test/api', 'https://overpass.test/api'];
+  const r = await searchOsm({ term: 'dentist', location: 'Colombo' }, two, { deadline: Date.now() + 40000 });
+  assert.equal(r.candidates.length, 2); assert.equal(r.stats.partial, false); // 504 is "busy", not "too big": nothing was split, nothing lost
+
+  // one bad tile (the server never answers for that part), the rest work: leads come back, marked partial, and the bad tile is where the next search resumes
+  let seenTiles = 0;
+  const flaky = makeCtx(ACME, {
+    fetch: async (url, init) => {
+      if (!url.startsWith('https://overpass.test')) return null;
+      const ql = new URLSearchParams(String(init?.body || '')).get('data') || '';
+      seenTiles++;
+      return seenTiles <= 4 ? new Response('busy', { status: 429 }) : Response.json({ elements: ELEMENTS.slice(0, 2) }); // the first tile fails: two tries, then the lighter category-only retry's two
+    },
+  });
+  const p = await searchOsm({ term: 'dentist', location: 'Colombo' }, flaky, { deadline: Date.now() + 40000 });
+  assert.equal(p.candidates.length, 2); assert.equal(p.stats.partial, true); assert.equal(p.stats.resumeAt, 0); assert.equal(p.stats.tilesTotal, 16);
+
+  // resuming from a tile skips the earlier ones
+  const calls = [];
+  const resume = makeCtx(ACME, { fetch: async (url) => { if (url.startsWith('https://overpass.test')) calls.push(url); return null; }, elements: [] });
+  await searchOsm({ term: 'dentist', location: 'Colombo' }, resume, { deadline: Date.now() + 40000, startTile: 14 });
+  assert.equal(calls.length, 2);
+
+  // nothing answers at all: an honest error after trying only a couple of tiles, not 16
+  const dead = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') ? new Response('busy', { status: 503 }) : null) });
+  await assert.rejects(() => searchOsm({ term: 'dentist', location: 'Colombo' }, dead, { deadline: Date.now() + 30000 }), (e) => e.code === 'MAP_BUSY');
+  assert.ok(dead.calls.filter((u) => u.startsWith('https://overpass.test')).length <= 6);
+});
+
 // ---------------------------------------------------------------- the job (in-memory store)
 function memoryDeps() {
   const mem = { job: null, settings: null, finder: null, delivered: [] };
@@ -297,6 +344,28 @@ await t('a step stops at its time box and the next call carries on from the same
   assert.equal(rest.finished, true);
   assert.equal(deps.mem.job.cursor, 14);
   assert.equal(new Set(deps.mem.delivered.map((l) => l.place_id)).size, deps.mem.delivered.length);
+});
+
+await t('a search the map could not answer does not use up the daily allowance; a partly answered one is remembered and resumed', async () => {
+  const deps = memoryDeps();
+  const dead = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') ? new Response('busy', { status: 503 }) : null) });
+  await assert.rejects(() => startSearch(null, 'u9', { query: 'dentist', location: 'Colombo' }, { ctx: dead, deps, deadline: Date.now() + 30000 }), (e) => e.code === 'MAP_BUSY');
+  assert.equal(deps.mem.job, null); // nothing saved, nothing counted
+  process.env.FINDER_DAILY_SEARCHES = '1';
+  try {
+    // one try fails completely, but the next works: the allowance of 1 is still available for it
+    const ok = makeCtx(ACME, { elements: ELEMENTS });
+    await startSearch(null, 'u9', { query: 'dentist', location: 'Colombo' }, { ctx: ok, deps });
+    assert.equal(deps.mem.job.usage.searches, 1);
+  } finally { delete process.env.FINDER_DAILY_SEARCHES; }
+  // partly answered: tiles after the first four never answer
+  let n = 0;
+  const flaky = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') && ++n > 4 ? new Response('busy', { status: 503 }) : null), elements: ELEMENTS });
+  const d2 = memoryDeps();
+  await startSearch(null, 'u10', { query: 'dentist', location: 'Colombo' }, { ctx: flaky, deps: d2, deadline: Date.now() + 60000 });
+  assert.match(d2.mem.job.note, /only part of the area/);
+  assert.equal(d2.mem.job.mapProgress.key, 'dentist|Colombo'); assert.ok(d2.mem.job.mapProgress.resumeAt >= 0);
+  assert.ok(d2.mem.job.candidates.length > 0);
 });
 
 await t('cancel stops a running search; the daily allowance is enforced and explained', async () => {
