@@ -55,6 +55,12 @@ await t('an unknown business type falls back to a name search; nothing typed can
   assert.match(q, /out tags center 300;$/);
   assert.match(overpassQuery(['tourism=hotel|guest_house'], [], { south: 1, west: 1, north: 2, east: 2 }), /\["tourism"~"\^\(hotel\|guest_house\)\$"\]/);
   assert.throws(() => overpassQuery([], [], { south: 1, west: 1, north: 2, east: 2 }));
+  // name searches: the cheap key filter comes first and no regex runs over key names (that form timed out the free servers on city-sized areas)
+  const named = overpassQuery([], ['plumb'], { south: 1, west: 1, north: 2, east: 2 });
+  assert.match(named, /nwr\["shop"\]\["name"~"plumb",i\]\(1\.000000,1\.000000,2\.000000,2\.000000\);/);
+  assert.match(named, /nwr\["industrial"\]\["name"~"plumb",i\]/);
+  assert.doesNotMatch(named, /\[~"/);
+  assert.equal((named.match(/nwr\[/g) || []).length, 8);
 });
 
 await t('searches: "term in place" splits; missing term or place is explained; saved searches are capped and deduplicated', () => {
@@ -224,6 +230,22 @@ await t('searching the map: finds the area, lists businesses, skips nameless one
   const busy = makeCtx({}, { fetch: async (url) => (url.startsWith('https://overpass.test') ? new Response('busy', { status: 429 }) : null) });
   busy.overpass = ['https://overpass.test/api'];
   await assert.rejects(() => searchOsm({ term: 'dentist', location: 'Colombo' }, busy, { deadline: Date.now() + 9000 }), (e) => e.code === 'MAP_BUSY');
+});
+
+await t('searching the map: if the name search is too heavy for the free servers, the category search alone still returns leads', async () => {
+  const queries = [];
+  const heavy = makeCtx(ACME, {
+    fetch: async (url, init) => {
+      if (!url.startsWith('https://overpass.test')) return null;
+      const ql = new URLSearchParams(String(init?.body || '')).get('data') || '';
+      queries.push(ql);
+      return /"name"~"/.test(ql) ? new Response('timeout', { status: 504 }) : Response.json({ elements: ELEMENTS.slice(0, 2) });
+    },
+  });
+  const r = await searchOsm({ term: 'dentist', location: 'Colombo' }, heavy, { deadline: Date.now() + 40000 });
+  assert.deepEqual(r.candidates.map((c) => c.place_id).sort(), ['osm:node/1', 'osm:node/2']);
+  assert.equal(r.stats.degraded, true);
+  assert.ok(queries.length >= 2 && /"name"~"/.test(queries[0]) && !/"name"~"/.test(queries[queries.length - 1]));
 });
 
 // ---------------------------------------------------------------- the job (in-memory store)

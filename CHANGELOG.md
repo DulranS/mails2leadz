@@ -1,5 +1,11 @@
 # Changelog
 
+## Pass 19b - Lead Inbox "free map servers are busy"
+- Cause: the business-name search asked the free OpenStreetMap (Overpass) servers to match a regex across every key of every object in the area. City-sized searches could not finish and timed out. It now uses the indexed form (the cheap `shop`/`craft`/... key filter first, then the name match) and a lighter server-side timeout.
+- Each attempt is shorter (22 s) so a slow server is dropped for the next one instead of using the whole budget; a fourth public mirror was added.
+- If the name search is still too heavy, the search falls back to the category search alone instead of failing (some leads beat none).
+- Tests: query shape, and the fallback (20 lead-finder tests). Not testable here: the real public servers.
+
 ## Pass 19 - closing the manual gaps
 - **Morning brief**: a short email to yourself, only on days something needs you (replies without a deal, due follow-ups, hot leads waiting, money owed, posts due, a stopped Autosend). Quiet days send nothing; on Mondays the weekly report replaces it.
 - **Learn from replies**: autopilot favours the cold-email angle with the best reply rate, but only once at least two angles have 15+ leads and a clear gap. Your own choice in Account always wins. Switch it off and it stops being used.
