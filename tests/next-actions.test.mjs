@@ -35,4 +35,19 @@ t('money already owed still outranks new-lead and content work; list stays at 5'
   assert.equal(list[0].priority, 1);
   assert.ok(ids(list).indexOf('overdue') < ids(list).indexOf('inbox') || !ids(list).includes('inbox'));
 });
+t('a stopped Autosend is never silent: self-paused is urgent, owner-paused is a reminder, blocked sends warn, quiet runs say nothing', () => {
+  const on = { autoSend: true };
+  const hot = buildNextActions({ metrics: quiet, autopilot: { settings: { ...on, autoSendPaused: true, autoSendPauseReason: '6 of the last 100 emails bounced' } } });
+  assert.equal(hot[0].id, 'autosend_paused'); assert.equal(hot[0].priority, 1); assert.equal(hot[0].tone, 'hot'); assert.match(hot[0].detail, /6 of the last 100/);
+  const mine = buildNextActions({ metrics: quiet, autopilot: { settings: { ...on, autoSendPaused: true, autoSendPauseReason: 'You paused it.' } } }).find((x) => x.id === 'autosend_paused');
+  assert.equal(mine.priority, 3); assert.match(mine.detail, /You paused it/);
+  const blocked = buildNextActions({ metrics: quiet, autopilot: { settings: on, lastAutoSend: { at: new Date(Date.now() - 3600000).toISOString(), sent: 0, stopped: 'no_gmail' } } }).find((x) => x.id === 'autosend_blocked');
+  assert.match(blocked.detail, /Gmail is not connected/);
+  const old = buildNextActions({ metrics: quiet, autopilot: { settings: on, lastAutoSend: { at: new Date(Date.now() - 5 * 86400000).toISOString(), stopped: 'no_gmail' } } });
+  assert.ok(!ids(old).includes('autosend_blocked')); // stale news is dropped
+  const fine = buildNextActions({ metrics: quiet, autopilot: { settings: on, lastAutoSend: { at: new Date().toISOString(), sent: 12, stopped: '' } } });
+  assert.ok(!ids(fine).some((i) => i.startsWith('autosend')));
+  assert.ok(!ids(buildNextActions({ metrics: quiet, autopilot: { settings: { autoSendPaused: true } } })).includes('autosend_paused')); // autosend not on: nothing to report
+  assert.ok(!ids(buildNextActions({ metrics: quiet })).some((i) => i.startsWith('autosend'))); // optional input
+});
 console.log(`\n${n} next-actions tests ok`);

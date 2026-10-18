@@ -53,8 +53,9 @@ Account → **Autopilot** has one button, "Run my business on autopilot", plus a
 | What | When | Cost |
 |---|---|---|
 | Find leads, write first emails and follow-ups | nightly 01:30 UTC (existing job) | DeepSeek, within your AI caps |
-| **Autosend**: send those drafts from your Gmail | daily 05:30 UTC (11:00 Colombo), inside your window | none |
-| Subscription invoices + polite payment reminders | daily 04:00 UTC (09:30 Colombo) | none (fixed wording) |
+| **Autosend**: send those drafts from your Gmail | daily 04:00 UTC (09:30 Colombo), inside your window | none |
+| Subscription invoices + polite payment reminders | daily 05:30 UTC (11:00 Colombo), after Autosend | none (fixed wording) |
+| **Morning brief** to yourself (only on days something needs you), and learning which email angle wins | same daily job | none (arithmetic) |
 | Weekly report emailed to you | Mondays, same job | none |
 | Next week's social posts (drafted and scheduled) | same job, only when the calendar is nearly empty | one small AI call |
 

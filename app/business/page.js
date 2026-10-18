@@ -84,7 +84,7 @@ export default function BusinessValuePage() {
       // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(2000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
@@ -96,6 +96,7 @@ export default function BusinessValuePage() {
         getDocs(query(collection(db, "invoices"), where("userId", "==", uid), limit(2000))).catch(() => ({ docs: [] })),
         getDocs(query(collection(db, "lead_inbox"), where("userId", "==", uid), limit(3000))).catch(() => ({ docs: [] })),
         getDocs(collection(db, "users", uid, "content_posts")).catch(() => ({ docs: [] })),
+        getDoc(doc(db, "users", uid, "settings", "autopilot")).catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -135,6 +136,7 @@ export default function BusinessValuePage() {
         inbox: { hotWithEmail }, content: contentInfo,
         deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
+        autopilot: autopilotSnap?.exists?.() ? autopilotSnap.data() : null,
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       });
     } catch (e) {
@@ -228,7 +230,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec });
+  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues, ...(rec.any ? { mrr: rec.mrr, subscribers: rec.subscribers, netNewMrr30: rec.netNewMrr30, renewalsSoon: rec.renewals.dueSoon.count } : {}) };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };

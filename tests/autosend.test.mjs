@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {
-  AUTOSEND_DEFAULTS, AUTOSEND_PER_DAY_MAX, sanitizeAutoSend, inSendWindow, sendRoom, planAutosend, shouldPause, classifyGmailError,
+  lastRunLine, AUTOSEND_DEFAULTS, AUTOSEND_PER_DAY_MAX, sanitizeAutoSend, inSendWindow, sendRoom, planAutosend, shouldPause, classifyGmailError,
   pauseBetweenSendsMs, autosendStatusLine, localParts,
 } from '../lib/autosend.js';
 import { sanitizeAutopilotSettings } from '../lib/draft-queue.js';
@@ -91,5 +91,18 @@ t('raw email: one-line headers (no injection), UTF-8 subject, CRLF body, opt-out
   assert.match(m, /\r\n\r\nLine 1\r\nLine 2\r\n$/);
   assert.match(b64(buildRawEmail({ to: 'a@x.lk', subject: 'Café ☕', body: 'x' })), /Subject: =\?utf-8\?B\?[A-Za-z0-9+/=]+\?=/);
   assert.doesNotMatch(b64(buildRawEmail({ to: 'a@x.lk', subject: 's', body: 'x' })), /^From:/); // no address -> Gmail uses the account
+});
+t('new switches: brief and learning default OFF, sanitize as booleans, and survive a round trip', () => {
+  assert.equal(AUTOSEND_DEFAULTS.dailyBrief, false); assert.equal(AUTOSEND_DEFAULTS.autoLearn, false);
+  const s = sanitizeAutoSend({ dailyBrief: true, autoLearn: 'yes' });
+  assert.equal(s.dailyBrief, true); assert.equal(s.autoLearn, false); // only real booleans count
+  assert.equal(sanitizeAutopilotSettings({ autoLearn: true }).autoLearn, true);
+});
+t('last run line: plain words, only what happened', () => {
+  assert.equal(lastRunLine(null, null), '');
+  assert.equal(lastRunLine({ at: 'x', sent: 1, failed: 0 }, null), '1 email sent');
+  assert.equal(lastRunLine({ at: 'x', sent: 12, failed: 2 }, { at: 'y', invoices: 2, reminders: 1, report: true, posts: 5 }), '12 emails sent, 2 failed · 2 invoices, 1 reminder, weekly report, 5 posts drafted');
+  assert.match(lastRunLine(null, { at: 'y' }), /nothing needed/);
+  assert.equal(lastRunLine(null, { at: 'y', brief: true, learned: 'Curious question' }), 'morning brief, now favouring "Curious question"');
 });
 console.log(`${n} autosend tests passed`);

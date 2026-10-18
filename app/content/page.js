@@ -11,7 +11,7 @@ import { db, auth } from "../../lib/firebase-client.js";
 import {
   PLATFORMS, PILLARS, localDateStr, isDateStr, platformLabel, platformUrl, pillarLabel, hasPlaceholders,
   sanitizeResults, summarizeContent, performanceHint, groupPosts, MIN_PER_GROUP, MIN_POSTS_TO_LEARN,
-  LINK_PLATFORMS, withEnquiryLink,
+  LINK_PLATFORMS, withEnquiryLink, composeUrl, composePrefills,
 } from "../../lib/content.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
@@ -36,10 +36,13 @@ function PostCard({ p, today, onSave, onDelete, onNotice, linkFor }) {
   const warn = open && hasPlaceholders(body);
 
   const postNow = () => {
-    window.open(platformUrl(p.platform), "_blank", "noopener"); // opened first: browsers only allow it straight after the tap
     const r = link && addLink ? withEnquiryLink(body, link, p.platform) : { text: body, mode: "bio" };
-    navigator.clipboard.writeText(fullText({ ...p, body: r.text })).then(
-      () => onNotice(`Copied${r.mode === "inline" ? " with your enquiry link" : ""}. Paste it into ${platformLabel(p.platform)}, then come back and press "Mark as posted".${r.mode === "too_long" ? " (The link did not fit in 280 characters: put it in your profile instead.)" : ""}`),
+    const text = fullText({ ...p, body: r.text });
+    const url = composeUrl(p.platform, text); // X and LinkedIn open with the text already filled in
+    const filled = composePrefills(p.platform) && url !== platformUrl(p.platform);
+    window.open(url, "_blank", "noopener"); // opened first: browsers only allow it straight after the tap
+    navigator.clipboard.writeText(text).then(
+      () => onNotice(`${filled ? `Opened ${platformLabel(p.platform)} with your post filled in (also copied)` : `Copied${r.mode === "inline" ? " with your enquiry link" : ""}. Paste it into ${platformLabel(p.platform)}`}${filled && r.mode === "inline" ? " and your enquiry link" : ""}. Check it, post it, then come back and press "Mark as posted".${r.mode === "too_long" ? " (The link did not fit in 280 characters: put it in your profile instead.)" : ""}`),
       () => onNotice("Could not copy automatically: select the text above and copy it by hand."),
     );
   };

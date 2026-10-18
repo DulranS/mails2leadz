@@ -1,11 +1,19 @@
 # Changelog
 
+## Pass 19 - closing the manual gaps
+- **Morning brief**: a short email to yourself, only on days something needs you (replies without a deal, due follow-ups, hot leads waiting, money owed, posts due, a stopped Autosend). Quiet days send nothing; on Mondays the weekly report replaces it.
+- **Learn from replies**: autopilot favours the cold-email angle with the best reply rate, but only once at least two angles have 15+ leads and a clear gap. Your own choice in Account always wins. Switch it off and it stops being used.
+- **Post now** opens X and LinkedIn with your post already filled in (the text is still copied); other networks open as before.
+- Cron order changed so the brief reports what Autosend just did: Autosend 04:00 UTC, daily job 05:30 UTC.
+- New switches in Account -> Autopilot (also turned on by "Run my business on autopilot"). 5 new unit tests files/cases and 2 new server scenarios (14 total).
+
 ## Pass 18 - Autopilot (the operating spine runs itself, inside limits)
 - **Autosend**: the server sends the overnight drafts from the owner's Gmail (opt-in "automatic sending" permission), with a daily cap (max 50), a weekday send window, a pause between emails, inbound replies first, the same checks as a hand-pressed Send, opt-out links on every email, and automatic pauses on bounces (>=5% of 7 days), Gmail rate limits, repeated failures or an expired grant.
 - **Billing autopilot**: monthly subscription invoices are raised and emailed (never the first invoice), and overdue invoices get polite reminders (max 3, spaced, fixed wording, no AI cost).
 - **Weekly report** emailed to the owner on Monday; **content autopilot** drafts and schedules next week's posts when the calendar runs empty (posting itself stays one tap).
 - Account -> Autopilot: one button plus a switch per part, a plain-words status line, pause/resume, daily cap and window. New crons `/api/cron/daily-ops` and `/api/cron/autosend` (shared `cronGate`).
 - Verified with 17 new unit tests and 12 end-to-end scenarios of the real server code against an in-memory database.
+- **Never silent**: each real Autosend / daily-ops run leaves a one-line record (shown as "Last run" in Account -> Autopilot), and a paused or blocked Autosend becomes a top item in Business -> "What to do next" (urgent when it stopped itself, a reminder when you paused it).
 
 ## Pass 17 - churn win-back
 - Customers who left now have a "Draft win-back note" button: an honest, no-discount, no-pressure AI note that asks what would have made it better (new post-sale purpose `churn_winback`; never enters the prospect sequence).

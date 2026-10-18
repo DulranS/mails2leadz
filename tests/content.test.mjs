@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { validateAiPlan, sanitizeResults, summarizeContent, performanceHint, contentActionInfo, groupPosts, addDays, localDateStr, isDateStr, hasPlaceholders, PLATFORMS } from '../lib/content.js';
+import { validateAiPlan, sanitizeResults, summarizeContent, performanceHint, contentActionInfo, groupPosts, addDays, localDateStr, isDateStr, hasPlaceholders, PLATFORMS, composeUrl, composePrefills } from '../lib/content.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 const TODAY = '2026-10-13';
@@ -90,5 +90,15 @@ t('calendar grouping', () => {
   const g = groupPosts([post({ scheduledFor: '2026-10-01' }), post({}), post({ scheduledFor: '2026-10-20' }), post({ scheduledFor: '2026-10-14' }), post({ status: 'posted', postedOn: TODAY })], TODAY);
   assert.equal(g.overdue.length, 1); assert.equal(g.today.length, 1); assert.equal(g.done.length, 1);
   assert.deepEqual(g.upcoming.map((p) => p.scheduledFor), ['2026-10-14', '2026-10-20']);
+});
+t('post now: X and LinkedIn open with the text filled in; others just open; too long falls back to the plain page', () => {
+  const x = composeUrl('x', 'Hello & welcome #1');
+  assert.equal(x, 'https://x.com/intent/post?text=Hello%20%26%20welcome%20%231');
+  assert.ok(composeUrl('linkedin', 'Short post').startsWith('https://www.linkedin.com/feed/?shareActive=true&text=Short%20post'));
+  assert.equal(composeUrl('x', 'a'.repeat(281)), 'https://x.com/compose/post'); // over X's limit
+  assert.equal(composeUrl('linkedin', 'é'.repeat(2000)), 'https://www.linkedin.com/feed/'); // would not fit in a link
+  assert.equal(composeUrl('instagram', 'text'), 'https://www.instagram.com/');
+  assert.equal(composeUrl('x', '   '), 'https://x.com/compose/post');
+  assert.deepEqual(['x', 'linkedin', 'facebook', 'tiktok', 'instagram'].map(composePrefills), [true, true, false, false, false]);
 });
 console.log(`\n${n} content tests ok`);

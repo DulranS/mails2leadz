@@ -10,7 +10,7 @@ import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { ANGLES } from "../../lib/angles.js";
-import { autosendStatusLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
+import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
 import { safeHttpsUrl, parseProofPoints, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -182,7 +182,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/autopilot");
       const d = await res.json().catch(() => ({}));
-      if (res.ok) setAp((a) => ({ ...a, loading: false, available: d.available !== false, cronConfigured: !!d.cronConfigured, settings: { ...a.settings, ...d.settings } }));
+      if (res.ok) setAp((a) => ({ ...a, loading: false, available: d.available !== false, cronConfigured: !!d.cronConfigured, lastRun: d.lastRun || null, settings: { ...a.settings, ...d.settings } }));
       else setAp((a) => ({ ...a, loading: false }));
     } catch { setAp((a) => ({ ...a, loading: false })); }
   };
@@ -433,10 +433,11 @@ export default function AccountPage() {
           <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3" role="status">
             <div className="text-sm font-medium text-gray-900 dark:text-white">Emails: {autosendStatusLine(ap.settings, { canSend: gm.canSend, connected: gm.connected })}</div>
             <div className="flex flex-col sm:flex-row gap-2 mt-2">
-              {!(ap.settings.autoSend && ap.settings.autoBilling && ap.settings.autoContent && ap.settings.weeklyReport && ap.settings.enabled) && <button type="button" disabled={ap.loading || !ap.available || ap.busy === "save"} onClick={() => saveAutopilot({ enabled: true, autoSend: true, autoBilling: true, autoContent: true, weeklyReport: true, autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Run my business on autopilot</button>}
+              {!(ap.settings.autoSend && ap.settings.autoBilling && ap.settings.autoContent && ap.settings.weeklyReport && ap.settings.dailyBrief && ap.settings.autoLearn && ap.settings.enabled) && <button type="button" disabled={ap.loading || !ap.available || ap.busy === "save"} onClick={() => saveAutopilot({ enabled: true, autoSend: true, autoBilling: true, autoContent: true, weeklyReport: true, dailyBrief: true, autoLearn: true, autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Run my business on autopilot</button>}
               {ap.settings.autoSend && !ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: true, autoSendPauseReason: "You paused it." })} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Pause sending</button>}
               {ap.settings.autoSend && ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Resume sending</button>}
             </div>
+            {ap.lastRun && lastRunLine(ap.lastRun.lastAutoSend, ap.lastRun.lastDailyOps) && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">Last run: {lastRunLine(ap.lastRun.lastAutoSend, ap.lastRun.lastDailyOps)}</p>}
             {ap.settings.autoSend && !gm.canSend && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Emails can only go out automatically after you connect Gmail with automatic sending (the card above). Until then the drafts wait for you in the dashboard.</p>}
           </div>
           <div className="mt-3 space-y-1">
@@ -445,6 +446,8 @@ export default function AccountPage() {
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoBilling} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoBilling: e.target.checked })} />Raise monthly subscription invoices and send payment reminders</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoContent} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoContent: e.target.checked })} />Draft and schedule next week&apos;s posts when the calendar is running empty</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.weeklyReport} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ weeklyReport: e.target.checked })} />Email me the weekly report every Monday</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.dailyBrief} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ dailyBrief: e.target.checked })} />Email me a short morning brief, only on days something needs me</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoLearn} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoLearn: e.target.checked })} />Learn from replies: favour the email angle that gets the most (only when the data is clear)</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.includeWarm} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ includeWarm: e.target.checked })} />Include WARM leads (default: HOT only)</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoDeals !== false} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoDeals: e.target.checked })} />When a lead replies positively, move their deal forward for me (never to Won or Lost)</label>
           </div>
