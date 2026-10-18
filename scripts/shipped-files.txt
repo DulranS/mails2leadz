@@ -15,7 +15,9 @@ app/api/cache-clear/route.js
 app/api/cache-stats/route.js
 app/api/call-webhook/route.js
 app/api/check-replies/route.js
+app/api/cron/autosend/route.js
 app/api/cron/check-replies/route.js
+app/api/cron/daily-ops/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
@@ -99,6 +101,8 @@ lib/angles.js
 lib/api-retry.js
 lib/apiResponse.js
 lib/attribution.js
+lib/autosend.js
+lib/billing-automation.js
 lib/billing-saas.js
 lib/billing.js
 lib/brand.js
@@ -133,9 +137,11 @@ lib/lead-scoring-engine.js
 lib/logger.js
 lib/next-actions.js
 lib/onboarding.js
+lib/owner-report.js
 lib/phone.js
 lib/plan.js
 lib/rate-limit.js
+lib/raw-email.js
 lib/recurring.js
 lib/redis.js
 lib/redux/hooks.js
@@ -156,8 +162,12 @@ lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
+lib/server/autosend.js
 lib/server/bounces.js
+lib/server/content-plan.js
+lib/server/cron-auth.js
 lib/server/daily-count.js
+lib/server/daily-ops.js
 lib/server/draft-core.js
 lib/server/gmail-offline.js
 lib/server/googleGmailClient.js
@@ -165,7 +175,9 @@ lib/server/inbox-store.js
 lib/server/ingest-key.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
+lib/server/owner-report.js
 lib/server/prepare-drafts.js
+lib/server/queue-checks.js
 lib/server/reply-triage.js
 lib/server/route-helpers.js
 lib/server/stripe.js

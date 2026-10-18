@@ -15,12 +15,12 @@ import { makeLimiter } from './lib/rate-limit.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
-// /api/cron/prepare-drafts is called by the host's scheduler, not a browser: it authenticates itself with CRON_SECRET.
+// /api/cron/prepare-drafts, /api/cron/autosend and /api/cron/daily-ops are called by the host's scheduler, not a browser: each authenticates itself with CRON_SECRET (lib/server/cron-auth.js).
 // /api/inbound is called by website visitors (not users): it authenticates with the owner's write-only enquiry key.
 // /api/stripe/webhook is Stripe: it carries no sign-in but must carry a valid Stripe signature over the raw body (verified in the route).
 // /api/cron/check-replies is the scheduler (CRON_SECRET). /api/gmail-offline/callback is Google's redirect after the owner's read-only
 // consent: it carries no sign-in, so it trusts ONLY the signed, 10-minute `state` created when the owner pressed Connect.
-const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/gmail-offline/callback', '/api/stripe/webhook', '/api/inbound']);
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/cron/autosend', '/api/cron/daily-ops', '/api/gmail-offline/callback', '/api/stripe/webhook', '/api/inbound']);
 const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear', '/api/cache-stats', '/api/admin/tenants']);

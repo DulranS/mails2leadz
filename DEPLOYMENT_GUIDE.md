@@ -46,6 +46,32 @@ Replies are normally found when you press Check replies. This makes it happen ev
 - Each customer switches it on in Account → "Drafts prepared overnight". The job only writes drafts: it never sends and needs no Gmail access.
 - Test it once: Account → **Prepare now**, then open the dashboard: the "drafts ready for your review" banner appears. To test the schedule itself: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/prepare-drafts`.
 
+## Autopilot: the app sends, invoices and reports for you (optional, off until you switch it on)
+
+Account → **Autopilot** has one button, "Run my business on autopilot", plus a switch for each part. What runs by itself:
+
+| What | When | Cost |
+|---|---|---|
+| Find leads, write first emails and follow-ups | nightly 01:30 UTC (existing job) | DeepSeek, within your AI caps |
+| **Autosend**: send those drafts from your Gmail | daily 05:30 UTC (11:00 Colombo), inside your window | none |
+| Subscription invoices + polite payment reminders | daily 04:00 UTC (09:30 Colombo) | none (fixed wording) |
+| Weekly report emailed to you | Mondays, same job | none |
+| Next week's social posts (drafted and scheduled) | same job, only when the calendar is nearly empty | one small AI call |
+
+Setup, once:
+1. Everything under "Automatic reply checking" above (service account or server login, `TOKEN_ENC_KEY`, `GOOGLE_CLIENT_SECRET`, `CRON_SECRET`).
+2. Google Cloud → OAuth consent screen → Scopes: also add `https://www.googleapis.com/auth/gmail.send`. Then Account → **Connect Gmail with automatic sending** (an owner who connected read-only before uses **Add automatic sending**).
+3. Account → Autopilot: keep the default 15 emails a day and the 09:00-17:00 weekday window until you see how replies and bounces look; raise it slowly.
+4. Time zone: the window uses your browser's local time, saved whenever you change an Autopilot setting (Colombo, UTC+05:30, by default).
+
+What keeps your Gmail safe (all enforced on every run, and tested): a daily cap (never above 50 on top of the platform cap), the send window, a 6-15 second pause between emails, the same opt-out / Lost / replied / already-emailed / stale checks a hand-pressed Send gets, the opt-out link on every email, and an automatic **pause** if 5% or more of the last 7 days' emails bounced, if Gmail asks to slow down, if three sends fail in a row, or if Gmail access expires. The reason is shown in Account; fix it and press **Resume sending**.
+
+Notes:
+- The first invoice to a customer is never automatic (it may include a setup fee). Only customers already invoiced once, with a monthly amount set on the Customers page, get the next one, about a month later. Reminders are the fixed friendly/firm/final wording, at most 3 per invoice, never more than every 3 days.
+- Posting to social networks is still one tap: each network needs its own approved developer app. The app writes, schedules and tracks the posts.
+- On Vercel's free plan a cron can run up to an hour late: the default times leave room for that. On a paid plan you may run `/api/cron/autosend` hourly (it is safe: caps and window are checked every run).
+- Test once: `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-APP/api/cron/daily-ops` and the same for `/api/cron/autosend` (inside your window, with drafts waiting). The reply lists what was sent and why anything stopped.
+
 ## Enquiry form (inbound, optional)
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key; **republish the Firestore rules** (`inbound_enquiries` is new).
 - Account → *Enquiry form* → create the link, tag it per place you share it. `/api/inbound` is public on purpose (visitors are not users); it only accepts enquiries for the key's owner.

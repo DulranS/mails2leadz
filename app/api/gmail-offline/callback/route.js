@@ -6,7 +6,7 @@ import { google } from 'googleapis';
 import { isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb } from '../../../../lib/server/route-helpers.js';
 import { verifyState } from '../../../../lib/server/token-vault.js';
-import { offlineConfigured, redirectUriFor, oauthClient, saveConnection, OFFLINE_SCOPE } from '../../../../lib/server/gmail-offline.js';
+import { offlineConfigured, redirectUriFor, oauthClient, saveConnection, OFFLINE_SCOPE, SEND_SCOPE } from '../../../../lib/server/gmail-offline.js';
 
 const back = (request, status) => NextResponse.redirect(new URL(`/account?gmail=${status}`, request.nextUrl.origin));
 
@@ -27,7 +27,7 @@ export async function GET(request) {
     const profile = await google.gmail({ version: 'v1', auth: client }).users.getProfile({ userId: 'me' });
     const email = String(profile.data.emailAddress || '').toLowerCase();
     if (!email) return back(request, 'error');
-    await saveConnection(getDb(), uid, { email, refreshToken: tokens.refresh_token });
+    await saveConnection(getDb(), uid, { email, refreshToken: tokens.refresh_token, canSend: String(tokens.scope || '').includes(SEND_SCOPE) });
     return back(request, 'connected');
   } catch (e) {
     console.error('[gmail-offline callback]', e?.message); // never log tokens or the code

@@ -9,21 +9,13 @@ import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { defaultCtx } from '../../../../lib/server/lead-finder-io.js';
 import { listFinderUsers, runNightly } from '../../../../lib/server/lead-finder-job.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
+import { cronGate } from '../../../../lib/server/cron-auth.js';
 
 export const maxDuration = 300;
 
-function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 export async function GET(request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return NextResponse.json({ error: 'CRON_SECRET is not set on the server.' }, { status: 503, headers: NO_STORE });
-  const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
-  if (!m || !safeEqual(m[1].trim(), secret)) return NextResponse.json({ error: 'Not allowed.' }, { status: 401, headers: NO_STORE });
+  const denied = cronGate(request);
+  if (denied) return denied;
   if (!isAdminMode()) return NextResponse.json({ error: 'Needs FIREBASE_SERVICE_ACCOUNT_JSON.' }, { status: 503, headers: NO_STORE });
 
   const db = getDb();

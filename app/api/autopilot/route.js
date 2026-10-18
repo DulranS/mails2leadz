@@ -19,7 +19,7 @@ export async function POST(request) {
   if (!uid) return NextResponse.json({ error: 'Please sign in again.' }, { status: 401, headers: NO_STORE });
   if (!isAdminMode()) return NextResponse.json({ error: NEEDS_ADMIN }, { status: 503, headers: NO_STORE });
   const body = await request.json().catch(() => ({}));
-  if (body.enabled === true) { // switching the overnight drafts ON needs a plan that includes them (SAAS_MODE only)
+  if (body.enabled === true || body.autoSend === true || body.autoBilling === true || body.autoContent === true || body.weeklyReport === true) { // switching any automation ON needs a plan that includes it (SAAS_MODE only)
     const gate = await guardTenant(getDb(), uid, { feature: 'autopilot' });
     if (gate.response) return gate.response;
   }

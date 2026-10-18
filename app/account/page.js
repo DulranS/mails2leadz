@@ -10,6 +10,7 @@ import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { ANGLES } from "../../lib/angles.js";
+import { autosendStatusLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
 import { safeHttpsUrl, parseProofPoints, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -26,9 +27,9 @@ export default function AccountPage() {
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
-  const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
+  const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
-  const [gm, setGm] = useState({ loading: true, available: false, connected: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
+  const [gm, setGm] = useState({ loading: true, available: false, connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [tn, setTn] = useState({ loading: true, saas: false, busy: "", msg: "" }); // plan / billing state (SaaS mode only)
   const [termsDays, setTermsDays] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
@@ -125,7 +126,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/gmail-offline");
       const d = await res.json().catch(() => ({}));
-      setGm((g) => ({ ...g, loading: false, available: !!d.available, connected: !!d.connected, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
+      setGm((g) => ({ ...g, loading: false, available: !!d.available, connected: !!d.connected, canSend: !!d.canSend, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
     } catch { setGm((g) => ({ ...g, loading: false })); }
   };
   useEffect(() => {
@@ -135,10 +136,10 @@ export default function AccountPage() {
     const text = { connected: "Gmail connected: replies will be checked for you overnight.", denied: "You did not give access, so nothing was connected.", no_refresh: "Google did not hand over long-term access. Remove this app at myaccount.google.com/permissions and connect again.", scope: "Read-only access was not granted. Connect again and tick the Gmail box.", unavailable: "Not set up on the server yet.", error: "Could not connect. Please try again." }[r || ""];
     if (text) setGm((g) => ({ ...g, msg: text }));
   }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
-  const connectGmail = async () => {
+  const connectGmail = async (withSend = false) => {
     setGm((g) => ({ ...g, busy: true, msg: "" }));
     try {
-      const res = await fetch("/api/gmail-offline", { method: "POST" });
+      const res = await fetch("/api/gmail-offline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withSend: withSend === true }) });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) { window.location.href = d.url; return; }
       setGm((g) => ({ ...g, busy: false, msg: d.error || "Could not start the connection." }));
@@ -147,7 +148,7 @@ export default function AccountPage() {
   const disconnectGmail = async () => {
     if (typeof window !== "undefined" && !window.confirm("Disconnect Gmail? Replies will be checked only when you press Check replies.")) return;
     setGm((g) => ({ ...g, busy: true, msg: "" }));
-    try { await fetch("/api/gmail-offline", { method: "DELETE" }); setGm((g) => ({ ...g, busy: false, connected: false, expired: false, msg: "Disconnected. The saved access was revoked and deleted." })); } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
+    try { await fetch("/api/gmail-offline", { method: "DELETE" }); setGm((g) => ({ ...g, busy: false, connected: false, canSend: false, expired: false, msg: "Disconnected. The saved access was revoked and deleted." })); } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
   };
 
   // Enquiry form: one write-only key; links are tagged with where they are shared so we learn which channel brings business.
@@ -189,6 +190,7 @@ export default function AccountPage() {
   const saveAutopilot = async (patch) => {
     const next = { ...ap.settings, ...patch };
     if (!next.senderName && user?.displayName) next.senderName = user.displayName;
+    next.tzOffsetMin = -new Date().getTimezoneOffset(); // the send window is in the owner's own local time
     setAp((a) => ({ ...a, settings: next, busy: "save", msg: "" }));
     try {
       const res = await fetch("/api/autopilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
@@ -377,18 +379,20 @@ export default function AccountPage() {
         )}
 
         <section className={card}>
-          <h2 className="font-semibold text-gray-900 dark:text-white">Replies checked for you <span className="text-xs font-normal text-gray-500">· read-only Gmail, even when you are away</span></h2>
-          <p className="text-xs text-gray-500 mt-1">Connect once and the app looks for replies every night: opt-outs are recorded, positive replies move the deal forward, and the dashboard tells you what happened while you were away. It can only <b>read</b> your mail: it can never send, delete or change anything. Sending still needs you, in the browser. The saved access is encrypted, and you can disconnect (which revokes it) at any time.</p>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Replies checked for you <span className="text-xs font-normal text-gray-500">· Gmail, even when you are away</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Connect once and the app looks for replies every night: opt-outs are recorded, positive replies move the deal forward, and the dashboard tells you what happened while you were away. By default it can only <b>read</b> your mail: it can never send, delete or change anything. If you want Autopilot to <b>send</b> your prepared emails, invoices and reminders for you, connect with automatic sending instead (the extra permission is only to send). The saved access is encrypted, and you can disconnect (which revokes it) at any time.</p>
           {!gm.available && !gm.loading && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not set up on the server yet: it needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY (see the deployment guide).</p>}
           {gm.available && !gm.connected && gm.redirectUri && <p className="text-xs text-gray-500 mt-2">One-time setup in Google Cloud (Credentials → your OAuth client → Authorized redirect URIs): <code className="break-all select-all">{gm.redirectUri}</code>. Also publish the OAuth consent screen (&quot;In production&quot;): while it says &quot;Testing&quot;, Google ends this access after 7 days.</p>}
           {gm.expired && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Gmail access expired{gm.lastError ? `: ${gm.lastError}` : ""} Connect again.</p>}
           {gm.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{gm.msg}</p>}
-          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
+          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.canSend ? " · automatic sending allowed" : " · read-only"}{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
           {gm.connected && (
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px] mt-1"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoReplyCheck !== false} disabled={!ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoReplyCheck: e.target.checked })} />Check for replies for me every night</label>
           )}
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
-            {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={connectGmail} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{gm.busy ? "Opening Google…" : gm.expired ? "Reconnect Gmail (read-only)" : "Connect Gmail (read-only)"}</button>}
+            {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={() => connectGmail(true)} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{gm.busy ? "Opening Google…" : gm.expired ? "Reconnect Gmail with automatic sending" : "Connect Gmail with automatic sending"}</button>}
+            {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={() => connectGmail(false)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{gm.expired ? "Reconnect read-only" : "Connect read-only"}</button>}
+            {gm.connected && !gm.canSend && <button type="button" disabled={gm.busy} onClick={() => connectGmail(true)} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Add automatic sending</button>}
             {gm.connected && <button type="button" disabled={gm.busy} onClick={disconnectGmail} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Disconnect</button>}
           </div>
         </section>
@@ -422,15 +426,45 @@ export default function AccountPage() {
         </section>
 
         <section className={card}>
-          <h2 className="font-semibold text-gray-900 dark:text-white">Drafts prepared overnight <span className="text-xs font-normal text-gray-500">· you still approve every send</span></h2>
-          <p className="text-xs text-gray-500 mt-1">Each night the app writes first emails for your best new leads and the follow-ups that are due, so you open the dashboard to a ready pile and only review and press Send. Nothing is ever sent without you, and every opt-out, Lost-deal and reply rule still applies.</p>
-          {!ap.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so this is switched off.</p>}
-          {ap.available && !ap.cronConfigured && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The nightly schedule needs CRON_SECRET on the server (see the deployment guide). Until then, drafts are prepared when new leads arrive and when you press "Prepare now".</p>}
-          <div className="mt-3 space-y-2">
-            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.enabled} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ enabled: e.target.checked })} />Prepare drafts for me every night</label>
+          <h2 className="font-semibold text-gray-900 dark:text-white">Autopilot <span className="text-xs font-normal text-gray-500">· the routine work runs itself; you steer</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Every night the app finds leads, writes the emails and follow-ups, checks replies and (if you allow it) sends them inside your limits. It also raises monthly invoices, sends polite payment reminders, drafts next week&apos;s posts and emails you the weekly report. Everything respects opt-outs, Lost deals, replies and your daily cap, and it stops by itself if emails bounce or Gmail refuses. Posting to social networks stays one tap (each network needs its own approved app).</p>
+          {!ap.available && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database yet (service account or server login), so this is switched off.</p>}
+          {ap.available && !ap.cronConfigured && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The scheduled jobs need CRON_SECRET on the server (see the deployment guide). Until then, drafts are prepared when new leads arrive and when you press &quot;Prepare now&quot;.</p>}
+          <div className="mt-3 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 p-3" role="status">
+            <div className="text-sm font-medium text-gray-900 dark:text-white">Emails: {autosendStatusLine(ap.settings, { canSend: gm.canSend, connected: gm.connected })}</div>
+            <div className="flex flex-col sm:flex-row gap-2 mt-2">
+              {!(ap.settings.autoSend && ap.settings.autoBilling && ap.settings.autoContent && ap.settings.weeklyReport && ap.settings.enabled) && <button type="button" disabled={ap.loading || !ap.available || ap.busy === "save"} onClick={() => saveAutopilot({ enabled: true, autoSend: true, autoBilling: true, autoContent: true, weeklyReport: true, autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Run my business on autopilot</button>}
+              {ap.settings.autoSend && !ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: true, autoSendPauseReason: "You paused it." })} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Pause sending</button>}
+              {ap.settings.autoSend && ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Resume sending</button>}
+            </div>
+            {ap.settings.autoSend && !gm.canSend && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Emails can only go out automatically after you connect Gmail with automatic sending (the card above). Until then the drafts wait for you in the dashboard.</p>}
+          </div>
+          <div className="mt-3 space-y-1">
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.enabled} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ enabled: e.target.checked })} />Prepare first emails and follow-ups every night</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoSend} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot(e.target.checked ? { autoSend: true, enabled: true } : { autoSend: false })} />Send them for me (inside the limits below)</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoBilling} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoBilling: e.target.checked })} />Raise monthly subscription invoices and send payment reminders</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoContent} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoContent: e.target.checked })} />Draft and schedule next week&apos;s posts when the calendar is running empty</label>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.weeklyReport} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ weeklyReport: e.target.checked })} />Email me the weekly report every Monday</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.includeWarm} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ includeWarm: e.target.checked })} />Include WARM leads (default: HOT only)</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoDeals !== false} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoDeals: e.target.checked })} />When a lead replies positively, move their deal forward for me (never to Won or Lost)</label>
           </div>
+          {ap.settings.autoContent && (
+            <fieldset className="mt-2"><legend className="text-xs text-gray-600 dark:text-gray-300">Post drafts for</legend>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {CONTENT_PLATFORM_IDS.map((id) => {
+                  const on = (ap.settings.contentPlatforms || []).includes(id);
+                  return <button key={id} type="button" aria-pressed={on} disabled={ap.busy === "save"} onClick={() => { const cur = ap.settings.contentPlatforms || []; const next = on ? cur.filter((x) => x !== id) : [...cur, id]; if (next.length) saveAutopilot({ contentPlatforms: next }); }} className={`min-h-[44px] px-3 rounded-lg text-sm border ${on ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"}`}>{{ linkedin: "LinkedIn", tiktok: "TikTok", x: "X" }[id] || id[0].toUpperCase() + id.slice(1)}</button>;
+                })}
+              </div>
+            </fieldset>
+          )}
+          <div className="grid sm:grid-cols-4 gap-3 mt-3">
+            <div><label className={label} htmlFor="apper">Emails a day (max 50)</label><input id="apper" type="number" min="1" max="50" className={field} value={ap.settings.autoSendPerDay ?? 15} onChange={(e) => setAp((a) => ({ ...a, settings: { ...a.settings, autoSendPerDay: e.target.value } }))} onBlur={() => ap.available && saveAutopilot({ autoSendPerDay: ap.settings.autoSendPerDay })} /></div>
+            <div><label className={label} htmlFor="apfrom">Send from (hour)</label><input id="apfrom" type="number" min="0" max="23" className={field} value={ap.settings.sendHourStart ?? 9} onChange={(e) => setAp((a) => ({ ...a, settings: { ...a.settings, sendHourStart: e.target.value } }))} onBlur={() => ap.available && saveAutopilot({ sendHourStart: ap.settings.sendHourStart })} /></div>
+            <div><label className={label} htmlFor="apto">Until (hour)</label><input id="apto" type="number" min="1" max="24" className={field} value={ap.settings.sendHourEnd ?? 17} onChange={(e) => setAp((a) => ({ ...a, settings: { ...a.settings, sendHourEnd: e.target.value } }))} onBlur={() => ap.available && saveAutopilot({ sendHourEnd: ap.settings.sendHourEnd })} /></div>
+            <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px] sm:mt-6"><input type="checkbox" className="h-5 w-5" checked={ap.settings.weekdaysOnly !== false} disabled={ap.busy === "save"} onChange={(e) => saveAutopilot({ weekdaysOnly: e.target.checked })} />Weekdays only</label>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Times are in your local time (Colombo by default). A small daily number and a working-hours window keep your Gmail reputation safe.</p>
           <div className="grid sm:grid-cols-2 gap-3 mt-2">
             <div><label className={label} htmlFor="apsn">Sign-off name on prepared drafts</label><input id="apsn" className={field} maxLength={80} value={ap.settings.senderName || ""} onChange={(e) => setAp((a) => ({ ...a, settings: { ...a.settings, senderName: e.target.value } }))} onBlur={() => ap.available && saveAutopilot({ senderName: ap.settings.senderName })} placeholder={user?.displayName || "Your name"} /></div>
           </div>

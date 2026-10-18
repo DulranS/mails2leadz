@@ -4,27 +4,17 @@
 //   POST { action: 'resolve', sent: [ids], dismissed: [ids] } -> close drafts after the review window
 // Nothing is sent here: sending is the review window's Send button -> /api/send-email | /api/send-followup.
 import { NextResponse } from 'next/server';
-import { collection, doc, getDoc, getDocs, query, where, setDoc, isAdminMode } from '../../../lib/server-firestore.js';
-import { getDb, uidFromRequest, pickOriginal, isBlockedContact, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { doc, getDoc, setDoc, isAdminMode } from '../../../lib/server-firestore.js';
+import { getDb, uidFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { loadAutopilot, readyDrafts, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
-import { QUEUE_KINDS, QUEUE_STATUS, isDraftStale, toReviewItem, summarizeQueue } from '../../../lib/draft-queue.js';
-import { MAX_FOLLOW_UPS } from '../../../lib/server/draft-core.js';
+import { QUEUE_KINDS, QUEUE_STATUS, toReviewItem, summarizeQueue } from '../../../lib/draft-queue.js';
+import { stillGood } from '../../../lib/server/queue-checks.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { inboxDocId } from '../../../lib/server/ingest-key.js';
 import { inboxKey, INBOX_STATUS } from '../../../lib/lead-inbox.js';
 
 export const maxDuration = 60;
 const NEEDS_ADMIN = 'Prepared drafts need the server connection to the database. Set FIREBASE_SERVICE_ACCOUNT_JSON on the server first.';
-
-/** Has anything changed since the draft was written that makes sending it wrong? (replied, opted out / Lost, already emailed, step already sent) */
-async function stillGood(db, uid, q) {
-  if (isDraftStale(q.createdAt)) return false;
-  if (await isBlockedContact(db, uid, q.email)) return false;
-  const sent = await getDocs(query(collection(db, 'sent_emails'), where('userId', '==', uid), where('to', '==', q.email)));
-  if (q.kind === QUEUE_KINDS.FIRST) return sent.empty; // somebody (or you, by hand) already emailed them
-  if (sent.empty || sent.docs.some((d) => d.data().replied === true)) return false;
-  return pickOriginal(sent.docs).count + 1 === q.number && q.number <= MAX_FOLLOW_UPS;
-}
 
 export async function GET(request) {
   const uid = uidFromRequest(request);

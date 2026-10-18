@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 18 - Autopilot (the operating spine runs itself, inside limits)
+- **Autosend**: the server sends the overnight drafts from the owner's Gmail (opt-in "automatic sending" permission), with a daily cap (max 50), a weekday send window, a pause between emails, inbound replies first, the same checks as a hand-pressed Send, opt-out links on every email, and automatic pauses on bounces (>=5% of 7 days), Gmail rate limits, repeated failures or an expired grant.
+- **Billing autopilot**: monthly subscription invoices are raised and emailed (never the first invoice), and overdue invoices get polite reminders (max 3, spaced, fixed wording, no AI cost).
+- **Weekly report** emailed to the owner on Monday; **content autopilot** drafts and schedules next week's posts when the calendar runs empty (posting itself stays one tap).
+- Account -> Autopilot: one button plus a switch per part, a plain-words status line, pause/resume, daily cap and window. New crons `/api/cron/daily-ops` and `/api/cron/autosend` (shared `cronGate`).
+- Verified with 17 new unit tests and 12 end-to-end scenarios of the real server code against an in-memory database.
+
 ## Pass 17 - churn win-back
 - Customers who left now have a "Draft win-back note" button: an honest, no-discount, no-pressure AI note that asks what would have made it better (new post-sale purpose `churn_winback`; never enters the prospect sequence).
 

@@ -1,6 +1,20 @@
 {
   "crons": [
-    { "path": "/api/cron/check-replies", "schedule": "30 0 * * *" },
-    { "path": "/api/cron/prepare-drafts", "schedule": "30 1 * * *" }
+    {
+      "path": "/api/cron/check-replies",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/prepare-drafts",
+      "schedule": "30 1 * * *"
+    },
+    {
+      "path": "/api/cron/daily-ops",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/autosend",
+      "schedule": "30 5 * * *"
+    }
   ]
 }
