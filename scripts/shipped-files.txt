@@ -71,6 +71,7 @@ app/components/ui/NotificationProvider.js
 app/components/ui/Sidebar.js
 app/components/ui/ThemeProvider.js
 app/content/page.js
+app/conversations/page.js
 app/crm/page.js
 app/customers/page.js
 app/dashboard/layout.js
@@ -110,6 +111,7 @@ lib/business-metrics.js
 lib/config.js
 lib/connection-status.js
 lib/content.js
+lib/conversations.js
 lib/currency.js
 lib/customers.js
 lib/dashboard-config.js
@@ -140,6 +142,7 @@ lib/onboarding.js
 lib/owner-report.js
 lib/phone.js
 lib/plan.js
+lib/post-webhook.js
 lib/rate-limit.js
 lib/raw-email.js
 lib/recurring.js
@@ -162,6 +165,7 @@ lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
+lib/server/auto-post.js
 lib/server/autosend.js
 lib/server/bounces.js
 lib/server/content-plan.js
@@ -189,6 +193,7 @@ lib/server/token-vault.js
 lib/server/unsubscribe.js
 lib/service-health.js
 lib/smart-followup-engine.js
+lib/team.js
 lib/tenant.js
 lib/weekly-kpi.js
 lib/worker-categories.js

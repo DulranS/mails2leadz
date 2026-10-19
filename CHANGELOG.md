@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 20 - the "still open" items, built
+- **Automatic social posting.** Turn on "Publish my posts automatically" in Account and paste the "catch hook" address of your own Zapier / Make / Buffer scenario. Each day the posts that are due are sent to it (text with hashtags, the tagged enquiry link, a visual brief) and marked posted; your automation publishes them to LinkedIn, Facebook, Instagram, X and so on. AI-drafted posts wait about 20 hours so you can read or skip them; a post with an unfilled [bracket] or older than 3 days is never sent; failures keep the post scheduled and the reason is shown. Internal / private addresses are refused. "Send a test" checks the address first.
+- **Conversations page.** A reply that came in on WhatsApp, SMS, a call, LinkedIn, Instagram, TikTok, Facebook or in person is logged in 20 seconds: the AI reads it, the deal moves forward (never backwards), follow-up emails to that person stop, and the exchange is kept. A new deal is credited to the channel.
+- **Team and commission.** Add the people who work the pipeline (Account, "Your team": name, role, commission %), pick an owner on any deal (CRM or Conversations), and the Business Value page shows each person's open pipeline, wins, win rate, the cash actually collected on their deals and the commission it earns, this month and all time. Commission is only on invoices marked PAID. Deals with no owner are listed so nothing is lost. This is a label for credit and pay on the one shared login; separate staff logins are intentionally not part of this build.
+- Also: morning brief and weekly report e-mail, learned best angle, "last run" line, autopilot alerts (earlier passes in this release).
+- Tests: team (4), conversations (6), post-webhook (6), autosend (13), owner-report (5), content (10), lead-finder (23), 15 orchestration scenarios.
+
 ## Pass 19c - map search that survives busy free servers
 - A busy server's "504" used to be read as "area too big": the search split the area and gave up instead of trying the next server. It now tries the next server.
 - A search is now a grid of small tiles (middle of the city first, at most 4 x 4), two quick tries per tile. A tile the servers cannot answer is skipped and remembered; the other tiles' leads are still returned with a note ("only part of the area was searched"), and the next search of the same thing resumes where it stopped. Only when nothing at all can be fetched is it an error, and then it stops after a couple of tiles instead of burning the whole time.

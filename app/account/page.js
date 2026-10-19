@@ -10,6 +10,7 @@ import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { ANGLES } from "../../lib/angles.js";
+import { sanitizeTeam, TEAM_ROLES, MAX_MEMBERS, MAX_COMMISSION_PCT } from "../../lib/team.js";
 import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
 import { safeHttpsUrl, parseProofPoints, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
@@ -28,6 +29,8 @@ export default function AccountPage() {
   const [usdRate, setUsdRate] = useState("");
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
+  const [team, setTeam] = useState({ members: [], busy: false, msg: "", ok: false });
+  const [hook, setHook] = useState({ url: "", busy: false, msg: "", ok: false });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
   const [gm, setGm] = useState({ loading: true, available: false, connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [tn, setTn] = useState({ loading: true, saas: false, busy: "", msg: "" }); // plan / billing state (SaaS mode only)
@@ -67,6 +70,21 @@ export default function AccountPage() {
       } catch { setMsg({ type: "error", text: "Could not load your settings." }); }
     })();
   }, [user?.uid]);
+
+  // The people who work the pipeline with you (labels on deals, not logins): loaded and saved as their own small settings document.
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    getDoc(doc(db, "users", user.uid, "settings", "team")).then((s) => { if (s.exists()) setTeam((t) => ({ ...t, members: sanitizeTeam(s.data().members) })); }).catch(() => {});
+  }, [user?.uid]);
+  const saveTeam = async () => {
+    setTeam((t) => ({ ...t, busy: true, msg: "" }));
+    try {
+      const members = sanitizeTeam(team.members);
+      await setDoc(doc(db, "users", user.uid, "settings", "team"), { members, updatedAt: new Date().toISOString() });
+      setTeam({ members, busy: false, ok: true, msg: "Team saved." });
+    } catch { setTeam((t) => ({ ...t, busy: false, ok: false, msg: "Could not save the team." })); }
+  };
+  const editMember = (i, patch) => setTeam((t) => ({ ...t, msg: "", members: t.members.map((m, k) => (k === i ? { ...m, ...patch } : m)) }));
 
   const refreshInboxKey = async () => {
     try {
@@ -185,6 +203,15 @@ export default function AccountPage() {
       if (res.ok) setAp((a) => ({ ...a, loading: false, available: d.available !== false, cronConfigured: !!d.cronConfigured, lastRun: d.lastRun || null, settings: { ...a.settings, ...d.settings } }));
       else setAp((a) => ({ ...a, loading: false }));
     } catch { setAp((a) => ({ ...a, loading: false })); }
+  };
+  useEffect(() => { setHook((h) => (h.url ? h : { ...h, url: ap.settings.postWebhookUrl || "" })); }, [ap.settings.postWebhookUrl]);
+  const testHook = async () => {
+    setHook((h) => ({ ...h, busy: true, msg: "", ok: false }));
+    try {
+      const res = await fetch("/api/autopilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "test_webhook", url: hook.url }) });
+      const d = await res.json().catch(() => ({}));
+      setHook((h) => ({ ...h, busy: false, ok: !!d.ok, msg: d.ok ? "Sent. Check that your automation received it (nothing was posted)." : d.error || "Could not send." }));
+    } catch { setHook((h) => ({ ...h, busy: false, ok: false, msg: "Could not reach the server." })); }
   };
   useEffect(() => { if (user?.uid) refreshAutopilot(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
   const saveAutopilot = async (patch) => {
@@ -362,6 +389,27 @@ export default function AccountPage() {
           </details>
         </section>
 
+        <section className={card} aria-label="Your team">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Your team <span className="text-xs font-normal text-gray-500">· who works which deal, and what they earn</span></h2>
+          <p className="text-xs text-gray-500 mt-1">Add the people who help you (an inbound creative, a BDR on commission, a closer). Pick an owner on any deal in the CRM or in Conversations. The Business Value page then shows each person&apos;s pipeline, wins, the cash actually collected on their deals and the commission that earns. Commission is only counted once the invoice is marked paid. Everyone keeps using this one login; this is for credit and pay, not separate accounts.</p>
+          <div className="mt-3 space-y-3">
+            {team.members.length === 0 && <p className="text-sm text-gray-600 dark:text-gray-300">Nobody added yet. Working alone? Leave this empty.</p>}
+            {team.members.map((m, i) => (
+              <div key={m.id || i} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_7rem_auto] gap-2 items-end rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                <div><label className={label} htmlFor={`tm-n-${i}`}>Name</label><input id={`tm-n-${i}`} className={field} value={m.name} maxLength={40} onChange={(e) => editMember(i, { name: e.target.value })} /></div>
+                <div><label className={label} htmlFor={`tm-r-${i}`}>Role</label><select id={`tm-r-${i}`} className={field} value={m.role} onChange={(e) => editMember(i, { role: e.target.value })}>{TEAM_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
+                <div><label className={label} htmlFor={`tm-c-${i}`}>Commission %</label><input id={`tm-c-${i}`} type="number" min="0" max={MAX_COMMISSION_PCT} step="0.5" inputMode="decimal" className={field} value={m.commissionPct} onChange={(e) => editMember(i, { commissionPct: e.target.value })} /></div>
+                <button type="button" onClick={() => setTeam((t) => ({ ...t, msg: "", members: t.members.filter((_, k) => k !== i) }))} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200" aria-label={`Remove ${m.name || "this person"}`}>Remove</button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button type="button" disabled={team.members.length >= MAX_MEMBERS} onClick={() => setTeam((t) => ({ ...t, msg: "", members: [...t.members, { id: "", name: "", role: "other", commissionPct: 0 }] }))} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Add a person</button>
+            <button type="button" disabled={team.busy} onClick={saveTeam} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{team.busy ? "Saving..." : "Save team"}</button>
+          </div>
+          {team.msg && <p role="status" className={`text-xs mt-2 ${team.ok ? "text-green-700 dark:text-green-300" : "text-amber-700 dark:text-amber-300"}`}>{team.msg}</p>}
+        </section>
+
         {tn.saas && (
           <section className={card} aria-label="Plan and billing">
             <h2 className="font-semibold text-gray-900 dark:text-white">Plan &amp; billing</h2>
@@ -448,6 +496,16 @@ export default function AccountPage() {
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.weeklyReport} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ weeklyReport: e.target.checked })} />Email me the weekly report every Monday</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.dailyBrief} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ dailyBrief: e.target.checked })} />Email me a short morning brief, only on days something needs me</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoLearn} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoLearn: e.target.checked })} />Learn from replies: favour the email angle that gets the most (only when the data is clear)</label>
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 mt-2 space-y-2">
+              <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.autoPost} disabled={ap.loading || !ap.available || ap.busy === "save" || (!hook.url && !ap.settings.postWebhookUrl)} onChange={(e) => saveAutopilot({ autoPost: e.target.checked, postWebhookUrl: hook.url || ap.settings.postWebhookUrl })} />Publish my scheduled posts automatically (through your own Zapier / Make / Buffer)</label>
+              <p className="text-xs text-gray-500">Each day the due posts are sent to the &quot;catch hook&quot; address you paste below; your automation publishes them to LinkedIn, Facebook, Instagram, X, etc. (those tools already hold the approved connections, so nothing extra is needed here). AI-drafted posts wait about a day so you can read or skip them first, and a post with an unfilled [bracket] is never sent.</p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input type="url" inputMode="url" placeholder="https://hooks.zapier.com/hooks/catch/..." value={hook.url} onChange={(e) => setHook((h) => ({ ...h, url: e.target.value, msg: "" }))} aria-label="Automation webhook address" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+                <button type="button" disabled={!hook.url || hook.busy} onClick={testHook} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{hook.busy ? "Sending..." : "Send a test"}</button>
+                <button type="button" disabled={!hook.url || hook.url === (ap.settings.postWebhookUrl || "") || ap.busy === "save"} onClick={() => saveAutopilot({ postWebhookUrl: hook.url })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Save address</button>
+              </div>
+              {hook.msg && <p role="status" className={`text-xs ${hook.ok ? "text-green-700 dark:text-green-300" : "text-amber-700 dark:text-amber-300"}`}>{hook.msg}</p>}
+            </div>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={!!ap.settings.includeWarm} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ includeWarm: e.target.checked })} />Include WARM leads (default: HOT only)</label>
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoDeals !== false} disabled={ap.loading || !ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoDeals: e.target.checked })} />When a lead replies positively, move their deal forward for me (never to Won or Lost)</label>
           </div>

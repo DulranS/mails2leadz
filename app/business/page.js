@@ -20,6 +20,7 @@ import { makeMoney, currencySymbol } from "../../lib/currency.js";
 import { computeBilling, computeUnbilled } from "../../lib/billing.js";
 import { computeCustomers, countQualificationGaps } from "../../lib/customers.js";
 import { contentActionInfo, localDateStr } from "../../lib/content.js";
+import { computeTeam, sanitizeTeam } from "../../lib/team.js";
 import { computeWeeklyKpis, weeklyHeadline, weeklyReportText } from "../../lib/weekly-kpi.js";
 
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
@@ -84,7 +85,7 @@ export default function BusinessValuePage() {
       // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap] = await Promise.all([
         getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(2000))),
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
         getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
@@ -97,6 +98,7 @@ export default function BusinessValuePage() {
         getDocs(query(collection(db, "lead_inbox"), where("userId", "==", uid), limit(3000))).catch(() => ({ docs: [] })),
         getDocs(collection(db, "users", uid, "content_posts")).catch(() => ({ docs: [] })),
         getDoc(doc(db, "users", uid, "settings", "autopilot")).catch(() => null),
+        getDoc(doc(db, "users", uid, "settings", "team")).catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -137,6 +139,7 @@ export default function BusinessValuePage() {
         deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         autopilot: autopilotSnap?.exists?.() ? autopilotSnap.data() : null,
+        team: teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [],
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       });
     } catch (e) {
@@ -159,6 +162,7 @@ export default function BusinessValuePage() {
   const rec = useMemo(() => computeRecurring({ deals: raw.deals }), [raw]);
   const subsDue = useMemo(() => computeSubscriptionsDue({ deals: raw.deals, invoices: raw.invoices }), [raw]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
+  const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
   const weekly = useMemo(() => computeWeeklyKpis({ emailRows: raw.emailRows || [], deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
 
@@ -366,6 +370,28 @@ export default function BusinessValuePage() {
               <Link href="/customers" className="inline-block mt-3 text-sm text-blue-600 dark:text-blue-400 underline">Open customers</Link>
             </Card>
           </div>
+        )}
+
+        {!loading && teamReport.any && (
+          <Card title={`Team · ${money(teamReport.commissionMonthTotal)} commission earned this month`}>
+            <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+              {teamReport.rows.map((r) => (
+                <li key={r.id} className="py-3">
+                  <div className="flex flex-wrap justify-between gap-x-3 gap-y-1">
+                    <span className="font-medium text-gray-900 dark:text-white break-words">{r.name}</span>
+                    <span className="text-sm text-gray-900 dark:text-white">{money(r.commissionMonth)} <span className="text-xs text-gray-500 dark:text-gray-400">this month ({r.commissionPct}% of {money(r.collectedMonth)} collected)</span></span>
+                  </div>
+                  <div className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                    {r.open} open deal{r.open === 1 ? "" : "s"} ({money(r.openValue)}) · {r.won} won ({money(r.wonValue)}) · {r.lost} lost{r.winRate !== null ? ` · ${pct(r.winRate)} win rate` : ""} · {money(r.commissionAll)} commission all time
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {(teamReport.unassigned.open + teamReport.unassigned.won + teamReport.unassigned.lost > 0) && (
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">No owner yet: {teamReport.unassigned.open} open, {teamReport.unassigned.won} won ({money(teamReport.unassigned.wonValue)}), {money(teamReport.unassigned.collected)} collected. Set an owner on the deal in the CRM so it counts for someone.</p>
+            )}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Commission is counted on cash collected (invoices marked paid), so a customer who never pays earns nothing. People and rates are set in Account.</p>
+          </Card>
         )}
 
         {goal > 0 && !loading && (

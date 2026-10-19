@@ -19,6 +19,7 @@ export const DashboardLayout = ({ children, title, subtitle }) => {
     { href: '/business', icon: '💰', label: 'Business Value' },
     { href: '/inbox', icon: '📥', label: 'Lead Inbox' },
     { href: '/content', icon: '📣', label: 'Content' },
+    { href: '/conversations', icon: '💬', label: 'Conversations' },
     { href: '/crm', icon: '💼', label: 'CRM & Deals' },
     { href: '/customers', icon: '🤝', label: 'Customers' },
     { href: '/billing', icon: '🧾', label: 'Billing' },

@@ -73,6 +73,16 @@ Notes:
 - On Vercel's free plan a cron can run up to an hour late: the default times leave room for that. On a paid plan you may run `/api/cron/autosend` hourly (it is safe: caps and window are checked every run).
 - Test once: `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-APP/api/cron/daily-ops` and the same for `/api/cron/autosend` (inside your window, with drafts waiting). The reply lists what was sent and why anything stopped.
 
+## Publishing posts automatically (optional)
+The app does not hold a developer app for every social network. Instead it hands each due post to YOUR automation tool, which already holds your approved connections:
+1. In Zapier (or Make, or n8n) create a scenario that starts with "Webhooks: Catch Hook" and copy its address.
+2. Add a step per network that posts the `text` field (and, if you like, a picture made from `visualBrief`). The payload is JSON: `event`, `platform`, `text`, `hashtags`, `link`, `visualBrief`.
+3. In the app: Account, "Run my business on autopilot", paste the address, press "Send a test" (your scenario should receive a test post), "Save address", then tick "Publish my posts automatically".
+4. It runs daily with the 05:30 UTC job (the same `/api/cron/daily-ops`). Nothing else to set up. Republish `firestore.rules` once if you have not since the last release (`firebase deploy --only firestore:rules`).
+
+## Team and commission (optional)
+Account, "Your team": add people, a role and a commission %. Assign an owner to a deal in the CRM (deal panel) or when logging a conversation. The Business Value page then shows each person's pipeline and the commission on cash collected. Everyone still uses one login; no extra setup or rules are needed.
+
 ## Enquiry form (inbound, optional)
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key; **republish the Firestore rules** (`inbound_enquiries` is new).
 - Account → *Enquiry form* → create the link, tag it per place you share it. `/api/inbound` is public on purpose (visitors are not users); it only accepts enquiries for the key's owner.

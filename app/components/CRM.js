@@ -24,6 +24,8 @@ export const CRM = ({
   dealStages = {},
   dealValues = {},
   dealQual = {},
+  dealOwners = {},
+  team = [],
   defaultDealValue = 1000,
   onUpdateLead,
   onAddNote,
@@ -58,13 +60,14 @@ export const CRM = ({
       score: leadScores[lead.email] || 0,
       stage: dealStages[lead.email] || "new",
       qualification: dealQual[lead.email] || null,
+      ownerId: dealOwners[lead.email] || "",
       replied: !!repliedLeads[lead.email] || lead.replied === true,
       company: lead.business || lead.company || "Unknown",
       // Real value if the user set one; otherwise the default, clearly marked as an estimate.
       value: dealValues[lead.email] || defaultDealValue,
       valueIsEstimate: !dealValues[lead.email],
     }));
-  }, [leads, leadScores, dealStages, repliedLeads, dealValues, dealQual, defaultDealValue]);
+  }, [leads, leadScores, dealStages, repliedLeads, dealValues, dealQual, dealOwners, defaultDealValue]);
 
   const selectedLead = useMemo(() => crmLeads.find((l) => l.email === selectedEmail) || null, [crmLeads, selectedEmail]);
 
@@ -409,6 +412,22 @@ export const CRM = ({
                 <StageOptions />
               </select>
             </div>
+
+            {/* Owner: who works this deal (a label from the Team list in Account; commission is worked out from it on the Business page) */}
+            {team.length > 0 && (
+              <div>
+                <label htmlFor="deal-owner" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Owner</label>
+                <select
+                  id="deal-owner"
+                  value={team.some((m) => m.id === selectedLead.ownerId) ? selectedLead.ownerId : ""}
+                  onChange={(e) => onUpdateLead?.(selectedLead.email, { ownerId: e.target.value })}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Nobody yet</option>
+                  {team.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            )}
 
             {/* Qualification */}
             {(() => {

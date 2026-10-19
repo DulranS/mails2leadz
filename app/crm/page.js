@@ -5,6 +5,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { dealDocId, buildDealWrite, normalizeStage } from "../../lib/deal-utils.js";
+import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
 
@@ -68,6 +69,8 @@ export default function CRMPage() {
     dealStages: {},
     dealValues: {},
     dealQual: {},
+    dealOwners: {},
+    team: [],
     defaultDealValue: 1000,
   });
   const [loading, setLoading] = useState(true);
@@ -107,12 +110,13 @@ export default function CRMPage() {
     }
 
     try {
-      const [sentSnap, contactsSnap, dealsSnap, taskSnap, settingsSnap] = await Promise.all([
+      const [sentSnap, contactsSnap, dealsSnap, taskSnap, settingsSnap, teamSnap] = await Promise.all([
         getDocs(query(collection(db, "sent_emails"), where("userId", "==", user.uid), limit(3000))),
         getDocs(collection(db, "users", user.uid, "contacts")).catch(() => ({ docs: [] })),
         getDocs(query(collection(db, "deals"), where("userId", "==", user.uid), limit(2000))),
         getDocs(query(collection(db, "users", user.uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
         getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
+        getDoc(doc(db, "users", user.uid, "settings", "team")).catch(() => null),
       ]);
 
       // ONE row per lead (several emails to the same person used to show as duplicate rows).
@@ -149,6 +153,7 @@ export default function CRMPage() {
       const dealValues = {};
       const dealNotes = {};
       const dealQual = {};
+      const dealOwners = {};
       dealsSnap.docs.forEach((d) => {
         const deal = d.data();
         const email = norm(deal.email);
@@ -157,6 +162,7 @@ export default function CRMPage() {
         if (Number(deal.value) > 0 && deal.valueIsEstimate !== true) dealValues[email] = Number(deal.value);
         if (Array.isArray(deal.notes)) dealNotes[email] = deal.notes;
         if (deal.qualification) dealQual[email] = deal.qualification;
+        if (deal.ownerId) dealOwners[email] = deal.ownerId;
         // A deal with no outreach email (referral, inbound, WhatsApp...) is still a lead.
         if (!byEmail.has(email)) {
           byEmail.set(email, {
@@ -214,7 +220,8 @@ export default function CRMPage() {
         if (!dealStages[lead.email]) dealStages[lead.email] = lead.replied ? "contacted" : "new";
       });
 
-      setData({ leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, defaultDealValue });
+      const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
+      setData({ leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, team, defaultDealValue });
     } catch (error) {
       console.error("Error loading CRM data:", error);
       addNotification("Error loading CRM data", "error");
@@ -238,6 +245,7 @@ export default function CRMPage() {
       lostReason: changes.lostReason,
       source: changes.source,
       qualification: changes.qualification,
+      ownerId: changes.ownerId,
       touch: changes.touch,
     });
     if (changes.notes) write.notes = changes.notes;
@@ -255,6 +263,16 @@ export default function CRMPage() {
     }
     try {
       const e = norm(email);
+      if (updates.ownerId !== undefined) {
+        const { write } = await writeDeal(e, { ownerId: updates.ownerId });
+        setData((prev) => {
+          const dealOwners = { ...prev.dealOwners };
+          if (write.ownerId) dealOwners[e] = write.ownerId; else delete dealOwners[e];
+          return { ...prev, dealOwners, dealStages: { ...prev.dealStages, [e]: write.stage } };
+        });
+        addNotification(write.ownerId ? "Owner saved" : "Owner cleared", "success");
+        return;
+      }
       if (updates.qualification || updates.touch) {
         const { write } = await writeDeal(e, { qualification: updates.qualification, touch: updates.touch });
         setData((prev) => ({
@@ -396,6 +414,8 @@ export default function CRMPage() {
         dealStages={data.dealStages}
         dealValues={data.dealValues}
         dealQual={data.dealQual}
+        dealOwners={data.dealOwners}
+        team={data.team}
         defaultDealValue={data.defaultDealValue}
         onUpdateLead={handleUpdateLead}
         onAddNote={handleAddNote}
