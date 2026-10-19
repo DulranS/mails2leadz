@@ -173,7 +173,7 @@ export default function InboxPage() {
               {targets.addAllCommand && (
                 <details className="text-xs text-gray-600 dark:text-gray-300">
                   <summary className="cursor-pointer min-h-[44px] flex items-center">Bigger runs on your own computer (optional Python worker)</summary>
-                  <p className="mt-1">The worker in the <code>worker</code> folder does slower, deeper crawls and can clean your own CSV lists. Its results land in the same inbox.</p>
+                  <p className="mt-1">The worker in the <code>worker</code> folder is optional: it does slower, deeper crawls on your own computer. Its results land in the same inbox.</p>
                   <button type="button" onClick={() => copyText(targets.addAllCommand, "all-add")} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 mt-1">{copied === "all-add" ? "Copied ✓" : "Copy: add all to the worker's daily routine"}</button>
                   <code className="block p-2 mt-1 rounded bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-nowrap">{targets.addAllCommand}</code>
                 </details>

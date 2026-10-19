@@ -2,6 +2,7 @@
 // Signed-in only. It never sends anything: leads land in the Lead Inbox, status "new", for the owner to review.
 //
 // POST { action: "start", query, location, minScore? }  queue a search            (one quick map request)
+// POST { action: "import-list", label, rows: [ {..file columns..} ] }  queue the owner's OWN list (any scraped CSV): no map request, same website reading
 // POST { action: "step" }                               work through the queue    (time-boxed; call again until finished)
 // POST { action: "cancel" }                             stop the running search
 // POST { action: "settings", enabled, searches }        the nightly routine (saved searches)
@@ -12,7 +13,7 @@ import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js'
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { featureAllowed } from '../../../lib/tenant.js';
 import { defaultCtx, FinderError } from '../../../lib/server/lead-finder-io.js';
-import { startSearch, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, limits } from '../../../lib/server/lead-finder-job.js';
+import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, limits } from '../../../lib/server/lead-finder-job.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../lib/draft-queue.js';
 import { OSM_ATTRIBUTION } from '../../../lib/lead-finder.js';
@@ -20,7 +21,7 @@ import { OSM_ATTRIBUTION } from '../../../lib/lead-finder.js';
 export const maxDuration = 60;
 const ok = (body) => NextResponse.json({ success: true, attribution: OSM_ATTRIBUTION, ...body }, { headers: NO_STORE });
 const fail = (status, error, code) => NextResponse.json({ success: false, error, code }, { status, headers: NO_STORE });
-const STATUS = { DAILY_LIMIT: 429, BAD_SEARCH: 422, AREA_NOT_FOUND: 422, AREA_TOO_BIG: 422, BAD_QUERY: 422, MAP_UNAVAILABLE: 503, MAP_BUSY: 503 };
+const STATUS = { DAILY_LIMIT: 429, BAD_SEARCH: 422, AREA_NOT_FOUND: 422, AREA_TOO_BIG: 422, BAD_QUERY: 422, MAP_UNAVAILABLE: 503, MAP_BUSY: 503, JOB_RUNNING: 409, BAD_LIST: 422 };
 
 async function overview(db, uid) {
   const [job, settings] = await Promise.all([loadJob(db, uid), loadFinderSettings(db, uid)]);
@@ -54,11 +55,18 @@ export async function POST(request) {
       return ok({ ...(await overview(db, uid)), settings });
     }
 
-    if (action !== 'start' && action !== 'step') return fail(400, 'Unknown action.', 'BAD_ACTION');
+    if (action !== 'start' && action !== 'step' && action !== 'import-list') return fail(400, 'Unknown action.', 'BAD_ACTION');
     const gate = await guardTenant(db, uid); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
     if (gate.response) return gate.response;
     const ctx = defaultCtx();
     const t0 = Date.now();
+
+    if (action === 'import-list') {
+      const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
+      if (!rows.length) return fail(400, 'The list is empty.', 'BAD_LIST');
+      await startImport(db, uid, { label: String(body.label || '').slice(0, 80), rows });
+      return ok(await overview(db, uid));
+    }
 
     if (action === 'start') {
       await startSearch(db, uid, { query: body.query, location: body.location, minScore: body.minScore }, { source: 'manual', ctx, deadline: t0 + 40000 });

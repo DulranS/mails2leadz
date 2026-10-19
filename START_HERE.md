@@ -30,6 +30,9 @@ Each typed search gets its own folder (`worker/searches/<date>_<what>-<where>/`)
 
 If the free map data is thin for a niche, use option 2 with a list from anywhere else: Google Maps exports, a purchased list, a CRM export. Columns like Business Name, E-mail, Phone Number and URL are understood; emails you already have are kept.
 
+## Your own list (Google Maps extension export, bought list, CRM export): in the app
+Lead Inbox → **Already have a list? Import it** → choose the CSV. The app shows how many rows are usable and which columns it understood (business name, website, email, phone, address, category), then reads each website for an email and phone, scores the leads and delivers the good ones to your inbox. Up to 500 businesses per file; import more files after. It uses no map request, only your daily website allowance (500). Where OpenStreetMap is thin for your city, this is the route: scrape Google Maps yourself with any extension, import the file here.
+
 ## 3. Every day (about 15 minutes)
 Nothing to run. Open Business Value and read "Do this next", then:
 

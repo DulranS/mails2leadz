@@ -134,6 +134,7 @@ lib/httpClient.js
 lib/inbound.js
 lib/lead-finder-categories.js
 lib/lead-finder.js
+lib/lead-import.js
 lib/lead-inbox.js
 lib/lead-scoring-engine.js
 lib/logger.js

@@ -3,6 +3,8 @@
 // A search runs as many short requests ("steps"); this page keeps asking for the next step while it is open. Close the tab and the
 // nightly routine (if switched on) carries on. Nothing is ever sent from here: leads land in the Lead Inbox for you to review.
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Papa from "papaparse";
+import { mapImportRows, detectColumns, importLabel, IMPORT_MAX_ROWS } from "../../lib/lead-import.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -56,6 +58,19 @@ export function useLeadFinder({ enabled, onAdded }) {
     await loop();
   }, [loop, running]);
 
+  // The owner's own scraped list (Google Maps extension export, purchased list, CRM export): same website reading and scoring, no map request.
+  const importList = useCallback(async (label, rows) => {
+    if (running) return false;
+    setError("");
+    try {
+      setRunning(true);
+      merge(await call("POST", { action: "import-list", label, rows }));
+    } catch (e) { setError(e.message); setRunning(false); return false; }
+    setRunning(false);
+    await loop();
+    return true;
+  }, [loop, running]);
+
   const cancel = useCallback(async () => {
     stop.current = true;
     try { merge(await call("POST", { action: "cancel" })); } catch (e) { setError(e.message); }
@@ -72,13 +87,15 @@ export function useLeadFinder({ enabled, onAdded }) {
     return saveSettings({ enabled: true, searches: [...cur.searches, ...add] });
   }, [saveSettings, state.settings]);
 
-  return { ...state, running, error, setError, start, loop, cancel, saveSettings, addNightly, refresh };
+  return { ...state, running, error, setError, start, importList, loop, cancel, saveSettings, addNightly, refresh };
 }
 
 const pct = (job) => (job?.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : job?.status === "done" ? 100 : 0);
 
 export function FindLeadsPanel({ finder, place, setPlace }) {
   const [what, setWhat] = useState("");
+  const [list, setList] = useState(null); // { name, rows, preview } once a file has been read in the browser
+  const [listError, setListError] = useState("");
   const { job, settings, today, running, error } = finder;
   const live = job.status === "running";
   const st = job.stats || {};
@@ -87,6 +104,26 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
   // "plumbers in Colombo" typed in the first box is enough: the server splits it into what and where.
   const canGo = !running && what.trim().length >= 3 && (place.trim().length >= 2 || /\sin\s+\S{2,}/i.test(what));
   const saveThis = () => finder.saveSettings({ enabled: true, searches: [...settings.searches, { term: what.trim(), location: place.trim() }] });
+  const pickFile = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    setListError(""); setList(null);
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { setListError("That file is over 5 MB. Split it into smaller files."); return; }
+    Papa.parse(f, {
+      header: true, skipEmptyLines: "greedy", worker: false,
+      complete: (res) => {
+        const rows = (res.data || []).filter((r) => r && typeof r === "object");
+        if (!rows.length) { setListError("That file has no rows. Use a CSV with a header row."); return; }
+        const preview = mapImportRows(rows, { label: importLabel(f.name) });
+        const cols = detectColumns(res.meta?.fields || []);
+        if (!cols.name) { setListError("No business name column found. Name one of the columns \"Business Name\", \"Name\" or \"Title\"."); return; }
+        setList({ name: f.name, rows: rows.slice(0, 2000), preview: { ...preview, columns: cols } });
+      },
+      error: () => setListError("That file could not be read. Save it as CSV (UTF-8) and try again."),
+    });
+  };
+  const runImport = async () => { if (await finder.importList(list.name, list.rows)) setList(null); };
   const removeAt = (i) => finder.saveSettings({ enabled: settings.enabled, searches: settings.searches.filter((_, x) => x !== i) });
 
   return (
@@ -110,7 +147,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
       {job.status !== "idle" && (
         <div className="mt-4 rounded-lg bg-gray-50 dark:bg-gray-900/40 p-3 space-y-2" aria-live="polite">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{job.term} · {job.location}</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white capitalize">{job.location ? `${job.term} · ${job.location}` : job.term}</p>
             <span className="text-xs text-gray-600 dark:text-gray-300">{live ? (running ? "Working…" : "Paused") : job.status === "done" ? "Finished" : job.status === "cancelled" ? "Stopped" : job.status}</span>
           </div>
           <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct(job)} aria-label="Search progress" className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -122,7 +159,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
           </p>
           {!live && (st.noContact > 0 || left.length > 0 || st.skipped > 0 || st.alreadySeen > 0 || st.blocked > 0 || st.unreachable > 0) && (
             <p className="text-xs text-gray-600 dark:text-gray-300">
-              Left out: {[st.noContact ? `${st.noContact} with no contact details on the map` : "", ...left, st.skipped ? `${st.skipped} already in your inbox, already contacted or opted out` : "", st.blocked ? `${st.blocked} whose site asks robots to stay away` : "", st.unreachable ? `${st.unreachable} websites that would not load` : "", st.alreadySeen ? `${st.alreadySeen} found by an earlier search` : ""].filter(Boolean).join(" · ")}.
+              Left out: {[st.noContact ? `${st.noContact} with no contact details` : "", ...left, st.skipped ? `${st.skipped} already in your inbox, already contacted, already a customer or deal, or opted out` : "", st.blocked ? `${st.blocked} whose site asks robots to stay away` : "", st.unreachable ? `${st.unreachable} websites that would not load` : "", st.alreadySeen ? `${st.alreadySeen} found by an earlier search` : ""].filter(Boolean).join(" · ")}.
             </p>
           )}
           {job.note && <p className="text-sm text-amber-800 dark:text-amber-200">{job.note}</p>}
@@ -136,6 +173,32 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
           )}
         </div>
       )}
+
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Already have a list? Import it</h3>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Scraped Google Maps with an extension, bought a list, or exporting from a CRM? Drop the CSV here. Each website is read for an email and phone, every business is scored, and the good ones land in your inbox. The map is not used, so this does not touch your daily search allowance. Up to {IMPORT_MAX_ROWS} businesses per file.</p>
+        <label className={`${btn} inline-flex items-center border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 mt-2 cursor-pointer ${live || running ? "opacity-50 pointer-events-none" : ""}`}>
+          Choose a CSV file
+          <input type="file" accept=".csv,text/csv" className="sr-only" onChange={pickFile} disabled={live || running} />
+        </label>
+        {listError && <p role="alert" className="text-sm text-red-700 dark:text-red-300 mt-2">{listError}</p>}
+        {list && (
+          <div className="mt-3 rounded-lg bg-gray-50 dark:bg-gray-900/40 p-3 space-y-2" aria-live="polite">
+            <p className="text-sm font-medium text-gray-900 dark:text-white break-words">{list.name}</p>
+            <p className="text-sm text-gray-800 dark:text-gray-100">
+              {list.rows.length} row{list.rows.length === 1 ? "" : "s"} read · <span className="font-semibold">{list.preview.stats.usable}</span> usable
+              {list.preview.stats.noContact ? ` · ${list.preview.stats.noContact} with no website, email or phone` : ""}
+              {list.preview.stats.duplicate ? ` · ${list.preview.stats.duplicate} duplicates` : ""}
+              {list.preview.stats.tooMany ? ` · ${list.preview.stats.tooMany} over the ${IMPORT_MAX_ROWS} limit (import them as a second file)` : ""}
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-300">Using: {Object.entries(list.preview.columns).map(([k, v]) => `${k} = "${v}"`).join(", ")}</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button type="button" onClick={runImport} disabled={running || live || list.preview.stats.usable === 0} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>Read websites and add to my inbox</button>
+              <button type="button" onClick={() => setList(null)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -161,7 +224,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-        {today ? `Today: ${today.searches} of ${today.searchesPerDay} searches, ${today.sites} of ${today.sitesPerDay} websites. ` : ""}Business data © OpenStreetMap contributors (ODbL). Some businesses are missing from the map or list no phone or website.
+        {today ? `Today: ${today.searches} of ${today.searchesPerDay} searches, ${today.sites} of ${today.sitesPerDay} websites. ` : ""}Map data © OpenStreetMap contributors (ODbL). Coverage differs by city: where the map is thin, import a list from Google Maps instead.
       </p>
     </section>
   );

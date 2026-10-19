@@ -24,8 +24,10 @@ BOTH      replies are read when found (opt-out suppressed, positive reply moves 
 | Drafts prepared ahead (first emails, follow-ups) | **Built** (needs `CRON_SECRET` + service account to run nightly) |
 | Inbound: public enquiry form + hosted page, channel tags, instant reply draft, deal created, "unanswered enquiries" first in Do-this-next | **Built** |
 | Inbound channel ROI (enquiries -> opportunities -> revenue per channel) | **Built** |
-| Social posting by the app | **Consciously left out** (the planner drafts; you post; it keeps platform accounts safe and costs nothing) |
-| Unattended sending / auto-replies to prospects / automatic Won-Lost | **Consciously left out** |
+| Social posting | **Built** (the planner drafts and schedules; due posts go to your own Zapier / Make / Buffer hook; AI drafts wait about 20 hours for you to read or skip). Needs your hook address in Account. |
+| Your own scraped list (Google Maps extension, bought list, CRM export) into the same flow | **Built** (Lead Inbox: import a CSV, websites read, scored, delivered; no map request) |
+| Never cold-email someone you already deal with (customer, enquiry, conversation, referral) | **Built** (checked at inbox delivery, overnight drafting, review window and Autosend) |
+| Auto-replies to prospects / automatic Won-Lost | **Consciously left out** (capped, opt-in Autosend of reviewed-style drafts exists; see CHANGELOG pass 18) |
 | Replies checked overnight from the server (read-only Gmail, encrypted key, "while you were away" note) | **Built** (needs the Google setup in DEPLOYMENT_GUIDE; Testing-mode apps lose access after 7 days) |
 | Reading the full text of a reply | **Built** |
 | Content posts carry a platform-tagged enquiry link | **Built** |
