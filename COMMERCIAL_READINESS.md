@@ -19,7 +19,7 @@ Status words mean exactly this: **Built** (in the code, tested) · **Not yet bui
 | Legal pages | Terms and Privacy switch to subscription wording and list Stripe when `SAAS_MODE=on`. **Templates, not legal advice: have a lawyer review before selling.** |
 
 ## Not yet built (in order of how much it would matter)
-1. **Teams / seats.** One person owns an account (`userId` is the owner everywhere). A shared team would need an organisation layer (members, roles, org-scoped rules). It is the biggest gap for selling to businesses with more than one salesperson, and it is a deliberate non-trivial refactor, so it is not hidden inside this pass. Selling to solo owners and very small businesses works today.
+1. **Separate logins for team members (seats and roles).** One person still owns and signs in to an account (`userId` is the owner everywhere). What IS built: team members as names, deal owners and a commission report (Account > Your team). What is NOT: each person signing in with their own login and role, which needs an organisation layer (members, roles, org-scoped rules), a deliberate non-trivial refactor. Selling to solo owners and small businesses that share one login works today.
 2. **Lifecycle emails** (trial ending, payment failed, welcome). In-app banners cover it; Stripe can send payment emails (enable them in the Stripe dashboard).
 3. **Per-customer sending set-up.** Customers send from their own Gmail. Fine for low volume; a customer who wants to send at scale needs their own domain, authentication records and warm-up, which the app does not manage.
 4. **Load and capacity testing.** Never done. Do it before announcing; the per-account limits and the Firebase/hosting plan decide the ceiling.
@@ -28,7 +28,7 @@ Status words mean exactly this: **Built** (in the code, tested) · **Not yet bui
 
 ## Consciously left out
 - Integrations with compliance-based systems (consent-management platforms, audit/attestation tooling, identity-verification services), as instructed. The app records opt-outs and honours them; it does not certify any customer's campaign as lawful.
-- Unattended sending, automatic replies to prospects, social-network automation, scraping.
+- Automatic replies to prospects, scraping or automating social networks (LinkedIn, Instagram, TikTok), buying lead lists. (Built and capped on purpose: opt-in Autosend of the day's drafts, scheduled posting through the owner's own Zapier/Make/Buffer hook, and the built-in lead finder on public OpenStreetMap data.)
 
 ## Not applicable now
 - Marketplace listings, reseller/partner programmes, multi-region hosting.

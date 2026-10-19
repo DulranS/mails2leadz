@@ -164,6 +164,12 @@ const firebase = initializeFirebase();
 const db = firebase?.db;
 const auth = firebase?.auth;
 
+// Gmail access token from Firebase sign-in, kept in memory for 50 minutes (it lasts an hour) so sending does not open a Google window every time.
+// The key is the signed-in user plus which Gmail is wanted, so a token is never reused for another account.
+const gmailTokenCache = { token: "", key: "", exp: 0 };
+const readGmailToken = (key) => (gmailTokenCache.token && gmailTokenCache.key === key && gmailTokenCache.exp > Date.now() ? gmailTokenCache.token : "");
+const storeGmailToken = (key, token) => { gmailTokenCache.token = token; gmailTokenCache.key = key; gmailTokenCache.exp = Date.now() + 50 * 60 * 1000; };
+
 // Default wording lives in lib/default-templates.js (neutral starter text, nothing specific to any business).
 
 // ============================================================================
@@ -3873,7 +3879,6 @@ function DashboardComponent() {
   // Only when you send from a DIFFERENT Gmail than you signed in with (Sender email setting) does Google's own script step in,
   // because Firebase cannot grant a token for another account; that path needs NEXT_PUBLIC_GOOGLE_CLIENT_ID.
   const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"];
-  const gmailTokenRef = useRef({ token: "", key: "", exp: 0 });
 
   const requestGmailTokenViaGoogle = (hint) =>
     new Promise((resolve, reject) => {
@@ -3910,8 +3915,8 @@ function DashboardComponent() {
     const mine = String(current.email || "").trim().toLowerCase();
     const sameAccount = !wanted || wanted === mine;
     const key = `${current.uid}|${sameAccount ? "me" : wanted}`;
-    const cached = gmailTokenRef.current;
-    if (cached.token && cached.key === key && cached.exp > Date.now()) return cached.token;
+    const cached = readGmailToken(key);
+    if (cached) return cached;
 
     let token = "";
     if (sameAccount) {
@@ -3931,7 +3936,7 @@ function DashboardComponent() {
       token = await requestGmailTokenViaGoogle(wanted);
     }
     if (!token) throw "No access token received";
-    gmailTokenRef.current = { token, key, exp: Date.now() + 50 * 60 * 1000 };
+    storeGmailToken(key, token);
     return token;
   };
 

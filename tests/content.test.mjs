@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { postCampaign, withPostTag, enquiriesByPost } from '../lib/content.js';
 import { validateAiPlan, sanitizeResults, summarizeContent, performanceHint, contentActionInfo, groupPosts, addDays, localDateStr, isDateStr, hasPlaceholders, PLATFORMS, composeUrl, composePrefills } from '../lib/content.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
@@ -100,5 +101,19 @@ t('post now: X and LinkedIn open with the text filled in; others just open; too 
   assert.equal(composeUrl('instagram', 'text'), 'https://www.instagram.com/');
   assert.equal(composeUrl('x', '   '), 'https://x.com/compose/post');
   assert.deepEqual(['x', 'linkedin', 'facebook', 'tiktok', 'instagram'].map(composePrefills), [true, true, false, false, false]);
+});
+
+t('per-post credit: a post gets a short tag, its link carries it, and enquiries are counted per post (platform links and noise are ignored)', () => {
+  assert.equal(postCampaign('AbC123xyz789QWERTYuiop'), 'p-abc123xyz789');
+  assert.equal(postCampaign(''), '');
+  assert.equal(postCampaign(undefined), '');
+  const base = 'https://x.test/enquire?k=KEY&src=linkedin';
+  assert.equal(withPostTag(base, 'AbC123xyz789QWERTYuiop'), `${base}&c=p-abc123xyz789`);
+  assert.equal(withPostTag(base, ''), base);              // no post id: the platform link is unchanged
+  assert.equal(withPostTag('', 'abc'), '');                // no link: stays empty
+  assert.equal(withPostTag('https://x.test/enquire', 'abc'), 'https://x.test/enquire?c=p-abc');
+  const credit = enquiriesByPost([{ campaign: 'p-abc123xyz789' }, { campaign: 'p-abc123xyz789' }, { campaign: 'p-zzz' }, { campaign: 'spring-sale' }, { campaign: '' }, {}, null]);
+  assert.deepEqual(credit, { 'p-abc123xyz789': 2, 'p-zzz': 1 });
+  assert.deepEqual(enquiriesByPost(), {});
 });
 console.log(`\n${n} content tests ok`);

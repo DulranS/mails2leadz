@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 24 - last-day audit against the full brief: post-level auto-analytics, docs made truthful
+- **Which post brought the enquiry, automatically.** Each post's enquiry link now carries its own tag (`&c=`), the public form passes it on, and Content shows "N enquiries from this post" on the card and a total under "What is working" (counted from the owner's own enquiry records; no typing). The scheduled auto-poster sends the same tagged link. The bio link stays platform-level, since every post shares it. Before, an enquiry was credited to the platform only, and per-post results had to be typed in by hand.
+- **Gmail token cache** (pass 23) moved out of the component, so it survives page changes and no longer adds React lint errors.
+- **Docs made truthful.** STRATEGY.md and COMMERCIAL_READINESS.md still listed the Conversations log, team/commission, Autosend, scheduled posting and the lead finder as "not built / left out"; they now say what exists and what really remains (separate team logins, load testing, Google's Gmail verification for selling).
+- Checked, no change needed: Google Maps API is gone everywhere (OpenStreetMap, no key, no card); every AI call goes through the one DeepSeek-first client; MRR / churn / lifetime value / renewals, cost per reply and per win, ROI and the versus-hiring comparison exist; weekly KPI, onboarding, billing/collections and customer health exist.
+- Tests: content (+1). Import check OK.
+
 ## Pass 23 - more of it runs on the Firebase packages
 - **Gmail permission through Firebase sign-in.** The dashboard now asks for the Gmail permission with Firebase Auth (`reauthenticateWithPopup` with the gmail.send / gmail.readonly scopes), so sending and reading replies no longer need a separate Google client id or secret. The token is kept in memory for 50 minutes (fewer pop-up windows). If the Sender email setting is a DIFFERENT Gmail than you signed in with, Google's own script is loaded on demand as before (needs `NEXT_PUBLIC_GOOGLE_CLIENT_ID`), because Firebase cannot grant a token for another account. `send-followup` no longer refuses to run without a client id and secret. They are only needed for the automatic overnight Gmail features.
 - **Logins verified with firebase-admin.** `lib/server-auth.js` checks the ID token locally with `firebase-admin` (needs only `NEXT_PUBLIC_FIREBASE_PROJECT_ID`) and falls back to Google's lookup call. Trade-off: a Firebase account you DISABLE keeps working until its token expires (at most 1 hour) when the local check accepts it.

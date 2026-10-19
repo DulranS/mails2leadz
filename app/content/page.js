@@ -5,13 +5,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, addDoc, setDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, addDoc, setDoc, deleteDoc, doc, query, where, limit } from "firebase/firestore";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import {
   PLATFORMS, PILLARS, localDateStr, isDateStr, platformLabel, platformUrl, pillarLabel, hasPlaceholders,
   sanitizeResults, summarizeContent, performanceHint, groupPosts, MIN_PER_GROUP, MIN_POSTS_TO_LEARN,
-  LINK_PLATFORMS, withEnquiryLink, composeUrl, composePrefills,
+  LINK_PLATFORMS, withEnquiryLink, composeUrl, composePrefills, postCampaign, withPostTag, enquiriesByPost,
 } from "../../lib/content.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
@@ -21,8 +21,10 @@ const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 r
 const postsRef = (uid) => collection(db, "users", uid, "content_posts");
 const fullText = (p) => `${p.body}${p.hashtags?.length ? `\n\n${p.hashtags.join(" ")}` : ""}`;
 
-function PostCard({ p, today, onSave, onDelete, onNotice, linkFor }) {
-  const link = linkFor ? linkFor(p.platform) : ""; // this owner's enquiry link, tagged with this platform
+function PostCard({ p, today, onSave, onDelete, onNotice, linkFor, credit }) {
+  const link = linkFor ? linkFor(p.platform, p.id) : ""; // this owner's enquiry link, tagged with this platform AND this post
+  const bioLink = linkFor ? linkFor(p.platform) : ""; // the bio link is shared by every post, so it carries the platform only
+  const credited = credit ? credit[postCampaign(p.id)] || 0 : 0; // enquiries the app credited to this exact post, automatically
   const inlineLinks = LINK_PLATFORMS.includes(p.platform);
   const [addLink, setAddLink] = useState(true);
   const [body, setBody] = useState(p.body || "");
@@ -59,6 +61,7 @@ function PostCard({ p, today, onSave, onDelete, onNotice, linkFor }) {
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
           </label>
         ) : <span className="text-xs text-gray-500 dark:text-gray-400">{p.status === "posted" ? `Posted ${p.postedOn || ""}` : "Skipped"}</span>}
+        {credited > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">{credited} enquir{credited === 1 ? "y" : "ies"} from this post</span>}
       </div>
 
       <textarea ref={taRef} value={body} onChange={(e) => setBody(e.target.value)} rows={3} readOnly={!open} aria-label={`${platformLabel(p.platform)} post text`} className={`${field} leading-relaxed`} />
@@ -68,7 +71,7 @@ function PostCard({ p, today, onSave, onDelete, onNotice, linkFor }) {
         <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={addLink} onChange={(e) => setAddLink(e.target.checked)} />Add my enquiry link to this post (enquiries it brings are credited to {platformLabel(p.platform)})</label>
       )}
       {open && link && !inlineLinks && (
-        <p className="text-xs rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 p-2">Links in {platformLabel(p.platform)} posts are not clickable. Put this link in your {platformLabel(p.platform)} bio once, and every enquiry from it is credited to {platformLabel(p.platform)}: <button type="button" className="underline" onClick={() => navigator.clipboard.writeText(link).then(() => onNotice("Bio link copied."), () => onNotice("Could not copy automatically."))}>copy bio link</button></p>
+        <p className="text-xs rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 p-2">Links in {platformLabel(p.platform)} posts are not clickable. Put this link in your {platformLabel(p.platform)} bio once, and every enquiry from it is credited to {platformLabel(p.platform)}: <button type="button" className="underline" onClick={() => navigator.clipboard.writeText(bioLink).then(() => onNotice("Bio link copied."), () => onNotice("Could not copy automatically."))}>copy bio link</button></p>
       )}
       {warn && <p role="alert" className="text-xs rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 p-2">Fill in the [bracketed] part with something real before you post. The AI never invents customers or results.</p>}
 
@@ -147,7 +150,15 @@ export default function ContentPage() {
   // The owner's enquiry link (Account → Enquiry form), tagged per platform, so a post can carry it and the enquiry is credited to that platform.
   const [enquiryKey, setEnquiryKey] = useState("");
   useEffect(() => { if (!user?.uid) return; fetch("/api/inbound-key").then((r) => r.json()).then((d) => setEnquiryKey(d?.key || "")).catch(() => {}); }, [user?.uid]);
-  const linkFor = useCallback((platformId) => (enquiryKey && typeof window !== "undefined" ? `${window.location.origin}/enquire?k=${enquiryKey}&src=${platformId}` : ""), [enquiryKey]);
+  const linkFor = useCallback((platformId, postId) => (enquiryKey && typeof window !== "undefined" ? withPostTag(`${window.location.origin}/enquire?k=${enquiryKey}&src=${platformId}`, postId) : ""), [enquiryKey]);
+  // Enquiries that arrived through a post's own link are counted per post by the app (no typing needed).
+  const [credit, setCredit] = useState({});
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    getDocs(query(collection(db, "inbound_enquiries"), where("userId", "==", user.uid), limit(1000)))
+      .then((snap) => setCredit(enquiriesByPost(snap.docs.map((d) => d.data()))))
+      .catch(() => {}); // not critical: the page works without the counts
+  }, [user?.uid]);
   useEffect(() => {
     if (!auth) { setAuthReady(true); setLoading(false); return; }
     return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
@@ -167,6 +178,7 @@ export default function ContentPage() {
   const stats = useMemo(() => (today ? summarizeContent(posts, today) : null), [posts, today]);
   const groups = useMemo(() => (today ? groupPosts(posts, today) : { overdue: [], today: [], upcoming: [], done: [] }), [posts, today]);
   const hint = useMemo(() => (today ? performanceHint(posts, today) : null), [posts, today]);
+  const autoCredited = useMemo(() => posts.reduce((n, p) => n + (credit[postCampaign(p.id)] || 0), 0), [posts, credit]);
 
   const flash = (msg) => { setNotice(msg); setTimeout(() => setNotice(""), 6000); };
   const save = async (p, patch, msg) => {
@@ -274,16 +286,17 @@ export default function ContentPage() {
         {loading ? <section className={card}><p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p></section> : (
           <>
             {posts.length === 0 && <section className={card}><p className="text-sm text-gray-700 dark:text-gray-200">No posts yet. Press “Draft my week” to get your first ones.</p></section>}
-            <Group title="Overdue" tone="text-red-700 dark:text-red-300" posts={groups.overdue} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
-            <Group title="Today" posts={groups.today} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
-            <Group title="Coming up" posts={groups.upcoming} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
-            <Group title="Posted & skipped" posts={groups.done} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} />
+            <Group title="Overdue" tone="text-red-700 dark:text-red-300" posts={groups.overdue} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} credit={credit} />
+            <Group title="Today" posts={groups.today} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} credit={credit} />
+            <Group title="Coming up" posts={groups.upcoming} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} credit={credit} />
+            <Group title="Posted & skipped" posts={groups.done} today={today} onSave={save} onDelete={remove} onNotice={flash} linkFor={linkFor} credit={credit} />
           </>
         )}
 
         {stats && stats.postedTotal > 0 && (
           <section className={card}>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">What is working</h2>
+            {autoCredited > 0 && <p className="text-sm text-green-800 dark:text-green-200 mt-2">{autoCredited} enquir{autoCredited === 1 ? "y was" : "ies were"} credited to your posts automatically (through each post&apos;s own link), without you logging anything.</p>}
             {stats.withResults === 0 ? <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">Log results on your posted posts (reach, engagement, enquiries) and this fills in.</p> : (
               <div className="mt-3 space-y-4">
                 <p className="text-sm text-gray-800 dark:text-gray-100">

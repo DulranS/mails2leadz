@@ -1,6 +1,6 @@
 "use client";
 // app/enquire/page.js - the PUBLIC enquiry page a visitor sees (link in bio, QR code, website embed). No sign-in.
-// URL: /enquire?k=<owner's enquiry key>&src=<where this link is shared>. It only submits an enquiry to its owner.
+// URL: /enquire?k=<owner's enquiry key>&src=<where this link is shared>&c=<which post, optional>. It only submits an enquiry to its owner.
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -10,6 +10,7 @@ function Form() {
   const params = useSearchParams();
   const key = params.get("k") || "";
   const src = params.get("src") || "";
+  const campaign = params.get("c") || ""; // which post brought this visitor (set by the Content page / auto-poster)
   const [name, setName] = useState("");
   const [booking, setBooking] = useState("");
   const [state, setState] = useState({ status: "idle", error: "", business: "" });
@@ -28,7 +29,7 @@ function Form() {
     e.preventDefault();
     setState((s) => ({ ...s, status: "sending", error: "" }));
     try {
-      const res = await fetch("/api/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, k: key, src }) });
+      const res = await fetch("/api/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, k: key, src, campaign }) });
       const d = await res.json().catch(() => ({}));
       if (res.ok) setState((s) => ({ ...s, status: "done" }));
       else setState((s) => ({ ...s, status: "idle", error: d.error || "Something went wrong. Please try again." }));

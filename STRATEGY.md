@@ -36,7 +36,9 @@ BOTH      replies are read when found (opt-out suppressed, positive reply moves 
 | Message-angle test on cold email (assigned evenly, measured by reply rate, optional lean) | **Built** (needs volume to mean anything) |
 | Speed-to-lead on enquiries; activity planner worked back from our own rates | **Built** |
 | Scraping social/LinkedIn, auto-connect, buying lead lists, tracking pixels | **Consciously left out** (platform rules, reputation and legal risk outweigh the gain) |
-| WhatsApp/SMS/call reply signals feeding attribution | **Not yet built** (providers give no reply signal back) |
+| WhatsApp/SMS/call/LinkedIn/Instagram/TikTok replies feeding the pipeline | **Built as a 20-second manual log** (Conversations page: the AI reads the reply, the deal moves forward, the channel is credited). These providers give no automatic reply signal back, so a person logs it |
+| Which exact post brought an enquiry | **Built** (every post's link carries its own tag; Content shows "N enquiries from this post" automatically, and the auto-poster sends the same tagged link) |
+| Team members, deal owners, commission report | **Built** (Account > Your team). Separate logins / roles inside one account: **not built** |
 | Compliance-service integrations | **Consciously left out** |
 
 ## Daily / weekly rhythm (10 minutes a day is the point)
