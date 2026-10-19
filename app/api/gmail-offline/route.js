@@ -29,7 +29,7 @@ export async function GET(request) {
 export async function POST(request) {
   const uid = uidFromRequest(request);
   if (!uid) return reply(401, { error: 'Please sign in again.' });
-  if (!isAdminMode() || !offlineConfigured()) return reply(503, { error: 'Not set up on the server yet: needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' });
+  if (!isAdminMode() || !offlineConfigured()) return reply(503, { error: 'Not set up on the server yet: needs FIREBASE_SERVICE_ACCOUNT_JSON, NEXT_PUBLIC_GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' });
   const gate = await guardTenant(getDb(), uid, { feature: 'offlineGmail' }); // plan / trial / suspension (SAAS_MODE only)
   if (gate.response) return gate.response;
   const body = await request.json().catch(() => ({}));

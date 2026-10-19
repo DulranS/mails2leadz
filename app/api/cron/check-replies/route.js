@@ -32,7 +32,7 @@ export async function GET(request) {
   if (!secret) return NextResponse.json({ error: 'CRON_SECRET is not set on the server.' }, { status: 503, headers: NO_STORE });
   const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
   if (!m || !safeEqual(m[1].trim(), secret)) return NextResponse.json({ error: 'Not allowed.' }, { status: 401, headers: NO_STORE });
-  if (!isAdminMode() || !offlineConfigured()) return NextResponse.json({ error: 'Needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' }, { status: 503, headers: NO_STORE });
+  if (!isAdminMode() || !offlineConfigured()) return NextResponse.json({ error: 'Needs FIREBASE_SERVICE_ACCOUNT_JSON, NEXT_PUBLIC_GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' }, { status: 503, headers: NO_STORE });
 
   const db = getDb();
   const deadline = Date.now() + 270000;

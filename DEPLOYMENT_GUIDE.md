@@ -33,7 +33,7 @@ Read **COMMERCIAL_READINESS.md** first (what is built, what is not, what is outs
 
 ## Automatic reply checking while you are away (optional)
 Replies are normally found when you press Check replies. This makes it happen every night as well, and leaves a "while you were away" note on the dashboard. **Read-only**: the server can read replies, never send or change mail. Sending still needs you, in the browser.
-1. Set `TOKEN_ENC_KEY` (`openssl rand -hex 32`). It encrypts the saved access key. **Keep it:** if it changes, every owner must reconnect. Also needs `GOOGLE_CLIENT_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON` and `CRON_SECRET`.
+1. Set `TOKEN_ENC_KEY` (`openssl rand -hex 32`). It encrypts the saved access key. **Keep it:** if it changes, every owner must reconnect. Also needs `NEXT_PUBLIC_GOOGLE_CLIENT_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON` and `CRON_SECRET`.
 2. Google Cloud console → APIs & Services → Credentials → your OAuth client → **Authorized redirect URIs**: add `https://YOUR-DOMAIN/api/gmail-offline/callback` (Account → "Replies checked for you" shows the exact address).
 3. OAuth consent screen: keep the `gmail.readonly` scope and set the publishing status to **In production**. While it says **Testing**, Google ends the saved access after **7 days** (the app then shows "Gmail access expired" and asks to reconnect). A production app that Google has not verified shows an "unverified app" warning on connect; that is normal for your own mailbox. **Check Google's current rules in the console:** sources differ on when verification becomes mandatory, and it is Google's decision, not ours.
 4. **Republish the Firestore rules** (`reply_notices` is new; `gmail_offline` is deliberately not readable from any browser).
@@ -60,7 +60,7 @@ Account → **Autopilot** has one button, "Run my business on autopilot", plus a
 | Next week's social posts (drafted and scheduled) | same job, only when the calendar is nearly empty | one small AI call |
 
 Setup, once:
-1. Everything under "Automatic reply checking" above (service account or server login, `TOKEN_ENC_KEY`, `GOOGLE_CLIENT_SECRET`, `CRON_SECRET`).
+1. Everything under "Automatic reply checking" above (service account or server login, `TOKEN_ENC_KEY`, `NEXT_PUBLIC_GOOGLE_CLIENT_SECRET`, `CRON_SECRET`).
 2. Google Cloud → OAuth consent screen → Scopes: also add `https://www.googleapis.com/auth/gmail.send`. Then Account → **Connect Gmail with automatic sending** (an owner who connected read-only before uses **Add automatic sending**).
 3. Account → Autopilot: keep the default 15 emails a day and the 09:00-17:00 weekday window until you see how replies and bounces look; raise it slowly.
 4. Time zone: the window uses your browser's local time, saved whenever you change an Autopilot setting (Colombo, UTC+05:30, by default).

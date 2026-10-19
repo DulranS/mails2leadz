@@ -21,7 +21,7 @@ export async function POST(request) {
     // 1. Check Environment Variables
     const requiredEnvVars = [
       'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
+      'NEXT_PUBLIC_GOOGLE_CLIENT_SECRET',
       'NEXT_PUBLIC_GOOGLE_REDIRECT_URI',
       'NEXT_PUBLIC_FIREBASE_API_KEY',
       'NEXT_PUBLIC_FIREBASE_PROJECT_ID'
@@ -80,13 +80,13 @@ export async function POST(request) {
     if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
       debugInfo.configuration.gmailOAuth = {
         clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Missing',
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing',
+        clientSecret: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing',
         redirectUri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI || '❌ Missing'
       };
 
-      if (!process.env.GOOGLE_CLIENT_SECRET) {
+      if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET) {
         debugInfo.issues.push('Google Client Secret is required for OAuth');
-        debugInfo.fixes.push('Set GOOGLE_CLIENT_SECRET (server-side only, no NEXT_PUBLIC_ prefix) in environment variables');
+        debugInfo.fixes.push('Set NEXT_PUBLIC_GOOGLE_CLIENT_SECRET (server-side only, no NEXT_PUBLIC_ prefix) in environment variables');
       }
 
       if (!process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI) {

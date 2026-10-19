@@ -86,19 +86,19 @@ export async function GET(request) {
   const fbWeb = ['NEXT_PUBLIC_FIREBASE_API_KEY', 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN', 'NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_APP_ID'];
   const fbMissing = fbWeb.filter((n) => !process.env[n]);
   const gid = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  const gsec = !!process.env.GOOGLE_CLIENT_SECRET;
+  const gsec = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET;
   add('gmail', 'Email sending (Gmail)', fbMissing.length === 0,
     fbMissing.length === 0
       ? `Gmail permission comes from your Firebase Google sign-in.${gid && gsec ? ' Automatic Gmail features are also set up.' : ' Automatic overnight Gmail features are off (optional).'}`
       : `Missing: ${fbMissing.join(', ')}.`,
-    'Set the NEXT_PUBLIC_FIREBASE_* variables (Firebase console > Project settings > Your apps > Web app), turn on the Google provider under Authentication, and enable the Gmail API in Google Cloud. For automatic overnight Gmail features also set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+    'Set the NEXT_PUBLIC_FIREBASE_* variables (Firebase console > Project settings > Your apps > Web app), turn on the Google provider under Authentication, and enable the Gmail API in Google Cloud. For automatic overnight Gmail features also set NEXT_PUBLIC_GOOGLE_CLIENT_ID and NEXT_PUBLIC_GOOGLE_CLIENT_SECRET.');
 
   // 2b. A client secret under a NEXT_PUBLIC_ name is published to every visitor's browser. The app no longer reads it.
-  const legacyName = 'NEXT_PUBLIC_' + 'GOOGLE_CLIENT_SECRET';
+  const legacyName = 'NEXT_PUBLIC_' + 'NEXT_PUBLIC_GOOGLE_CLIENT_SECRET';
   const legacyPresent = !!process.env[legacyName];
   add('secret-exposure', 'Google secret not exposed', !legacyPresent,
     legacyPresent ? `${legacyName} is set. The app ignores it, but any NEXT_PUBLIC_ value is visible to every visitor.` : 'No secret is published to browsers.',
-    `Delete ${legacyName} from your hosting environment variables and redeploy, then create a NEW client secret in Google Cloud (the old one was exposed). Only if you use the automatic Gmail features, save the new one as GOOGLE_CLIENT_SECRET.`);
+    `Delete ${legacyName} from your hosting environment variables and redeploy, then create a NEW client secret in Google Cloud (the old one was exposed). Only if you use the automatic Gmail features, save the new one as NEXT_PUBLIC_GOOGLE_CLIENT_SECRET.`);
 
   // 3. AI
   const ai = aiConfig();
