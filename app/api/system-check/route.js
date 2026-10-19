@@ -60,9 +60,18 @@ export async function GET(request) {
       add('admin', 'Server credentials', true, mode === 'admin' ? 'Service account active.' : 'Server login active (no service-account key).');
     }
   } catch (e) {
-    const denied = /permission|insufficient/i.test(e.message || '');
-    add('database', 'Database (server access)', false, denied ? `The server is not allowed to write to your database. ${serverMode() === 'login' ? 'Server login is set, but the rules do not recognise the server user yet.' : (WHY[adminReason()] || '')}`.trim() : (serverLoginProblem() || e.message),
-      denied
+    const msg = String(e?.message || '');
+    const denied = /permission|insufficient/i.test(msg);
+    // gRPC code 16 / "invalid authentication credentials": the service account key WAS read, but Google refuses it
+    // (key deleted or disabled in Google Cloud, key from another project, or a private key damaged when pasted).
+    const rejected = serverMode() === 'admin' && (e?.code === 16 || /UNAUTHENTICATED|invalid authentication credentials|invalid_grant|invalid jwt/i.test(msg));
+    add('database', 'Database (server access)', false,
+      rejected ? 'The server has a service-account key, but Google rejected it (it was deleted, disabled, belongs to another project, or was damaged when pasted).'
+        : denied ? `The server is not allowed to write to your database. ${serverMode() === 'login' ? 'Server login is set, but the rules do not recognise the server user yet.' : (WHY[adminReason()] || '')}`.trim()
+        : (serverLoginProblem() || msg),
+      rejected
+        ? 'Firebase console > Project settings > Service accounts > Generate new private key (use the project whose id is in NEXT_PUBLIC_FIREBASE_PROJECT_ID). Paste the WHOLE downloaded JSON on ONE line into FIREBASE_SERVICE_ACCOUNT_JSON (or its base64), with no extra quotes. Then delete the old key under Google Cloud > IAM > Service accounts > Keys, and redeploy.'
+        : denied
         ? (serverMode() === 'login'
           ? 'Paste the server user\'s UID into firestore.rules (isServer) and republish them: firebase deploy --only firestore:rules.'
           : 'Your Firestore rules are locked down but the server has no credentials. Set FIREBASE_SERVICE_ACCOUNT_JSON (paste the downloaded JSON key) or use server login (DEPLOYMENT_GUIDE.md), then redeploy.')
@@ -89,8 +98,10 @@ export async function GET(request) {
     'Set DEEPSEEK_API_KEY (recommended; or OPENAI_API_KEY / ANTHROPIC_API_KEY), then redeploy. Everything except AI drafting works without it.');
 
   // 4. Webhooks (only matters if phone calls are used)
-  add('webhooks', 'Call webhook protection', !!process.env.WEBHOOK_SECRET, process.env.WEBHOOK_SECRET ? 'Protected.' : 'No webhook secret set.',
-    'Set WEBHOOK_SECRET to a long random string (the app adds ?key= to the call-status callback itself). Skip if you do not use phone calls.');
+  const usesPhone = !!(process.env.TWILIO_ACCOUNT_SID || process.env.TWILIO_AUTH_TOKEN);
+  add('webhooks', 'Call webhook protection', !!process.env.WEBHOOK_SECRET || !usesPhone,
+    process.env.WEBHOOK_SECRET ? 'Protected.' : !usesPhone ? 'Not needed (phone calls are not set up).' : 'No webhook secret set.',
+    'Set WEBHOOK_SECRET to a long random string (the app adds ?key= to the call-status callback itself).');
 
   // 5. Opt-out links (every outgoing email carries one when this is green)
   const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();
