@@ -4,7 +4,7 @@
 // (which name configuration variables) are shown only to ADMIN_EMAILS.
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode, adminReason, serverMode, serverLoginProblem } from '../../../lib/server-firestore.js';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, isAdminMode, adminReason, adminProblem, adminProjectMismatch, serverMode, serverLoginProblem } from '../../../lib/server-firestore.js';
 import { aiConfig } from '../../../lib/ai-client.js';
 import { isRestricted } from '../../../lib/access.js';
 
@@ -13,10 +13,11 @@ export const maxDuration = 30;
 // Plain-language reason the server is not in full-access mode (the cause, not just the symptom).
 const WHY = {
   no_credentials: 'Neither FIREBASE_SERVICE_ACCOUNT_JSON nor FIREBASE_SERVER_EMAIL + FIREBASE_SERVER_PASSWORD is set on the server.',
-  bad_credentials: 'FIREBASE_SERVICE_ACCOUNT_JSON is set but cannot be read. Paste the whole downloaded JSON key (or its base64) on ONE line, with no extra quotes.',
+  bad_credentials: 'The service-account key cannot be used. Paste the whole downloaded JSON key (or its base64) into FIREBASE_SERVICE_ACCOUNT_JSON.',
   module_missing: 'The firebase-admin package could not be loaded on the server.',
   init_failed: 'The service account was rejected by Firebase (wrong project or a deleted key).',
 };
+const whyNot = () => (adminProblem() && adminReason() !== 'ok' ? adminProblem() : WHY[adminReason()] || '');
 const withTimeout = (p, ms, label) =>
   Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms / 1000}s`)), ms))]);
 
@@ -54,7 +55,7 @@ export async function GET(request) {
     add('database', 'Database (server access)', ok, ok ? (mode === 'admin' ? 'Working (full server access).' : mode === 'login' ? 'Working (server login).' : 'Working (limited mode).') : 'Wrote but could not read back.',
       'Check the Firestore project id and that rules are deployed.');
     if (ok && mode === 'none') {
-      add('admin', 'Server credentials', false, `Running without server credentials. ${WHY[adminReason()] || ''}`.trim(),
+      add('admin', 'Server credentials', false, `Running without server credentials. ${whyNot()}`.trim(),
         'Either set FIREBASE_SERVICE_ACCOUNT_JSON (Firebase console > Project settings > Service accounts > Generate new private key), or, if your project does not allow keys, use server login: see DEPLOYMENT_GUIDE.md ("Server login"). Then redeploy.');
     } else if (ok) {
       add('admin', 'Server credentials', true, mode === 'admin' ? 'Service account active.' : 'Server login active (no service-account key).');
@@ -66,11 +67,13 @@ export async function GET(request) {
     // (key deleted or disabled in Google Cloud, key from another project, or a private key damaged when pasted).
     const rejected = serverMode() === 'admin' && (e?.code === 16 || /UNAUTHENTICATED|invalid authentication credentials|invalid_grant|invalid jwt/i.test(msg));
     add('database', 'Database (server access)', false,
-      rejected ? 'The server has a service-account key, but Google rejected it (it was deleted, disabled, belongs to another project, or was damaged when pasted).'
-        : denied ? `The server is not allowed to write to your database. ${serverMode() === 'login' ? 'Server login is set, but the rules do not recognise the server user yet.' : (WHY[adminReason()] || '')}`.trim()
+      rejected ? (adminProjectMismatch()
+          ? `The service-account key is for project "${adminProjectMismatch().key}", but the web app uses "${adminProjectMismatch().app}". Google rejected it.`
+          : 'The server has a service-account key, but Google rejected it (it was deleted, disabled, belongs to another project, or was damaged when pasted).')
+        : denied ? `The server is not allowed to write to your database. ${serverMode() === 'login' ? 'Server login is set, but the rules do not recognise the server user yet.' : whyNot()}`.trim()
         : (serverLoginProblem() || msg),
       rejected
-        ? 'Firebase console > Project settings > Service accounts > Generate new private key (use the project whose id is in NEXT_PUBLIC_FIREBASE_PROJECT_ID). Paste the WHOLE downloaded JSON on ONE line into FIREBASE_SERVICE_ACCOUNT_JSON (or its base64), with no extra quotes. Then delete the old key under Google Cloud > IAM > Service accounts > Keys, and redeploy.'
+        ? 'Firebase console > Project settings > Service accounts > Generate new private key (use the project whose id is in NEXT_PUBLIC_FIREBASE_PROJECT_ID; on Google\'s own hosting you can remove the key variable and the default credentials are used). Paste the WHOLE downloaded JSON on ONE line into FIREBASE_SERVICE_ACCOUNT_JSON (or its base64), with no extra quotes. Then delete the old key under Google Cloud > IAM > Service accounts > Keys, and redeploy.'
         : denied
         ? (serverMode() === 'login'
           ? 'Paste the server user\'s UID into firestore.rules (isServer) and republish them: firebase deploy --only firestore:rules.'
@@ -78,19 +81,24 @@ export async function GET(request) {
         : 'Check the NEXT_PUBLIC_FIREBASE_* variables, the server login email/password, and that Email/Password sign-in is enabled in Firebase Authentication.');
   }
 
-  // 2. Gmail sending (Google sign-in client)
+  // 2. Gmail sending. The browser gets the Gmail permission through Firebase sign-in (the Google provider), so only the Firebase web
+  // config is needed. A separate Google client id + secret only switch on the optional automatic (overnight) Gmail features.
+  const fbWeb = ['NEXT_PUBLIC_FIREBASE_API_KEY', 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN', 'NEXT_PUBLIC_FIREBASE_PROJECT_ID', 'NEXT_PUBLIC_FIREBASE_APP_ID'];
+  const fbMissing = fbWeb.filter((n) => !process.env[n]);
   const gid = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   const gsec = !!process.env.GOOGLE_CLIENT_SECRET;
-  add('gmail', 'Email sending (Gmail)', gid && gsec,
-    gid && gsec ? 'Google client configured.' : `Missing: ${[!gid && 'client id', !gsec && 'client secret'].filter(Boolean).join(', ')}.`,
-    'Set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (Google Cloud > Credentials; if you only have NEXT_PUBLIC_GOOGLE_CLIENT_SECRET, rename it), enable the Gmail API, then redeploy.');
+  add('gmail', 'Email sending (Gmail)', fbMissing.length === 0,
+    fbMissing.length === 0
+      ? `Gmail permission comes from your Firebase Google sign-in.${gid && gsec ? ' Automatic Gmail features are also set up.' : ' Automatic overnight Gmail features are off (optional).'}`
+      : `Missing: ${fbMissing.join(', ')}.`,
+    'Set the NEXT_PUBLIC_FIREBASE_* variables (Firebase console > Project settings > Your apps > Web app), turn on the Google provider under Authentication, and enable the Gmail API in Google Cloud. For automatic overnight Gmail features also set NEXT_PUBLIC_GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
 
   // 2b. A client secret under a NEXT_PUBLIC_ name is published to every visitor's browser. The app no longer reads it.
   const legacyName = 'NEXT_PUBLIC_' + 'GOOGLE_CLIENT_SECRET';
   const legacyPresent = !!process.env[legacyName];
   add('secret-exposure', 'Google secret not exposed', !legacyPresent,
     legacyPresent ? `${legacyName} is set. The app ignores it, but any NEXT_PUBLIC_ value is visible to every visitor.` : 'No secret is published to browsers.',
-    `Rename ${legacyName} to GOOGLE_CLIENT_SECRET in your hosting environment variables, redeploy, then create a NEW client secret in Google Cloud (the old one was exposed) and update it.`);
+    `Delete ${legacyName} from your hosting environment variables and redeploy, then create a NEW client secret in Google Cloud (the old one was exposed). Only if you use the automatic Gmail features, save the new one as GOOGLE_CLIENT_SECRET.`);
 
   // 3. AI
   const ai = aiConfig();

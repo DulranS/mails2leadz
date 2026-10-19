@@ -192,6 +192,7 @@ lib/server/tenant-guard.js
 lib/server/tenant.js
 lib/server/token-vault.js
 lib/server/unsubscribe.js
+lib/service-account.js
 lib/service-health.js
 lib/smart-followup-engine.js
 lib/team.js

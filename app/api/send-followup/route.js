@@ -16,9 +16,7 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_API_KEY',
   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
   'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-  'NEXT_PUBLIC_GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET'
+  'NEXT_PUBLIC_FIREBASE_APP_ID'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -147,17 +145,7 @@ export async function POST(request) {
       );
     }
     
-    if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      return NextResponse.json(
-        { 
-          error: 'Google/Gmail configuration missing',
-          details: 'Missing Google OAuth or Gmail configuration',
-          code: 'CONFIG_ERROR'
-        },
-        { status: 500, headers }
-      );
-    }
-    
+    // No Google client id/secret needed here: the browser sends the user's Gmail access token (from Firebase sign-in) and it is used as is.
     const payload = await request.json();
     const { accessToken, senderName, attachments = [] } = payload;
     const email = String(payload.email || '').trim().toLowerCase();

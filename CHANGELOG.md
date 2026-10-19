@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 23 - more of it runs on the Firebase packages
+- **Gmail permission through Firebase sign-in.** The dashboard now asks for the Gmail permission with Firebase Auth (`reauthenticateWithPopup` with the gmail.send / gmail.readonly scopes), so sending and reading replies no longer need a separate Google client id or secret. The token is kept in memory for 50 minutes (fewer pop-up windows). If the Sender email setting is a DIFFERENT Gmail than you signed in with, Google's own script is loaded on demand as before (needs `NEXT_PUBLIC_GOOGLE_CLIENT_ID`), because Firebase cannot grant a token for another account. `send-followup` no longer refuses to run without a client id and secret. They are only needed for the automatic overnight Gmail features.
+- **Logins verified with firebase-admin.** `lib/server-auth.js` checks the ID token locally with `firebase-admin` (needs only `NEXT_PUBLIC_FIREBASE_PROJECT_ID`) and falls back to Google's lookup call. Trade-off: a Firebase account you DISABLE keeps working until its token expires (at most 1 hour) when the local check accepts it.
+- **Easier server credentials.** `FIREBASE_SERVICE_ACCOUNT_JSON` is read as downloaded, on one line, wrapped in quotes or as base64 (`lib/service-account.js`). A damaged or incomplete key is reported at start-up with the reason, and a key from a different Firebase project than the web app is flagged. On Google's own hosting (or with `GOOGLE_APPLICATION_CREDENTIALS`) no key is needed: firebase-admin uses Application Default Credentials.
+- The connection check's Gmail line now tests the Firebase web config; the client id/secret only affect an optional "automatic Gmail" note.
+- Tests: `service-account` (7).
+
 ## Pass 22 - connection check: clearer database error, no false alarm for phone calls
 - **Database check** now recognises "16 UNAUTHENTICATED / invalid authentication credentials" and says what it means (the service-account key was read but Google rejected it: deleted, disabled, wrong project, or damaged when pasted) and how to replace it. Before, it suggested checking unrelated variables.
 - **Call webhook protection** no longer shows red when Twilio is not configured (it only matters if phone calls are used).

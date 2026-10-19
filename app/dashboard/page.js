@@ -46,6 +46,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  reauthenticateWithPopup,
   onAuthStateChanged,
   signOut,
   updateProfile,
@@ -174,7 +175,6 @@ function DashboardComponent() {
   // ============================================================================
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
-  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [authError, setAuthError] = useState(null);
   const router = useRouter();
 
@@ -2404,34 +2404,6 @@ function DashboardComponent() {
   const safeFollowUpDisabledReason = useMemo(() => getSafeFollowUpDisabledReason(), [isSending, safeFollowUpCandidates]);
 
   // ============================================================================
-  // GOOGLE OAUTH SCRIPT LOADER
-  // ============================================================================
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (window.google?.accounts?.oauth2?.initTokenClient) {
-      setIsGoogleLoaded(true);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.onload = () => setIsGoogleLoaded(true);
-    script.onerror = () => {
-      console.error("Failed to load Google OAuth script");
-      addNotification("Failed to load Google OAuth. Please refresh.", "error");
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
-    };
-  }, []);
-
-  // ============================================================================
   // AUTH STATE LISTENER
   // ============================================================================
   useEffect(() => {
@@ -3896,44 +3868,71 @@ function DashboardComponent() {
   // ============================================================================
   // REQUEST GMAIL OAUTH TOKEN
   // ============================================================================
-  const requestGmailToken = () => {
-    return new Promise((resolve, reject) => {
-      if (typeof window === "undefined") {
-        reject("Browser only");
-        return;
-      }
+  // Gmail permission comes from Firebase sign-in (the same Google account you signed in with): no separate Google client id or
+  // secret is needed. The token lasts an hour, so it is kept in memory for 50 minutes instead of opening a window for every action.
+  // Only when you send from a DIFFERENT Gmail than you signed in with (Sender email setting) does Google's own script step in,
+  // because Firebase cannot grant a token for another account; that path needs NEXT_PUBLIC_GOOGLE_CLIENT_ID.
+  const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly"];
+  const gmailTokenRef = useRef({ token: "", key: "", exp: 0 });
 
+  const requestGmailTokenViaGoogle = (hint) =>
+    new Promise((resolve, reject) => {
       const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
       if (!clientId) {
-        reject("Google Client ID missing");
+        reject("To send from a different Gmail than you signed in with, set NEXT_PUBLIC_GOOGLE_CLIENT_ID. Or clear the Sender email setting to use your signed-in Gmail.");
         return;
       }
-
-      if (!window.google?.accounts?.oauth2) {
-        reject("Google OAuth not loaded");
-        return;
-      }
-
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope:
-          "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
-        callback: (res) => {
-          if (res.access_token) {
-            resolve(res.access_token);
-          } else {
-            reject("No access token received");
-          }
-        },
-        error_callback: (err) => {
-          reject(err.message || "OAuth error");
-        },
-        ...(senderEmail ? { login_hint: senderEmail } : {}),
-      });
-
-      client.requestAccessToken();
+      const start = () => {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: GMAIL_SCOPES.join(" "),
+          callback: (res) => (res.access_token ? resolve(res.access_token) : reject("No access token received")),
+          error_callback: (err) => reject(err.message || "OAuth error"),
+          ...(hint ? { login_hint: hint } : {}),
+        });
+        client.requestAccessToken();
+      };
+      if (window.google?.accounts?.oauth2?.initTokenClient) return start();
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.onload = start;
+      script.onerror = () => reject("Google OAuth could not load. Please refresh.");
+      document.head.appendChild(script);
     });
+
+  const requestGmailToken = async () => {
+    if (typeof window === "undefined") throw "Browser only";
+    const current = auth?.currentUser;
+    if (!current) throw "Please sign in first";
+
+    const wanted = String(senderEmail || "").trim().toLowerCase();
+    const mine = String(current.email || "").trim().toLowerCase();
+    const sameAccount = !wanted || wanted === mine;
+    const key = `${current.uid}|${sameAccount ? "me" : wanted}`;
+    const cached = gmailTokenRef.current;
+    if (cached.token && cached.key === key && cached.exp > Date.now()) return cached.token;
+
+    let token = "";
+    if (sameAccount) {
+      const provider = new GoogleAuthProvider();
+      GMAIL_SCOPES.forEach((sc) => provider.addScope(sc));
+      if (mine) provider.setCustomParameters({ login_hint: mine });
+      try {
+        const result = await reauthenticateWithPopup(current, provider);
+        token = GoogleAuthProvider.credentialFromResult(result)?.accessToken || "";
+      } catch (err) {
+        if (err?.code === "auth/popup-blocked") throw "Your browser blocked the Google window. Allow pop-ups for this site and try again.";
+        if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") throw "Gmail permission was not granted";
+        if (err?.code === "auth/user-mismatch") throw "Please choose the same Google account you signed in with.";
+        throw err?.message || "Google sign-in failed";
+      }
+    } else {
+      token = await requestGmailTokenViaGoogle(wanted);
+    }
+    if (!token) throw "No access token received";
+    gmailTokenRef.current = { token, key, exp: Date.now() + 50 * 60 * 1000 };
+    return token;
   };
 
   // ============================================================================

@@ -5,12 +5,12 @@ Do these in order. The order matters: step 3 before step 4.
 1. **Create the Firebase project.** Enable Authentication (Google provider) and Firestore.
    Add your production domain under Authentication > Settings > Authorized domains.
 2. **Create a service account key** (Project settings > Service accounts) and set
-   `FIREBASE_SERVICE_ACCOUNT_JSON` on your host. Copy every other variable from `.env.example`.
+   `FIREBASE_SERVICE_ACCOUNT_JSON` on your host (the JSON as downloaded, on one line, in quotes or as base64 all work; on Google's own hosting you can skip it). Copy every other variable from `.env.example`.
 3. **Deploy the app** (`vercel --prod` or your host) and open `/api/health`: it must answer `{"status":"ok"}`.
 4. **Deploy the Firestore rules:** `firebase deploy --only firestore:rules`.
    (Doing this before step 2/3 makes the API unable to read the database.)
 5. **Twilio (if used):** the call-status webhook is set by the app itself (see "Phone calls" below). Nothing to configure in the Twilio console for it.
-6. **Google OAuth:** add `https://your-domain.com` as an authorized JavaScript origin, and enable the Gmail API.
+6. **Gmail:** enable the Gmail API in Google Cloud (same project as Firebase) and add the `gmail.send` and `gmail.readonly` scopes on the OAuth consent screen. The permission is requested through Firebase sign-in, so no separate Google client id or secret is needed for sending. (They are only needed for the automatic overnight Gmail features below and for sending from a different Gmail than you signed in with; for those, add `https://your-domain.com` as an authorized JavaScript origin on the OAuth client.)
 7. **Open Account → Run connection check.** Every line should be green except optional ones (AI, Twilio) you do not use. If something is red it tells you exactly what to set.
 8. **Smoke test as a new customer** (5 minutes):
    - Sign in. Open **Account**, fill in "What do you sell?", set a typical deal value, Save.
