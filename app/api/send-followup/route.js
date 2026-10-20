@@ -8,6 +8,7 @@ import { google } from 'googleapis';
 import { headerSafe, pickOriginal, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
 import { fillTemplate } from '../../../lib/server/template-vars.js';
+import { cleanBusinessName } from '../../../lib/lead-name.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -243,7 +244,7 @@ export async function POST(request) {
     const templatesToUse = customTemplates && customTemplates.length > 0 ? customTemplates : FOLLOW_UP_TEMPLATES;
     const template = templatesToUse[followUpIndex] || templatesToUse[templatesToUse.length - 1];
     
-    const vars = { businessName: existingData.businessName || 'Contact', firstName: existingData.contactName || '', senderName: senderName || 'Team' };
+    const vars = { businessName: cleanBusinessName(existingData.businessName, { email: existingData.to || existingData.recipientEmail || existingData.email }) || 'Contact', firstName: existingData.contactName || '', senderName: senderName || 'Team' };
     let subject = fillTemplate(template.subject, vars);
     let body = fillTemplate(template.body, vars);
     

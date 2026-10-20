@@ -1,96 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../../../lib/firebase-client.js';
-import { Sidebar, SidebarItem } from './Sidebar';
-import { Button } from './Button';
-import { useTheme } from './ThemeProvider';
+'use client';
+// Pages keep writing <DashboardLayout title="..." subtitle="...">. The frame itself (sidebar, top bar, avatar, theme button) now
+// lives once in the root layout (app/components/AppShell.js) and stays mounted between pages; this component only hands over the
+// page title. It renders nothing of its own, so a page no longer rebuilds the whole frame every time you open it.
+import React from 'react';
+import { usePageMeta } from '../AppShell';
 
 export const DashboardLayout = ({ children, title, subtitle }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
-  const [initial, setInitial] = useState('');
-  useEffect(() => {
-    if (!auth) return undefined;
-    return onAuthStateChanged(auth, (u) => setInitial(String(u?.displayName || u?.email || '').trim().charAt(0).toUpperCase()));
-  }, []);
-
-  const navigationItems = [
-    { href: '/dashboard', icon: '📊', label: 'Dashboard' },
-    { href: '/business', icon: '💰', label: 'Business Value' },
-    { href: '/inbox', icon: '📥', label: 'Lead Inbox' },
-    { href: '/content', icon: '📣', label: 'Content' },
-    { href: '/conversations', icon: '💬', label: 'Conversations' },
-    { href: '/crm', icon: '💼', label: 'CRM & Deals' },
-    { href: '/customers', icon: '🤝', label: 'Customers' },
-    { href: '/billing', icon: '🧾', label: 'Billing' },
-    { href: '/account', icon: '⚙️', label: 'Account' },
-  ];
-
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)}>
-        {navigationItems.map((item) => (
-          <SidebarItem
-            key={item.href}
-            href={item.href}
-            icon={item.icon}
-            label={item.label}
-            badge={item.badge}
-          />
-        ))}
-      </Sidebar>
-
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top bar */}
-        <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open menu"
-                className="lg:hidden p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <div className="ml-2 lg:ml-0 min-w-0">
-                {title && <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h1>}
-                {subtitle && <p className="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {/* Theme toggle */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-                className="p-2"
-              >
-                {theme === 'light' ? '🌙' : '☀️'}
-              </Button>
-
-              {/* User menu placeholder */}
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">{initial || '?'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Page content */}
-        <main className="p-4 lg:p-8">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  usePageMeta(title, subtitle);
+  return <>{children}</>;
 };
 
 export default DashboardLayout;

@@ -1,11 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
-const NotificationContext = createContext();
+// Two contexts on purpose. The ACTIONS (add / success / error ...) never change, so a page that only shows toasts is not
+// re-rendered when a toast appears or fades away. Only the small container that draws the toasts follows the list.
+// (Before, one object holding the list was handed to every page: each toast re-rendered the whole page it was shown on.)
+const NotificationActions = createContext(null);
+const NotificationList = createContext([]);
 
 export const useNotifications = () => {
-  const context = useContext(NotificationContext);
+  const context = useContext(NotificationActions);
   if (!context) {
     throw new Error('useNotifications must be used within a NotificationProvider');
   }
@@ -14,6 +18,10 @@ export const useNotifications = () => {
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+
+  const removeNotification = useCallback((id) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  }, []);
 
   const addNotification = useCallback((message, type = 'info', duration = 5000) => {
     const id = Date.now() + Math.random();
@@ -28,32 +36,30 @@ export const NotificationProvider = ({ children }) => {
     }
 
     return id;
-  }, []);
+  }, [removeNotification]);
 
-  const removeNotification = useCallback((id) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  }, []);
-
-  const value = {
-    notifications,
+  const actions = useMemo(() => ({
     addNotification,
     removeNotification,
     success: (message, duration) => addNotification(message, 'success', duration),
     error: (message, duration) => addNotification(message, 'error', duration),
     warning: (message, duration) => addNotification(message, 'warning', duration),
     info: (message, duration) => addNotification(message, 'info', duration),
-  };
+  }), [addNotification, removeNotification]);
 
   return (
-    <NotificationContext.Provider value={value}>
-      {children}
-      <NotificationContainer />
-    </NotificationContext.Provider>
+    <NotificationActions.Provider value={actions}>
+      <NotificationList.Provider value={notifications}>
+        {children}
+        <NotificationContainer />
+      </NotificationList.Provider>
+    </NotificationActions.Provider>
   );
 };
 
 const NotificationContainer = () => {
-  const { notifications, removeNotification } = useNotifications();
+  const notifications = useContext(NotificationList);
+  const { removeNotification } = useNotifications();
 
   return (
     <div className="fixed top-4 right-4 z-50 space-y-2">

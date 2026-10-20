@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardHeader, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
 import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
+import { NO_NAME_LABEL } from "../../lib/lead-name.js";
 import { QUAL_FIELDS, qualificationSummary } from "../../lib/deal-extras.js";
 import DraftModal from "./DraftModal";
 
@@ -32,10 +33,13 @@ export const CRM = ({
   onAddNote,
   onScheduleFollowUp,
   onAddLead,
+  onRename,
 }) => {
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
   const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -72,6 +76,7 @@ export const CRM = ({
   }, [leads, leadScores, dealStages, repliedLeads, dealValues, dealQual, dealOwners, defaultDealValue]);
 
   const selectedLead = useMemo(() => crmLeads.find((l) => l.email === selectedEmail) || null, [crmLeads, selectedEmail]);
+  useEffect(() => { setRenaming(false); }, [selectedEmail]); // opening another lead closes the rename box
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -369,9 +374,36 @@ export const CRM = ({
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Company
                 </label>
-                <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                  {selectedLead.company}
-                </p>
+                {renaming ? (
+                  <form
+                    className="mt-1 flex gap-2"
+                    onSubmit={async (ev) => { ev.preventDefault(); const ok = await onRename?.(selectedLead.email, nameDraft); if (ok) setRenaming(false); }}
+                  >
+                    <input
+                      autoFocus
+                      value={nameDraft}
+                      maxLength={120}
+                      onChange={(ev) => setNameDraft(ev.target.value)}
+                      aria-label="Business name"
+                      className="min-h-[44px] w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 text-sm text-gray-900 dark:text-white"
+                    />
+                    <Button type="submit" size="sm">Save</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setRenaming(false)}>Cancel</Button>
+                  </form>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-900 dark:text-white">
+                    {selectedLead.company}
+                    {onRename && (
+                      <button
+                        type="button"
+                        onClick={() => { setNameDraft(selectedLead.company === NO_NAME_LABEL ? "" : selectedLead.company); setRenaming(true); }}
+                        className="ml-2 min-h-[44px] text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        {selectedLead.company === NO_NAME_LABEL ? "Add a name" : "Rename"}
+                      </button>
+                    )}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

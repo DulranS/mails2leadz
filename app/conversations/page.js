@@ -4,8 +4,10 @@
 // the deal, stops the follow-ups to that person and keeps the exchange. Nothing is sent from here.
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, getDoc, setDoc, addDoc, updateDoc, doc, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, setDoc, addDoc, updateDoc, doc, limit } from "../../lib/client-firestore.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put } from "../../lib/swr-cache.js";
+import { getDeals, getConversations, getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { dealDocId, ALL_STAGES, STAGE_LABELS, LOST_REASONS, isClosed } from "../../lib/deal-utils.js";
@@ -18,11 +20,11 @@ const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 r
 const EMPTY = { channel: "whatsapp", email: "", businessName: "", text: "" };
 
 export default function ConversationsPage() {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [deals, setDeals] = useState([]);
-  const [recent, setRecent] = useState([]);
-  const [team, setTeam] = useState([]);
+  const { user, ready: authReady } = useAuthUser();
+  const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|conversations`)) || null);
+  const [deals, setDeals] = useState(snap0?.deals || []);
+  const [recent, setRecent] = useState(snap0?.recent || []);
+  const [team, setTeam] = useState(snap0?.team || []);
   const [owner, setOwner] = useState(""); // "" = leave as it is
   const [f, setF] = useState(EMPTY);
   const [read, setRead] = useState({ busy: false, error: "", result: null });
@@ -33,18 +35,13 @@ export default function ConversationsPage() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
-
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
     try {
       const [d, c, tm] = await Promise.all([
-        getDocs(query(collection(db, "deals"), where("userId", "==", user.uid), limit(2000))),
-        getDocs(collection(db, "users", user.uid, "conversations")).catch(() => ({ docs: [] })),
-        getDoc(doc(db, "users", user.uid, "settings", "team")).catch(() => null),
+        getDeals(db, user.uid),
+        getConversations(db, user.uid).catch(() => ({ docs: [] })),
+        getSettingsDoc(db, user.uid, "team").catch(() => null),
       ]);
       setTeam(tm?.exists?.() ? sanitizeTeam(tm.data().members) : []);
       setDeals(d.docs.map((x) => ({ _id: x.id, ...x.data() })).filter((x) => x.email));
@@ -52,6 +49,7 @@ export default function ConversationsPage() {
     } catch { setError("Could not load your deals. Check your connection and try again."); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (user?.uid && (deals.length || recent.length || team.length)) put(`${user.uid}|page|conversations`, { deals, recent, team }); }, [user?.uid, deals, recent, team]);
 
   const byEmail = useMemo(() => new Map(deals.map((d) => [String(d.email).toLowerCase(), d])), [deals]);
   const existing = byEmail.get(f.email.trim().toLowerCase()) || null;

@@ -38,7 +38,7 @@ function resolveFile(spec, fromFile) {
 /** { names:Set, hasDefault:boolean, stars:string[] } for one file. */
 function exportsOf(file) {
   if (cache.has(file)) return cache.get(file);
-  const info = { names: new Set(), hasDefault: false, stars: [] };
+  const info = { names: new Set(), hasDefault: false, stars: [], open: false };
   cache.set(file, info);
   const src = stripComments(readFileSync(file, 'utf8'));
   let m;
@@ -57,7 +57,11 @@ function exportsOf(file) {
   }
   if (/\bexport\s+default\b/.test(src)) info.hasDefault = true;
   const stars = /\bexport\s*\*\s*(?:as\s+([A-Za-z_$][\w$]*)\s*)?from\s*['"]([^'"]+)['"]/g;
-  while ((m = stars.exec(src))) { if (m[1]) info.names.add(m[1]); else info.stars.push(resolveFile(m[2], file)); }
+  while ((m = stars.exec(src))) {
+    if (m[1]) info.names.add(m[1]);
+    else if (m[2].startsWith('.') || m[2].startsWith('@/')) info.stars.push(resolveFile(m[2], file));
+    else info.open = true; // `export * from 'some-package'`: its names live in node_modules, so any name is accepted here (the build still checks them)
+  }
   return info;
 }
 function hasExport(file, name, seen = new Set()) {
@@ -66,6 +70,7 @@ function hasExport(file, name, seen = new Set()) {
   const info = exportsOf(file);
   if (name === 'default') return info.hasDefault;
   if (info.names.has(name)) return true;
+  if (info.open && name !== 'default') return true;
   return info.stars.some((f) => f && hasExport(f, name, seen));
 }
 

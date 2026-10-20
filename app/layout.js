@@ -8,6 +8,8 @@ import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
 import ReduxProvider from '../components/ReduxProvider';
 import ErrorBoundary from './components/ErrorBoundary';
+import { AuthProvider } from './components/AuthProvider';
+import AppShell from './components/AppShell';
 import { APP_NAME, APP_DESCRIPTION } from '../lib/brand.js';
 
 // A malformed NEXT_PUBLIC_BASE_URL must never take the whole site down.
@@ -36,11 +38,13 @@ export default function RootLayout({ children }) {
           <ReduxProvider>
             <ThemeProvider>
               <NotificationProvider>
-                <ExtensionCleaner />
-                <AuthFetch />
-                <AccessNotice />
-                <ConnectionBanner />
-                {children}
+                <AuthProvider>
+                  <ExtensionCleaner />
+                  <AuthFetch />
+                  <AccessNotice />
+                  <ConnectionBanner />
+                  <AppShell>{children}</AppShell>
+                </AuthProvider>
               </NotificationProvider>
             </ThemeProvider>
           </ReduxProvider>

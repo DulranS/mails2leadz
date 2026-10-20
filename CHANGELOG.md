@@ -1,5 +1,37 @@
 # Changelog
 
+## Pass 29 - revenue is not profit (the one real value gap left)
+Checked every area against "works for any kind of business, even the software itself". Selling, delivering, billing, retention, forecast and unit economics were all there. What was missing: the app knew what you earn, not what you keep. A resale or service business can look great on revenue and lose money.
+- **Delivery cost per customer** (Customers > Details): what it cost you to deliver that deal. 0 means it cost nothing, empty means not entered.
+- **Other monthly costs** (Account): wages, rent, ads, software. Feeds profit and break-even.
+- **Business Value > Profit (last 90 days):** won revenue, gross profit and margin, running costs, net profit, break-even revenue per month, a 30-day profit forecast built on the existing forecast, and deals that cost more than they brought in. Nothing is guessed: it stays hidden until costs exist, says how many wins still lack a cost, and flags estimated deal values.
+- The AI coach now sees profit totals (never names) and judges by margin when it is present.
+- New `lib/profit.js`, 10 tests. Existing data is untouched; deals without a cost simply show as "not entered".
+
+## Pass 28 - download the enriched leads
+- **Lead Inbox: Download as CSV.** Everything the finder, the CSV import or the worker enriched (emails, phones, socials, scores, decision-maker fields) can now be downloaded straight from the web app: the current filter, or only the ticked leads. Same columns the sender's CSV import reads. Before, enriched leads could only go to the sender, not back out as a file.
+- Checked, nothing else to build: in-app Find leads, in-app CSV import and enrichment, nightly searches and the optional Python worker already cover "scrape or import, enrich, deliver" from the web system. Tests and build pass.
+
+## Pass 27 - phone numbers no longer pass as business names; going back and forth between pages no longer reloads everything
+Both reported from real use. The second was fixed in the architecture, not page by page.
+
+**1. A phone number is never a business name.** Scraped lists and map data sometimes carry the phone number in the name field, and it then showed up as the business in CRM & Deals (and in "Hi 0771234567," greetings and on invoices).
+- New `lib/lead-name.js`: recognises phone-like names in any format (not "7 Eleven" or "24/7 Plumbing"), and where it honestly can derives a name from the lead's own website or business e-mail domain ("acme-plumbing.lk" -> "Acme Plumbing"). It never invents one: free-mail, social and link-in-bio hosts give nothing.
+- Applied where names enter: Lead Inbox (finder, CSV import and worker all pass through it), list import, the map finder (next real name tag first), dashboard CSV rows, send-email, send-new-leads, send-followup, AI deal drafts, and deal writes (a phone number is never stored as a deal name).
+- Applied where names are read: CRM, Business Value, Customers, Billing and recurring-revenue numbers show the cleaned name (or the e-mail), so old records that already hold a number are fixed on screen without editing the data. A lead with no usable name shows "Unnamed business".
+- CRM lead details: **Rename / Add a name** next to the company (saved on the deal, which wins everywhere).
+- A genuinely blank name is still treated as nameless (unchanged).
+
+**2. Architecture: stop re-downloading and re-building on every navigation.** Causes found: every page drew its own copy of the sidebar and top bar (thrown away and rebuilt on each navigation), every page started its own sign-in listener and showed a spinner until it answered, and every page downloaded its own copy of the same Firestore collections (the Business page alone up to ~11,000 documents per visit, against the free plan's 50,000 reads/day), then re-rendered from empty. A toast also re-rendered the whole page it appeared on.
+- **One persistent frame.** `app/components/AppShell.js` (root layout) holds the sidebar, top bar, avatar and theme button for the 8 app pages and stays mounted between them. `DashboardLayout` now only hands over the page title, so pages are unchanged. The dashboard keeps its own frame.
+- **One sign-in listener.** `app/components/AuthProvider.js`: no per-page "who is signed in?" wait; switching accounts or signing out empties the cache so data never leaks between accounts.
+- **One shared, cached read layer** (`lib/swr-cache.js`, `lib/client-data.js`): the first page to ask downloads a collection, the others reuse it (60 s for deals / sent emails / invoices / inbox / follow-ups, 2-5 min for the rest); simultaneous asks share one download; a failed download is never kept.
+- **Always fresh after a change.** `lib/client-firestore.js` replaces `firebase/firestore` in all browser code and drops exactly the cache entries a write touches; any server call that may write (send, draft, import...) clears the read cache (`lib/api-writes.js`; read-only calls are exempt).
+- **Instant return.** Each page remembers what it last showed and repaints it at once, refreshing quietly behind it; only the very first visit shows a spinner.
+- **Calmer rendering.** Toasts no longer re-render pages (split notification context); theme and auth values are memoised; the sidebar and top bar are memoised.
+- Tests: `client-cache` (15), `lead-name` (7), `lead-name-wiring` (5). A throwaway harness also server-rendered all 8 pages inside the new frame with fixture data; it caught a real bug (a local variable named `stale` on the Business page shadowed the new cache function), fixed here.
+- Not run in a real browser, and the dashboard (own frame) is still a full switch when you go to or from it; its data was already cached.
+
 ## Pass 26 - the forecast counts what is already under contract; customer value against cost to win (merged with pass 25 below)
 Two parallel v21 builds were compared file by file and combined: they changed different files (pass 25 = closing tools; this pass = business numbers), so nothing was overwritten.
 - **Gap closed: "What to expect" ignored recurring revenue.** The forecast only weighed the open pipeline, so a business with paying subscribers and an empty pipeline was told to expect nothing. Business Value now shows, for 30 / 60 / 90 days, **already committed (monthly recurring revenue still running) + from the pipeline**, with the range. A subscriber whose renewal date passed with no record of them leaving is left out until confirmed (the page says how much that is); the low end assumes customers renewing soon leave, only for the time after their renewal date. A one-off business sees exactly what it saw before.

@@ -3,8 +3,9 @@
 // and AI check-in drafts you send yourself. Health flags always say WHY they are raised.
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, getDoc, doc, limit } from "firebase/firestore";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put } from "../../lib/swr-cache.js";
+import { getDeals, getInvoices, getPendingFollowUps, getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
@@ -14,7 +15,7 @@ import { STAGE_LABELS } from "../../lib/deal-utils.js";
 import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { completeFollowUpTask } from "../../lib/firebase-operations.js";
-import { makeMoney, normalizeCurrency } from "../../lib/currency.js";
+import { makeMoney, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -39,15 +40,16 @@ function Stat({ label, value, hint, tone }) {
 }
 
 export default function CustomersPage() {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, ready: authReady } = useAuthUser(); // shared sign-in: nothing to wait for when coming back to this page
+  // What this page showed last time paints at once; fresh data loads quietly behind it (only the first visit shows a spinner).
+  const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|customers`)) || null);
+  const [loading, setLoading] = useState(!snap0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [deals, setDeals] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [settings, setSettings] = useState({});
-  const [tasks, setTasks] = useState([]); // pending follow-up reminders (post-sale ones get ticked off when you check in)
+  const [deals, setDeals] = useState(snap0?.deals || []);
+  const [invoices, setInvoices] = useState(snap0?.invoices || []);
+  const [settings, setSettings] = useState(snap0?.settings || {});
+  const [tasks, setTasks] = useState(snap0?.tasks || []); // pending follow-up reminders (post-sale ones get ticked off when you check in)
   const [filter, setFilter] = useState("action"); // action | onboarding | healthy | all
   const [open, setOpen] = useState(null); // email of the expanded customer
   const [busy, setBusy] = useState("");
@@ -55,20 +57,18 @@ export default function CustomersPage() {
   const [issueText, setIssueText] = useState("");
   const [reply, setReply] = useState(null); // { email, issueId, plan }
 
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); setLoading(false); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
+  useEffect(() => { if (!auth) setLoading(false); }, []);
 
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
-    setLoading(true); setError("");
+    if (!stale(`${user.uid}|page|customers`)) setLoading(true);
+    setError("");
     try {
       const [dealSnap, invSnap, setSnap, taskSnap] = await Promise.all([
-        getDocs(query(collection(db, "deals"), where("userId", "==", user.uid), limit(2000))),
-        getDocs(query(collection(db, "invoices"), where("userId", "==", user.uid), limit(2000))).catch(() => ({ docs: [] })),
-        getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
-        getDocs(query(collection(db, "users", user.uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
+        getDeals(db, user.uid),
+        getInvoices(db, user.uid).catch(() => ({ docs: [] })),
+        getSettingsDoc(db, user.uid, "business").catch(() => null),
+        getPendingFollowUps(db, user.uid).catch(() => ({ docs: [] })),
       ]);
       setDeals(dealSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       setInvoices(invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
@@ -80,6 +80,8 @@ export default function CustomersPage() {
     } finally { setLoading(false); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  // Keep the saved copy equal to what is on screen (including edits made here), so coming back never flashes older values.
+  useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|customers`, { deals, invoices, settings, tasks }); }, [user?.uid, loading, deals, invoices, settings, tasks]);
 
   const money = makeMoney(normalizeCurrency(settings.currency));
   const data = useMemo(() => computeCustomers({ deals, invoices, avgDealValue: settings.avgDealValue }), [deals, invoices, settings.avgDealValue]);
@@ -101,8 +103,9 @@ export default function CustomersPage() {
   };
 
   // Subscription facts for the customer whose panel is open, and the three things you can do with them.
-  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "" });
+  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "" });
   const saveSub = (c) => saveExtras(c.email, { recurringMonthly: sub.amount === "" ? 0 : sub.amount, renewalAt: sub.renewal || null }, "Subscription saved.");
+  const saveCost = (c) => saveExtras(c.email, { deliveryCost: sub.cost === "" ? null : sub.cost }, sub.cost === "" ? "Delivery cost cleared." : "Delivery cost saved. Business Value now counts it.");
   const markChurned = async (c) => {
     if (!window.confirm(`Mark ${c.businessName || c.email} as churned? The deal stays Won (a customer who leaves is not a lost deal) and their recurring revenue stops counting.`)) return;
     const ok = await saveExtras(c.email, { churn: true, churnReason: sub.reason }, "Marked as churned. You can reactivate them from the list at the bottom.");
@@ -253,7 +256,7 @@ export default function CustomersPage() {
                       <button type="button" disabled={busy === c.email} onClick={() => askCheckin(c)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === c.email ? "Working..." : `Draft check-in`}</button>
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
-                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
+                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })() }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
@@ -305,6 +308,17 @@ export default function CustomersPage() {
                           <button type="button" disabled={!issueText.trim() || busy === c.email} onClick={() => raiseIssue(c)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Add issue</button>
                         </div>
                         {c.overdue && <p className="text-xs text-amber-700 dark:text-amber-300 mt-3">{c.overdue.count} overdue invoice{c.overdue.count === 1 ? "" : "s"}, {money(c.overdue.amount)}. <Link href="/billing" className="underline">Open billing</Link></p>}
+                      </div>
+                      <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">What it cost you to deliver this (so Business Value can show profit, not just revenue)</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">One-off cost: goods bought, contractor, shipping, anything you paid out for this customer ({currencySymbol(settings.currency)})
+                            <input type="number" inputMode="decimal" min="0" step="any" value={sub.email === c.email ? sub.cost : ""} onChange={(e) => setSub({ ...sub, email: c.email, cost: e.target.value })} placeholder="0 if it cost nothing; empty = not entered" className={`${field} mt-1 min-h-[44px]`} />
+                          </label>
+                          <div className="flex items-end">
+                            <button type="button" disabled={busy === c.email} onClick={() => saveCost(c)} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Save cost</button>
+                          </div>
+                        </div>
                       </div>
                       <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Subscription (only if they pay you every month)</h3>

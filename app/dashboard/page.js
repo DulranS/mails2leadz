@@ -41,7 +41,7 @@ import {
   orderBy,
   limit,
   Timestamp,
-} from "firebase/firestore";
+} from "../../lib/client-firestore.js";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -127,6 +127,7 @@ import {
 } from "../../lib/firebase-operations.js";
 import { invalidateCache } from "../../lib/firebase-cache.js";
 import { makeMoney } from "../../lib/currency.js";
+import { cleanBusinessName } from "../../lib/lead-name.js";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -5929,7 +5930,7 @@ function DashboardComponent() {
               const contact = {
                 id: contactId,
                 rowGroupId, // Track which row this came from
-                business: row[businessCol] || "Business",
+                business: cleanBusinessName(row[businessCol], { website: row.website, email }) || "Business",
                 address: row.address || "",
                 phone: formattedPhone,
                 email: email,
@@ -5977,7 +5978,7 @@ function DashboardComponent() {
             const contact = {
               id: contactId,
               rowGroupId,
-              business: row[businessCol] || "Business",
+              business: cleanBusinessName(row[businessCol], { website: row.website, email: emails[0] }) || "Business",
               address: row.address || "",
               phone: formattedPhone,
               email: null,

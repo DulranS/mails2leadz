@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, doc, setDoc, increment } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, doc, setDoc, increment } from '../lib/client-firestore.js';
 import { daysBetween, normalizeContactKey } from '../lib/dashboard-utils.js';
 import { CONFIG } from '../lib/dashboard-config.js';
 

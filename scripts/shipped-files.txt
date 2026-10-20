@@ -51,7 +51,9 @@ app/api/unsubscribe/route.js
 app/billing/page.js
 app/business/page.js
 app/components/AccessNotice.js
+app/components/AppShell.js
 app/components/AuthFetch.js
+app/components/AuthProvider.js
 app/components/AutoBatchModal.js
 app/components/CRM.js
 app/components/ClientLayout.js
@@ -100,7 +102,9 @@ lib/admin-actions.js
 lib/ai-client.js
 lib/angles.js
 lib/api-retry.js
+lib/api-writes.js
 lib/apiResponse.js
+lib/app-routes.js
 lib/attribution.js
 lib/autosend.js
 lib/billing-automation.js
@@ -108,6 +112,8 @@ lib/billing-saas.js
 lib/billing.js
 lib/brand.js
 lib/business-metrics.js
+lib/client-data.js
+lib/client-firestore.js
 lib/config.js
 lib/connection-status.js
 lib/content.js
@@ -136,6 +142,7 @@ lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
 lib/lead-inbox.js
+lib/lead-name.js
 lib/lead-scoring-engine.js
 lib/logger.js
 lib/next-actions.js
@@ -145,6 +152,7 @@ lib/owner-report.js
 lib/phone.js
 lib/plan.js
 lib/post-webhook.js
+lib/profit.js
 lib/rate-limit.js
 lib/raw-email.js
 lib/recurring.js
@@ -196,6 +204,7 @@ lib/server/unsubscribe.js
 lib/service-account.js
 lib/service-health.js
 lib/smart-followup-engine.js
+lib/swr-cache.js
 lib/team.js
 lib/tenant.js
 lib/weekly-kpi.js

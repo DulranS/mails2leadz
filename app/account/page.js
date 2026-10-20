@@ -2,8 +2,10 @@
 // Account: who you are, what you sell (drives the AI), your money settings, and control of your data.
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { onAuthStateChanged, signOut, deleteUser } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { signOut, deleteUser } from "firebase/auth";
+import { doc, setDoc } from "../../lib/client-firestore.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
@@ -19,11 +21,11 @@ const label = "block text-sm font-medium text-gray-700 dark:text-gray-200";
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 
 export default function AccountPage() {
-  const [user, setUser] = useState(null);
-  const [ready, setReady] = useState(false);
+  const { user, ready } = useAuthUser();
   const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
+  const [monthlyOverhead, setMonthlyOverhead] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
@@ -45,20 +47,16 @@ export default function AccountPage() {
   const [check, setCheck] = useState(null); // {ok, checks[]} | {error}
 
   useEffect(() => {
-    if (!auth) { setReady(true); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); });
-  }, []);
-
-  useEffect(() => {
     if (!user?.uid || !db) return;
     (async () => {
       try {
-        const snap = await getDoc(doc(db, "users", user.uid, "settings", "business"));
+        const snap = await getSettingsDoc(db, user.uid, "business");
         if (!snap.exists()) return;
         const d = snap.data();
         if (d.profile) setProfile((p) => ({ ...p, ...d.profile }));
         if (d.avgDealValue) setAvgDealValue(String(d.avgDealValue));
         if (d.monthlyCost) setMonthlyCost(String(d.monthlyCost));
+        if (d.monthlyOverhead) setMonthlyOverhead(String(d.monthlyOverhead));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
@@ -74,7 +72,7 @@ export default function AccountPage() {
   // The people who work the pipeline with you (labels on deals, not logins): loaded and saved as their own small settings document.
   useEffect(() => {
     if (!user?.uid || !db) return;
-    getDoc(doc(db, "users", user.uid, "settings", "team")).then((s) => { if (s.exists()) setTeam((t) => ({ ...t, members: sanitizeTeam(s.data().members) })); }).catch(() => {});
+    getSettingsDoc(db, user.uid, "team").then((s) => { if (s.exists()) setTeam((t) => ({ ...t, members: sanitizeTeam(s.data().members) })); }).catch(() => {});
   }, [user?.uid]);
   const saveTeam = async () => {
     setTeam((t) => ({ ...t, busy: true, msg: "" }));
@@ -245,6 +243,7 @@ export default function AccountPage() {
         profile,
         avgDealValue: Math.max(0, Number(avgDealValue) || 0),
         monthlyCost: Math.max(0, Number(monthlyCost) || 0),
+        monthlyOverhead: Math.max(0, Number(monthlyOverhead) || 0),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
@@ -368,6 +367,7 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="mo">Other monthly costs of running the business ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mo" type="number" min="0" inputMode="decimal" className={field} value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">Wages (include your own if you want it counted), rent, ads, software, transport. Used for profit and break-even in Business Value.</p></div>
           </div>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Compare with hiring an outbound rep (optional)</summary>

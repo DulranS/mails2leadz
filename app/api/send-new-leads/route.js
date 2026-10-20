@@ -7,6 +7,7 @@ import { getFirestore, collection, addDoc, query, where, getDocs } from '../../.
 import { google } from 'googleapis';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
+import { cleanBusinessName } from '../../../lib/lead-name.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -228,7 +229,7 @@ export async function POST(request) {
     
     for (const recipient of recipientsToSend) {
       const email = recipient.email.trim().toLowerCase();
-      const businessName = recipient.business_name || recipient.business || 'Contact';
+      const businessName = cleanBusinessName(recipient.business_name || recipient.business, { website: recipient.website, email }) || 'Contact';
       
       // Render template
       let subject = template.subject;

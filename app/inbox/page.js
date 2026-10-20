@@ -4,8 +4,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, setDoc, doc, limit } from "firebase/firestore";
+import { setDoc, doc } from "../../lib/client-firestore.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put } from "../../lib/swr-cache.js";
+import { getLeadInbox } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { useLeadFinder, FindLeadsPanel } from "../components/FindLeads";
 import { db, auth } from "../../lib/firebase-client.js";
@@ -22,12 +24,12 @@ const QUALITY_CLS = {
 
 export default function InboxPage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, ready: authReady } = useAuthUser();
+  const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|inbox`)) || null);
+  const [loading, setLoading] = useState(!snap0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [leads, setLeads] = useState([]); // status === new
+  const [leads, setLeads] = useState(snap0?.leads || []); // status === new
   const [selected, setSelected] = useState(() => new Set());
   const [filter, setFilter] = useState("HOT"); // HOT | WARM | COLD | email | phone | all
   const [busy, setBusy] = useState(false);
@@ -57,16 +59,13 @@ export default function InboxPage() {
     catch { setFindError("Could not copy automatically. Select the command and copy it by hand."); }
   };
 
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); setLoading(false); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
+  useEffect(() => { if (!auth) setLoading(false); }, []);
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!user?.uid || !db) return;
-    if (!quiet) { setLoading(true); setError(""); }
+    if (!quiet) { if (!stale(`${user.uid}|page|inbox`)) setLoading(true); setError(""); }
     try {
-      const snap = await getDocs(query(collection(db, "lead_inbox"), where("userId", "==", user.uid), limit(3000)));
+      const snap = await getLeadInbox(db, user.uid);
       const all = snap.docs.map((d) => ({ _id: d.id, ...d.data() })).filter((l) => l.status === INBOX_STATUS.NEW);
       all.sort((a, b) => Number(b.lead_quality_score) - Number(a.lead_quality_score));
       setLeads(all);
@@ -77,6 +76,7 @@ export default function InboxPage() {
     } finally { if (!quiet) setLoading(false); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|inbox`, { leads }); }, [user?.uid, loading, leads]);
   const finder = useLeadFinder({ enabled: !!user, onAdded: () => load({ quiet: true }) });
   const finderBusy = finder.running || finder.job.status === "running";
   const placeOk = place.trim().length >= 2;
@@ -107,6 +107,21 @@ export default function InboxPage() {
       setError("Could not hand the leads to the sender. Try a smaller selection.");
       setBusy(false);
     }
+  };
+
+  // Download what is on screen (or only the ticked leads) as an enriched CSV: emails, phones, socials, scores.
+  const exportCsv = () => {
+    const rows = chosen.length ? chosen : shown;
+    if (!rows.length) return;
+    try {
+      const blob = new Blob([leadsToCsv(rows)], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `leads-enriched-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setNotice(`Downloaded ${rows.length} lead${rows.length === 1 ? "" : "s"}.`);
+    } catch { setError("Could not create the file."); }
   };
 
   const dismiss = async () => {
@@ -199,6 +214,7 @@ export default function InboxPage() {
           <button type="button" onClick={selectShown} disabled={!shown.length} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Select these {Math.min(shown.length, MAX_LOAD)}</button>
           <button type="button" onClick={() => setSelected(new Set())} disabled={!selected.size} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Clear</button>
           <span className="flex-1" />
+          <button type="button" onClick={exportCsv} disabled={!shown.length} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{selected.size ? `Download ${selected.size} as CSV` : "Download as CSV"}</button>
           <button type="button" onClick={dismiss} disabled={!selected.size || busy} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Dismiss selected</button>
           <button type="button" onClick={loadIntoSender} disabled={!selected.size || busy} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white`}>{busy ? "Working..." : `Load ${selected.size || ""} into the sender`}</button>
         </div>

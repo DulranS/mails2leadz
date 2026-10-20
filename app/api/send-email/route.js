@@ -11,6 +11,7 @@ import { countToday } from '../../../lib/server/daily-count.js';
 import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
 import { isAngleId } from '../../../lib/angles.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
+import { cleanBusinessName } from '../../../lib/lead-name.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 export const maxDuration = 60;
@@ -278,7 +279,7 @@ export async function POST(request) {
       const recipient = {};
       headers.forEach((header, index) => { recipient[header] = values[index] || ''; });
       
-      const businessName = recipient[fieldMappings?.company || fieldMappings?.business_name || fieldMappings?.businessName || ''];
+      const businessName = cleanBusinessName(recipient[fieldMappings?.company || fieldMappings?.business_name || fieldMappings?.businessName || ''], { website: recipient.website, email: recipient.email });
       const firstName = recipient[fieldMappings?.first_name || fieldMappings?.firstName || ''];
       const lastName = recipient[fieldMappings?.last_name || fieldMappings?.lastName || ''];
       

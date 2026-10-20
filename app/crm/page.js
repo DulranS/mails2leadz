@@ -8,6 +8,10 @@ import { dealDocId, buildDealWrite, normalizeStage, daysQuiet } from "../../lib/
 import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put } from "../../lib/swr-cache.js";
+import { getSentEmails, getContacts, getDeals, getPendingFollowUps, getSettingsDoc } from "../../lib/client-data.js";
+import { pickBusinessName, NO_NAME_LABEL } from "../../lib/lead-name.js";
 
 // Import Firebase functions
 import { initializeApp, getApps, getApp } from "firebase/app";
@@ -23,12 +27,8 @@ import {
   limit,
   getDoc,
   setDoc,
-} from "firebase/firestore";
-import {
-  getAuth,
-  onAuthStateChanged,
-  browserLocalPersistence,
-} from "firebase/auth";
+} from "../../lib/client-firestore.js";
+import { getAuth, browserLocalPersistence } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -57,45 +57,25 @@ try {
   console.error("Firebase initialization error:", error);
 }
 
+const EMPTY_CRM = {
+  leads: [], contacts: {}, repliedLeads: {}, leadScores: {}, dealStages: {}, dealValues: {}, dealQual: {}, dealOwners: {}, dealLost: {}, team: [], defaultDealValue: 1000,
+};
+
 export default function CRMPage() {
   const { addNotification } = useNotifications();
-  const [user, setUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [data, setData] = useState({
-    leads: [],
-    contacts: {},
-    repliedLeads: {},
-    leadScores: {},
-    dealStages: {},
-    dealValues: {},
-    dealQual: {},
-    dealOwners: {},
-    dealLost: {},
-    team: [],
-    defaultDealValue: 1000,
-  });
-  const [loading, setLoading] = useState(true);
-
-  // Auth state listener
-  useEffect(() => {
-    if (!auth) {
-      setLoadingAuth(false);
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoadingAuth(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+  const { user, ready } = useAuthUser(); // one shared sign-in listener for the whole app
+  const loadingAuth = !ready;
+  // The last list shown (if any) paints at once on the way back to this page; the fresh one loads quietly behind it.
+  const [data, setData] = useState(() => (user?.uid && stale(`${user.uid}|page|crm`)) || EMPTY_CRM);
+  const [loading, setLoading] = useState(() => !(user?.uid && stale(`${user.uid}|page|crm`)));
 
   useEffect(() => {
     if (user?.uid) {
       loadCRMData();
+    } else if (ready) {
+      setLoading(false);
     }
-  }, [user?.uid]);
+  }, [user?.uid, ready]);
 
   const norm = (e) => String(e || "").trim().toLowerCase();
   const toIso = (v) => {
@@ -104,6 +84,9 @@ export default function CRMPage() {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   };
 
+  // Keep the saved copy equal to what is on screen (including edits made here), so coming back never flashes older values.
+  useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|crm`, data); }, [user?.uid, loading, data]);
+
   const loadCRMData = async () => {
     if (!user?.uid || !db) {
       setLoading(false);
@@ -111,13 +94,14 @@ export default function CRMPage() {
     }
 
     try {
+      // Shared, cached reads (the same copies Business, Customers and Billing use): coming back to this page costs no new downloads.
       const [sentSnap, contactsSnap, dealsSnap, taskSnap, settingsSnap, teamSnap] = await Promise.all([
-        getDocs(query(collection(db, "sent_emails"), where("userId", "==", user.uid), limit(3000))),
-        getDocs(collection(db, "users", user.uid, "contacts")).catch(() => ({ docs: [] })),
-        getDocs(query(collection(db, "deals"), where("userId", "==", user.uid), limit(2000))),
-        getDocs(query(collection(db, "users", user.uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
-        getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
-        getDoc(doc(db, "users", user.uid, "settings", "team")).catch(() => null),
+        getSentEmails(db, user.uid),
+        getContacts(db, user.uid).catch(() => ({ docs: [] })),
+        getDeals(db, user.uid),
+        getPendingFollowUps(db, user.uid).catch(() => ({ docs: [] })),
+        getSettingsDoc(db, user.uid, "business").catch(() => null),
+        getSettingsDoc(db, user.uid, "team").catch(() => null),
       ]);
 
       // ONE row per lead (several emails to the same person used to show as duplicate rows).
@@ -129,10 +113,12 @@ export default function CRMPage() {
         const sentAt = toIso(x.sentAt) || toIso(x.createdAt);
         const prev = byEmail.get(email);
         if (!prev) {
+          // A phone number in a name field is not a name: take the first real one, else the website / e-mail domain, else a plain label.
+          const shown = pickBusinessName([x.recipientName, x.business_name, x.businessName], { website: x.recipientWebsite, email }) || NO_NAME_LABEL;
           byEmail.set(email, {
             id: d.id, email,
-            business: x.recipientName || x.business_name || x.businessName || "Unknown",
-            company: x.business_name || x.businessName || x.recipientName || "Unknown",
+            business: shown,
+            company: shown,
             phone: x.recipientPhone || null, website: x.recipientWebsite || null, industry: x.industry || null,
             sentAt, lastContact: sentAt, replied: x.replied === true, repliedAt: x.repliedAt || null,
             followUpAt: x.followUpAt || null, notes: Array.isArray(x.notes) ? x.notes : [], source: "email",
@@ -167,10 +153,13 @@ export default function CRMPage() {
         if (deal.qualification) dealQual[email] = deal.qualification;
         if (deal.ownerId) dealOwners[email] = deal.ownerId;
         if (dealStages[email] === "closed_lost") dealLost[email] = { reason: deal.lostReason || "", quietDays: daysQuiet(deal, nowMs) };
+        // The deal is the owner's own record (and what "Rename" writes), so a real name there wins over the one on the sent email.
+        const dealName = pickBusinessName([deal.businessName], { email });
+        if (dealName && byEmail.has(email)) { const l = byEmail.get(email); l.business = dealName; l.company = dealName; }
         // A deal with no outreach email (referral, inbound, WhatsApp...) is still a lead.
         if (!byEmail.has(email)) {
           byEmail.set(email, {
-            id: d.id, email, business: deal.businessName || email, company: deal.businessName || email,
+            id: d.id, email, business: dealName || email, company: dealName || email,
             phone: null, website: null, industry: null, sentAt: null, lastContact: toIso(deal.lastUpdate),
             replied: false, repliedAt: null, followUpAt: null, notes: [], source: "deal",
           });
@@ -225,7 +214,9 @@ export default function CRMPage() {
       });
 
       const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
-      setData({ leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, dealLost, team, defaultDealValue });
+      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, dealLost, team, defaultDealValue };
+      put(`${user.uid}|page|crm`, next);
+      setData(next);
     } catch (error) {
       console.error("Error loading CRM data:", error);
       addNotification("Error loading CRM data", "error");
@@ -353,6 +344,31 @@ export default function CRMPage() {
     }
   };
 
+  // Give a lead a proper name (for leads that arrived with only a phone number, or a wrong name). Saved on the deal, which wins everywhere.
+  const handleRename = async (email, name) => {
+    if (!user?.uid || !db) return false;
+    const clean = pickBusinessName([String(name || "").slice(0, 120)], {});
+    if (!clean) {
+      addNotification("Type a business name (a phone number is not a name)", "error");
+      return false;
+    }
+    try {
+      const e = norm(email);
+      await writeDeal(e, { businessName: clean });
+      setData((prev) => ({
+        ...prev,
+        leads: prev.leads.map((l) => (l.email === e ? { ...l, business: clean, company: clean } : l)),
+        dealStages: { ...prev.dealStages, [e]: prev.dealStages[e] || "new" },
+      }));
+      addNotification("Name saved", "success");
+      return true;
+    } catch (error) {
+      console.error("Error renaming lead:", error);
+      addNotification("Could not save the name", "error");
+      return false;
+    }
+  };
+
   // Add a lead that did not come from cold email (referral, inbound, walk-in...).
   const handleAddLead = async ({ email, businessName, stage, value, source }) => {
     if (!user?.uid || !db) return false;
@@ -426,6 +442,7 @@ export default function CRMPage() {
         onAddNote={handleAddNote}
         onScheduleFollowUp={handleScheduleFollowUp}
         onAddLead={handleAddLead}
+        onRename={handleRename}
       />
       <LostReasonModal
         target={lostPrompt}

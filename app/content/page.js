@@ -4,8 +4,10 @@
 // approved developer app, and a person pressing "post" keeps your accounts safe.
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, getDocs, addDoc, setDoc, deleteDoc, doc, query, where, limit } from "firebase/firestore";
+import { collection, addDoc, setDoc, deleteDoc, doc } from "../../lib/client-firestore.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put, load as swrLoad } from "../../lib/swr-cache.js";
+import { getContentPosts, getInboundEnquiries } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import {
@@ -130,10 +132,10 @@ function StatsTable({ title, rows }) {
 }
 
 export default function ContentPage() {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [posts, setPosts] = useState([]);
+  const { user, ready: authReady } = useAuthUser();
+  const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|content`)) || null);
+  const [loading, setLoading] = useState(!snap0);
+  const [posts, setPosts] = useState(snap0?.posts || []);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [today, setToday] = useState("");
@@ -149,31 +151,35 @@ export default function ContentPage() {
   useEffect(() => { const d = localDateStr(); setToday(d); setMDate(d); }, []);
   // The owner's enquiry link (Account → Enquiry form), tagged per platform, so a post can carry it and the enquiry is credited to that platform.
   const [enquiryKey, setEnquiryKey] = useState("");
-  useEffect(() => { if (!user?.uid) return; fetch("/api/inbound-key").then((r) => r.json()).then((d) => setEnquiryKey(d?.key || "")).catch(() => {}); }, [user?.uid]);
+  useEffect(() => {
+    if (!user?.uid) return;
+    // The enquiry key never changes while you browse: ask the server once, reuse it for the rest of the session.
+    swrLoad(`${user.uid}|enquiry-key`, () => fetch("/api/inbound-key").then((r) => r.json()).then((d) => d?.key || ""), { ttlMs: 30 * 60 * 1000 })
+      .then((k) => setEnquiryKey(k || "")).catch(() => {});
+  }, [user?.uid]);
   const linkFor = useCallback((platformId, postId) => (enquiryKey && typeof window !== "undefined" ? withPostTag(`${window.location.origin}/enquire?k=${enquiryKey}&src=${platformId}`, postId) : ""), [enquiryKey]);
   // Enquiries that arrived through a post's own link are counted per post by the app (no typing needed).
   const [credit, setCredit] = useState({});
   useEffect(() => {
     if (!user?.uid || !db) return;
-    getDocs(query(collection(db, "inbound_enquiries"), where("userId", "==", user.uid), limit(1000)))
+    getInboundEnquiries(db, user.uid)
       .then((snap) => setCredit(enquiriesByPost(snap.docs.map((d) => d.data()))))
       .catch(() => {}); // not critical: the page works without the counts
   }, [user?.uid]);
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); setLoading(false); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
+  useEffect(() => { if (!auth) setLoading(false); }, []);
 
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
-    setLoading(true); setError("");
+    if (!stale(`${user.uid}|page|content`)) setLoading(true);
+    setError("");
     try {
-      const snap = await getDocs(postsRef(user.uid));
+      const snap = await getContentPosts(db, user.uid);
       setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) { console.error(e); setError("Could not load your posts. Check your connection and try again."); }
     finally { setLoading(false); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|content`, { posts }); }, [user?.uid, loading, posts]);
 
   const stats = useMemo(() => (today ? summarizeContent(posts, today) : null), [posts, today]);
   const groups = useMemo(() => (today ? groupPosts(posts, today) : { overdue: [], today: [], upcoming: [], done: [] }), [posts, today]);

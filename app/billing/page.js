@@ -3,8 +3,10 @@
 // Records only: the app does not take payments or issue tax invoices. Reminders are AI drafts you approve and send yourself.
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, getDoc, setDoc, addDoc, doc, limit } from "firebase/firestore";
+import { collection, setDoc, addDoc, doc } from "../../lib/client-firestore.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { stale, put } from "../../lib/swr-cache.js";
+import { getDeals, getInvoices, getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
@@ -51,33 +53,31 @@ function Bar({ value, max, label, right, color = "bg-blue-600" }) {
 const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "" };
 
 export default function BillingPage() {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, ready: authReady } = useAuthUser();
+  const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|billing`)) || null);
+  const [loading, setLoading] = useState(!snap0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [invoices, setInvoices] = useState([]);
-  const [deals, setDeals] = useState([]);
-  const [settings, setSettings] = useState({});
+  const [invoices, setInvoices] = useState(snap0?.invoices || []);
+  const [deals, setDeals] = useState(snap0?.deals || []);
+  const [settings, setSettings] = useState(snap0?.settings || {});
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState("");
   const [draft, setDraft] = useState(null); // { invoice, to, title, subject, body, source, note }
   const [filter, setFilter] = useState("open"); // open | paid | all
 
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); setLoading(false); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
+  useEffect(() => { if (!auth) setLoading(false); }, []);
 
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
-    setLoading(true); setError("");
+    if (!stale(`${user.uid}|page|billing`)) setLoading(true);
+    setError("");
     try {
       const [invSnap, dealSnap, setSnap] = await Promise.all([
-        getDocs(query(collection(db, "invoices"), where("userId", "==", user.uid), limit(2000))),
-        getDocs(query(collection(db, "deals"), where("userId", "==", user.uid), limit(2000))),
-        getDoc(doc(db, "users", user.uid, "settings", "business")).catch(() => null),
+        getInvoices(db, user.uid),
+        getDeals(db, user.uid),
+        getSettingsDoc(db, user.uid, "business").catch(() => null),
       ]);
       setInvoices(invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       setDeals(dealSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
@@ -88,6 +88,7 @@ export default function BillingPage() {
     } finally { setLoading(false); }
   }, [user?.uid]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|billing`, { invoices, deals, settings }); }, [user?.uid, loading, invoices, deals, settings]);
 
   const currency = normalizeCurrency(settings.currency);
   const money = makeMoney(currency);

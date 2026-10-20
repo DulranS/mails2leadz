@@ -7,6 +7,8 @@
 import { useEffect } from 'react';
 import { getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { invalidate } from '../../lib/swr-cache.js';
+import { callMayWrite } from '../../lib/api-writes.js';
 
 export default function AuthFetch() {
   useEffect(() => {
@@ -56,6 +58,12 @@ export default function AuthFetch() {
         /* send without a token; the server answers 401 and the user is told to sign in again */
       }
       const response = await original(input, finalInit);
+      // A server call that may have written (send, ingest, draft, import ...) makes the shared read cache stale: drop it, keep the
+      // screens' saved snapshots (they repaint instantly and refresh behind). Reads are untouched.
+      try {
+        const method = finalInit?.method || (typeof input !== 'string' ? input?.method : '') || 'GET';
+        if (callMayWrite(method, url)) invalidate((k) => !k.includes('|page|'));
+      } catch { /* the cache must never break a request */ }
       // Invite-only deployment (ALLOWED_EMAILS): tell the person once, clearly, instead of a wall of failed requests.
       if (response.status === 403) {
         try {

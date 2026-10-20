@@ -3,14 +3,18 @@
 // ROI (what it cost) and AI usage. Everything is computed from the user's own deals.
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "../../lib/client-firestore.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
+import { computeProfit, forecastProfit } from "../../lib/profit.js";
+import { useAuthUser } from "../components/AuthProvider";
+import { pickBusinessName } from "../../lib/lead-name.js";
+import { stale as savedSnapshot, put } from "../../lib/swr-cache.js"; // (aliased: this page has its own "stale" list of stuck deals)
+import { getDeals, getSentEmails, getInvoices, getLeadInbox, getPendingFollowUps, getAiUsage, getAiMonth, getContentPosts, getSettingsDoc } from "../../lib/client-data.js";
 import { computeTemplateStats, computeAngleStats, suggestStageChances } from "../../lib/attribution.js";
 import { computeOutboundPlan } from "../../lib/plan.js";
 import { angleLabel } from "../../lib/angles.js";
@@ -59,25 +63,24 @@ function Bar({ value, max, label, right }) {
   );
 }
 
+const EMPTY_RAW = { inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } };
+
 export default function BusinessValuePage() {
-  const [user, setUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, ready: authReady } = useAuthUser(); // one shared sign-in listener: no spinner on the way back to this page
+  // The last numbers shown (if any) paint at once; the fresh ones load quietly behind them.
+  const snapKey = user?.uid ? `${user.uid}|page|business` : null;
+  const [loading, setLoading] = useState(() => !(snapKey && savedSnapshot(snapKey)));
   const [error, setError] = useState("");
-  const [raw, setRaw] = useState({ inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } });
+  const [raw, setRaw] = useState(() => (snapKey && savedSnapshot(snapKey)) || EMPTY_RAW);
   const [saving, setSaving] = useState("");
   const [showProspects, setShowProspects] = useState(false);
   const [coach, setCoach] = useState(null); // { loading } | { error } | { result }
   const [reportMsg, setReportMsg] = useState("");
 
-  useEffect(() => {
-    if (!auth) { setAuthReady(true); setLoading(false); return; }
-    return onAuthStateChanged(auth, (u) => { setUser(u); setAuthReady(true); });
-  }, []);
-
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
-    setLoading(true); setError("");
+    if (!savedSnapshot(`${user.uid}|page|business`)) setLoading(true); // only the very first visit shows a spinner
+    setError("");
     try {
       const uid = user.uid;
       const since90 = Date.now() - 90 * 86400000;
@@ -86,20 +89,21 @@ export default function BusinessValuePage() {
       // This month + the 2 before it ~ the 90-day ROI window. Exact spend, read from 3 tiny counter docs.
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
+      // Shared, cached reads: Customers, Billing, CRM and this page reuse each other's downloads instead of each fetching their own.
       const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap] = await Promise.all([
-        getDocs(query(collection(db, "deals"), where("userId", "==", uid), limit(2000))),
-        getDocs(query(collection(db, "sent_emails"), where("userId", "==", uid), limit(3000))),
-        getDoc(doc(db, "users", uid, "settings", "business")).catch(() => null),
-        getDoc(doc(db, "ai_usage_monthly", `${uid}_${month}`)).catch(() => null),
-        getDocs(query(collection(db, "ai_usage"), where("userId", "==", uid), limit(1000))).catch(() => ({ docs: [] })),
-        getDocs(query(collection(db, "users", uid, "follow_up_tasks"), where("status", "==", "pending"), limit(500))).catch(() => ({ docs: [] })),
-        getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[1]}`)).catch(() => null),
-        getDoc(doc(db, "ai_usage_monthly", `${uid}_${months[2]}`)).catch(() => null),
-        getDocs(query(collection(db, "invoices"), where("userId", "==", uid), limit(2000))).catch(() => ({ docs: [] })),
-        getDocs(query(collection(db, "lead_inbox"), where("userId", "==", uid), limit(3000))).catch(() => ({ docs: [] })),
-        getDocs(collection(db, "users", uid, "content_posts")).catch(() => ({ docs: [] })),
-        getDoc(doc(db, "users", uid, "settings", "autopilot")).catch(() => null),
-        getDoc(doc(db, "users", uid, "settings", "team")).catch(() => null),
+        getDeals(db, uid),
+        getSentEmails(db, uid),
+        getSettingsDoc(db, uid, "business").catch(() => null),
+        getAiMonth(db, uid, month).catch(() => null),
+        getAiUsage(db, uid).catch(() => ({ docs: [] })),
+        getPendingFollowUps(db, uid).catch(() => ({ docs: [] })),
+        getAiMonth(db, uid, months[1]).catch(() => null),
+        getAiMonth(db, uid, months[2]).catch(() => null),
+        getInvoices(db, uid).catch(() => ({ docs: [] })),
+        getLeadInbox(db, uid).catch(() => ({ docs: [] })),
+        getContentPosts(db, uid).catch(() => ({ docs: [] })),
+        getSettingsDoc(db, uid, "autopilot").catch(() => null),
+        getSettingsDoc(db, uid, "team").catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -112,7 +116,7 @@ export default function BusinessValuePage() {
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
         if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, angle: x.angle || "", replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
-        if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: x.businessName || x.recipientName || x.business_name || "" });
+        if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: pickBusinessName([x.businessName, x.recipientName, x.business_name], { website: x.recipientWebsite, email: to }) });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
         if (t && t < since90) return;
         sent++; if (x.replied) replied++;
@@ -135,14 +139,16 @@ export default function BusinessValuePage() {
       }).length;
       const hotWithEmail = inboxSnap.docs.filter((d) => { const x = d.data(); return x.status === "new" && x.lead_quality === "HOT" && !!x.email; }).length;
       const contentInfo = contentActionInfo(contentSnap.docs.map((d) => d.data()), localDateStr());
-      setRaw({
+      const next = {
         inbox: { hotWithEmail }, content: contentInfo,
         deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         autopilot: autopilotSnap?.exists?.() ? autopilotSnap.data() : null,
         team: teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [],
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
-      });
+      };
+      put(`${uid}|page|business`, next);
+      setRaw(next);
     } catch (e) {
       console.error(e);
       setError("Could not load your numbers. Check your connection and try again.");
@@ -164,6 +170,8 @@ export default function BusinessValuePage() {
   const subsDue = useMemo(() => computeSubscriptionsDue({ deals: raw.deals, invoices: raw.invoices }), [raw]);
   const outlook = useMemo(() => computeOutlook({ metrics: m, recurring: rec, billing }), [m, rec, billing]);
   const unitEco = useMemo(() => computeUnitEconomics({ roi: m.roi, recurring: rec }), [m, rec]);
+  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90 }), [raw]);
+  const profitNext30 = useMemo(() => forecastProfit({ profit, expectedRevenue: outlook.horizons?.[0]?.total, days: 30 }), [profit, outlook]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
   const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
@@ -221,6 +229,7 @@ export default function BusinessValuePage() {
         unbilledCount: unbilled.count, unbilledAmount: unbilled.amount,
         customers: customers.total, atRisk: customers.atRisk.count, stuckOnboarding: customers.stuckOnboarding, openIssues: customers.openIssues,
         weekly: Object.fromEntries(weekly.rows.map((r) => [r.key, { cur: r.cur, prev: r.prev }])),
+        ...(profit.ready ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -442,6 +451,32 @@ export default function BusinessValuePage() {
         )}
 
         {/* FUTURE */}
+        {!loading && (
+          <Card title="Profit (last 90 days)">
+            {profit.ready ? (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <Stat label="Won revenue" value={money(profit.revenue)} hint={`${profit.wins} win${profit.wins === 1 ? "" : "s"}`} />
+                  <Stat label="Gross profit" value={money(profit.grossProfit)} hint={profit.marginPct !== null ? `${profit.marginPct}% margin${profit.complete ? "" : " (costed wins only)"}` : "enter delivery costs to see margin"} />
+                  <Stat label="Running costs" value={money(profit.operating90)} hint={`${money(profit.operatingMonthly)}/month + AI ${money2(profit.aiCost90)}`} />
+                  <Stat label="Net profit" value={money(profit.netProfit90)} hint={`${money(profit.netMonthly)}/month average`} />
+                </div>
+                <ul className="mt-3 space-y-1 text-sm text-gray-800 dark:text-gray-100 list-disc pl-5">
+                  {profit.breakEvenMonthly !== null && <li>You need about <b>{money(profit.breakEvenMonthly)}</b> of won revenue a month just to cover running costs at your current margin.</li>}
+                  {profitNext30 && <li>Next 30 days, if the forecast above holds: about <b>{money(profitNext30.net)}</b> after costs ({money(profitNext30.gross)} gross profit minus {money(profitNext30.running)} running costs).</li>}
+                  {profit.losers.length > 0 && <li>Cost more than they brought in: {profit.losers.slice(0, 3).map((d) => `${d.name} (${money(d.loss)} loss)`).join(", ")}. Reprice or stop selling it that way.</li>}
+                </ul>
+                {profit.notes.length > 0 && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{profit.notes.join(" ")}</p>}
+              </>
+            ) : (
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {profit.wins === 0 ? "Profit appears after your first win. " : ""}
+                Revenue is not profit. Enter what each won customer cost you to deliver (Customers, open a customer) and your other monthly costs (<Link href="/account" className="underline">Account</Link>). Nothing is guessed: the figures stay hidden until you do.
+              </p>
+            )}
+          </Card>
+        )}
+
         <Card title="What to expect (forecast)">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(outlook.any ? outlook.horizons : m.future.horizons.map((h) => ({ days: h.days, total: h.expected, low: h.low, high: h.high }))).map((h) => (
