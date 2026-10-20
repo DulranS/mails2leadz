@@ -37,6 +37,8 @@ BOTH      replies are read when found (opt-out suppressed, positive reply moves 
 | Speed-to-lead on enquiries; activity planner worked back from our own rates | **Built** |
 | Scraping social/LinkedIn, auto-connect, buying lead lists, tracking pixels | **Consciously left out** (platform rules, reputation and legal risk outweigh the gain) |
 | WhatsApp/SMS/call/LinkedIn/Instagram/TikTok replies feeding the pipeline | **Built as a 20-second manual log** (Conversations page: the AI reads the reply, the deal moves forward, the channel is credited). These providers give no automatic reply signal back, so a person logs it |
+| Closing: a written proposal, and re-engaging lost deals | **Built** (CRM: "Draft a proposal" from your notes + qualification + offer + deal value, never a guessed price; "Draft a check-in email" for deals lost on price, timing or silence after 45 days; both are drafts you send yourself) |
+| Forward-looking value: committed recurring revenue + pipeline per 30/60/90 days; lifetime value vs cost to win | **Built** (Business Value; committed money is shown separately from the guess; figures are withheld until the data exists) |
 | Which exact post brought an enquiry | **Built** (every post's link carries its own tag; Content shows "N enquiries from this post" automatically, and the auto-poster sends the same tagged link) |
 | Team members, deal owners, commission report | **Built** (Account > Your team). Separate logins / roles inside one account: **not built** |
 | Compliance-service integrations | **Consciously left out** |

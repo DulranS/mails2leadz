@@ -10,6 +10,7 @@ import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
+import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
 import { computeTemplateStats, computeAngleStats, suggestStageChances } from "../../lib/attribution.js";
 import { computeOutboundPlan } from "../../lib/plan.js";
 import { angleLabel } from "../../lib/angles.js";
@@ -161,6 +162,8 @@ export default function BusinessValuePage() {
   const unbilled = useMemo(() => computeUnbilled({ deals: m.deals, invoices: raw.invoices }), [m, raw]);
   const rec = useMemo(() => computeRecurring({ deals: raw.deals }), [raw]);
   const subsDue = useMemo(() => computeSubscriptionsDue({ deals: raw.deals, invoices: raw.invoices }), [raw]);
+  const outlook = useMemo(() => computeOutlook({ metrics: m, recurring: rec, billing }), [m, rec, billing]);
+  const unitEco = useMemo(() => computeUnitEconomics({ roi: m.roi, recurring: rec }), [m, rec]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
   const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
@@ -441,18 +444,37 @@ export default function BusinessValuePage() {
         {/* FUTURE */}
         <Card title="What to expect (forecast)">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {m.future.horizons.map((h) => (
+            {(outlook.any ? outlook.horizons : m.future.horizons.map((h) => ({ days: h.days, total: h.expected, low: h.low, high: h.high }))).map((h) => (
               <div key={h.days} className="rounded-lg bg-gray-50 dark:bg-gray-900/40 p-3">
                 <div className="text-xs text-gray-500 dark:text-gray-400">Next {h.days} days</div>
-                <div className="text-xl font-bold text-gray-900 dark:text-white">{money(h.expected)}</div>
+                <div className="text-xl font-bold text-gray-900 dark:text-white">{money(h.total)}</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">likely range {money(h.low)} – {money(h.high)}</div>
+                {outlook.any && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{money(h.committed)} already committed + {money(h.pipeline)} from the pipeline</div>}
               </div>
             ))}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
             Confidence: <b>{m.future.confidence}</b> ({m.past.wonCount + m.past.lostCount} closed deals). Recent run-rate from won deals: {money(m.future.monthlyRunRate)}/month.
-            Based on your deals' values and stage chances (editable in <Link href="/account" className="underline">Settings</Link>).
+            {outlook.any
+              ? ` Committed = the ${money(outlook.committedMonthly)}/month your subscribers pay, kept running${outlook.uncertainMonthly > 0 ? ` (${money(outlook.uncertainMonthly)}/month with a passed renewal date is left out until you confirm it)` : ""}; the low end assumes customers renewing soon leave.`
+              : ""}
+            {" "}Pipeline part is based on your deals' values and stage chances (editable in <Link href="/account" className="underline">Settings</Link>).
           </p>
+          {outlook.owed.count > 0 && (
+            <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">
+              Cash already invoiced and waiting: <b>{money(outlook.owed.amount)}</b>{outlook.owed.overdue > 0 ? `, of which ${money(outlook.owed.overdue)} is overdue` : ""}; {money(outlook.owed.dueNext30)} falls due in the next 30 days. It is not added to the numbers above (mostly already counted as revenue).
+            </p>
+          )}
+          {(unitEco.ltvToCost !== null || unitEco.paybackMonths !== null) && (
+            <div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm text-gray-800 dark:text-gray-100">
+              <div className="font-medium">What a customer is worth against what it costs to win one</div>
+              <ul className="mt-1 space-y-0.5 text-xs text-gray-600 dark:text-gray-300">
+                {unitEco.ltvToCost !== null && <li>Lifetime value is <b>{unitEco.ltvToCost}×</b> the cost of winning a customer ({money(unitEco.ltv)} vs {money(unitEco.costPerWin)}){unitEco.ltvCapped ? ", lifetime capped at 5 years" : ""}. {unitEco.verdict === "healthy" ? "Healthy (3× or more)." : unitEco.verdict === "thin" ? "Thin: under 3×, so growth leaves little room for mistakes." : "Losing money on each new customer."}</li>}
+                {unitEco.paybackMonths !== null && <li>A new customer pays their win cost back in about <b>{unitEco.paybackMonths} month{unitEco.paybackMonths === 1 ? "" : "s"}</b> of their monthly fee.</li>}
+                <li>Win cost here = this tool plus AI spend over 90 days, per win. Your own time and any commission are not in it.</li>
+              </ul>
+            </div>
+          )}
         </Card>
 
         {chanceTip && !dismissedTip && (

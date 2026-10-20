@@ -140,6 +140,7 @@ lib/lead-scoring-engine.js
 lib/logger.js
 lib/next-actions.js
 lib/onboarding.js
+lib/outlook.js
 lib/owner-report.js
 lib/phone.js
 lib/plan.js

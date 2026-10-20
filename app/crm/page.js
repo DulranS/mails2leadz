@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
-import { dealDocId, buildDealWrite, normalizeStage } from "../../lib/deal-utils.js";
+import { dealDocId, buildDealWrite, normalizeStage, daysQuiet } from "../../lib/deal-utils.js";
 import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
@@ -70,6 +70,7 @@ export default function CRMPage() {
     dealValues: {},
     dealQual: {},
     dealOwners: {},
+    dealLost: {},
     team: [],
     defaultDealValue: 1000,
   });
@@ -154,6 +155,8 @@ export default function CRMPage() {
       const dealNotes = {};
       const dealQual = {};
       const dealOwners = {};
+      const dealLost = {}; // lost deals: why, and how long since the last contact (decides whether a revive draft is offered)
+      const nowMs = Date.now();
       dealsSnap.docs.forEach((d) => {
         const deal = d.data();
         const email = norm(deal.email);
@@ -163,6 +166,7 @@ export default function CRMPage() {
         if (Array.isArray(deal.notes)) dealNotes[email] = deal.notes;
         if (deal.qualification) dealQual[email] = deal.qualification;
         if (deal.ownerId) dealOwners[email] = deal.ownerId;
+        if (dealStages[email] === "closed_lost") dealLost[email] = { reason: deal.lostReason || "", quietDays: daysQuiet(deal, nowMs) };
         // A deal with no outreach email (referral, inbound, WhatsApp...) is still a lead.
         if (!byEmail.has(email)) {
           byEmail.set(email, {
@@ -221,7 +225,7 @@ export default function CRMPage() {
       });
 
       const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
-      setData({ leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, team, defaultDealValue });
+      setData({ leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, dealLost, team, defaultDealValue });
     } catch (error) {
       console.error("Error loading CRM data:", error);
       addNotification("Error loading CRM data", "error");
@@ -415,6 +419,7 @@ export default function CRMPage() {
         dealValues={data.dealValues}
         dealQual={data.dealQual}
         dealOwners={data.dealOwners}
+        dealLost={data.dealLost}
         team={data.team}
         defaultDealValue={data.defaultDealValue}
         onUpdateLead={handleUpdateLead}

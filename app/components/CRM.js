@@ -4,7 +4,7 @@ import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
-import { LEAD_SOURCES } from "../../lib/deal-utils.js";
+import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
 import { QUAL_FIELDS, qualificationSummary } from "../../lib/deal-extras.js";
 import DraftModal from "./DraftModal";
 
@@ -25,6 +25,7 @@ export const CRM = ({
   dealValues = {},
   dealQual = {},
   dealOwners = {},
+  dealLost = {},
   team = [],
   defaultDealValue = 1000,
   onUpdateLead,
@@ -40,16 +41,17 @@ export const CRM = ({
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [closing, setClosing] = useState({ busy: false, error: "", draft: null });
 
-  // AI closing nudge for an open deal. A draft only: it opens in the owner's own email app.
-  const askClosingDraft = async (lead) => {
+  // AI drafts for a deal (next-step email, proposal, or a re-engagement email for a lost deal). A draft only: it opens in the owner's own email app.
+  const askDraft = async (kind, lead, titlePrefix) => {
     setClosing({ busy: true, error: "", draft: null });
     try {
-      const res = await fetch("/api/ai-deal-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "closing", email: lead.email }) });
+      const res = await fetch("/api/ai-deal-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: lead.email }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.success) { setClosing({ busy: false, error: d.error || "Could not create a draft right now.", draft: null }); return; }
-      setClosing({ busy: false, error: "", draft: { lead, to: lead.email, title: `Next step: ${lead.company}`, subject: d.draft.subject, body: d.draft.body, source: d.source } });
+      setClosing({ busy: false, error: "", draft: { lead, to: lead.email, title: `${titlePrefix}: ${lead.company}`, subject: d.draft.subject, body: d.draft.body, source: d.source } });
     } catch { setClosing({ busy: false, error: "Could not reach the server.", draft: null }); }
   };
+  const askClosingDraft = (lead) => askDraft("closing", lead, "Next step");
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -466,9 +468,27 @@ export const CRM = ({
                 <div className="text-sm font-medium text-gray-900 dark:text-white">Move this deal forward</div>
                 <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">The AI writes a short email for the current stage using your notes and qualification. You edit it and send it yourself.</p>
                 {closing.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-1">{closing.error}</p>}
-                <Button size="sm" className="mt-2" loading={closing.busy} disabled={closing.busy} onClick={() => askClosingDraft(selectedLead)}>Draft the next-step email</Button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button size="sm" loading={closing.busy} disabled={closing.busy} onClick={() => askClosingDraft(selectedLead)}>Draft the next-step email</Button>
+                  <Button size="sm" variant="outline" disabled={closing.busy} onClick={() => askDraft("proposal", selectedLead, "Proposal")}>Draft a proposal</Button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A proposal uses only your notes, the qualification answers, what you sell and the deal value. With no real value set, it leaves [price to confirm] for you to fill in.</p>
               </div>
             )}
+
+            {normalizeStage(selectedLead.stage) === "closed_lost" && REVIVABLE_REASONS.includes(dealLost[selectedLead.email]?.reason) && (() => {
+              const lost = dealLost[selectedLead.email];
+              const check = reviveCheck({ stage: "closed_lost", lostReason: lost.reason, quietDays: lost.quietDays });
+              return (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">Worth another look</div>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">This deal was lost for a reason that often changes with time. One light check-in costs almost nothing and is the cheapest lead you will ever work. You edit it and send it yourself.</p>
+                  {closing.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-1">{closing.error}</p>}
+                  {!check.ok && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{check.reason}</p>}
+                  <Button size="sm" className="mt-2" loading={closing.busy} disabled={closing.busy || !check.ok} onClick={() => askDraft("revive", selectedLead, "Check-in")}>Draft a check-in email</Button>
+                </div>
+              );
+            })()}
 
             {/* Notes */}
             <div>
