@@ -72,3 +72,29 @@ assert.deepEqual(nicheEvidenceLines(null), []);
 assert.equal(nicheEvidenceLines(s, { max: 1 }).length, 1);
 
 console.log('niche tests passed');
+
+// ---- profit per kind of business (only from costs the owner entered) ----
+{
+  const em = [...mk(2, 'plumbers'), ...mk(2, 'dentists')];
+  const wonDeal = (value, deliveryCost) => ({ stage: 'closed_won', value, deliveryCost, reached: [] });
+  const deals = new Map([
+    ['plumbers0@x.lk', wonDeal(1000, 400)],
+    ['plumbers1@x.lk', wonDeal(500, null)],     // cost not entered: never guessed
+    ['dentists0@x.lk', wonDeal(800, 0)],         // zero is a real answer
+  ]);
+  const s = computeNicheStats({ emails: em, dealsByEmail: deals });
+  const plumbers = s.rows.find((r) => r.niche === 'plumbers');
+  assert.equal(plumbers.revenue, 1500);
+  assert.equal(plumbers.costedWon, 1);
+  assert.equal(plumbers.profit, 600);          // only the costed win counts toward profit
+  assert.equal(plumbers.marginPct, 60);
+  const dentists = s.rows.find((r) => r.niche === 'dentists');
+  assert.equal(dentists.profit, 800);
+  assert.equal(dentists.marginPct, 100);
+  const none = computeNicheStats({ emails: mk(2, 'roofers'), dealsByEmail: new Map([['roofers0@x.lk', wonDeal(300, null)]]) }).rows[0];
+  assert.equal(none.profit, null);
+  assert.equal(none.marginPct, null);
+  assert.match(nicheEvidenceLines(s).join(' '), /60% margin on the 1 with costs entered/);
+  assert.doesNotMatch(nicheEvidenceLines(computeNicheStats({ emails: mk(2, 'roofers'), dealsByEmail: new Map([['roofers0@x.lk', wonDeal(300, null)]]) })).join(' '), /margin/);
+}
+console.log('niche profit tests passed');

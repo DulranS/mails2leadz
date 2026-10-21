@@ -5,6 +5,7 @@ Two builds started from v23 and changed different parts, so they were merged fil
 - **From build A:** niche learning loop. Category is remembered on every first email, Business Value shows which kind of business replies and buys, and the AI target finder learns from it (`lib/niche.js`, `lib/server/niche-evidence.js`, send routes, autosend, draft queue, ai-targets, dashboard).
 - **From build B:** passes 28 to 30 below: enriched CSV download, profit (delivery cost, monthly costs, margin, break-even, profit forecast) and "Run it on my computer" for the Python worker.
 - Both are on the Business Value page now: the profit panel and the niche table sit side by side.
+- **Where they meet: profit per kind of business.** The niche table gets a Profit column (revenue minus the delivery costs you entered, only for wins that have a cost; never guessed, with "n of m costed" when partial), and the AI target finder is told the margin of niches that produced sales. Pick a niche by what you keep, not what you bill.
 
 ## Pass 30 - start a worker search from the web app
 The Python worker could only be started by typing on your computer. Now the web app can ask for it.
