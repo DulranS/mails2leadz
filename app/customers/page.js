@@ -16,6 +16,8 @@ import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from 
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { completeFollowUpTask } from "../../lib/firebase-operations.js";
 import { makeMoney, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
+import { doc, getDoc, setDoc } from "../../lib/client-firestore.js";
+import { addProofPoint } from "../../lib/sales-kit.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -103,9 +105,32 @@ export default function CustomersPage() {
   };
 
   // Subscription facts for the customer whose panel is open, and the three things you can do with them.
-  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "" });
+  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "", quote: "" });
   const saveSub = (c) => saveExtras(c.email, { recurringMonthly: sub.amount === "" ? 0 : sub.amount, renewalAt: sub.renewal || null }, "Subscription saved.");
   const saveCost = (c) => saveExtras(c.email, { deliveryCost: sub.cost === "" ? null : sub.cost }, sub.cost === "" ? "Delivery cost cleared." : "Delivery cost saved. Business Value now counts it.");
+  const saveQuote = (c) => saveExtras(c.email, { customerQuote: sub.quote }, sub.quote.trim() ? "Saved." : "Cleared.");
+  const addToProof = async (c) => {
+    setBusy(c.email); setError(""); setNotice("");
+    try {
+      const ref = doc(db, "users", user.uid, "settings", "business");
+      const snap = await getDoc(ref);
+      const out = addProofPoint(snap.exists() ? snap.data().proofText : "", sub.quote);
+      if (!out.ok) { setError(out.reason); return; }
+      await setDoc(ref, { proofText: out.text }, { merge: true });
+      setNotice("Added to your proof points. Your next AI emails and replies can cite it.");
+    } catch (e) { console.error(e); setError("Could not add it right now."); }
+    finally { setBusy(""); }
+  };
+  const askFeedback = async (c) => {
+    setBusy(c.email); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/ai-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: c.email, purpose: "feedback_ask", businessName: c.businessName, senderName: user?.displayName || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setError(d.error || "Could not create the message right now."); return; }
+      setDraft({ kind: "feedback", customer: c, to: c.email, title: `How did it go: ${c.businessName || c.email}`, subject: d.draft.subject, body: d.draft.body, source: "ai", note: "Read it as if it came from you. Only mention a result they actually told you about, and only with their OK." });
+    } catch { setError("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
   const markChurned = async (c) => {
     if (!window.confirm(`Mark ${c.businessName || c.email} as churned? The deal stays Won (a customer who leaves is not a lost deal) and their recurring revenue stops counting.`)) return;
     const ok = await saveExtras(c.email, { churn: true, churnReason: sub.reason }, "Marked as churned. You can reactivate them from the list at the bottom.");
@@ -183,7 +208,7 @@ export default function CustomersPage() {
     const c = dr.customer;
     const stepFor = { onboarding: "welcome", delivery_check: "checkin" };
     try {
-      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "referral" ? { referralAsked: true } : {}), ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
+      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "referral" ? { referralAsked: true } : {}), ...(dr.kind === "feedback" ? { feedbackAsked: true } : {}), ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
       if (dr.kind === "checkin") {
         const match = tasks.filter((t) => lower(t.leadEmail) === lower(c.email) && t.followUpStage === c.checkin.purpose);
         for (const t of match) await completeFollowUpTask(user.uid, t.id, { completedBy: user.email, method: "email_manual" }).catch(() => {});
@@ -254,9 +279,10 @@ export default function CustomersPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                       <button type="button" disabled={busy === c.email} onClick={() => askCheckin(c)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === c.email ? "Working..." : `Draft check-in`}</button>
+                      {c.feedback?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askFeedback(c)} title={c.feedback.why} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Ask how it went</button>}
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
-                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })() }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
+                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
@@ -308,6 +334,17 @@ export default function CustomersPage() {
                           <button type="button" disabled={!issueText.trim() || busy === c.email} onClick={() => raiseIssue(c)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Add issue</button>
                         </div>
                         {c.overdue && <p className="text-xs text-amber-700 dark:text-amber-300 mt-3">{c.overdue.count} overdue invoice{c.overdue.count === 1 ? "" : "s"}, {money(c.overdue.amount)}. <Link href="/billing" className="underline">Open billing</Link></p>}
+                      </div>
+                      <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Their result, as proof for future customers</h3>
+                        <label className="block text-xs text-gray-600 dark:text-gray-300">One line, only a result they really got and are happy for you to mention. Never invent or round up.
+                          <input type="text" maxLength={160} value={sub.email === c.email ? sub.quote : ""} onChange={(e) => setSub({ ...sub, email: c.email, quote: e.target.value })} placeholder="Cut no-shows by about a third in the first month" className={`${field} mt-1 min-h-[44px]`} />
+                        </label>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <button type="button" disabled={busy === c.email} onClick={() => saveQuote(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Save note</button>
+                          <button type="button" disabled={busy === c.email || sub.quote.trim().length < 8} onClick={() => addToProof(c)} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Add to my proof points</button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Proof points are the only results the AI may cite in your outreach and replies (3 at most, set in Account).</p>
                       </div>
                       <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">What it cost you to deliver this (so Business Value can show profit, not just revenue)</h3>

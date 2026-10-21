@@ -1,5 +1,11 @@
 # Changelog
 
+## Pass 32 - delight: customers become proof (checked against the inbound/outbound, funnel, lifecycle and 7 Ps frameworks)
+Mapped the app to the standard frameworks (inbound and outbound, attract-convert-nurture-close-expand, awareness to loyalty, inbound automation with opt-out and convert exits, the 7 Ps). Everything was already covered except one link: a happy customer could be asked for a referral, but nobody asked them how it went or turned the answer into proof for outreach.
+- **Customers: \"Ask how it went\"** (AI draft you read and send yourself): offered 14+ days after winning, once the customer is activated, with no open issue and nothing overdue; never more than once every 120 days. No incentives, no pre-written praise, no invented results.
+- **Their result, as proof:** a one-line note per customer (only a result they really got and are happy for you to mention), and \"Add to my proof points\" puts it straight into the three results the AI is allowed to cite in outreach and replies. Limits and duplicates are checked.
+- 4 new tests. Nothing else changed.
+
 ## Pass 31 - two parallel builds combined (best of both)
 Two builds started from v23 and changed different parts, so they were merged file by file (three-way against v23). Nothing was overwritten; the one file both touched (Business Value) merged without conflicts.
 - **From build A:** niche learning loop. Category is remembered on every first email, Business Value shows which kind of business replies and buys, and the AI target finder learns from it (`lib/niche.js`, `lib/server/niche-evidence.js`, send routes, autosend, draft queue, ai-targets, dashboard).
