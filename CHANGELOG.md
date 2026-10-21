@@ -1,5 +1,18 @@
 # Changelog
 
+## Pass 31 - two parallel builds combined (best of both)
+Two builds started from v23 and changed different parts, so they were merged file by file (three-way against v23). Nothing was overwritten; the one file both touched (Business Value) merged without conflicts.
+- **From build A:** niche learning loop. Category is remembered on every first email, Business Value shows which kind of business replies and buys, and the AI target finder learns from it (`lib/niche.js`, `lib/server/niche-evidence.js`, send routes, autosend, draft queue, ai-targets, dashboard).
+- **From build B:** passes 28 to 30 below: enriched CSV download, profit (delivery cost, monthly costs, margin, break-even, profit forecast) and "Run it on my computer" for the Python worker.
+- Both are on the Business Value page now: the profit panel and the niche table sit side by side.
+
+## Pass 30 - start a worker search from the web app
+The Python worker could only be started by typing on your computer. Now the web app can ask for it.
+- **Lead Inbox: "Big search? Run it on my computer".** Type a business and place, press Queue it. Up to 5 waiting at once, cancel any that have not started, status updates on screen, and the inbox reloads when a search finishes.
+- **Worker: `pull` command and menu option 5.** Asks the app what is queued, runs each search exactly like menu option 1, delivers the leads to the Lead Inbox and reports added / already known / failed back to the app. `--loop-minutes N` keeps checking. A request the computer started but never finished (laptop closed) is offered again after 6 hours.
+- Safe by design: the app never connects to your computer. The worker asks, with your existing ingest key. New route `/api/lead-inbox/jobs` (ingest key) and `/api/worker-queue` (signed in); queue stored server-side in `finder_jobs`, so `firestore.rules` needs no change.
+- 7 new JS tests and 5 new worker tests.
+
 ## Pass 29 - revenue is not profit (the one real value gap left)
 Checked every area against "works for any kind of business, even the software itself". Selling, delivering, billing, retention, forecast and unit economics were all there. What was missing: the app knew what you earn, not what you keep. A resale or service business can look great on revenue and lose money.
 - **Delivery cost per customer** (Customers > Details): what it cost you to deliver that deal. 0 means it cost nothing, empty means not entered.
@@ -11,6 +24,16 @@ Checked every area against "works for any kind of business, even the software it
 ## Pass 28 - download the enriched leads
 - **Lead Inbox: Download as CSV.** Everything the finder, the CSV import or the worker enriched (emails, phones, socials, scores, decision-maker fields) can now be downloaded straight from the web app: the current filter, or only the ticked leads. Same columns the sender's CSV import reads. Before, enriched leads could only go to the sender, not back out as a file.
 - Checked, nothing else to build: in-app Find leads, in-app CSV import and enrichment, nightly searches and the optional Python worker already cover "scrape or import, enrich, deliver" from the web system. Tests and build pass.
+
+## Pass 28 (parallel build, merged in pass 31) - last-day audit against the full brief: which KIND of business replies and buys (the learning loop for targeting)
+**Audit result.** Every step of acquisition -> sale -> delivery -> retention -> cash already existed (passes 1-27); Google Maps is gone (OpenStreetMap + CSV import, no key, no card); every AI call goes through the one DeepSeek-first client; the finder, the CSV enrichment and the Python worker all run from the app or alongside it. One real gap remained in the "war chest": the app measured which message angle, template, channel and source work, but **not which kind of business** (plumbers, dentists, ...) replies and buys, so "who should I look for next?" was answered from a guess, not from our own record.
+- **Category is now remembered on every first email** (`sent_emails.category`, cleaned to one short lowercase label by `cleanNiche`; web addresses, phone numbers and junk are dropped, a cell with several categories keeps the first). Stored by every path that sends a first email: the one-lead AI send, the "draft all, approve together" batch, the overnight queue + Autosend (the queue now carries the category), the CSV bulk sender (`category` column) and `send-new-leads`.
+- **Business Value -> "Which kind of business replies and buys"**: per niche, emailed -> replied -> real chats -> won -> revenue. Counted once per lead under the category of their first email; a reply to any later email counts. A niche is labelled "too few yet" under 10 leads; a verdict (8+ points of reply rate ahead of the next niche, two niches with 10+ leads) is only shown when the data supports it; leads with no category are counted and stated, not guessed.
+- **"Who should I look for?" now learns from it.** The AI target finder is given our own per-niche results (niches with a sale or with 10+ emails; four emails and no reply is not evidence) and told to rank by them and to quote only those numbers. No results yet = the prompt is exactly what it was.
+- **Side fix:** the single-lead AI send did not record its message angle (so it was missing from the angle test); it does now.
+- Code: `lib/niche.js` (pure), `lib/server/niche-evidence.js`, `app/business/page.js`, `app/api/ai-targets/route.js`, the send routes, `lib/server/autosend.js`, `lib/server/prepare-drafts.js`, `lib/draft-queue.js`, `app/dashboard/page.js`. Cost: nothing extra (arithmetic on rows already loaded; the target finder prompt grows by up to 5 short lines).
+- Tests: `niche` (cleaning, per-lead counting, qualified/won/revenue, verdict rules, uncategorised count, evidence lines). The test caught a real bug while writing it (a web address was being cut at the "/" and kept as "https"). Import check OK, 271 files parse.
+- **Not run:** `next build` and the suites that import Firebase / Stripe / Next (the package registry is blocked in the build sandbox), and nothing against a live Firebase. Run `npm test` and `npm run build` on your machine before deploying.
 
 ## Pass 27 - phone numbers no longer pass as business names; going back and forth between pages no longer reloads everything
 Both reported from real use. The second was fixed in the architecture, not page by page.

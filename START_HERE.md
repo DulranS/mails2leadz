@@ -25,6 +25,9 @@ Double-click `worker/run.bat` (or run `python autoleads_worker.py` with no words
     2  Use MY OWN CSV: drag the file in; it shows what it understood, reads the websites, adds the good leads to your Lead Inbox
     3  Run my daily routine now
     4  Tools: set up, test connections, see the plan or results
+    5  Run the searches I queued in the app (see below)
+
+**Starting a worker search from the web app.** In Lead Inbox, open "Big search? Run it on my computer", type the business and place, press Queue it. Later, on your computer, double-click `worker/run.bat` and choose 5 (or run `python autoleads_worker.py pull`; add `--loop-minutes 30` to keep checking while the window stays open). The worker runs the search, adds the leads to your Lead Inbox and the app shows how many were added. The app never reaches into your computer: the worker asks the app what is waiting, using the same ingest key as everything else.
 
 Each typed search gets its own folder (`worker/searches/<date>_<what>-<where>/`) and is remembered, so the same business is never handed to you twice. It does not touch your saved daily routine unless you answer yes to "repeat this search every morning". The schedule itself is unchanged: it runs `run` on its own and never shows the menu.
 
@@ -52,6 +55,7 @@ It understands the usual columns (business_name or name, phone or whatsapp_numbe
 
 ## Handy commands (all optional)
     python autoleads_worker.py run        run now
+    python autoleads_worker.py pull       run the searches you queued in the app
     python autoleads_worker.py plan       what the next run would do, calls nothing
     python autoleads_worker.py status     budget used, best searches
     python autoleads_worker.py check      test the map servers, the AutoLeads connection and the webhook

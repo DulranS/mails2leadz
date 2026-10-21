@@ -10,6 +10,7 @@ import { stale, put } from "../../lib/swr-cache.js";
 import { getLeadInbox } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { useLeadFinder, FindLeadsPanel } from "../components/FindLeads";
+import WorkerQueue from "../components/WorkerQueue";
 import { db, auth } from "../../lib/firebase-client.js";
 import { INBOX_STATUS, INBOX_HANDOFF_KEY, summarizeInbox, leadsToCsv } from "../../lib/lead-inbox.js";
 
@@ -146,6 +147,8 @@ export default function InboxPage() {
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
 
         <FindLeadsPanel finder={finder} place={place} setPlace={setPlace} />
+
+        <WorkerQueue enabled={!!user} onFinished={() => load({ quiet: true })} />
 
         <section className={card} aria-labelledby="targets-title">
           <div className="flex items-center justify-between gap-2">

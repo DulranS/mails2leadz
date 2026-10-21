@@ -30,6 +30,7 @@ app/api/health/route.js
 app/api/inbound-key/route.js
 app/api/inbound/route.js
 app/api/lead-inbox/ingest/route.js
+app/api/lead-inbox/jobs/route.js
 app/api/lead-inbox/key/route.js
 app/api/list-sent-leads/route.js
 app/api/list-whatsapp-contacts/route.js
@@ -48,6 +49,7 @@ app/api/system-check/route.js
 app/api/tenant/route.js
 app/api/track-company/route.js
 app/api/unsubscribe/route.js
+app/api/worker-queue/route.js
 app/billing/page.js
 app/business/page.js
 app/components/AccessNotice.js
@@ -63,6 +65,7 @@ app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
 app/components/FindLeads.js
 app/components/LegalPage.js
+app/components/WorkerQueue.js
 app/components/ui/Button.js
 app/components/ui/Card.js
 app/components/ui/DashboardLayout.js
@@ -146,6 +149,7 @@ lib/lead-name.js
 lib/lead-scoring-engine.js
 lib/logger.js
 lib/next-actions.js
+lib/niche.js
 lib/onboarding.js
 lib/outlook.js
 lib/owner-report.js
@@ -189,6 +193,7 @@ lib/server/inbox-store.js
 lib/server/ingest-key.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
+lib/server/niche-evidence.js
 lib/server/owner-report.js
 lib/server/prepare-drafts.js
 lib/server/queue-checks.js
@@ -201,6 +206,7 @@ lib/server/tenant-guard.js
 lib/server/tenant.js
 lib/server/token-vault.js
 lib/server/unsubscribe.js
+lib/server/worker-queue-store.js
 lib/service-account.js
 lib/service-health.js
 lib/smart-followup-engine.js
@@ -209,3 +215,4 @@ lib/team.js
 lib/tenant.js
 lib/weekly-kpi.js
 lib/worker-categories.js
+lib/worker-queue.js

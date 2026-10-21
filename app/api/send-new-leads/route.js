@@ -8,6 +8,7 @@ import { google } from 'googleapis';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
+import { nicheFields } from '../../../lib/niche.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -283,7 +284,8 @@ export async function POST(request) {
           lastFollowUpSentAt: null,
           followUpDates: [],
           messageId: response.data.id,
-          threadId: response.data.threadId
+          threadId: response.data.threadId,
+          ...nicheFields(recipient.category || recipient.Category || recipient.business_category || ''),
         });
         
         sentCount++;

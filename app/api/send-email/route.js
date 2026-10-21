@@ -12,6 +12,7 @@ import { fillTemplate, resolveSenderName } from '../../../lib/server/template-va
 import { isAngleId } from '../../../lib/angles.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
+import { nicheFields } from '../../../lib/niche.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 export const maxDuration = 60;
@@ -173,6 +174,7 @@ export async function POST(request) {
       userId: claimedUserId,
       csvSource,
       angle: angleInput,
+      category: categoryInput,
       senderName: typedSenderName,
     } = requestData;
     const who = identify(request, claimedUserId);
@@ -330,8 +332,10 @@ export async function POST(request) {
           threadId: response.data.threadId,
           csvSource: csvSource || 'unknown',
           ...(angle ? { angle } : {}),
+          // The kind of business this lead is (Business Value: which niches reply and buy). Typed on the request, or the CSV row's own category column.
+          ...nicheFields(categoryInput || recipient.category || recipient.Category || recipient.business_category || ''),
         };
-        
+
         await addDoc(collection(db, 'sent_emails'), emailData);
 
         successCount++;

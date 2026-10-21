@@ -4656,6 +4656,7 @@ function DashboardComponent() {
           contactEmail: contact.email,
           userId: user.uid,
           senderName,
+          ...(contact.category ? { category: contact.category } : {}),
         }),
       });
       const data = await response.json();
@@ -4671,6 +4672,7 @@ function DashboardComponent() {
         subject: data.draft.subject,
         body: data.draft.body,
         angle: data.angle,
+        angleId: data.angleId || "",
         reasons: data.reasons || [],
         busy: false,
       });
@@ -4711,6 +4713,8 @@ function DashboardComponent() {
           templateToSend: "A",
           userId: user.uid,
           csvSource: "ai_draft",
+          ...(aiDraft.angleId ? { angle: aiDraft.angleId } : {}), // the single-lead path now joins the message-angle test too
+          ...(contact.category ? { category: contact.category } : {}),
         }),
       });
       const data = await res.json();
@@ -4782,7 +4786,7 @@ function DashboardComponent() {
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok && data.success) {
-              items.push({ id: c.email, email: c.email, business: c.business, quality: c.quality, subject: data.draft.subject, body: data.draft.body, selected: true, state: "draft", ...(data.angleId ? { angleId: data.angleId } : {}) });
+              items.push({ id: c.email, email: c.email, business: c.business, quality: c.quality, subject: data.draft.subject, body: data.draft.body, selected: true, state: "draft", ...(data.angleId ? { angleId: data.angleId } : {}), ...(c.category ? { category: c.category } : {}) });
             } else if (["NO_PROFILE", "AI_DAILY_LIMIT", "AI_BUDGET", "AI_NOT_CONFIGURED", "AI_AUTH"].includes(data.code) || res.status >= 500) {
               stopReason = data.error || "The AI is not available right now.";
             } else {
@@ -4839,6 +4843,7 @@ function DashboardComponent() {
               userId: user.uid,
               csvSource: "ai_batch",
               ...(it.angleId ? { angle: it.angleId } : {}), // which message angle this email tested (Business Value shows which one gets replies)
+              ...(it.category ? { category: it.category } : {}), // which kind of business this lead is (Business Value shows which niches reply and buy)
             }),
           });
           const data = await res.json().catch(() => ({}));
@@ -5937,6 +5942,7 @@ function DashboardComponent() {
                 allEmails: emails, // Store all emails from this row
                 emailIndex: index, // Position in the email list
                 place_id: row.place_id || "",
+                category: row.category || "",
                 website: row.website || "",
                 instagram: row.instagram || "",
                 twitter: row.twitter || "",
@@ -5984,6 +5990,7 @@ function DashboardComponent() {
               email: null,
               allEmails: [],
               place_id: row.place_id || "",
+              category: row.category || "",
               website: row.website || "",
               instagram: row.instagram || "",
               twitter: row.twitter || "",

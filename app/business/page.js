@@ -18,6 +18,7 @@ import { getDeals, getSentEmails, getInvoices, getLeadInbox, getPendingFollowUps
 import { computeTemplateStats, computeAngleStats, suggestStageChances } from "../../lib/attribution.js";
 import { computeOutboundPlan } from "../../lib/plan.js";
 import { angleLabel } from "../../lib/angles.js";
+import { computeNicheStats } from "../../lib/niche.js";
 import { buildNextActions } from "../../lib/next-actions.js";
 import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
@@ -114,7 +115,7 @@ export default function BusinessValuePage() {
       sentSnap.docs.forEach((d) => {
         const x = d.data();
         const to = String(x.to || x.recipientEmail || "").toLowerCase();
-        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, angle: x.angle || "", replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
+        if (to) emailRows.push({ to, template: x.template, abTest: x.abTest, angle: x.angle || "", category: x.category || "", replied: !!x.replied, repliedAt: x.repliedAt || null, t: toMs(x.sentAt) ?? toMs(x.createdAt) ?? 0 });
         if (x.replied && to) repliedEmails.add(to);
         if (x.replied && to && !engaged.has(to) && !unconvertedMap.has(to)) unconvertedMap.set(to, { email: to, business: pickBusinessName([x.businessName, x.recipientName, x.business_name], { website: x.recipientWebsite, email: to }) });
         const t = toMs(x.sentAt) ?? toMs(x.createdAt);
@@ -160,6 +161,7 @@ export default function BusinessValuePage() {
   const m = useMemo(() => computeBusinessMetrics({ deals: raw.deals, outreach: raw.outreach, settings: raw.settings, aiCostUsd: raw.ai.cost90, emailed: (raw.emailRows || []).map((r) => r.to) }), [raw]);
   const tplStats = useMemo(() => computeTemplateStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])) }), [raw, m]);
   const angleStats = useMemo(() => computeAngleStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])), labelOf: angleLabel }), [raw, m]);
+  const nicheStats = useMemo(() => computeNicheStats({ emails: raw.emailRows || [], dealsByEmail: new Map((m.deals || []).map((d) => [String(d.email).toLowerCase(), d])) }), [raw, m]);
   const plan = useMemo(() => computeOutboundPlan({ emailRows: raw.emailRows || [], deals: m.deals || [], goal: Number(raw.settings?.monthlyGoal) || 0, avgDealValue: m.settings.avgDealValue }), [raw, m]);
   const chanceTip = useMemo(() => suggestStageChances({ deals: raw.deals || [], current: m.settings.probabilities }), [raw, m]);
   const [dismissedTip, setDismissedTip] = useState(false);
@@ -553,6 +555,22 @@ export default function BusinessValuePage() {
             </div>
             <p className="text-sm mt-2 text-gray-800 dark:text-gray-100">{angleStats.verdict ? <><b>{angleStats.verdict.label}</b> is ahead by {angleStats.verdict.gapPoints} points of reply rate. You can lean on it in Account → Your business → "Lean on this angle".</> : `Too early to call: it needs ${angleStats.minPerAngle}+ leads on at least two angles and a clear gap.`}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Each lead is given an angle evenly, so this is a fair comparison. Replies are the signal; sales per angle are too few to judge. A hint, not proof.</p>
+          </Card>
+        )}
+
+        {nicheStats.active && (
+          <Card title="Cold email: which kind of business replies and buys">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Kind of business</th><th className="py-1 text-right">Emailed</th><th className="py-1 text-right">Replied</th><th className="py-1 text-right">Reply rate</th><th className="py-1 text-right">Real chats</th><th className="py-1 text-right">Won</th><th className="py-1 text-right">Revenue</th></tr></thead>
+                <tbody>{nicheStats.rows.slice(0, 12).map((r) => (
+                  <tr key={r.niche} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5 capitalize">{r.niche}{!r.enough && <span className="text-xs text-gray-500 normal-case"> (too few yet)</span>}</td><td className="py-1.5 text-right">{r.leads}</td><td className="py-1.5 text-right">{r.replied}</td><td className="py-1.5 text-right">{r.replyRate === null ? "n/a" : `${Math.round(r.replyRate * 100)}%`}</td><td className="py-1.5 text-right">{r.qualified}</td><td className="py-1.5 text-right">{r.won}</td><td className="py-1.5 text-right">{r.revenue > 0 ? money(r.revenue) : "—"}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <p className="text-sm mt-2 text-gray-800 dark:text-gray-100">{nicheStats.verdict ? <><b className="capitalize">{nicheStats.verdict.niche}</b> replies {nicheStats.verdict.gapPoints} points more often than the next niche. Search more of them (Lead Inbox → "Who should I look for?" now uses this).</> : `Too early to call: it needs ${nicheStats.minPerNiche}+ emails in at least two kinds of business and a clear gap. Revenue and wins show from the first sale.`}</p>
+            {nicheStats.uncategorised > 0 && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{nicheStats.uncategorised} emailed lead{nicheStats.uncategorised === 1 ? " has" : "s have"} no category (older sends, or a list without a category column), so they are not in this table.</p>}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Counted once per lead, under the category of their first email. Replies are the early signal; sales and revenue are the proof. A hint, not proof, until the numbers grow.</p>
           </Card>
         )}
 

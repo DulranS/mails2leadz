@@ -40,6 +40,7 @@ BOTH      replies are read when found (opt-out suppressed, positive reply moves 
 | Closing: a written proposal, and re-engaging lost deals | **Built** (CRM: "Draft a proposal" from your notes + qualification + offer + deal value, never a guessed price; "Draft a check-in email" for deals lost on price, timing or silence after 45 days; both are drafts you send yourself) |
 | Forward-looking value: committed recurring revenue + pipeline per 30/60/90 days; lifetime value vs cost to win | **Built** (Business Value; committed money is shown separately from the guess; figures are withheld until the data exists) |
 | Which exact post brought an enquiry | **Built** (every post's link carries its own tag; Content shows "N enquiries from this post" automatically, and the auto-poster sends the same tagged link) |
+| Which kind of business (niche) replies and buys; the AI target finder ranks by our own results | **Built** (Business Value table; needs about 10 emails per niche before it may call a leader) |
 | Team members, deal owners, commission report | **Built** (Account > Your team). Separate logins / roles inside one account: **not built** |
 | Compliance-service integrations | **Consciously left out** |
 

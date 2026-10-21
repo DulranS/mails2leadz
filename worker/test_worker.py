@@ -16,6 +16,7 @@ import tempfile
 import time
 import unittest
 import unittest.mock
+from unittest import mock
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1660,3 +1661,73 @@ class TargetVocabularyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class PullQueueTests(unittest.TestCase):
+    """"Run it on my computer": the worker asks the app what is queued, runs it, and reports back."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = str(self.tmp / "autoleads.json")
+        Path(self.cfg).write_text(json.dumps({"secrets": {"autoleads_url": "https://app.example", "autoleads_ingest_key": "uid.secret"}}))
+
+    def test_request_becomes_the_same_search_the_menu_runs(self):
+        argv, folder = w._request_argv({"query": "plumbers", "location": "Colombo, Sri Lanka", "requireWebsite": True}, self.cfg, self.tmp)
+        self.assertEqual(argv[0], "find")
+        self.assertIn("plumbers", argv)
+        self.assertEqual(argv[argv.index("--location") + 1], "Colombo, Sri Lanka")
+        self.assertIn("--require-website", argv)
+        self.assertEqual(argv[argv.index("--max-requests") + 1], str(w.MENU_SEARCH_REQUESTS))
+        self.assertEqual(folder.parent.name, "searches")
+        args = w.parse_args(argv)  # it must be a command the worker itself accepts
+        self.assertEqual(args.command, "find")
+        argv2, _ = w._request_argv({"query": "roofers in Leeds, UK", "location": "", "requireWebsite": False}, self.cfg, self.tmp)
+        self.assertNotIn("--location", argv2)
+        self.assertNotIn("--require-website", argv2)
+
+    def test_pull_runs_each_request_and_reports_results(self):
+        calls = []
+
+        async def fake_call(url, key, payload):
+            calls.append(payload)
+            if payload["action"] == "claim":
+                return {"success": True, "requests": [{"id": "r1", "query": "plumbers", "location": "Colombo", "requireWebsite": True},
+                                                      {"id": "r2", "query": "bad", "location": "Nowhere"}]}
+            return {"success": True}
+
+        async def fake_run(req, url, key, cfg, base):
+            return {"status": "done", "added": 4, "skipped": 1, "ready": 5} if req["id"] == "r1" else {"status": "failed", "note": "boom"}
+
+        with mock.patch.object(w, "_jobs_call", fake_call), mock.patch.object(w, "_run_one_request", fake_run), contextlib.redirect_stdout(io.StringIO()):
+            code = asyncio.run(w.run_pull(self.cfg))
+        self.assertEqual(code, 0)
+        done = [c for c in calls if c["action"] == "complete"]
+        self.assertEqual([(c["id"], c["status"]) for c in done], [("r1", "done"), ("r2", "failed")])
+        self.assertEqual(done[0]["added"], 4)
+
+    def test_pull_without_a_connection_explains_what_to_do(self):
+        Path(self.cfg).write_text(json.dumps({"secrets": {}}))
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {}, clear=False), contextlib.redirect_stdout(out):
+            for k in ("AUTOLEADS_URL", "AUTOLEADS_INGEST_KEY"):
+                os.environ.pop(k, None)
+            code = asyncio.run(w.run_pull(self.cfg))
+        self.assertEqual(code, 2)
+        self.assertIn("setup", out.getvalue())
+
+    def test_pull_with_an_empty_queue_says_so_and_exits(self):
+        async def empty(url, key, payload):
+            return {"success": True, "requests": []}
+        out = io.StringIO()
+        with mock.patch.object(w, "_jobs_call", empty), contextlib.redirect_stdout(out):
+            self.assertEqual(asyncio.run(w.run_pull(self.cfg)), 0)
+        self.assertIn("Nothing is waiting", out.getvalue())
+
+    def test_unreachable_app_is_reported_not_crashed(self):
+        async def down(url, key, payload):
+            raise w.ApiError("could not reach the app (offline)")
+        out = io.StringIO()
+        with mock.patch.object(w, "_jobs_call", down), contextlib.redirect_stdout(out):
+            self.assertEqual(asyncio.run(w.run_pull(self.cfg)), 1)
+        self.assertIn("offline", out.getvalue())

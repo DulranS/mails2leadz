@@ -3578,6 +3578,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     p.add_argument("--location", default="", help="Where, e.g. \"Leeds, UK\"")
     p.add_argument("--require-website", action="store_true", help="Only keep businesses that have a website")
 
+    p = sub.add_parser("pull", help="Run the searches you queued in the app (Lead Inbox, Run it on my computer)")
+    _common(p)
+    p.add_argument("--loop-minutes", type=float, default=0, help="Keep checking the queue every N minutes (leave the window open)")
+
     p = sub.add_parser("find", help="One-off: search + crawl + import file for a single query")
     _common(p)
     _search_options(p)
@@ -3649,6 +3653,7 @@ MENU_TEXT = """
   2  Use MY OWN CSV: clean it, read the websites, add to Lead Inbox
   3  Run my daily routine now (the searches saved in autoleads.json)
   4  Tools: set up, test connections, see the plan or results
+  5  Run the searches I queued in the app (Lead Inbox, "Run it on my computer")
   q  Quit
 """
 
@@ -3828,6 +3833,99 @@ def _lead_summary(rows: Sequence[Mapping[str, Any]]) -> str:
     return f"{len(rows)} lead(s) ready: {emails} with an email, {len(rows) - emails} phone-only, {hot} HOT, {owner} with the owner's first name"
 
 
+async def _jobs_call(url: str, key: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """One call to the app's worker queue (same ingest key as the lead delivery). Raises ApiError with a plain message."""
+    endpoint = url.rstrip("/") + "/api/lead-inbox/jobs"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(endpoint, json=payload, headers={"Authorization": f"Bearer {key}"},
+                                    timeout=aiohttp.ClientTimeout(total=45)) as resp:
+                data = await resp.json(content_type=None)
+                if resp.status == 200 and isinstance(data, dict) and data.get("success"):
+                    return data
+                raise ApiError(f"the app said {resp.status}: {(data or {}).get('error', 'unknown error') if isinstance(data, dict) else 'unknown error'}")
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+        raise ApiError(f"could not reach the app ({exc})") from exc
+
+
+def _request_argv(req: Mapping[str, Any], cfg_path: str, base_dir: Path) -> Tuple[List[str], Path]:
+    """The same one-off search the menu runs, built from a request typed in the app."""
+    query = str(req.get("query") or "").strip()
+    place = str(req.get("location") or "").strip()
+    today = datetime.now().strftime("%Y-%m-%d")
+    folder = base_dir / "searches" / f"{today}_{slugify(query + ' ' + place, 50)}"
+    argv = ["find", "--config", cfg_path, "--name", str(folder / "leads"), "--seen-file", str(base_dir / "searches" / "seen_places.json"),
+            "--max-requests", str(MENU_SEARCH_REQUESTS), "--min-score", str(WARM_SCORE), "-q", query]
+    if place:
+        argv += ["--location", place]
+    if req.get("requireWebsite", True):
+        argv.append("--require-website")
+    argv += _crawl_flags(cfg_path)
+    return argv, folder
+
+
+async def _run_one_request(req: Mapping[str, Any], url: str, key: str, cfg_path: str, base_dir: Path) -> Dict[str, Any]:
+    """Run one queued search and deliver it. Returns the result the app records (status done / failed)."""
+    argv, folder = _request_argv(req, cfg_path, base_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    base = str(folder / "leads")
+    started = time.time()
+    try:
+        code = await run_pipeline(parse_args(argv))
+    except Exception as exc:  # one bad search must not stop the others
+        return {"status": "failed", "note": f"search stopped: {exc}"[:200]}
+    import_path = f"{base}_app_import.csv"
+    if code != 0:
+        return {"status": "failed", "note": "the search did not finish (see the worker window)"}
+    if not os.path.exists(import_path) or os.path.getmtime(import_path) < started - 2:
+        return {"status": "done", "added": 0, "skipped": 0, "ready": 0, "note": "nothing new found for this search"}
+    rows, _ = read_csv(import_path)
+    if not rows:
+        return {"status": "done", "added": 0, "skipped": 0, "ready": 0, "note": "nothing new found for this search"}
+    batch = f"worker-{slugify(str(req.get('query') or 'search'), 30)}-{datetime.now().strftime('%m%d')}"[:60]
+    res = await push_rows(url, key, rows, batch, source="worker")
+    if not res.ok:
+        return {"status": "failed", "ready": len(rows), "added": res.added, "skipped": res.skipped, "note": f"found {len(rows)} but could not deliver: {res.error}"[:200]}
+    return {"status": "done", "added": res.added, "skipped": res.skipped, "ready": len(rows)}
+
+
+async def run_pull(cfg_path: str, loop_minutes: float = 0.0, sleep: Callable[[float], Any] = asyncio.sleep) -> int:
+    """Ask the app what you queued ("Run it on my computer"), run each search here, deliver to the Lead Inbox, report back."""
+    url, key = _inbox_credentials(cfg_path)
+    if not url or not key:
+        print("Not connected to AutoLeads yet. Run:  python autoleads_worker.py setup   (it asks for the app address and the ingest key from the Account page).")
+        return 2
+    base_dir = Path(cfg_path).resolve().parent
+    handled = 0
+    while True:
+        try:
+            data = await _jobs_call(url, key, {"action": "claim"})
+        except ApiError as exc:
+            print(f"Could not check the queue: {exc}")
+            return 1
+        requests = data.get("requests") or []
+        for req in requests:
+            label = f"{req.get('query')} in {req.get('location')}" if req.get("location") else str(req.get("query"))
+            print(f"\n>>> From the app: {label}")
+            result = await _run_one_request(req, url, key, cfg_path, base_dir)
+            try:
+                await _jobs_call(url, key, {"action": "complete", "id": req.get("id"), **result})
+            except ApiError as exc:
+                print(f"Finished, but could not tell the app: {exc}")
+            handled += 1
+            if result.get("status") == "done":
+                print(f"Done: {result.get('added', 0)} added to your Lead Inbox, {result.get('skipped', 0)} already known.")
+            else:
+                print(f"Did not finish: {result.get('note', '')}")
+        if loop_minutes <= 0:
+            if not requests:
+                print("Nothing is waiting in the app. Queue a search in Lead Inbox, then run this again.")
+            return 0
+        if not requests:
+            print(f"Nothing waiting. Checking again in {loop_minutes:g} minutes (close this window to stop).")
+        await sleep(loop_minutes * 60)
+
+
 def menu_find(base_dir: Path, cfg_path: str, ask: Callable[..., str], confirm: Callable[..., bool]) -> int:
     """Type any kind of business and place: search, read the websites, score, and (if connected) add to the Lead Inbox."""
     print("\nFIND NEW LEADS. Anything works: roofers, wedding photographers, dental clinics, yoga studios...")
@@ -3983,7 +4081,7 @@ def run_menu(args: argparse.Namespace, ask: Callable[..., str] = _ask, confirm: 
         crawl_logger.setLevel(logging.INFO)  # an earlier "daily routine" run quiets it; progress lines should come back
         print(MENU_TEXT)
         # Enter (or a closed window) means quit, so an unattended prompt can never loop on its own.
-        choice = ask("Choose 1-4, or q to quit", "q").strip().lower()
+        choice = ask("Choose 1-5, or q to quit", "q").strip().lower()
         try:
             if choice == "1":
                 menu_find(base_dir, cfg_path, ask, confirm)
@@ -3996,10 +4094,12 @@ def run_menu(args: argparse.Namespace, ask: Callable[..., str] = _ask, confirm: 
                     print("\nNo daily routine yet. Choose 4, then 1 to set it up.")
             elif choice == "4":
                 menu_tools(cfg_path, ask)
+            elif choice == "5":
+                asyncio.run(run_pull(cfg_path))
             elif choice in ("q", "quit", "exit", "0", ""):
                 return 0
             else:
-                print("Please type 1, 2, 3, 4 or q.")
+                print("Please type 1, 2, 3, 4, 5 or q.")
         except ApiError as exc:
             print(f"\n{exc}")
         except KeyboardInterrupt:
@@ -4044,6 +4144,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("Windows (Command Prompt):\n  " + subprocess.list2cmdline(cmds["windows_create"]) + "\n")
         print("Mac / Linux (add with crontab -e):\n  " + cmds["cron_line"])
         return 0
+
+    if command == "pull":
+        try:
+            return asyncio.run(run_pull(str(cfg_path), max(0.0, float(args.loop_minutes or 0))))
+        except KeyboardInterrupt:
+            print("\nStopped.")
+            return 130
 
     if command == "add":
         return run_add(args, str(cfg_path))
