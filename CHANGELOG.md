@@ -1,5 +1,26 @@
 # Changelog
 
+## Pass 35 - lines of business: find out which business actually works
+You are still deciding what business to run, and the app assumed one offer. Now you can run several ideas side by side and let the numbers choose.
+- **Account: "Your lines of business"** (optional, up to 5), for example a service, a resale line and the software itself.
+- **Customers, Details: "Which line of business"** tags each customer.
+- **Business Value: "Which line of business works":** wins, revenue, average deal, profit, profit per deal and margin per line, with the best marked only once at least two lines each have 3 wins with a delivery cost entered. Before that it says exactly what is missing. Untagged customers are counted so nothing is hidden.
+- 5 new tests.
+
+## Pass 34 - company, not a job: SOPs, the absence check, and why customers choose you
+Checked against: customers cannot easily substitute you (convenience, status or identity, a problem they must solve), scaling without more people, and "use SOPs and leverage, then be absent and see how it functions".
+- **SOPs page** (new, in the sidebar): six standard procedures that use the screens of this app (finding leads, replying and closing, onboarding, delivering, billing, support). Edit them to match how you work, set who does each one (you, someone else, automated), mark them reviewed. Three or more steps counts as written down; an owner other than you counts as handed over.
+- **Business Value: If you were away.** For each of the six parts of the business it says whether it runs by itself (autopilot), is handed over (SOP with another owner), or still needs you, with the live count waiting right now (replies, overdue invoices, stuck onboarding, renewals). One plain verdict: mostly runs without you, partly depends on you, or still a job. Plus people in the business, customers per person and revenue per person, so you can see whether growth needs more headcount.
+- **Why they chose you.** Customers, Details: pick the main reason (convenience, a problem only you solve, status or identity, trust, quality, price). Business Value shows the split and says plainly when most customers chose you on price, because anyone can undercut that. Nothing is claimed until 5 reasons are recorded.
+- 6 new tests; sidebar and frame route list updated.
+
+## Pass 33 - delivery capacity (do not sell more than you can deliver)
+Checked the app with a new lens: what stops a business from growing itself to death. Acquisition, closing, retention and profit were all there, but nothing connected selling to the ability to deliver, which is how a service or agency business loses the customers it already has.
+- **Account: \"Most customers you can serve well at once\"** (optional; leave empty if capacity is not a limit, for example a product business).
+- **Business Value: Delivery capacity** card with a bar (green, amber at 80 percent, red when full or over) and a plain instruction: slow outreach, raise your price, or add capacity.
+- **Do this next** warns before the next campaign when delivery is nearly full, full or over. The AI coach is told too, so it stops recommending more selling when delivery has no room.
+- It only informs. Nothing is paused automatically. 4 new tests.
+
 ## Pass 32 - delight: customers become proof (checked against the inbound/outbound, funnel, lifecycle and 7 Ps frameworks)
 Mapped the app to the standard frameworks (inbound and outbound, attract-convert-nurture-close-expand, awareness to loyalty, inbound automation with opt-out and convert exits, the 7 Ps). Everything was already covered except one link: a happy customer could be asked for a referral, but nobody asked them how it went or turned the answer into proof for outreach.
 - **Customers: \"Ask how it went\"** (AI draft you read and send yourself): offered 14+ days after winning, once the customer is activated, with no open issue and nothing overdue; never more than once every 120 days. No incentives, no pre-written praise, no invented results.

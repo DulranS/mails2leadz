@@ -11,6 +11,7 @@ import { db, auth } from "../../lib/firebase-client.js";
 import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
+import { sanitizeLines } from "../../lib/lines.js";
 import { ANGLES } from "../../lib/angles.js";
 import { sanitizeTeam, TEAM_ROLES, MAX_MEMBERS, MAX_COMMISSION_PCT } from "../../lib/team.js";
 import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
@@ -26,6 +27,8 @@ export default function AccountPage() {
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyOverhead, setMonthlyOverhead] = useState("");
+  const [maxActive, setMaxActive] = useState("");
+  const [linesText, setLinesText] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
@@ -57,6 +60,8 @@ export default function AccountPage() {
         if (d.avgDealValue) setAvgDealValue(String(d.avgDealValue));
         if (d.monthlyCost) setMonthlyCost(String(d.monthlyCost));
         if (d.monthlyOverhead) setMonthlyOverhead(String(d.monthlyOverhead));
+        if (d.maxActiveCustomers) setMaxActive(String(d.maxActiveCustomers));
+        if (Array.isArray(d.businessLines)) setLinesText(d.businessLines.join("\n"));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
@@ -244,6 +249,8 @@ export default function AccountPage() {
         avgDealValue: Math.max(0, Number(avgDealValue) || 0),
         monthlyCost: Math.max(0, Number(monthlyCost) || 0),
         monthlyOverhead: Math.max(0, Number(monthlyOverhead) || 0),
+        maxActiveCustomers: Math.max(0, Math.min(100000, Math.floor(Number(maxActive) || 0))),
+        businessLines: sanitizeLines(linesText),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
@@ -367,6 +374,8 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="bl">Your lines of business <span className="text-xs font-normal text-gray-500">(optional, up to 5, one per line)</span></label><textarea id="bl" rows={3} className={field} value={linesText} onChange={(e) => setLinesText(e.target.value)} placeholder={"Web design service\nUsed car resale\nThe software itself"} /><p className="text-xs text-gray-500 mt-1">Still finding which business works? Name each one, tag customers with their line (Customers, Details), and Business Value compares profit per deal across them.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="mx">Most customers you can serve well at once <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mx" type="number" min="0" step="1" inputMode="numeric" className={field} value={maxActive} onChange={(e) => setMaxActive(e.target.value)} placeholder="Leave empty if capacity is not a limit" /><p className="text-xs text-gray-500 mt-1">Business Value then shows how full you are and warns before more outreach would overload delivery.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mo">Other monthly costs of running the business ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mo" type="number" min="0" inputMode="decimal" className={field} value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">Wages (include your own if you want it counted), rent, ads, software, transport. Used for profit and break-even in Business Value.</p></div>
           </div>
           <details className="mt-4">

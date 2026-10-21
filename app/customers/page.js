@@ -18,6 +18,7 @@ import { completeFollowUpTask } from "../../lib/firebase-operations.js";
 import { makeMoney, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { doc, getDoc, setDoc } from "../../lib/client-firestore.js";
 import { addProofPoint } from "../../lib/sales-kit.js";
+import { WIN_REASONS } from "../../lib/independence.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -105,7 +106,7 @@ export default function CustomersPage() {
   };
 
   // Subscription facts for the customer whose panel is open, and the three things you can do with them.
-  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "", quote: "" });
+  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "", quote: "", winReason: "", line: "" });
   const saveSub = (c) => saveExtras(c.email, { recurringMonthly: sub.amount === "" ? 0 : sub.amount, renewalAt: sub.renewal || null }, "Subscription saved.");
   const saveCost = (c) => saveExtras(c.email, { deliveryCost: sub.cost === "" ? null : sub.cost }, sub.cost === "" ? "Delivery cost cleared." : "Delivery cost saved. Business Value now counts it.");
   const saveQuote = (c) => saveExtras(c.email, { customerQuote: sub.quote }, sub.quote.trim() ? "Saved." : "Cleared.");
@@ -282,7 +283,7 @@ export default function CustomersPage() {
                       {c.feedback?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askFeedback(c)} title={c.feedback.why} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Ask how it went</button>}
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
-                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
+                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "", winReason: c.winReason || "", line: c.line || "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
@@ -334,6 +335,32 @@ export default function CustomersPage() {
                           <button type="button" disabled={!issueText.trim() || busy === c.email} onClick={() => raiseIssue(c)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Add issue</button>
                         </div>
                         {c.overdue && <p className="text-xs text-amber-700 dark:text-amber-300 mt-3">{c.overdue.count} overdue invoice{c.overdue.count === 1 ? "" : "s"}, {money(c.overdue.amount)}. <Link href="/billing" className="underline">Open billing</Link></p>}
+                      </div>
+                      {Array.isArray(settings.businessLines) && settings.businessLines.length >= 2 && (
+                        <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Which line of business</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">So Business Value can compare which line earns most
+                              <select value={sub.email === c.email ? sub.line : ""} onChange={(e) => setSub({ ...sub, email: c.email, line: e.target.value })} className={`${field} mt-1 min-h-[44px]`}>
+                                <option value="">Not tagged</option>
+                                {settings.businessLines.map((n) => <option key={n} value={n}>{n}</option>)}
+                              </select>
+                            </label>
+                            <div className="flex items-end"><button type="button" disabled={busy === c.email} onClick={() => saveExtras(c.email, { line: sub.line }, "Saved.")} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Save line</button></div>
+                          </div>
+                        </div>
+                      )}
+                      <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Why they chose you</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">The main reason, in your honest view. Business Value shows whether customers could easily go elsewhere.
+                            <select value={sub.email === c.email ? sub.winReason : ""} onChange={(e) => setSub({ ...sub, email: c.email, winReason: e.target.value })} className={`${field} mt-1 min-h-[44px]`}>
+                              <option value="">Not recorded</option>
+                              {WIN_REASONS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                            </select>
+                          </label>
+                          <div className="flex items-end"><button type="button" disabled={busy === c.email} onClick={() => saveExtras(c.email, { winReason: sub.winReason }, "Saved.")} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Save reason</button></div>
+                        </div>
                       </div>
                       <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Their result, as proof for future customers</h3>

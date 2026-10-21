@@ -90,6 +90,7 @@ app/page.js
 app/privacy/page.js
 app/robots.js
 app/sitemap.js
+app/sops/page.js
 app/terms/page.js
 app/unsubscribe/page.js
 components/ErrorBoundary.js
@@ -115,6 +116,7 @@ lib/billing-saas.js
 lib/billing.js
 lib/brand.js
 lib/business-metrics.js
+lib/capacity.js
 lib/client-data.js
 lib/client-firestore.js
 lib/config.js
@@ -141,12 +143,14 @@ lib/gmail-text.js
 lib/graceful-degradation.js
 lib/httpClient.js
 lib/inbound.js
+lib/independence.js
 lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
 lib/lead-inbox.js
 lib/lead-name.js
 lib/lead-scoring-engine.js
+lib/lines.js
 lib/logger.js
 lib/next-actions.js
 lib/niche.js
@@ -210,6 +214,7 @@ lib/server/worker-queue-store.js
 lib/service-account.js
 lib/service-health.js
 lib/smart-followup-engine.js
+lib/sops.js
 lib/swr-cache.js
 lib/team.js
 lib/tenant.js

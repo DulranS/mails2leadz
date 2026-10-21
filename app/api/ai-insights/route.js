@@ -43,6 +43,11 @@ export async function POST(request) {
       f.weekly = { emailsSent: pair('sent'), replies: pair('replies'), newlyQualified: pair('qualified'), dealsWon: pair('won'), revenueWon: pair('wonRevenue'), dealsLost: pair('lost'), invoiced: pair('invoiced'), cashCollected: pair('collected') };
     }
 
+    // Delivery capacity (only if the owner set one): counts and a state word, never names.
+    const cp = facts.capacity && typeof facts.capacity === 'object' ? facts.capacity : null;
+    if (cp && ['ok', 'near', 'full', 'over'].includes(cp.state)) {
+      f.deliveryCapacity = { customersServed: Math.max(0, Math.min(1e6, Math.floor(Number(cp.used) || 0))), mostServedWell: Math.max(0, Math.min(1e6, Math.floor(Number(cp.max) || 0))), percentFull: Math.max(0, Math.min(1000, Math.floor(Number(cp.pct) || 0))), state: cp.state };
+    }
     // Profit (only present once the owner entered costs): totals and percentages, never names.
     const pf = facts.profit && typeof facts.profit === 'object' ? facts.profit : null;
     if (pf) {
@@ -51,7 +56,7 @@ export async function POST(request) {
     }
 
     const profile = await getBusinessProfile(uid);
-    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nIf a \"profitLast90d\" block is present, judge by profit and margin, not revenue alone, and say so when costs entered are incomplete. Money already earned matters as much as new sales: overdue invoices, work won but never invoiced, and customers at risk count when ranking actions. If a "weekly" block is present, say how this week went against last week first. Rules: use no numbers that are not in the JSON; money amounts are in the currency named in the JSON (write them with that currency, not '$' unless it is USD); never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
+    const system = `You are a practical sales coach for a small business owner. Read ONLY the JSON numbers given and explain what they mean in plain, friendly language.\nIf a \"deliveryCapacity\" block shows state near, full or over, say more selling is not the answer until delivery has room. If a \"profitLast90d\" block is present, judge by profit and margin, not revenue alone, and say so when costs entered are incomplete. Money already earned matters as much as new sales: overdue invoices, work won but never invoiced, and customers at risk count when ranking actions. If a "weekly" block is present, say how this week went against last week first. Rules: use no numbers that are not in the JSON; money amounts are in the currency named in the JSON (write them with that currency, not '$' unless it is USD); never invent benchmarks, industry averages or percentages; if a number is null or the sample is small, say the data is too thin to judge rather than guessing; no jargon; no hype.\nReturn JSON only: {"headline": string (max 18 words), "working": [up to 2 short strings: what is going well], "risks": [up to 2 short strings: what needs attention], "actions": [exactly 3 objects {"title": string (max 8 words), "why": string (max 25 words)}] ordered by money at stake}.`;
     const prompt = `${profileBlock(profile) || 'No business profile saved.'}\n\nNumbers (last 90 days unless stated):\n${JSON.stringify(f)}`;
 
     const ai = await callAI({ uid, feature: 'pipeline_insights', tier: 'fast', system, prompt, maxTokens: 600 });

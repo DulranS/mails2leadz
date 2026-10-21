@@ -11,6 +11,10 @@ import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
 import { computeProfit, forecastProfit } from "../../lib/profit.js";
+import { computeCapacity } from "../../lib/capacity.js";
+import { computeWhyChosen, computeAwayCheck } from "../../lib/independence.js";
+import { sanitizeSops, computeSopCoverage } from "../../lib/sops.js";
+import { computeLineComparison } from "../../lib/lines.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { pickBusinessName } from "../../lib/lead-name.js";
 import { stale as savedSnapshot, put } from "../../lib/swr-cache.js"; // (aliased: this page has its own "stale" list of stuck deals)
@@ -64,7 +68,7 @@ function Bar({ value, max, label, right }) {
   );
 }
 
-const EMPTY_RAW = { inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } };
+const EMPTY_RAW = { sops: [], inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } };
 
 export default function BusinessValuePage() {
   const { user, ready: authReady } = useAuthUser(); // one shared sign-in listener: no spinner on the way back to this page
@@ -91,7 +95,7 @@ export default function BusinessValuePage() {
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
       // Shared, cached reads: Customers, Billing, CRM and this page reuse each other's downloads instead of each fetching their own.
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap, sopsSnap] = await Promise.all([
         getDeals(db, uid),
         getSentEmails(db, uid),
         getSettingsDoc(db, uid, "business").catch(() => null),
@@ -105,6 +109,7 @@ export default function BusinessValuePage() {
         getContentPosts(db, uid).catch(() => ({ docs: [] })),
         getSettingsDoc(db, uid, "autopilot").catch(() => null),
         getSettingsDoc(db, uid, "team").catch(() => null),
+        getSettingsDoc(db, uid, "sops").catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -146,6 +151,7 @@ export default function BusinessValuePage() {
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         autopilot: autopilotSnap?.exists?.() ? autopilotSnap.data() : null,
         team: teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [],
+        sops: sopsSnap?.exists?.() ? sanitizeSops(sopsSnap.data().items) : [],
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       };
       put(`${uid}|page|business`, next);
@@ -175,6 +181,16 @@ export default function BusinessValuePage() {
   const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90 }), [raw]);
   const profitNext30 = useMemo(() => forecastProfit({ profit, expectedRevenue: outlook.horizons?.[0]?.total, days: 30 }), [profit, outlook]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
+  const capacity = useMemo(() => computeCapacity({ active: customers.total, max: raw.settings?.maxActiveCustomers }), [customers, raw]);
+  const whyChosen = useMemo(() => computeWhyChosen(m.deals), [m]);
+  const lineCompare = useMemo(() => computeLineComparison({ deals: m.deals, lines: raw.settings?.businessLines }), [m, raw]);
+  const sopCoverage = useMemo(() => computeSopCoverage(raw.sops), [raw]);
+  const away = useMemo(() => computeAwayCheck({
+    waiting: m.present?.inboundWaiting?.length || 0, unconverted: raw.unconverted?.length || 0, overdueCount: billing.overdue.count,
+    stuckOnboarding: customers.stuckOnboarding, renewalsSoon: rec.renewals?.dueSoon?.count || 0, atRisk: customers.atRisk.count,
+    autopilotOn: !!(raw.autopilot && raw.autopilot.autoSend && !raw.autopilot.autoSendPaused), coverage: sopCoverage,
+    people: 1 + (raw.team?.length || 0), customers: customers.total, revenue90: profit.revenue,
+  }), [m, raw, billing, customers, rec, sopCoverage, profit]);
   const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
   const weekly = useMemo(() => computeWeeklyKpis({ emailRows: raw.emailRows || [], deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
@@ -231,6 +247,7 @@ export default function BusinessValuePage() {
         unbilledCount: unbilled.count, unbilledAmount: unbilled.amount,
         customers: customers.total, atRisk: customers.atRisk.count, stuckOnboarding: customers.stuckOnboarding, openIssues: customers.openIssues,
         weekly: Object.fromEntries(weekly.rows.map((r) => [r.key, { cur: r.cur, prev: r.prev }])),
+        ...(capacity.set ? { capacity: { used: capacity.used, max: capacity.max, pct: capacity.pct, state: capacity.state } } : {}),
         ...(profit.ready ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
@@ -248,7 +265,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
+  const actions = loading ? [] : buildNextActions({ capacity, metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues, ...(rec.any ? { mrr: rec.mrr, subscribers: rec.subscribers, netNewMrr30: rec.netNewMrr30, renewalsSoon: rec.renewals.dueSoon.count } : {}) };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };
@@ -453,6 +470,76 @@ export default function BusinessValuePage() {
         )}
 
         {/* FUTURE */}
+        {!loading && capacity.set && (
+          <Card title="Delivery capacity">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="min-w-[140px]"><p className="text-2xl font-bold text-gray-900 dark:text-white">{capacity.used} of {capacity.max}</p><p className="text-xs text-gray-500 dark:text-gray-400">customers served ({capacity.pct}% full)</p></div>
+              <div className="flex-1 min-w-[200px]">
+                <div className="h-3 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, capacity.pct)} aria-label="Delivery capacity used">
+                  <div className={`h-full ${capacity.state === "ok" ? "bg-green-500" : capacity.state === "near" ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${Math.min(100, capacity.pct)}%` }} />
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-200 mt-2">{capacity.message}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {!loading && (
+          <Card title="If you were away">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">{away.verdict}</p>
+            <ul className="mt-2 divide-y divide-gray-100 dark:divide-gray-700">
+              {away.rows.map((r) => (
+                <li key={r.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                  <span className={`inline-block min-w-[96px] text-xs font-semibold ${r.state === "needs_you" ? "text-red-600 dark:text-red-300" : "text-green-700 dark:text-green-300"}`}>{r.state === "needs_you" ? "Needs you" : r.state === "runs" ? "Runs itself" : "Handed over"}</span>
+                  <span className="text-gray-900 dark:text-gray-100">{r.label}</span>
+                  <span className="text-gray-600 dark:text-gray-300">{r.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <Stat label="People in the business" value={String(away.people)} hint="you plus your team" />
+              <Stat label="Customers per person" value={away.customersPerPerson === null ? "n/a" : String(away.customersPerPerson)} hint={away.revenuePerPerson90 === null ? "grows as you scale without hiring" : `${money(away.revenuePerPerson90)} won per person, 90 days`} />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">The test: take three days fully off, then write down everything that stalled as an SOP and hand it over. <Link href="/sops" className="underline">Open SOPs</Link></p>
+          </Card>
+        )}
+
+        {!loading && lineCompare.lines.length >= 2 && (
+          <Card title="Which line of business works">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Line</th><th className="py-1 text-right">Wins</th><th className="py-1 text-right">Revenue</th><th className="py-1 text-right">Avg deal</th><th className="py-1 text-right">Profit</th><th className="py-1 text-right">Per deal</th><th className="py-1 text-right">Margin</th></tr></thead>
+                <tbody>{lineCompare.rows.map((r) => (
+                  <tr key={r.name} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100">
+                    <td className="py-1.5">{r.name}{r.name === lineCompare.bestName && <span className="text-xs text-green-700 dark:text-green-300"> (best so far)</span>}</td>
+                    <td className="py-1.5 text-right">{r.wins}</td>
+                    <td className="py-1.5 text-right">{r.revenue > 0 ? money(r.revenue) : "n/a"}</td>
+                    <td className="py-1.5 text-right">{r.avgDeal === null ? "n/a" : money(r.avgDeal)}</td>
+                    <td className="py-1.5 text-right">{r.profit === null ? "n/a" : money(r.profit)}</td>
+                    <td className="py-1.5 text-right">{r.profitPerDeal === null ? "n/a" : money(r.profitPerDeal)}</td>
+                    <td className="py-1.5 text-right">{r.marginPct === null ? "n/a" : `${r.marginPct}%`}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            {lineCompare.verdict && <p className="text-sm text-gray-700 dark:text-gray-200 mt-2">{lineCompare.verdict}</p>}
+            {lineCompare.untagged > 0 && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{lineCompare.untagged} won customer{lineCompare.untagged === 1 ? " is" : "s are"} not tagged with a line yet.</p>}
+          </Card>
+        )}
+
+        {!loading && (
+          <Card title="Why customers chose you">
+            {whyChosen.rows.length > 0 && (
+              <ul className="space-y-1 mb-2">
+                {whyChosen.rows.map((r) => (
+                  <li key={r.id} className="flex items-baseline gap-3 text-sm text-gray-800 dark:text-gray-100"><span className="min-w-[2rem] text-right font-semibold">{r.count}</span><span>{r.label}</span></li>
+                ))}
+              </ul>
+            )}
+            <p className="text-sm text-gray-700 dark:text-gray-200">{whyChosen.verdict}</p>
+          </Card>
+        )}
+
         {!loading && (
           <Card title="Profit (last 90 days)">
             {profit.ready ? (
