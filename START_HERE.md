@@ -80,3 +80,6 @@ Keys are stored in this file (keep it private, it is git-ignored). An environmen
 - To search a place by a different name, write it the way OpenStreetMap does ("Colombo, Sri Lanka"). Search words like plumbers, dentists, restaurants, salons, lawyers, accountants and dozens more are understood; anything else is matched against business names.
 
 Developers: tests are in worker/test_worker.py (python test_worker.py, no internet or keys needed). The app's own tests: npm test.
+
+## Team logins and emails
+Invite people to work in your workspace (Account, Team logins), with Manager or Viewer roles. Works for an internal team and for customers of the software alike. Optional system emails (invites, trial and payment notices) need one mail setting. Full guide and a 10 minute check: TEAM_ACCESS.md.

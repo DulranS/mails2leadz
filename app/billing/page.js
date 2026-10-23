@@ -16,6 +16,7 @@ import { computeBilling, computeUnbilled, buildInvoiceWrite, canRemind, dunningL
 import { setOnboardingStep } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { makeMoney, currencySymbol, normalizeCurrency } from "../../lib/currency.js";
+import BillsPanel from "../components/BillsPanel";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -326,6 +327,7 @@ export default function BillingPage() {
           </Card>
         </div>
       </div>
+      <div className="mt-4 sm:mt-6"><BillsPanel uid={user?.uid} money={money} /></div>
       <DraftModal draft={draft} onClose={() => setDraft(null)} onOpened={afterReminder} />
     </DashboardLayout>
   );

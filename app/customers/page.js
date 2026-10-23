@@ -106,7 +106,7 @@ export default function CustomersPage() {
   };
 
   // Subscription facts for the customer whose panel is open, and the three things you can do with them.
-  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "", quote: "", winReason: "", line: "" });
+  const [sub, setSub] = useState({ email: "", amount: "", renewal: "", reason: "", cost: "", quote: "", winReason: "", line: "", hours: "", nps: "" });
   const saveSub = (c) => saveExtras(c.email, { recurringMonthly: sub.amount === "" ? 0 : sub.amount, renewalAt: sub.renewal || null }, "Subscription saved.");
   const saveCost = (c) => saveExtras(c.email, { deliveryCost: sub.cost === "" ? null : sub.cost }, sub.cost === "" ? "Delivery cost cleared." : "Delivery cost saved. Business Value now counts it.");
   const saveQuote = (c) => saveExtras(c.email, { customerQuote: sub.quote }, sub.quote.trim() ? "Saved." : "Cleared.");
@@ -283,7 +283,7 @@ export default function CustomersPage() {
                       {c.feedback?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askFeedback(c)} title={c.feedback.why} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Ask how it went</button>}
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
-                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "", winReason: c.winReason || "", line: c.line || "" }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
+                      <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "", winReason: c.winReason || "", line: c.line || "", hours: c.hoursSpent === null || c.hoursSpent === undefined ? "" : String(c.hoursSpent), nps: c.nps === null || c.nps === undefined ? "" : String(c.nps) }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
@@ -372,6 +372,21 @@ export default function CustomersPage() {
                           <button type="button" disabled={busy === c.email || sub.quote.trim().length < 8} onClick={() => addToProof(c)} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Add to my proof points</button>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Proof points are the only results the AI may cite in your outreach and replies (3 at most, set in Account).</p>
+                      </div>
+                      <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Your hours and their score (so Business Value can show what an hour of your time earns, and whether customers would recommend you)</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                          <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Hours you spent on this customer (selling, delivering, supporting)
+                            <input type="number" inputMode="decimal" min="0" step="any" value={sub.email === c.email ? sub.hours : ""} onChange={(e) => setSub({ ...sub, email: c.email, hours: e.target.value })} placeholder="0 if none; empty = not entered" className={`${field} mt-1 min-h-[44px]`} />
+                          </label>
+                          <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">How likely they say they are to recommend you (0 to 10)
+                            <select value={sub.email === c.email ? sub.nps : ""} onChange={(e) => setSub({ ...sub, email: c.email, nps: e.target.value })} className={`${field} mt-1 min-h-[44px]`}>
+                              <option value="">Not asked yet</option>
+                              {Array.from({ length: 11 }, (_, n) => <option key={n} value={String(10 - n)}>{10 - n}</option>)}
+                            </select>
+                          </label>
+                          <div className="flex items-end"><button type="button" disabled={busy === c.email} onClick={() => saveExtras(c.email, { hoursSpent: sub.hours === "" ? null : sub.hours, nps: sub.nps === "" ? null : sub.nps }, "Saved.")} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Save</button></div>
+                        </div>
                       </div>
                       <div className="lg:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">What it cost you to deliver this (so Business Value can show profit, not just revenue)</h3>

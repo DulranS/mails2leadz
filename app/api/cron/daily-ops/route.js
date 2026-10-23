@@ -8,6 +8,7 @@ import { dailyOpsForUser } from '../../../../lib/server/daily-ops.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
+import { runLifecycleEmails } from '../../../../lib/server/lifecycle.js';
 
 export const maxDuration = 300;
 
@@ -33,5 +34,8 @@ export async function GET(request) {
       console.error('[cron daily-ops] owner failed:', uid, e?.message);
     }
   }
+  // Platform emails to the businesses that use this deployment (trial ending or ended, payment failed). SaaS mode with a mail
+  // provider only; otherwise a no-op. Never lets a mail problem fail the owners' daily jobs above.
+  try { summary.lifecycle = await runLifecycleEmails(db); } catch (e) { console.error('[cron daily-ops] lifecycle emails failed:', e?.message); summary.lifecycle = { error: true }; }
   return NextResponse.json({ success: true, ...summary }, { headers: NO_STORE });
 }

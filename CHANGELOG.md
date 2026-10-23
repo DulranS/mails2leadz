@@ -1,5 +1,43 @@
 # Changelog
 
+## Pass 40 - the lead finder no longer starves quietly
+Checked the finding part end to end: nightly saved searches find and read businesses, good ones land in the Lead Inbox, HOT ones get drafts the same night, autosend sends them (if switched on, with caps). One real weakness: a saved search runs dry (every business in that area has been seen), the night is still spent on it, and the pipeline quietly goes empty.
+- **Dry searches are noticed.** After two finished nightly runs in a row that add no new lead, a search counts as dry. The night skips dry searches and takes turns among the rest, so no night is wasted on a finished area. If every search is dry it still tries the next in turn (areas gain new businesses) and says so.
+- **Do this next tells you:** "Your nightly searches have stopped finding new leads", naming the searches, with what to do (widen the area or try a related type of business; Lead Inbox has ideas for who to look for next).
+- 5 new tests.
+
+## Pass 39 - the lessons from the 20 business-systems screenshots, checked against the app
+Mapped them: cash, unit economics, SOPs and leverage, feedback loops, incentives, concentration and diversification were already covered. Four things the pages underline were not:
+- **Will the money be there when bills are due?** Profit is an opinion; cash on the due date is a fact. New 13 week cash forecast on Business Value: your cash, unpaid invoices by due date, running costs, and the bills you enter, as two bookends (everyone pays on time; payments come 2 weeks late and overdue ones never arrive). It names the week you would run short and why. Bills (rent, suppliers, loan repayments, tools; once or monthly) are entered on the Billing page. It does not count new sales or tax, and says so.
+- **What an hour of your own time earns.** Enter your hours per customer (Customers, Details) and what an hour of your time is worth (Account). Business Value shows what each hour really earns and says plainly when it pays less than your time is worth: still a job. Also: how long your cash lasts if every sale stopped today.
+- **Would customers recommend you (NPS).** A 0 to 10 answer per customer, score from 5 answers, and the detractors to speak to first.
+- **Found while testing:** the cash forecast could never reach its "even on time you run short" state. Fixed, with a test for each state.
+- 11 new tests.
+
+## Pass 38 - thinking outside the box: the two things that decide whether a still-undecided founder gets an answer
+Features were not the gap. The risks left were running out of money while deciding, and never deciding.
+- **Experiments (new page, in the sidebar).** Every idea becomes a test: one sentence, what you count, the number that means it worked, a judging date. At most three running at once, because ten half-finished tests teach nothing. On the judging day Do this next tells you; you enter the real number, the app suggests (hit the target: double down; about half: change one thing; clearly short: stop, and do not continue because time was spent), and you record your own decision. After three finished tests it shows how many hit their target. Business Value lists what is running.
+- **How long your cash lasts (Business Value).** Type the cash you have (Account; optional). With your costs and your profit it shows the monthly result, how many months the cash lasts, and how many if unpaid invoices come in. Before any sale the burn is just your running costs. It says when it is not losing money, asks you to update a figure older than 30 days, and warns in Do this next when it is under 12 months.
+- 7 new tests. Nothing existing changed; both are stored under your own account so team roles and the database rules already cover them.
+
+## Pass 37 - the practical mechanics: stock and capital, risk, demand check, profit-based unit economics
+Mapped your list of what a business really needs (market validation, sales, unit economics, retention, ops and inventory, risk) against the app. Sales, retention, CAC, lifetime value and payback were there. Four things were not:
+- **Stock and capital (new page, in the sidebar).** For any business that buys to resell (goods, vehicles, equipment, boxes, assets). Add what you bought (full cost, asking price, supplier, date), mark it sold or written off. It shows money tied up, expected proceeds and profit, how long stock sits (ageing, slow stock over 90 days), profit made, average days to sell, return per year on the money used, a 30/60/90 day cash-back forecast (only once 3 sales show how long things take), supplier share of spend with margin and speed per supplier, and room left in a stock budget you set in Account. Stock sales also flow into Profit, so a trading business sees real profit.
+- **Is the demand real?** From the funnel you already have: it refuses to judge under 50 people contacted, and the only thing it calls proof is someone paying. Otherwise it says what the pattern points at (silent, replies but little interest, interest but no payment).
+- **What could hurt you.** Customer concentration (largest customer and top 3 as a share of 12 month revenue), how much monthly revenue repeats by itself, one supplier dominating spend, winning mostly on price, delivery full. Measured from your records; competition and regulation are left to your judgement and say so.
+- **Unit economics on profit.** Lifetime value and payback were on revenue, which flatters a business that costs a lot to deliver. Once delivery costs give a margin, both are also shown on profit.
+- 10 new tests. Existing data untouched: stock is stored under your own account (users/{you}/inventory), so team roles and the database rules already cover it.
+
+## Pass 36 - team logins and system emails (work for internal use, for selling the software, or both)
+These were the two things left unbuilt, and they matter if you sell the software or grow a team. Built so nothing changes for a single owner.
+- **Team logins.** Invite people to sign in with their own account and work inside your workspace as Manager (all daily work) or Viewer (read only). Account, Team logins: optional email lock, role, a link you can always copy (valid 7 days, shown once, only a hash is stored), change a role, remove someone, cancel an invite. The owner keeps the team, plan and payments, keys, the mailbox connection and deleting the account.
+- **How it is enforced.** The gate (proxy) decides on the server whose workspace a person works in from records only the server writes, then enforces the role per route. The database rules were extended so managers read and write the owner's data and viewers only read, never the roster, keys or server-only records. A failed lookup always falls back to the person's own workspace, never to more access. The previous rules are kept as `firestore.rules.v31-owner-only` for rollback.
+- **Seats.** Plans now include team seats (trial 1, starter 2, growth 5; internal and non-SaaS use `TEAM_MAX_SEATS`, default 10). Waiting invites count.
+- **System emails.** Team invite, trial ends in 3 days, trial ended, payment failed (each once, from the daily job, SaaS mode only). One mail setting: Resend or any webhook. With none set nothing breaks and invites give a link. Every attempt is logged.
+- **Members see** a small Account page (role, leave), a banner showing they are in a shared workspace, and view-only is explained instead of failing silently.
+- **Fixed while testing this:** the SOPs page read the signed-in user the wrong way and would have shown "please sign in" even when signed in. Fixed.
+- 23 new tests (role gate, invites, store, rules shape, lifecycle, system mail). See TEAM_ACCESS.md, including a 10 minute check to run once after publishing the rules: they could not be run against a real Firebase project here.
+
 ## Pass 35 - lines of business: find out which business actually works
 You are still deciding what business to run, and the app assumed one offer. Now you can run several ideas side by side and let the numbers choose.
 - **Account: "Your lines of business"** (optional, up to 5), for example a service, a resale line and the software itself.

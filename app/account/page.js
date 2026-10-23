@@ -12,6 +12,8 @@ import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { sanitizeLines } from "../../lib/lines.js";
+import TeamAccess from "../components/TeamAccess";
+import MemberAccount from "../components/MemberAccount";
 import { ANGLES } from "../../lib/angles.js";
 import { sanitizeTeam, TEAM_ROLES, MAX_MEMBERS, MAX_COMMISSION_PCT } from "../../lib/team.js";
 import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
@@ -22,12 +24,16 @@ const label = "block text-sm font-medium text-gray-700 dark:text-gray-200";
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 
 export default function AccountPage() {
-  const { user, ready } = useAuthUser();
+  const { user, ready, workspace, raw } = useAuthUser();
   const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "" });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyOverhead, setMonthlyOverhead] = useState("");
   const [maxActive, setMaxActive] = useState("");
+  const [capitalBudget, setCapitalBudget] = useState("");
+  const [cashOnHand, setCashOnHand] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [cashLoaded, setCashLoaded] = useState({ value: "", asOf: "" });
   const [linesText, setLinesText] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
@@ -61,6 +67,9 @@ export default function AccountPage() {
         if (d.monthlyCost) setMonthlyCost(String(d.monthlyCost));
         if (d.monthlyOverhead) setMonthlyOverhead(String(d.monthlyOverhead));
         if (d.maxActiveCustomers) setMaxActive(String(d.maxActiveCustomers));
+        if (d.capitalBudget) setCapitalBudget(String(d.capitalBudget));
+        if (d.hourlyRate) setHourlyRate(String(d.hourlyRate));
+        if (d.cashOnHand !== undefined && d.cashOnHand !== null) { setCashOnHand(String(d.cashOnHand)); setCashLoaded({ value: String(d.cashOnHand), asOf: d.cashAsOf || "" }); }
         if (Array.isArray(d.businessLines)) setLinesText(d.businessLines.join("\n"));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
@@ -251,6 +260,10 @@ export default function AccountPage() {
         monthlyOverhead: Math.max(0, Number(monthlyOverhead) || 0),
         maxActiveCustomers: Math.max(0, Math.min(100000, Math.floor(Number(maxActive) || 0))),
         businessLines: sanitizeLines(linesText),
+        capitalBudget: Math.max(0, Math.min(1e12, Number(capitalBudget) || 0)),
+        hourlyRate: Math.max(0, Math.min(1e7, Number(hourlyRate) || 0)),
+        cashOnHand: cashOnHand === "" ? null : Math.max(0, Math.min(1e12, Number(cashOnHand) || 0)),
+        cashAsOf: cashOnHand === "" ? null : (cashOnHand === cashLoaded.value && cashLoaded.asOf ? cashLoaded.asOf : new Date().toISOString()),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
@@ -306,6 +319,12 @@ export default function AccountPage() {
       window.location.href = "/dashboard";
     } catch { setMsg({ type: "error", text: "Deletion failed part-way. Run it again to finish." }); setBusy(""); }
   };
+
+  // A team member sees a small page: who they work for, their role, and how to leave. Plan, team, keys and deleting the account
+  // (everything below) belong to the owner, and the server and the database rules enforce that too.
+  if (ready && user && workspace && !workspace.isOwner) {
+    return <DashboardLayout title="Account" subtitle="Your access to this workspace"><div className="space-y-4"><MemberAccount role={workspace.role} actorUid={raw?.uid} /></div></DashboardLayout>;
+  }
 
   if (ready && !user) {
     return <DashboardLayout title="Account"><div className={card}><p className="text-gray-700 dark:text-gray-200">Please <Link href="/dashboard" className="text-blue-600 underline">sign in on the dashboard</Link> first.</p></div></DashboardLayout>;
@@ -374,6 +393,9 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="hr">What one hour of your own time is worth ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="hr" type="number" min="0" inputMode="decimal" className={field} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="What you would pay someone to do it" /><p className="text-xs text-gray-500 mt-1">With your hours entered per customer (Customers, Details), Business Value shows what each hour you put in really earns, and whether the work pays more than your time is worth.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="coh">Cash you have right now ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="coh" type="number" min="0" inputMode="decimal" className={field} value={cashOnHand} onChange={(e) => setCashOnHand(e.target.value)} placeholder="What is available to run the business" /><p className="text-xs text-gray-500 mt-1">Business Value turns this into how many months it lasts at your current costs. Update it now and then; it is only as true as the number you type.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="cb">Most money you want tied up in stock at once ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="cb" type="number" min="0" inputMode="decimal" className={field} value={capitalBudget} onChange={(e) => setCapitalBudget(e.target.value)} placeholder="Leave empty if you do not hold stock" /><p className="text-xs text-gray-500 mt-1">Only for businesses that buy to resell. The Stock page shows how much room is left.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="bl">Your lines of business <span className="text-xs font-normal text-gray-500">(optional, up to 5, one per line)</span></label><textarea id="bl" rows={3} className={field} value={linesText} onChange={(e) => setLinesText(e.target.value)} placeholder={"Web design service\nUsed car resale\nThe software itself"} /><p className="text-xs text-gray-500 mt-1">Still finding which business works? Name each one, tag customers with their line (Customers, Details), and Business Value compares profit per deal across them.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mx">Most customers you can serve well at once <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mx" type="number" min="0" step="1" inputMode="numeric" className={field} value={maxActive} onChange={(e) => setMaxActive(e.target.value)} placeholder="Leave empty if capacity is not a limit" /><p className="text-xs text-gray-500 mt-1">Business Value then shows how full you are and warns before more outreach would overload delivery.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mo">Other monthly costs of running the business ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mo" type="number" min="0" inputMode="decimal" className={field} value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">Wages (include your own if you want it counted), rent, ads, software, transport. Used for profit and break-even in Business Value.</p></div>
@@ -396,6 +418,11 @@ export default function AccountPage() {
             </div>
             <p className="text-xs text-gray-500 mt-2">Start with the defaults and adjust once you've closed a few deals.</p>
           </details>
+        </section>
+
+        <section className={card} aria-label="Team logins">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Team logins <span className="text-xs font-normal text-gray-500">· let people sign in and work in this workspace</span></h2>
+          <div className="mt-3"><TeamAccess ownerName={user?.displayName || ""} /></div>
         </section>
 
         <section className={card} aria-label="Your team">

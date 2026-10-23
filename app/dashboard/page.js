@@ -128,6 +128,7 @@ import {
 import { invalidateCache } from "../../lib/firebase-cache.js";
 import { makeMoney } from "../../lib/currency.js";
 import { cleanBusinessName } from "../../lib/lead-name.js";
+import { resolveWorkspaceUser } from "../../lib/workspace-client.js";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -2419,7 +2420,11 @@ function DashboardComponent() {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (signedIn) => {
+      // Team logins: a person invited to someone else's workspace works inside it, so everything below loads from the owner's
+      // data. Everyone else gets their own account back unchanged. (lib/workspace-client.js)
+      const resolved = signedIn ? await resolveWorkspaceUser(signedIn) : { user: null };
+      const user = resolved.user;
       if (user) {
         setUser(user);
         setSenderEmail(user.email || "");
@@ -2448,6 +2453,15 @@ function DashboardComponent() {
           "success",
           3000,
         );
+        if (resolved.workspace && !resolved.workspace.isOwner) {
+          addNotification(
+            resolved.workspace.role === "viewer"
+              ? "You are working in a shared workspace as a viewer: you can look at everything but not change anything."
+              : "You are working in a shared workspace as a manager.",
+            "info",
+            9000,
+          );
+        }
       } else {
         setUser(null);
         setSenderEmail("");

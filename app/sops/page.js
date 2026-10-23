@@ -18,7 +18,7 @@ const toRow = (s) => ({ ...s, stepsText: (s.steps || []).join("\n") });
 const toSop = (r) => ({ id: r.id, process: r.process, title: r.title, owner: r.owner, reviewedAt: r.reviewedAt, steps: String(r.stepsText || "").split("\n") });
 
 export default function SopsPage() {
-  const user = useAuthUser();
+  const { user, ready } = useAuthUser();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,7 +26,7 @@ export default function SopsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  useEffect(() => { if (!auth) setLoading(false); }, []);
+  useEffect(() => { if (!auth || (ready && !user)) setLoading(false); }, [ready, user]);
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
     setError("");
@@ -55,7 +55,7 @@ export default function SopsPage() {
     finally { setSaving(false); }
   };
 
-  if (!user) return <DashboardLayout title="SOPs"><section className={card}><p className="text-gray-700 dark:text-gray-200">Please <Link className="text-blue-600 dark:text-blue-400 underline" href="/">sign in</Link> to continue.</p></section></DashboardLayout>;
+  if (ready && !user) return <DashboardLayout title="SOPs"><section className={card}><p className="text-gray-700 dark:text-gray-200">Please <Link className="text-blue-600 dark:text-blue-400 underline" href="/">sign in</Link> to continue.</p></section></DashboardLayout>;
 
   return (
     <DashboardLayout title="SOPs" subtitle="Write it down once so anyone, or the app, can do it. Then be absent and see what breaks">

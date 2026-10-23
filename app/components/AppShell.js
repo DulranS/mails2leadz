@@ -25,7 +25,7 @@ export function usePageMeta(title, subtitle) {
 const TopBar = React.memo(function TopBar({ onOpenMenu }) {
   const { title, subtitle } = useContext(MetaValue);
   const { theme, toggleTheme } = useTheme();
-  const { user } = useAuthUser();
+  const { user, workspace } = useAuthUser();
   const initial = String(user?.displayName || user?.email || '').trim().charAt(0).toUpperCase();
   return (
     <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
@@ -56,6 +56,11 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
           </div>
         </div>
       </div>
+      {workspace && !workspace.isOwner && (
+        <div role="status" className="px-4 py-1.5 text-xs bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border-t border-amber-200 dark:border-amber-800">
+          You are working in a shared workspace as a {workspace.role === 'viewer' ? 'viewer. You can look at everything but not change anything.' : 'manager.'}
+        </div>
+      )}
     </div>
   );
 });

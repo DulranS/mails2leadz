@@ -4,6 +4,7 @@
 //  2. Tenant isolation: a `userId` in the query string or JSON body must equal the token's uid.
 //  3. Provider webhooks (Twilio) can't send a Firebase token: they must carry ?key=WEBHOOK_SECRET.
 //  3b. Invite list: when ALLOWED_EMAILS is set, only those people (and ADMIN_EMAILS) get past this point (lib/access.js).
+//  3c. Team logins (lib/workspace-access.js): a member works inside the owner's workspace with a role; the gate enforces the role.
 //  4. Public: /api/health, /api/auth/callback, /api/unsubscribe (signed-link opt-out), /api/lead-inbox/ingest (own ingest-key check)
 //     /api/cron/prepare-drafts (the scheduler's CRON_SECRET check; it only writes drafts) and /api/inbound (the public enquiry
 //     form: its own write-only key, the owner comes from the key, spam-checked and rate-limited).
@@ -12,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 import { hasAccess, noAccessMessage } from './lib/access.js';
 import { makeLimiter } from './lib/rate-limit.js';
+import { routeAccess } from './lib/workspace-access.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
@@ -56,7 +58,17 @@ async function gate(request) {
   const user = await verifyIdToken(extractBearer(request));
   if (!user) return json(401, 'Please sign in again (missing or expired session).');
 
-  if (!hasAccess(user.email)) return json(403, noAccessMessage(user.email), 'NO_ACCESS');
+  // Team logins: a person invited to someone else's workspace works INSIDE it. The server decides this from its own records
+  // (lib/server/workspace.js), never from anything the browser says. Everything downstream sees the workspace owner as the tenant
+  // (x-user-id) and the real person as the actor (x-actor-uid, x-actor-role).
+  let workspace = null;
+  try { const { resolveWorkspace } = await import('./lib/server/workspace.js'); workspace = await resolveWorkspace(user.uid); } catch { workspace = null; }
+  const tenantUid = workspace ? workspace.ownerUid : user.uid;
+  const role = workspace ? workspace.role : 'owner';
+
+  // Invite-only deployments (ALLOWED_EMAILS) check the person who signed up. Someone invited into a workspace is covered by the
+  // owner, and anyone signed in may open an invite link (/api/team decides what they may do).
+  if (!workspace && pathname !== '/api/team' && !hasAccess(user.email)) return json(403, noAccessMessage(user.email), 'NO_ACCESS');
 
   const rate = limiter.hit(user.uid);
   if (!rate.ok) { const r = json(429, 'Too many requests. Please slow down and try again in a moment.', 'RATE_LIMITED'); r.headers.set('Retry-After', String(rate.retryAfterSec)); return r; }
@@ -66,8 +78,11 @@ async function gate(request) {
     if (!user.email || !admins.includes(user.email.toLowerCase())) return json(403, 'Admin only.');
   }
 
+  const allowed = routeAccess(role, request.method, pathname);
+  if (!allowed.ok) return json(403, allowed.error, allowed.code);
+
   const claimed = searchParams.get('userId');
-  if (claimed && claimed !== user.uid) return json(403, 'You can only access your own data.');
+  if (claimed && claimed !== tenantUid) return json(403, 'You can only access your own data.');
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
     // Routes call request.json() whatever the Content-Type says, so the tenant check must not depend on
@@ -76,7 +91,7 @@ async function gate(request) {
     if (len > MAX_JSON_BYTES) return json(413, 'Request too large');
     try {
       const body = await request.clone().json();
-      if (body && typeof body === 'object' && body.userId && body.userId !== user.uid) {
+      if (body && typeof body === 'object' && body.userId && body.userId !== tenantUid) {
         return json(403, 'You can only access your own data.');
       }
     } catch {
@@ -87,7 +102,11 @@ async function gate(request) {
   const headers = new Headers(request.headers);
   headers.delete('x-user-id');
   headers.delete('x-user-email');
-  headers.set('x-user-id', user.uid);
+  headers.delete('x-actor-uid');
+  headers.delete('x-actor-role');
+  headers.set('x-user-id', tenantUid);
+  headers.set('x-actor-uid', user.uid);
+  headers.set('x-actor-role', role);
   headers.set('x-user-email', user.email || '');
   return NextResponse.next({ request: { headers } });
 }
