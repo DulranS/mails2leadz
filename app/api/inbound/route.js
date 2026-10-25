@@ -12,7 +12,7 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, isAdminMode } f
 import { getDb } from '../../../lib/server/route-helpers.js';
 import { parseIngestKey, verifySecret } from '../../../lib/server/ingest-key.js';
 import { getBusinessProfile, AiError } from '../../../lib/ai-client.js';
-import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
+import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, intakeToQualification, intakeFit, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
 import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
 import { queueDocId, QUEUE_KINDS, QUEUE_STATUS } from '../../../lib/draft-queue.js';
 import { draftInboundReply, DraftError } from '../../../lib/server/draft-core.js';
@@ -62,7 +62,7 @@ export async function GET(request) {
     const uid = await ownerFromKey(getDb(), request.nextUrl.searchParams.get('k'));
     if (!uid) return out(404, { error: 'This link is not active.' });
     const profile = await getBusinessProfile(uid);
-    return out(200, { name: String(profile.businessName || '').slice(0, 100), bookingLink: profile.bookingLink || '' });
+    return out(200, { name: String(profile.businessName || '').slice(0, 100), bookingLink: profile.bookingLink || '', intake: profile.intake === true });
   } catch {
     return out(404, { error: 'This link is not active.' });
   }
@@ -110,6 +110,7 @@ export async function POST(request) {
     if (!existing) {
       // A link a customer passed on (ref-<customer>) makes this a REFERRAL from that customer; anything else is a plain inbound enquiry.
       const write = buildDealWrite({ uid, email: e.email, stage: 'new', businessName: e.company || e.name || '', source: isReferralSrc(e.src) ? 'referral' : 'inbound', sourceDetail: e.src || 'form' });
+      if (e.intake) write.qualification = { ...intakeToQualification(e.intake), updatedAt: now.toISOString() }; // what they said fills budget, authority and timeline
       write.inboundAt = now.toISOString();
       await setDoc(dealRef, write, { merge: true });
     } else {
@@ -129,7 +130,7 @@ export async function POST(request) {
         const r = await draftInboundReply({ db, uid, enquiry: e, senderName: settings.senderName });
         await setDoc(doc(db, 'draft_queue', queueDocId(uid, QUEUE_KINDS.FIRST, e.email)), {
           userId: uid, kind: QUEUE_KINDS.FIRST, status: QUEUE_STATUS.READY, inbound: true, email: e.email,
-          business: e.company || e.name || e.email, quality: 'HOT', score: 100, subject: r.draft.subject, body: r.draft.body,
+          business: e.company || e.name || e.email, quality: intakeFit(e.intake).level === 'light' ? 'WARM' : 'HOT', score: intakeFit(e.intake).level === 'light' ? 60 : 100, subject: r.draft.subject, body: r.draft.body,
           context: enquiryContext(e), createdAt: new Date().toISOString(),
         });
         await setDoc(enqRef, { drafted: true }, { merge: true });

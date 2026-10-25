@@ -17,7 +17,7 @@ import MemberAccount from "../components/MemberAccount";
 import { ANGLES } from "../../lib/angles.js";
 import { sanitizeTeam, TEAM_ROLES, MAX_MEMBERS, MAX_COMMISSION_PCT } from "../../lib/team.js";
 import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
-import { safeHttpsUrl, parseProofPoints, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
+import { safeHttpsUrl, parseProofPoints, parsePackages, playbookStrength, sanitizeKit, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const label = "block text-sm font-medium text-gray-700 dark:text-gray-200";
@@ -25,7 +25,7 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 
 export default function AccountPage() {
   const { user, ready, workspace, raw } = useAuthUser();
-  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "" });
+  const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "", guarantee: "", firstStep: "", costOfInaction: "", beforeAfter: "", honestLimit: "", availability: "", packagesText: "", intakeQuestions: false });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
   const [monthlyOverhead, setMonthlyOverhead] = useState("");
@@ -374,6 +374,37 @@ export default function AccountPage() {
                 <div><label className={label} htmlFor="ob">Your honest answers to common objections <span className="text-xs font-normal text-gray-500">(one per line: objection = answer)</span></label>
                   <textarea id="ob" rows={3} maxLength={1200} placeholder={"It is too expensive = We start with a small fixed-price pilot\nWe already have someone = Fine: we complement them, not replace them"} className={field} value={profile.objectionsText || ""} onChange={(e) => setProfile({ ...profile, objectionsText: e.target.value })} />
                   <p className="text-xs text-gray-500 mt-1">{parseObjections(profile.objectionsText).length} in use (max {KIT_LIMITS.objCount}). Used only when a reply or enquiry truly raises one.</p></div>
+                <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Your messaging playbook</h3>
+                  <p className="text-xs text-gray-500 mt-1">The things that make a reply likelier, each only as true facts you type. The AI uses exactly these and invents nothing: no fake scarcity, discounts or reviews. A lever you leave empty is simply not used.</p>
+                  {(() => { const pb = playbookStrength(sanitizeKit(profile, { validAngleIds: [] })); return (
+                    <div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                      <p className="text-sm text-gray-800 dark:text-gray-100"><b>{pb.done} of {pb.total}</b> levers filled.{pb.next.length > 0 ? " Next most useful:" : " Nothing missing."}</p>
+                      {pb.next.map((n) => <p key={n.id} className="text-xs text-gray-600 dark:text-gray-300 mt-1"><b>{n.label}.</b> {n.why}</p>)}
+                    </div>); })()}
+                </div>
+                <div><label className={label} htmlFor="fs">The smallest first step you offer <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="fs" maxLength={KIT_LIMITS.line} placeholder="A free 15 minute look at your current setup" className={field} value={profile.firstStep || ""} onChange={(e) => setProfile({ ...profile, firstStep: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">Asking for something tiny first gets far more yeses than asking for the sale.</p></div>
+                <div><label className={label} htmlFor="gu">A real guarantee, trial or policy that removes their risk <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="gu" maxLength={KIT_LIMITS.line} placeholder="Full refund in the first 14 days, no questions" className={field} value={profile.guarantee || ""} onChange={(e) => setProfile({ ...profile, guarantee: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">Only a policy you will really honour. The AI mentions it as written and never promises results.</p></div>
+                <div><label className={label} htmlFor="ci">What it costs them to wait <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="ci" maxLength={KIT_LIMITS.line} placeholder="Every missed call is a customer who rings the next shop" className={field} value={profile.costOfInaction || ""} onChange={(e) => setProfile({ ...profile, costOfInaction: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">Losing something hurts more than missing a gain. Only if true. Switches on the "What waiting costs" message angle.</p></div>
+                <div><label className={label} htmlFor="ba">Before and after <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="ba" maxLength={KIT_LIMITS.line} placeholder="From chasing invoices by hand to being paid within a week" className={field} value={profile.beforeAfter || ""} onChange={(e) => setProfile({ ...profile, beforeAfter: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">Switches on the "Before and after" message angle.</p></div>
+                <div><label className={label} htmlFor="hl">One honest limitation <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="hl" maxLength={KIT_LIMITS.line} placeholder="We are a small team, so we take a limited number of clients" className={field} value={profile.honestLimit || ""} onChange={(e) => setProfile({ ...profile, honestLimit: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">Saying one small real limit upfront makes everything else more believable.</p></div>
+                <div><label className={label} htmlFor="av">True availability or deadline <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <input id="av" maxLength={KIT_LIMITS.line} placeholder="Two places left for November" className={field} value={profile.availability || ""} onChange={(e) => setProfile({ ...profile, availability: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">The only scarcity the AI may mention. Keep it true and update it when it changes: remove it when the places are gone.</p></div>
+                <div><label className={label} htmlFor="pk">Your offers: two or three, one highlighted <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+                  <textarea id="pk" rows={3} maxLength={700} placeholder={"Starter | 15000 | 8 posts a month\nGrowth | 30000 | 16 posts and a monthly report | best\nPartner | 60000 | everything, plus a weekly call"} className={field} value={profile.packagesText || ""} onChange={(e) => setProfile({ ...profile, packagesText: e.target.value })} />
+                  <p className="text-xs text-gray-500 mt-1">{parsePackages(profile.packagesText).length} in use (max {KIT_LIMITS.pkgCount}). Name | price | what is included | best (marks the one to highlight). Proposals and closing notes present only these, with these exact prices. More than three options and people choose none.</p></div>
+                <label className="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="mt-1" checked={profile.intakeQuestions === true} onChange={(e) => setProfile({ ...profile, intakeQuestions: e.target.checked })} /><span>Ask three short qualifying questions on my enquiry form (budget, who decides, when). They fill the lead's qualification and make the reply warmer or lighter. Fewer time-wasters, slightly fewer enquiries.</span></label>
                 <div><label className={label} htmlFor="la">Lean on this message angle <span className="text-xs font-normal text-gray-500">(after Business Value shows a winner)</span></label>
                   <select id="la" className={field} value={profile.leanAngle || ""} onChange={(e) => setProfile({ ...profile, leanAngle: e.target.value })}>
                     <option value="">No preference: test all angles evenly</option>
@@ -398,7 +429,7 @@ export default function AccountPage() {
             <div className="sm:col-span-2"><label className={label} htmlFor="cb">Most money you want tied up in stock at once ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="cb" type="number" min="0" inputMode="decimal" className={field} value={capitalBudget} onChange={(e) => setCapitalBudget(e.target.value)} placeholder="Leave empty if you do not hold stock" /><p className="text-xs text-gray-500 mt-1">Only for businesses that buy to resell. The Stock page shows how much room is left.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="bl">Your lines of business <span className="text-xs font-normal text-gray-500">(optional, up to 5, one per line)</span></label><textarea id="bl" rows={3} className={field} value={linesText} onChange={(e) => setLinesText(e.target.value)} placeholder={"Web design service\nUsed car resale\nThe software itself"} /><p className="text-xs text-gray-500 mt-1">Still finding which business works? Name each one, tag customers with their line (Customers, Details), and Business Value compares profit per deal across them.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mx">Most customers you can serve well at once <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mx" type="number" min="0" step="1" inputMode="numeric" className={field} value={maxActive} onChange={(e) => setMaxActive(e.target.value)} placeholder="Leave empty if capacity is not a limit" /><p className="text-xs text-gray-500 mt-1">Business Value then shows how full you are and warns before more outreach would overload delivery.</p></div>
-            <div className="sm:col-span-2"><label className={label} htmlFor="mo">Other monthly costs of running the business ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mo" type="number" min="0" inputMode="decimal" className={field} value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">Wages (include your own if you want it counted), rent, ads, software, transport. Used for profit and break-even in Business Value.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="mo">Other monthly costs of running the business ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="mo" type="number" min="0" inputMode="decimal" className={field} value={monthlyOverhead} onChange={(e) => setMonthlyOverhead(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">Rent, ads, software, transport, and your own pay if you want it counted. Wages of employees on the Payroll page (with EPF and ETF) and loan interest from Assets and loans are counted automatically, so do not repeat them here. Used for profit and break-even in Business Value.</p></div>
           </div>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Compare with hiring an outbound rep (optional)</summary>

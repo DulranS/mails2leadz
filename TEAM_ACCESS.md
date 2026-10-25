@@ -4,8 +4,8 @@ Works the same whether you use AutoLeads only for yourself, sell it to other bus
 
 ## Roles
 - **Owner**: everything, including the team, plan and payments, keys, connections and deleting the account.
-- **Manager**: all the daily work (leads, outreach, replies, CRM, customers, billing, content, SOPs). Cannot change the team, plan, keys, the mailbox connection, or delete the account.
-- **Viewer**: sees everything, changes nothing (also cannot use AI drafting, because that is an action).
+- **Manager**: all the daily work (leads, outreach, replies, CRM, customers, billing, content, SOPs, stock, experiments). Cannot change the team, plan, keys, the mailbox connection, or delete the account. Cannot see the owner's money-and-people records: payroll and salaries, loans, assets, bills, contracts and partner payments (their pages say so, and Business Value hides profit, cash and runway from them, because those depend on those records).
+- **Viewer**: sees what a manager sees, changes nothing (also cannot use AI drafting, because that is an action).
 
 A person has one workspace to work in. They use their own sign-in (Google or email), never a shared password.
 

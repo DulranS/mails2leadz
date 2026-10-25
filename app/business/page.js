@@ -23,6 +23,10 @@ import { computeRunway } from "../../lib/runway.js";
 import { computeCashForecast } from "../../lib/cashflow.js";
 import { computeNps } from "../../lib/nps.js";
 import { sanitizeFinderSettings, drySearches } from "../../lib/lead-finder.js";
+import { sanitizeRates, monthlyEmployerCost, epfReminder, prevYm } from "../../lib/payroll.js";
+import { computeBalance } from "../../lib/balance.js";
+import { computeContracts } from "../../lib/contracts.js";
+import { computePartners } from "../../lib/partners.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { pickBusinessName } from "../../lib/lead-name.js";
 import { stale as savedSnapshot, put } from "../../lib/swr-cache.js"; // (aliased: this page has its own "stale" list of stuck deals)
@@ -76,10 +80,11 @@ function Bar({ value, max, label, right }) {
   );
 }
 
-const EMPTY_RAW = { finder: null, bills: [], experiments: [], stock: [], sops: [], inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } };
+const EMPTY_RAW = { partners: [], partnerPayouts: [], employees: [], payrollRates: {}, assets: [], loans: [], contracts: [], payrollInputs: [], payrollPaid: [], finder: null, bills: [], experiments: [], stock: [], sops: [], inbox: { hotWithEmail: 0 }, content: null, deals: [], invoices: [], unconverted: [], dueFollowUps: 0, outreach: { sent: 0, replied: 0 }, settings: {}, ai: { month: null, byFeature: {}, costMonth: 0, callsMonth: 0, cost90: 0 } };
 
 export default function BusinessValuePage() {
-  const { user, ready: authReady } = useAuthUser(); // one shared sign-in listener: no spinner on the way back to this page
+  const { user, ready: authReady, workspace } = useAuthUser();
+  const ownerView = !workspace || workspace.isOwner; // salaries, loans, bills and contracts are the owner's alone, so profit and cash are shown to the owner only // one shared sign-in listener: no spinner on the way back to this page
   // The last numbers shown (if any) paint at once; the fresh ones load quietly behind them.
   const snapKey = user?.uid ? `${user.uid}|page|business` : null;
   const [loading, setLoading] = useState(() => !(snapKey && savedSnapshot(snapKey)));
@@ -103,7 +108,7 @@ export default function BusinessValuePage() {
       const months = [0, 1, 2].map((i) => new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
       const month = months[0];
       // Shared, cached reads: Customers, Billing, CRM and this page reuse each other's downloads instead of each fetching their own.
-      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap, sopsSnap, stockSnap, expSnap, billsSnap, finderSnap] = await Promise.all([
+      const [dealsSnap, sentSnap, settingsSnap, aiMonthSnap, aiSnap, taskSnap, aiPrev1, aiPrev2, invSnap, inboxSnap, contentSnap, autopilotSnap, teamSnap, sopsSnap, stockSnap, expSnap, billsSnap, finderSnap, empSnap, payrollSnap, assetSnap, loanSnap, contractSnap, inputSnap, monthSnap, partnerSnap, payoutSnap] = await Promise.all([
         getDeals(db, uid),
         getSentEmails(db, uid),
         getSettingsDoc(db, uid, "business").catch(() => null),
@@ -122,6 +127,15 @@ export default function BusinessValuePage() {
         getDocs(query(collection(db, "users", uid, "experiments"), limit(60))).catch(() => null),
         getDocs(query(collection(db, "users", uid, "bills"), limit(120))).catch(() => null),
         getSettingsDoc(db, uid, "lead_finder").catch(() => null),
+        getDocs(query(collection(db, "users", uid, "employees"), limit(100))).catch(() => null),
+        getSettingsDoc(db, uid, "payroll").catch(() => null),
+        getDocs(query(collection(db, "users", uid, "assets"), limit(100))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "loans"), limit(30))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "contracts"), limit(200))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "payroll_inputs"), where("ym", ">=", prevYm(Date.parse(`${prevYm()}-15T00:00:00Z`))), limit(250))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "payroll_months"), limit(36))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "partners"), limit(100))).catch(() => null),
+        getDocs(query(collection(db, "users", uid, "partner_payouts"), limit(1000))).catch(() => null),
       ]);
       const deals = dealsSnap.docs.map((d) => ({ _id: d.id, ...d.data() }));
       const engaged = new Set(deals.filter((d) => !PROSPECT_STAGES.includes(normalizeStage(d.stage))).map((d) => String(d.email).toLowerCase()));
@@ -168,6 +182,15 @@ export default function BusinessValuePage() {
         experiments: expSnap ? expSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
         bills: billsSnap ? billsSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
         finder: finderSnap?.exists?.() ? sanitizeFinderSettings(finderSnap.data()) : null,
+        employees: empSnap ? empSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        payrollRates: payrollSnap?.exists?.() ? payrollSnap.data() : {},
+        assets: assetSnap ? assetSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        loans: loanSnap ? loanSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        contracts: contractSnap ? contractSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        partners: partnerSnap ? partnerSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        partnerPayouts: payoutSnap ? payoutSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : [],
+        payrollInputs: inputSnap ? inputSnap.docs.map((d) => d.data()) : [],
+        payrollPaid: monthSnap ? monthSnap.docs.filter((d) => d.data().epfPaidAt).map((d) => d.id) : [],
         ai: { month: monthDoc, byFeature, costMonth, callsMonth: Number(monthDoc?.calls) || 0, cost90 },
       };
       put(`${uid}|page|business`, next);
@@ -193,8 +216,12 @@ export default function BusinessValuePage() {
   const rec = useMemo(() => computeRecurring({ deals: raw.deals }), [raw]);
   const subsDue = useMemo(() => computeSubscriptionsDue({ deals: raw.deals, invoices: raw.invoices }), [raw]);
   const outlook = useMemo(() => computeOutlook({ metrics: m, recurring: rec, billing }), [m, rec, billing]);
+  const payrollRates = useMemo(() => sanitizeRates(raw.payrollRates), [raw]);
+  const payrollMonthly = useMemo(() => monthlyEmployerCost(raw.employees, payrollRates), [raw, payrollRates]);
+  const loanSummary = useMemo(() => computeBalance({ loans: raw.loans }), [raw]);
   const stock = useMemo(() => computeStock({ items: raw.stock, capitalBudget: raw.settings?.capitalBudget }), [raw]);
-  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock) }), [raw]);
+  const partnerState = useMemo(() => computePartners({ partners: raw.partners, deals: m.deals, paidInvoices: billing.rows.filter((r) => r.state === "paid"), payouts: raw.partnerPayouts }), [raw, m, billing]);
+  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock), payrollMonthly, loanInterestMonthly: loanSummary.totals.interestMonthly, partnerPayouts90: partnerState.totals.payouts90 }), [raw, payrollMonthly, loanSummary, partnerState]);
   const unitEco = useMemo(() => computeUnitEconomics({ roi: m.roi, recurring: rec, marginPct: profit.marginPct }), [m, rec, profit]);
   const profitNext30 = useMemo(() => forecastProfit({ profit, expectedRevenue: outlook.horizons?.[0]?.total, days: 30 }), [profit, outlook]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
@@ -210,9 +237,12 @@ export default function BusinessValuePage() {
   }), [m, raw, billing, customers, rec, sopCoverage, profit]);
   const exps = useMemo(() => computeExperiments({ items: raw.experiments }), [raw]);
   const runway = useMemo(() => computeRunway({ cashOnHand: raw.settings?.cashOnHand ?? null, cashAsOf: raw.settings?.cashAsOf || "", netMonthly: profit.netMonthly, operatingMonthly: profit.operatingMonthly, profitReady: profit.ready, owedToYou: billing.outstanding }), [raw, profit, billing]);
-  const cashFlow = useMemo(() => computeCashForecast({ cash: raw.settings?.cashOnHand ?? null, invoices: billing.rows, bills: raw.bills, operatingMonthly: profit.operatingMonthly }), [raw, billing, profit]);
+  const cashFlow = useMemo(() => computeCashForecast({ cash: raw.settings?.cashOnHand ?? null, invoices: billing.rows, bills: raw.bills, loans: raw.loans, operatingMonthly: profit.operatingMonthly - profit.loanInterestMonthly }), [raw, billing, profit]);
   const nps = useMemo(() => computeNps(m.deals), [m]);
   const finderState = useMemo(() => (raw.finder ? { enabled: raw.finder.enabled, total: raw.finder.searches.length, dry: drySearches(raw.finder).map((x) => (x.location ? `${x.term} in ${x.location}` : x.term)) } : null), [raw]);
+  const balance = useMemo(() => computeBalance({ assets: raw.assets, loans: raw.loans, cash: raw.settings?.cashOnHand ?? null, owedToYou: billing.outstanding, stockAtCost: stock.inStock.capitalTied }), [raw, billing, stock]);
+  const contractsState = useMemo(() => computeContracts({ items: raw.contracts }), [raw]);
+  const epf = useMemo(() => epfReminder({ employees: raw.employees, inputs: raw.payrollInputs, rates: payrollRates, paidMonths: raw.payrollPaid }), [raw, payrollRates]);
   const risks = useMemo(() => computeRisks({ deals: m.deals, mrr: rec?.mrr || 0, supplierConcentrationPct: stock.supplierConcentrationPct, pricePct: whyChosen.pricePct, whyRecorded: whyChosen.recorded, capacity }), [m, rec, stock, whyChosen, capacity]);
   const validation = useMemo(() => { const f = Object.fromEntries((m.present?.funnel || []).map((x) => [x.key, x.count])); return computeValidation({ contacted: f.sent, replied: f.replied, qualified: f.qualified, won: f.won }); }, [m]);
   const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
@@ -272,7 +302,7 @@ export default function BusinessValuePage() {
         customers: customers.total, atRisk: customers.atRisk.count, stuckOnboarding: customers.stuckOnboarding, openIssues: customers.openIssues,
         weekly: Object.fromEntries(weekly.rows.map((r) => [r.key, { cur: r.cur, prev: r.prev }])),
         ...(capacity.set ? { capacity: { used: capacity.used, max: capacity.max, pct: capacity.pct, state: capacity.state } } : {}),
-        ...(profit.ready ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
+        ...(profit.ready && ownerView ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -289,7 +319,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ finder: finderState, experiments: exps, runway, capacity, metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
+  const actions = loading ? [] : buildNextActions({ partners: ownerView ? partnerState : null, contracts: ownerView ? contractsState : null, epf: ownerView ? epf : null, finder: finderState, experiments: exps, runway: ownerView ? runway : null, capacity, metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues, ...(rec.any ? { mrr: rec.mrr, subscribers: rec.subscribers, netNewMrr30: rec.netNewMrr30, renewalsSoon: rec.renewals.dueSoon.count } : {}) };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };
@@ -515,7 +545,7 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
-        {!loading && runway.set && (
+        {!loading && ownerView && runway.set && (
           <Card title="How long your cash lasts">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <Stat label="Cash you have" value={money(runway.cash)} hint={runway.staleDays !== null ? `entered ${runway.staleDays} day${runway.staleDays === 1 ? "" : "s"} ago` : ""} />
@@ -527,7 +557,7 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
-        {!loading && cashFlow.set && (
+        {!loading && ownerView && cashFlow.set && (
           <Card title="Will the money be there when bills are due? (13 weeks)">
             <p className={`text-sm font-semibold ${cashFlow.state === "short" ? "text-red-600 dark:text-red-300" : cashFlow.state === "tight" ? "text-amber-700 dark:text-amber-300" : "text-gray-900 dark:text-white"}`}>{cashFlow.message}</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
@@ -563,6 +593,43 @@ export default function BusinessValuePage() {
             </div>
             <p className="text-sm text-gray-700 dark:text-gray-200 mt-2">{nps.verdict}</p>
             {nps.detractorList.length > 0 && <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">Speak to these first: {nps.detractorList.map((d) => `${d.name} (${d.score})`).join(", ")}. <Link href="/customers" className="underline">Open Customers</Link></p>}
+          </Card>
+        )}
+
+        {!loading && ownerView && (raw.assets.length > 0 || raw.loans.length > 0) && (
+          <Card title="What the business owns and owes">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Stat label="Owns" value={money(balance.totals.assets)} hint="assets, cash, money owed to you, stock" />
+              <Stat label="Owes" value={money(balance.totals.debt)} hint={raw.loans.length ? `${money(balance.totals.monthlyPayments)} a month in loan payments` : "no loans"} />
+              <Stat label="Net worth" value={money(balance.totals.netWorth)} hint={balance.debtToAssetsPct !== null ? `debt is ${balance.debtToAssetsPct}% of what you own` : ""} />
+              <Stat label="Loan interest" value={money(balance.totals.interestMonthly)} hint="a month, counted in Profit" />
+            </div>
+            {balance.warnings.length > 0 && <p className="text-sm text-red-600 dark:text-red-300 mt-2">{balance.warnings[0]}</p>}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Assets lose or gain value by the method you chose for each. <Link href="/assets" className="underline">Open Assets and loans</Link></p>
+          </Card>
+        )}
+
+        {!loading && ownerView && partnerState.any && (
+          <Card title="Your partner network">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Stat label="Leads from partners" value={String(partnerState.totals.leads)} hint={`${partnerState.totals.won} won`} />
+              <Stat label="Won through partners" value={money(partnerState.totals.revenue)} hint="deal value" />
+              <Stat label="Commission earned" value={money(partnerState.totals.earned)} hint={`${money(partnerState.totals.paid)} paid`} />
+              <Stat label="You owe" value={money(partnerState.totals.owed)} hint={partnerState.totals.owed > 0 ? "pay promptly" : "all settled"} />
+            </div>
+            <p className="text-sm text-gray-700 dark:text-gray-200 mt-2">{partnerState.top ? `${partnerState.top.name} brings the most: ${money(partnerState.top.revenue)} won from ${partnerState.top.leads} lead${partnerState.top.leads === 1 ? "" : "s"}.` : "No partner has brought a sale yet. Give each partner their own link and check back."}{partnerState.totals.payouts90 > 0 ? ` ${money(partnerState.totals.payouts90)} paid to partners in 90 days is counted as a cost in Profit.` : ""}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2"><Link href="/partners" className="underline">Open Partners</Link></p>
+          </Card>
+        )}
+
+        {!loading && ownerView && contractsState.attention.length > 0 && (
+          <Card title="Agreements that need a decision">
+            <ul className="space-y-2">
+              {contractsState.attention.slice(0, 4).map((a) => (
+                <li key={a.id} className="text-sm"><span className={`font-medium ${a.state === "ending_soon" ? "text-amber-700 dark:text-amber-300" : "text-red-600 dark:text-red-300"}`}>{a.title} with {a.party}</span><span className="ml-2 text-gray-700 dark:text-gray-200">{a.message}</span></li>
+              ))}
+            </ul>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2"><Link href="/contracts" className="underline">Open Contracts</Link></p>
           </Card>
         )}
 
@@ -667,7 +734,7 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
-        {!loading && (
+        {!loading && ownerView && (
           <Card title="Profit (last 90 days)">
             {profit.ready ? (
               <>

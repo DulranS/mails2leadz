@@ -51,6 +51,7 @@ app/api/tenant/route.js
 app/api/track-company/route.js
 app/api/unsubscribe/route.js
 app/api/worker-queue/route.js
+app/assets/page.js
 app/bets/page.js
 app/billing/page.js
 app/business/page.js
@@ -81,6 +82,7 @@ app/components/ui/NotificationProvider.js
 app/components/ui/Sidebar.js
 app/components/ui/ThemeProvider.js
 app/content/page.js
+app/contracts/page.js
 app/conversations/page.js
 app/crm/page.js
 app/customers/page.js
@@ -93,6 +95,8 @@ app/join/page.js
 app/layout.js
 app/leads/page.js
 app/page.js
+app/partners/page.js
+app/payroll/page.js
 app/privacy/page.js
 app/robots.js
 app/sitemap.js
@@ -118,6 +122,7 @@ lib/apiResponse.js
 lib/app-routes.js
 lib/attribution.js
 lib/autosend.js
+lib/balance.js
 lib/billing-automation.js
 lib/billing-saas.js
 lib/billing.js
@@ -130,6 +135,7 @@ lib/client-firestore.js
 lib/config.js
 lib/connection-status.js
 lib/content.js
+lib/contracts.js
 lib/conversations.js
 lib/currency.js
 lib/customers.js
@@ -168,6 +174,8 @@ lib/nps.js
 lib/onboarding.js
 lib/outlook.js
 lib/owner-report.js
+lib/partners.js
+lib/payroll.js
 lib/phone.js
 lib/plan.js
 lib/post-webhook.js

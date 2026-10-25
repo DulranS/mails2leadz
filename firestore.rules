@@ -75,14 +75,15 @@ service cloud.firestore {
       }
     }
 
-    // Team members inside the owner's workspace. Never the roster (team_access) and never the enquiry / ingest keys.
+    // Team members inside the owner's workspace. Never the roster (team_access), never the enquiry / ingest keys, and never the owner's
+    // money-and-people records: salaries and payroll, loans, assets, bills, contracts and what is paid to partners.
     match /users/{userId}/settings/{docName} {
       allow read: if teamOf(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
       allow write: if teamWrites(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
     }
     match /users/{userId}/{coll}/{rest=**} {
-      allow read: if teamOf(userId) && !(coll in ['settings', 'team_access']);
-      allow write: if teamWrites(userId) && !(coll in ['settings', 'team_access']);
+      allow read: if teamOf(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
+      allow write: if teamWrites(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
     }
 
     // Collections the signed-in user reads and writes directly from the browser.

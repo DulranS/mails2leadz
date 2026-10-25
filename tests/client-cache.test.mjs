@@ -150,9 +150,9 @@ await t('which server calls may have written (and so drop the cache)', async () 
 });
 
 await t('the persistent frame wraps exactly the app pages: not the dashboard (own frame), landing, enquiry form, legal or admin', async () => {
-  for (const p of ['/business', '/inbox', '/content', '/conversations', '/crm', '/customers', '/billing', '/stock', '/bets', '/sops', '/account', '/crm/', '/crm?x']) assert.equal(isShellRoute(p.replace('?x', '')), true, p);
+  for (const p of ['/business', '/inbox', '/content', '/conversations', '/crm', '/customers', '/billing', '/stock', '/bets', '/partners', '/payroll', '/assets', '/contracts', '/sops', '/account', '/crm/', '/crm?x']) assert.equal(isShellRoute(p.replace('?x', '')), true, p);
   for (const p of ['/', '/dashboard', '/enquire', '/privacy', '/terms', '/unsubscribe', '/admin', '/leads', '/crmx', '', null, undefined]) assert.equal(isShellRoute(p), false, String(p));
-  assert.equal(SHELL_ROUTES.length, 11);
+  assert.equal(SHELL_ROUTES.length, 15);
   assert.deepEqual(NAV_ITEMS.map((i) => i.href).filter((h) => h !== '/dashboard').sort(), [...SHELL_ROUTES].sort()); // sidebar and frame agree
 });
 

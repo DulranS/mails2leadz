@@ -1,6 +1,7 @@
 "use client";
 // app/enquire/page.js - the PUBLIC enquiry page a visitor sees (link in bio, QR code, website embed). No sign-in.
 // URL: /enquire?k=<owner's enquiry key>&src=<where this link is shared>&c=<which post, optional>. It only submits an enquiry to its owner.
+import { INTAKE_QUESTIONS, INTAKE_OPTIONS } from "../../lib/inbound.js";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -13,20 +14,22 @@ function Form() {
   const campaign = params.get("c") || ""; // which post brought this visitor (set by the Content page / auto-poster)
   const [name, setName] = useState("");
   const [booking, setBooking] = useState("");
+  const [intake, setIntake] = useState(false);
   const [state, setState] = useState({ status: "idle", error: "", business: "" });
-  const [f, setF] = useState({ name: "", email: "", phone: "", message: "", company_site: "" });
+  const [f, setF] = useState({ name: "", email: "", phone: "", message: "", company_site: "", budget: "", authority: "", timeline: "" });
 
   useEffect(() => {
     let live = true;
     if (!key) { setState((s) => ({ ...s, status: "invalid" })); return undefined; }
     fetch(`/api/inbound?k=${encodeURIComponent(key)}`)
-      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!live) return; if (!r.ok) setState((s) => ({ ...s, status: "invalid" })); else { setName(d.name || ""); setBooking(typeof d.bookingLink === "string" && d.bookingLink.startsWith("https://") ? d.bookingLink : ""); } })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!live) return; if (!r.ok) setState((s) => ({ ...s, status: "invalid" })); else { setName(d.name || ""); setIntake(d.intake === true); setBooking(typeof d.bookingLink === "string" && d.bookingLink.startsWith("https://") ? d.bookingLink : ""); } })
       .catch(() => {});
     return () => { live = false; };
   }, [key]);
 
   const submit = async (e) => {
     e.preventDefault();
+    if (intake && (!f.budget || !f.authority || !f.timeline)) { setState((s) => ({ ...s, error: "Please answer the three short questions so we can reply properly." })); return; }
     setState((s) => ({ ...s, status: "sending", error: "" }));
     try {
       const res = await fetch("/api/inbound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...f, k: key, src, campaign }) });
@@ -52,6 +55,20 @@ function Form() {
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-email">Email <span aria-hidden="true">*</span></label><input id="eq-email" type="email" required className={field} maxLength={120} autoComplete="email" value={f.email} onChange={set("email")} /></div>
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-phone">Phone (optional)</label><input id="eq-phone" type="tel" className={field} maxLength={30} autoComplete="tel" value={f.phone} onChange={set("phone")} /></div>
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-msg">How can we help?</label><textarea id="eq-msg" rows={5} className={field} maxLength={1500} value={f.message} onChange={set("message")} /></div>
+      {intake && (
+        <fieldset className="space-y-3 border-t border-gray-200 pt-3">
+          <legend className="text-sm font-medium text-gray-700">Three quick questions, so we can reply properly</legend>
+          {Object.keys(INTAKE_QUESTIONS).map((k) => (
+            <div key={k}>
+              <label className="block text-sm text-gray-700" htmlFor={`eq-${k}`}>{INTAKE_QUESTIONS[k]} <span aria-hidden="true">*</span></label>
+              <select id={`eq-${k}`} required className={field} value={f[k]} onChange={set(k)}>
+                <option value="">Choose one</option>
+                {INTAKE_OPTIONS[k].map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </div>
+          ))}
+        </fieldset>
+      )}
       {/* Honeypot: invisible to people, tempting to bots. */}
       <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
         <label>Leave this empty<input tabIndex={-1} autoComplete="off" value={f.company_site} onChange={set("company_site")} /></label>
