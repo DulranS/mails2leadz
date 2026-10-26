@@ -7,6 +7,7 @@ import { getDb, requireAdmin, NO_STORE } from '../../../../lib/server/route-help
 import { getTenant, writeTenant } from '../../../../lib/server/tenant.js';
 import { saasEnabled, resolveEntitlement, plansWithOverrides } from '../../../../lib/tenant.js';
 import { planAdminAction } from '../../../../lib/admin-actions.js';
+import { computeTrialConversion } from '../../../../lib/saas-metrics.js';
 import { billingConfigured } from '../../../../lib/server/stripe.js';
 import { vaultConfigured } from '../../../../lib/server/token-vault.js';
 
@@ -39,7 +40,8 @@ export async function GET(request) {
     limited: rows.filter((r) => r.mode === 'limited').length, suspended: rows.filter((r) => r.mode === 'suspended').length,
     aiCostMonthUsd: Math.round(rows.reduce((a, r) => a + r.aiCostMonthUsd, 0) * 100) / 100, truncated: snap.docs.length >= MAX_ROWS,
   };
-  return reply(200, { config, tenants: rows, totals, month });
+  const conversion = computeTrialConversion({ tenants: rows, now: Date.now() });
+  return reply(200, { config, tenants: rows, totals, conversion, month });
 }
 
 export async function POST(request) {

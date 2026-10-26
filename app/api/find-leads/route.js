@@ -13,7 +13,9 @@ import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js'
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { featureAllowed } from '../../../lib/tenant.js';
 import { defaultCtx, FinderError } from '../../../lib/server/lead-finder-io.js';
-import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, limits } from '../../../lib/server/lead-finder-job.js';
+import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, refreshAutoSearches, limits } from '../../../lib/server/lead-finder-job.js';
+import { needsAutoRefresh } from '../../../lib/lead-finder.js';
+import { suggestTargets } from '../../../lib/server/auto-targets.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../lib/draft-queue.js';
 import { OSM_ATTRIBUTION } from '../../../lib/lead-finder.js';
@@ -51,7 +53,12 @@ export async function POST(request) {
     if (action === 'settings') {
       const gate = await guardTenant(db, uid, { feature: 'autopilot' });
       if (gate.response) return gate.response;
-      const settings = await saveFinderSettings(db, uid, { enabled: body.enabled === true, searches: Array.isArray(body.searches) ? body.searches : [] });
+      const patch = { enabled: body.enabled === true, searches: Array.isArray(body.searches) ? body.searches : [] };
+      if (typeof body.autoFind === 'boolean') patch.autoFind = body.autoFind;
+      if (typeof body.area === 'string') patch.area = body.area;
+      let settings = await saveFinderSettings(db, uid, patch);
+      // Turning auto-find on (or setting its area) fills the list now, not tomorrow night.
+      if (needsAutoRefresh(settings)) settings = await refreshAutoSearches(db, uid, { settings, suggest: (u, area) => suggestTargets(db, u, area) });
       return ok({ ...(await overview(db, uid)), settings });
     }
 

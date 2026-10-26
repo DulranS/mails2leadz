@@ -12,6 +12,7 @@ import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
 import { sanitizeLines } from "../../lib/lines.js";
+import { sanitizeSeasonIndex, MONTH_LABELS } from "../../lib/seasonality.js";
 import TeamAccess from "../components/TeamAccess";
 import MemberAccount from "../components/MemberAccount";
 import { ANGLES } from "../../lib/angles.js";
@@ -33,6 +34,7 @@ export default function AccountPage() {
   const [capitalBudget, setCapitalBudget] = useState("");
   const [cashOnHand, setCashOnHand] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
+  const [season, setSeason] = useState(Array(12).fill(""));
   const [cashLoaded, setCashLoaded] = useState({ value: "", asOf: "" });
   const [linesText, setLinesText] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
@@ -69,6 +71,7 @@ export default function AccountPage() {
         if (d.maxActiveCustomers) setMaxActive(String(d.maxActiveCustomers));
         if (d.capitalBudget) setCapitalBudget(String(d.capitalBudget));
         if (d.hourlyRate) setHourlyRate(String(d.hourlyRate));
+        if (Array.isArray(d.seasonIndex) && d.seasonIndex.length === 12) setSeason(d.seasonIndex.map((n) => (Number(n) === 100 ? "" : String(n))));
         if (d.cashOnHand !== undefined && d.cashOnHand !== null) { setCashOnHand(String(d.cashOnHand)); setCashLoaded({ value: String(d.cashOnHand), asOf: d.cashAsOf || "" }); }
         if (Array.isArray(d.businessLines)) setLinesText(d.businessLines.join("\n"));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
@@ -262,6 +265,7 @@ export default function AccountPage() {
         businessLines: sanitizeLines(linesText),
         capitalBudget: Math.max(0, Math.min(1e12, Number(capitalBudget) || 0)),
         hourlyRate: Math.max(0, Math.min(1e7, Number(hourlyRate) || 0)),
+        seasonIndex: sanitizeSeasonIndex(season) || [],
         cashOnHand: cashOnHand === "" ? null : Math.max(0, Math.min(1e12, Number(cashOnHand) || 0)),
         cashAsOf: cashOnHand === "" ? null : (cashOnHand === cashLoaded.value && cashLoaded.asOf ? cashLoaded.asOf : new Date().toISOString()),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
@@ -424,6 +428,13 @@ export default function AccountPage() {
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
+            <div className="sm:col-span-2"><span className={label}>Is your year uneven? <span className="text-xs font-normal text-gray-500">(optional: tourism, events, weddings, education, farming)</span></span>
+              <p className="text-xs text-gray-500 mb-2">For each month, how busy it usually is compared with an average month: 100 is average, 50 is half as busy, 200 is twice as busy. Leave a month empty for average. Business Value then warns before a quiet or a busy stretch, and learns the pattern by itself after a year of sales.</p>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {MONTH_LABELS.map((mn, i) => (
+                  <label key={mn} className="block text-xs text-gray-600 dark:text-gray-300">{mn}<input type="number" inputMode="numeric" min="0" max="400" className={`${field} mt-1`} value={season[i]} onChange={(e) => setSeason((a) => a.map((v, j) => (j === i ? e.target.value : v)))} placeholder="100" /></label>
+                ))}
+              </div></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="hr">What one hour of your own time is worth ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="hr" type="number" min="0" inputMode="decimal" className={field} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} placeholder="What you would pay someone to do it" /><p className="text-xs text-gray-500 mt-1">With your hours entered per customer (Customers, Details), Business Value shows what each hour you put in really earns, and whether the work pays more than your time is worth.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="coh">Cash you have right now ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="coh" type="number" min="0" inputMode="decimal" className={field} value={cashOnHand} onChange={(e) => setCashOnHand(e.target.value)} placeholder="What is available to run the business" /><p className="text-xs text-gray-500 mt-1">Business Value turns this into how many months it lasts at your current costs. Update it now and then; it is only as true as the number you type.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="cb">Most money you want tied up in stock at once ({currencySymbol(currency)}) <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="cb" type="number" min="0" inputMode="decimal" className={field} value={capitalBudget} onChange={(e) => setCapitalBudget(e.target.value)} placeholder="Leave empty if you do not hold stock" /><p className="text-xs text-gray-500 mt-1">Only for businesses that buy to resell. The Stock page shows how much room is left.</p></div>

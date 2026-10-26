@@ -9,7 +9,7 @@ import { getDeals, getInvoices, getPendingFollowUps, getSettingsDoc } from "../.
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
-import { computeCustomers } from "../../lib/customers.js";
+import { computeCustomers, sanitizeReviewLink } from "../../lib/customers.js";
 import { computeRecurring } from "../../lib/recurring.js";
 import { STAGE_LABELS } from "../../lib/deal-utils.js";
 import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from "../../lib/deal-extras.js";
@@ -59,6 +59,7 @@ export default function CustomersPage() {
   const [draft, setDraft] = useState(null);
   const [issueText, setIssueText] = useState("");
   const [reply, setReply] = useState(null); // { email, issueId, plan }
+  const [reviewText, setReviewText] = useState("");
 
   useEffect(() => { if (!auth) setLoading(false); }, []);
 
@@ -76,6 +77,7 @@ export default function CustomersPage() {
       setDeals(dealSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       setInvoices(invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })));
       setSettings(setSnap?.exists?.() ? setSnap.data() : {});
+      setReviewText(setSnap?.exists?.() ? (setSnap.data().reviewLink || "") : "");
       setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
@@ -87,7 +89,8 @@ export default function CustomersPage() {
   useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|customers`, { deals, invoices, settings, tasks }); }, [user?.uid, loading, deals, invoices, settings, tasks]);
 
   const money = makeMoney(normalizeCurrency(settings.currency));
-  const data = useMemo(() => computeCustomers({ deals, invoices, avgDealValue: settings.avgDealValue }), [deals, invoices, settings.avgDealValue]);
+  const data = useMemo(() => computeCustomers({ deals, invoices, avgDealValue: settings.avgDealValue, reviewLink: settings.reviewLink || "" }), [deals, invoices, settings.avgDealValue, settings.reviewLink]);
+  const reviewStats = { asked: data.customers.filter((c) => c.reviewAsked).length, reviewed: data.customers.filter((c) => c.reviewed).length };
   const rec = useMemo(() => computeRecurring({ deals }), [deals]);
   const list = data.customers.filter((c) => (filter === "all" ? true : filter === "action" ? c.health === "at_risk" || c.health === "attention" : c.health === filter));
   const counts = { action: data.atRisk.count + data.attention.count, onboarding: data.customers.filter((c) => c.health === "onboarding").length, healthy: data.customers.filter((c) => c.health === "healthy").length, all: data.total };
@@ -161,6 +164,29 @@ export default function CustomersPage() {
   };
 
   // A happy customer is the cheapest, warmest lead there is. The draft carries THEIR personal enquiry link, so anyone they send is credited to them.
+  const askReview = async (c) => {
+    setBusy(c.email); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/ai-followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: c.email, purpose: "review_ask", businessName: c.businessName, senderName: user?.displayName || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setError(d.error || "Could not create the review ask right now."); return; }
+      setDraft({ kind: "review", customer: c, to: c.email, title: `Review ask: ${c.businessName || c.email}`, subject: d.draft.subject, body: d.draft.body, source: "ai", note: "Read it as if it came from you. Never offer anything in return for a review." });
+    } catch { setError("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
+  const saveReviewLink = async () => {
+    const r = sanitizeReviewLink(reviewText);
+    if (r.error) { setError(r.error); return; }
+    setBusy("review-link"); setError(""); setNotice("");
+    try {
+      await setDoc(doc(db, "users", user.uid, "settings", "business"), { reviewLink: r.link, updatedAt: new Date().toISOString() }, { merge: true });
+      setSettings((s) => ({ ...s, reviewLink: r.link }));
+      setReviewText(r.link);
+      setNotice(r.link ? "Review link saved. Customers you are ready to ask will get it." : "Review link cleared.");
+    } catch (e) { console.error(e); setError("Could not save the review link right now."); }
+    finally { setBusy(""); }
+  };
+  const markReviewed = (c) => saveExtras(c.email, { reviewedAt: new Date().toISOString() }, "Marked as reviewed. Thank you for letting them know.");
   const askReferral = async (c) => {
     setBusy(c.email); setError(""); setNotice("");
     try {
@@ -209,7 +235,7 @@ export default function CustomersPage() {
     const c = dr.customer;
     const stepFor = { onboarding: "welcome", delivery_check: "checkin" };
     try {
-      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "referral" ? { referralAsked: true } : {}), ...(dr.kind === "feedback" ? { feedbackAsked: true } : {}), ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
+      await saveExtras(c.email, (d) => ({ touch: true, ...(dr.kind === "referral" ? { referralAsked: true } : {}), ...(dr.kind === "feedback" ? { feedbackAsked: true } : {}), ...(dr.kind === "review" ? { reviewAskedAt: new Date().toISOString() } : {}), ...(dr.kind === "checkin" && stepFor[c.checkin.purpose] ? { onboardingDone: setOnboardingStep(d.onboardingDone, stepFor[c.checkin.purpose], true) } : {}) }), "Logged. Customer contact recorded.");
       if (dr.kind === "checkin") {
         const match = tasks.filter((t) => lower(t.leadEmail) === lower(c.email) && t.followUpStage === c.checkin.purpose);
         for (const t of match) await completeFollowUpTask(user.uid, t.id, { completedBy: user.email, method: "email_manual" }).catch(() => {});
@@ -225,6 +251,14 @@ export default function CustomersPage() {
   return (
     <DashboardLayout title="Customers" subtitle="Onboard them well, keep them, and catch problems early">
       <div className="space-y-4 sm:space-y-6">
+        <section className={card} aria-label="Public reviews">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Public reviews</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste the page where customers leave a public review (Google, Trustpilot, Facebook). Only happy, settled customers are asked. Asked {reviewStats.asked} · left {reviewStats.reviewed}.</p>
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <input className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder="https://" aria-label="Review link" />
+            <button type="button" onClick={saveReviewLink} disabled={busy === "review-link"} className={`${btn} bg-blue-600 text-white`}>Save link</button>
+          </div>
+        </section>
         {error && <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 rounded-lg p-3 text-sm">{error}</div>}
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
 
@@ -282,6 +316,8 @@ export default function CustomersPage() {
                       <button type="button" disabled={busy === c.email} onClick={() => askCheckin(c)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === c.email ? "Working..." : `Draft check-in`}</button>
                       {c.feedback?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askFeedback(c)} title={c.feedback.why} className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`}>Ask how it went</button>}
                       {c.referral?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReferral(c)} title={c.referral.why} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white`}>Ask for a referral</button>}
+                      {c.review?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReview(c)} title={c.review.why} className={`${btn} bg-amber-500 hover:bg-amber-400 text-white`}>Ask for a review</button>}
+                      {c.reviewAsked && !c.reviewed && <button type="button" disabled={busy === c.email} onClick={() => markReviewed(c)} title="Tap once they tell you they left one" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>They left a review</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
                       <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "", winReason: c.winReason || "", line: c.line || "", hours: c.hoursSpent === null || c.hoursSpent === undefined ? "" : String(c.hoursSpent), nps: c.nps === null || c.nps === undefined ? "" : String(c.nps) }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>

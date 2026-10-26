@@ -36,7 +36,7 @@ export default function AdminPage() {
 
   if (state.loading) return <main className="p-6 text-gray-700 dark:text-gray-200">Loading…</main>;
   if (state.error) return <main className="p-6 max-w-xl mx-auto"><p className="text-gray-800 dark:text-gray-100" role="alert">{state.error}</p></main>;
-  const { config, tenants, totals, note } = state.data;
+  const { config, tenants, totals, note, conversion } = state.data;
 
   return (
     <main className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4">
@@ -54,6 +54,13 @@ export default function AdminPage() {
             {[["Accounts", totals.accounts], ["Paying", totals.paying], ["On trial", totals.trialing], ["Limited", totals.limited], ["Suspended", totals.suspended], [`AI cost ${state.data.month}`, `$${totals.aiCostMonthUsd}`]].map(([k, v]) => <div key={k}><div className="text-xs text-gray-500">{k}</div><div className="text-lg font-semibold">{v}</div></div>)}
           </div>
           {totals.truncated && <p className="text-xs text-amber-600 mt-2">Showing the newest 300 accounts only.</p>}
+          {conversion && (
+            <div className="mt-3 text-sm">
+              <span className="text-xs text-gray-500">Trial to paid</span>{" "}
+              <span className="font-semibold">{conversion.ratePct === null ? `not enough finished trials yet (need ${conversion.minDecided})` : `${conversion.ratePct}%`}</span>
+              <span className="text-xs text-gray-500"> · {conversion.converted} paid of {conversion.decided} finished trials · {conversion.stillTrialing} still trialing · {conversion.lapsed} lapsed. Counts Stripe payments only.</span>
+            </div>
+          )}
         </section>
       )}
       {msg && <p className="text-sm text-gray-700 dark:text-gray-200" role="status">{msg}</p>}

@@ -49,7 +49,7 @@ export async function GET(request) {
   if (ent.saas && isAdminMode()) {
     try {
       const t = await getTenant(db, uid);
-      if (t && Date.now() - new Date(t.lastSeenAt || 0).getTime() > HOUR) { await setDoc(doc(db, 'tenants', uid), { lastSeenAt: new Date().toISOString() }, { merge: true }); invalidateTenant(uid); }
+      if (t && Date.now() - new Date(t.lastSeenAt || 0).getTime() > HOUR) { await setDoc(doc(db, 'tenants', uid), { lastSeenAt: new Date().toISOString() }, { merge: true }); await invalidateTenant(uid); }
     } catch { /* cosmetic */ }
   }
 
@@ -70,7 +70,7 @@ export async function DELETE(request) {
     const t = await getTenant(db, uid);
     if (t?.stripeSubscriptionId) await cancelSubscriptionNow(t.stripeSubscriptionId).catch((e) => console.warn('[tenant] subscription cancel failed:', e?.message));
     await deleteDoc(doc(db, 'tenants', uid));
-    invalidateTenant(uid);
+    await invalidateTenant(uid);
   } catch (e) { console.warn('[tenant] close failed:', e?.message); return reply(500, { error: 'Could not close the account record. Please try again.' }); }
   return reply(200, { closed: true });
 }

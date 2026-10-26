@@ -1,5 +1,65 @@
 # Changelog
 
+## Pass 53 - silent failures become visible: "Needs your attention"
+- **The problem this solves.** The app's on-demand health check only helps if you think to press it. The worse case is a job that stopped days ago while nothing said so. A quiet night also used to look identical to a stopped one, because the nightly record was written only when something happened.
+- **A heartbeat.** The nightly routine now records when it last ran, on every run for an account with an Autopilot switch on, including quiet nights.
+- **Needs your attention** (top of Business Value). Shown only when something you switched on is not working: the nightly routine has not run in 26 hours or ever, the Gmail connection expired, the reply check is stale, automatic posting failed, or auto-find cannot suggest searches. Each line says what to do. When everything is fine, the card does not appear.
+- Only features you have switched on are judged, so nothing is reported as broken when it was never set up.
+- 6 new tests (179 in total). The production build compiles.
+
+## Pass 52 - the commercial readiness document brought up to date
+- COMMERCIAL_READINESS.md listed team logins and lifecycle emails as not built. Both are built (team logins with Manager and Viewer roles in Pass 36, salary privacy in Pass 44, system emails in Pass 36), so the document now lists them as built, with the live checks a buyer would need (team roles, cache backend).
+- Still open, and stated plainly: per-customer sending set-up, load testing, monitoring and backups, and the external gates (Google's Gmail review, legal review, tax).
+- No code changed in this pass.
+
+## Pass 51 - less typing: one-off sales invoice themselves, and fixed costs are entered once
+- **Won sales are invoiced automatically** under the existing auto-billing switch (Account > Autopilot). A one-off deal won in the last 14 days, with a real value and a customer email, gets an invoice the next morning, in the same send window and with the same wording as subscription invoices. Estimates, subscriptions (already automatic), zero values, and wins already invoiced by hand are skipped. Old history is never invoiced when the switch is turned on.
+- **Same-every-month marketing spend.** A tool or subscription is entered once and counts every month until you remove it, instead of being typed in each month.
+- Tests: 173 pass (7 new). The production build compiles.
+- Deliberately still manual: marking invoices paid and bills settled, monthly attendance and payroll inputs, and stock purchases. These depend on money actually moving, and there is no bank connection, so the app asks rather than guesses.
+
+## Pass 50 - finding businesses by itself, from your context
+- **Auto-find** (Find leads > Find businesses for me every night). Turn it on and set your area once. Each refresh, the AI reads what you sell (your offer and profile) and your own results (which kinds of business you emailed, replied to, and won), then suggests the business types most likely to buy, chosen only from the searchable list. Those become nightly searches in your area. New businesses land in your Lead Inbox for review. Nothing is sent.
+- **Turning it on fills the list straight away**; after that the nightly routine refreshes it when it is empty, when every search has gone dry, or once a week. A refresh is never asked for more than once a day, which keeps AI cost low.
+- **Dry searches retire.** A search that stops finding new businesses is dropped, and the AI is not asked to suggest it again (the finder remembers the most recent 60 retired searches), so the nightly run is not spent on an exhausted area.
+- **Failures never stop the night.** If the AI is unreachable or your offer is not described yet, the note on the Find leads page says why and the existing searches are left alone.
+- Works wherever the map has coverage: the area is free text (city, region, or country), and results come from the public OpenStreetMap data already in use. Social networks are not scraped, and no lists are bought.
+- 7 new tests (166 in total). The production build compiles.
+
+## Pass 49 - public review asks, and supplier payment days (the last two gaps)
+- **Public review asks** (`lib/customers.js` reviewState, Customers page). Paste your review page (Google, Trustpilot, Facebook) once under Public reviews. The Ask for a review button appears only for customers who are delivered, settled, activated, not at risk, scoring you 7 or more (or unscored), and not asked in the last 90 days. The draft includes only your own https link and never offers anything in return, because review platforms forbid incentivised reviews. When they tell you they left one, tap They left a review. The card shows asked and left counts.
+- **Supplier payment days** (`lib/cash-cycle.js` supplierDays). Bills now record the day they were billed (optional) and the day they were marked paid. Average days from bill to payment is taken over paid bills in the last 90 days, shown once there are at least 3. The cash cycle subtracts it, so it is no longer measured before supplier credit when you record bill dates.
+- Broadcast emails to many past customers are deliberately not built. A bulk send would be the one feature that can damage your sending reputation and invite spam complaints, and the per-customer asks already cover the relationship channel. This is a decision for you, not an omission.
+- 8 new tests (159 in total). The production build compiles.
+
+## Pass 48 - marketing spend, and cost per win by channel
+- **Marketing spend** (`app/components/MarketingSpendPanel.js`, Business Value page, under the pipeline). Enter what you spent each month on paid ads, content and social, outreach tools, events, or other marketing. Stored under your own account, with remove.
+- **Cost per win** (`lib/marketing.js`): spend over the last three months divided by customers won in the same months, and cost per inbound win (inbound-channel spend over inbound-tagged wins). Withheld as n/a until both spend and wins exist, and flagged as overstated when a month has no spend entered.
+- Referral rewards and partner commission are deliberately not entered here, because Profit already counts them, so counting them twice would understate the return.
+- Review of the marketing gaps against the brief: feedback asks and referral asks were already tracked; public review requests (a link to your Google review page) are not built yet.
+- 6 new tests (151 in total). The production build compiles.
+
+## Pass 47 - contribution margin and the cash cycle, the last two numbers the brief named
+- **Contribution margin** (`lib/profit.js`, Business Value > Profit). What each sale keeps after everything that varies with selling it: delivery cost, partner commission and AI spend, as a share of revenue. Shown with the same rule as gross margin: only when every counted win has a delivery cost, so missing costs can never flatter it. Shown as n/a until then.
+- **Cash cycle** (`lib/cash-cycle.js`, Business Value > cash card). Days to get paid plus days stock sits before it sells. Supplier credit is not included yet, because bills have no payment date; the figure says so. Service businesses are measured on days to get paid alone, and nothing is shown until a paid invoice exists.
+- 5 new tests (145 in total). The production build compiles.
+
+## Pass 46 - a shared cache across instances, and trial-to-paid for the software itself
+- **Shared cache when `REDIS_URL` is set** (`lib/server/shared-cache.js`). The account-standing check that runs before every sending, AI and background call was cached in each server instance's own memory, so a suspension or plan change could take up to a minute to reach every instance, and each instance re-read the database. That cache now lives in Redis when `REDIS_URL` is set, so a change applies to every instance at once and one read serves them all. Without `REDIS_URL`, or when Redis is unreachable, it falls back to the previous per-instance memory and nothing breaks.
+- **Redis fails fast.** The Redis client no longer queues commands while disconnected (it fails at once and the caller falls back) and gives up connecting after 3 seconds, so a Redis outage cannot hold a request open.
+- **Cache stats say which backend is live** (`serverCache: 'redis' | 'memory'`, operator only).
+- **Trial-to-paid for the software** (`lib/saas-metrics.js`), shown on the operator console (`/admin`). Converted = a Stripe subscription exists (accounts an operator switched to a paid plan by hand are not counted, since nothing shows they paid). Decided = paid plus finished-and-unpaid trials; internal and suspended accounts are left out. The rate is withheld until 5 trials have finished.
+- Verified: 140 tests pass (9 new), the production build compiles, and the shared cache was checked across three separate processes against a real Redis server (a value written by one is read by another, deleted by a third, and reads fall back in 0 ms with Redis down). Not yet checked: a live deployment against your own Vercel and Stripe accounts.
+
+## Pass 45 - the rest of the business-model list: seasonal, leasing and renting, lending, and never pricing to the bottom
+Checked your taxonomy (scarcity, commodity, convenience and subscriptions, seasonal trading, leasing and loans, passive assets, brand) against the app. Product, service, subscriptions, scarcity and brand were covered. These were not:
+- **Seasonal businesses (tourism, events, weddings, education, farming).** Account: set how busy each month usually is (100 is average). Business Value shows the season ahead (the next three months, what to expect in sales) and Do this next warns before a quiet or a busy stretch. After a year of sales the app learns the pattern by itself; what you declare always wins. The recent run rate is made season-neutral first, so a busy quarter is not mistaken for the new normal.
+- **Leasing, renting and passive assets.** An asset can now earn rent or lease income each month, shown with its yearly yield. That income counts as revenue in Profit and arrives week by week in the cash forecast.
+- **Lending.** Loans have a direction: money you owe, or money you lent out. Money lent is an asset (a loan book), its interest is income, and the repayments you receive land in the cash forecast on their dates (two weeks later in the harsher case).
+- **Never pricing to the bottom.** What could hurt you now flags when your average sale falls 15% or more against the previous 90 days (only with 3 real sales in each period), and says so when you are winning more customers at lower prices.
+- **Debt risk.** Loan payments are set against what the business keeps each month; over 30% is a warning, over 50% (or payments with no gross profit) is serious.
+- 17 new tests.
+
 ## Pass 44 - a full safety sweep, and salaries stay private
 Instead of another feature, a pass to make sure nothing added in the last rounds can break or leak.
 - **Static scan of the whole app** for undefined variables, undefined components, hooks called after an early return and duplicate props (the kinds of bug a build does not catch because they only crash after sign-in). It found one: an old helper in `lib/firebase-operations.js` (unused, from the first version) called a function that does not exist. Fixed. Nothing else, and the scan was proven to catch both kinds of bug on a planted sample.

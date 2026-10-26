@@ -16,8 +16,8 @@ const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-5
 const ghost = `${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`;
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const today = () => new Date().toISOString().slice(0, 10);
-const blankAsset = () => ({ name: "", cost: "", acquiredAt: today(), method: "straight_line", lifeYears: "5", salvage: "", ratePct: "", manualValue: "" });
-const blankLoan = () => ({ name: "", lender: "", balance: "", ratePct: "", monthlyPayment: "", nextPaymentDate: "" });
+const blankAsset = () => ({ name: "", cost: "", acquiredAt: today(), method: "straight_line", lifeYears: "5", salvage: "", ratePct: "", manualValue: "", monthlyIncome: "" });
+const blankLoan = () => ({ name: "", lender: "", balance: "", ratePct: "", monthlyPayment: "", nextPaymentDate: "", direction: "borrowed" });
 
 export default function AssetsPage() {
   const { user, ready, workspace } = useAuthUser();
@@ -80,8 +80,8 @@ export default function AssetsPage() {
 
         {(assets.length > 0 || loans.length > 0) && (
           <section className={card}>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[["Assets you hold", T.fixedAssets, assets.length ? `${T.depreciation ? `${money(T.depreciation)} lost in value` : ""}${T.depreciation && T.appreciation ? ", " : ""}${T.appreciation ? `${money(T.appreciation)} gained` : ""}` : ""], ["What you owe", T.debt, loans.length ? `${money(T.monthlyPayments)} a month` : ""], ["Interest next month", T.interestMonthly, "counted as a cost in Profit"], ["Owned minus owed", T.fixedAssets - T.debt, "fixed assets only; Business Value adds cash, money owed to you and stock"]].map(([l, v, h]) => (
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              {[["Assets you hold", T.fixedAssets, assets.length ? `${T.depreciation ? `${money(T.depreciation)} lost in value` : ""}${T.depreciation && T.appreciation ? ", " : ""}${T.appreciation ? `${money(T.appreciation)} gained` : ""}` : ""], ["What you owe", T.debt, loans.length ? `${money(T.monthlyPayments)} a month` : ""], ["Interest next month", T.interestMonthly, "counted as a cost in Profit"], ["Income from assets and loans you made", T.otherIncomeMonthly, T.otherIncomeMonthly > 0 ? "a month: rent, leases and interest, counted in Profit and the cash forecast" : "rent, lease or loan interest"], ["Owned minus owed", T.fixedAssets - T.debt, "fixed assets only; Business Value adds cash, money owed to you and stock"]].map(([l, v, h]) => (
                 <div key={l} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3"><p className="text-xs text-gray-500 dark:text-gray-400">{l}</p><p className="text-xl font-bold text-gray-900 dark:text-white">{money(v)}</p><p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{h}</p></div>
               ))}
             </div>
@@ -95,7 +95,7 @@ export default function AssetsPage() {
               {b.assets.map((r) => { const a = assets.find((x) => x.id === r.id); return (
                 <li key={r.id} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                   <span className="font-medium text-gray-900 dark:text-white min-w-[140px]">{r.name}</span>
-                  <span className="text-gray-700 dark:text-gray-200">cost {money(r.cost)}, now {money(r.value)}</span>
+                  <span className="text-gray-700 dark:text-gray-200">cost {money(r.cost)}, now {money(r.value)}{r.incomeMonthly > 0 ? `, earns ${money(r.incomeMonthly)} a month${r.yieldPct !== null ? ` (${r.yieldPct}% a year)` : ""}` : ""}</span>
                   <span className={r.change < 0 ? "text-red-600 dark:text-red-300" : r.change > 0 ? "text-green-700 dark:text-green-300" : "text-gray-500"}>{r.change < 0 ? `down ${money(-r.change)}` : r.change > 0 ? `up ${money(r.change)}` : "unchanged"}</span>
                   <span className="ml-auto flex gap-2">
                     <button type="button" disabled={busy} onClick={() => patch("assets", r.id, a, { sold: true })} className={ghost}>Sold or scrapped</button>
@@ -117,13 +117,14 @@ export default function AssetsPage() {
             </>)}
             {af.method === "appreciating" && <label className="block text-xs text-gray-600 dark:text-gray-300">Yearly gain (%)<input type="number" min="0" step="any" className={`${field} mt-1`} value={af.ratePct} onChange={(e) => setAf({ ...af, ratePct: e.target.value })} /></label>}
             {af.method === "manual" && <label className="block text-xs text-gray-600 dark:text-gray-300">Value today<input type="number" min="0" step="any" className={`${field} mt-1`} value={af.manualValue} onChange={(e) => setAf({ ...af, manualValue: e.target.value })} /></label>}
+            <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Rent or lease income it earns each month <span className="text-gray-400">(optional)</span><input type="number" inputMode="decimal" min="0" step="any" className={`${field} mt-1`} value={af.monthlyIncome} onChange={(e) => setAf({ ...af, monthlyIncome: e.target.value })} placeholder="0" /></label>
             <div className="flex items-end"><button type="submit" disabled={busy} className={`${btn} w-full bg-blue-600 hover:bg-blue-500 text-white`}>Add asset</button></div>
           </form>
         </section>
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-2">Loans and what you owe</h2>
-          {b.loans.length === 0 ? <p className="text-sm text-gray-600 dark:text-gray-300">No loans. Add bank loans, leases and money owed to a lender. Enter loans here, not as bills, so interest and payoff are worked out.</p> : (
+          {b.loans.length === 0 ? <p className="text-sm text-gray-600 dark:text-gray-300">No loans you owe. Add bank loans, leases and money owed to a lender, and money you have lent to others, below. Enter loans here, not as bills, so interest and payoff are worked out.</p> : (
             <ul className="divide-y divide-gray-100 dark:divide-gray-700">
               {b.loans.map((l) => (
                 <li key={l.id} className="py-2 text-sm">
@@ -140,8 +141,27 @@ export default function AssetsPage() {
               ))}
             </ul>
           )}
+          {b.lentLoans.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Money you have lent</h3>
+              <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+                {b.lentLoans.map((l) => (
+                  <li key={l.id} className="py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                    <span className="font-medium text-gray-900 dark:text-white">{l.name}</span>
+                    <span className="text-gray-700 dark:text-gray-200">owed to you {money(l.balance)} at {l.ratePct}%, paying you {money(l.monthlyPayment)} a month</span>
+                    {l.neverPaysOff ? <span className="text-amber-700 dark:text-amber-300">the payment does not cover the interest</span> : <span className="text-gray-600 dark:text-gray-300">{l.monthsLeft} months left, repaid {l.payoffDate}, {money(l.totalInterest)} more interest to come</span>}
+                    <span className="ml-auto flex gap-2">
+                      <button type="button" disabled={busy} onClick={() => patch("loans", l.id, loans.find((x) => x.id === l.id), { closed: true })} className={ghost}>Paid back</button>
+                      <button type="button" disabled={busy} onClick={() => del("loans", l.id, l.name)} className={ghost}>Delete</button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <form onSubmit={addLoan} className="grid grid-cols-1 sm:grid-cols-6 gap-3 mt-4">
-            <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Loan<input className={`${field} mt-1`} value={lf.name} maxLength={80} onChange={(e) => setLf({ ...lf, name: e.target.value })} placeholder="Bank loan" /></label>
+            <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Which way<select className={`${field} mt-1`} value={lf.direction} onChange={(e) => setLf({ ...lf, direction: e.target.value })}><option value="borrowed">I owe this (a loan I took)</option><option value="lent">Someone owes me (money I lent)</option></select></label>
+            <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Name<input className={`${field} mt-1`} value={lf.name} maxLength={80} onChange={(e) => setLf({ ...lf, name: e.target.value })} placeholder={lf.direction === "lent" ? "Loan to a customer" : "Bank loan"} /></label>
             <label className="block text-xs text-gray-600 dark:text-gray-300">What you still owe<input type="number" inputMode="decimal" min="0" step="any" className={`${field} mt-1`} value={lf.balance} onChange={(e) => setLf({ ...lf, balance: e.target.value })} /></label>
             <label className="block text-xs text-gray-600 dark:text-gray-300">Yearly interest (%)<input type="number" min="0" step="any" className={`${field} mt-1`} value={lf.ratePct} onChange={(e) => setLf({ ...lf, ratePct: e.target.value })} /></label>
             <label className="block text-xs text-gray-600 dark:text-gray-300">Monthly payment<input type="number" inputMode="decimal" min="0" step="any" className={`${field} mt-1`} value={lf.monthlyPayment} onChange={(e) => setLf({ ...lf, monthlyPayment: e.target.value })} /></label>

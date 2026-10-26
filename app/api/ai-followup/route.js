@@ -19,6 +19,7 @@ const POST_SALE_BRIEF = {
   quarterly_review: 'A friendly quarterly review invitation. Offer a short call to look at how things are going and plan the next quarter together.',
   churn_winback: 'A short, honest note to a customer who stopped (cancelled or did not renew). Do not guilt, pressure or discount. Say you were glad to work with them, ask ONE open question about what would have made it better, and say the door is open if their needs change. Never claim to know why they left, and never invent changes or new features.',
   feedback_ask: 'A short, warm, personal note to a customer who has had their result. Thank them, then ask ONE simple thing: in a sentence or two, how did it go, and is there a result they noticed? Say you would love to mention it if they are happy for you to, and that they can say no. No incentives, no pressure, no guilt, no pre-written praise for them to copy. Never invent or assume any result.',
+  review_ask: 'A short, warm, personal note to a customer who has been happy with the result. Thank them, then ask ONE simple thing: if they have a minute, would they leave a short, honest review on the page linked below. Say that a few honest words help other businesses find us, and that it is completely fine to say no. Never offer a reward, discount or anything in return for a review (review platforms forbid it). Do not write the review for them and do not suggest what it should say. Never invent or assume any result.',
   referral_ask: 'A short, warm, personal note to a customer who is doing well. Thank them genuinely, then ask for ONE introduction to someone who has the same need (the kind of business in "Who we help"). Make it easy: if a personal link is given, say they can simply pass it on or forward the email. No incentives, no pressure, no guilt; say you will look after anyone they send. Do not mention results or numbers that are not provided.',
 };
 
@@ -31,6 +32,15 @@ async function referralLinkFor(db, uid, request, customerName) {
     const envBase = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();
     const origin = /^https:\/\//.test(envBase) ? new URL(envBase).origin : request.nextUrl.origin;
     return buildReferralLink({ origin, key: d.key, customerName });
+  } catch { return ''; }
+}
+
+// The owner's public review page, read from their own business settings. Only a valid https link is ever sent.
+async function reviewLinkFor(db, uid) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid, 'settings', 'business'));
+    const link = snap.exists() ? String(snap.data().reviewLink || '') : '';
+    return /^https:\/\/\S{4,300}$/.test(link) ? link : '';
   } catch { return ''; }
 }
 
@@ -48,8 +58,8 @@ export async function POST(request) {
         return NextResponse.json({ success: false, code: 'NO_PROFILE', error: 'Tell the AI what you sell first: Account → "Your business".' }, { status: 422, headers: NO_STORE });
       }
       const system = `You write short, warm customer-care emails for a small business to a customer who has ALREADY bought.\n${SALES_GUARDRAILS.replace('one clear low-pressure call to action (e.g. a short reply or a quick call)', 'one easy question or next step')}\n${POST_SALE_BRIEF[purpose]}\nNever invent project details, results, dates or numbers; if you would need them, keep the wording general.\nReturn JSON only: {"subject": string, "body": string}. The body is plain text with a greeting and a sign-off.`;
-      const refLink = purpose === 'referral_ask' ? await referralLinkFor(getDb(), uid, request, businessName || to) : '';
-      const prompt = `${profileBlock(profile)}\n\nCustomer: ${clip(businessName || to, 100)}\n${purpose === 'referral_ask' ? (refLink ? `Personal link the customer can pass on (the ONLY link you may include, exactly as written): ${refLink}\n` : 'No link is available: ask them to reply with an introduction.\n') : ''}Sign off as: ${clip(senderName || profile.businessName || 'the sender', 80)}\n\nWrite the email.`;
+      const refLink = purpose === 'referral_ask' ? await referralLinkFor(getDb(), uid, request, businessName || to) : purpose === 'review_ask' ? await reviewLinkFor(getDb(), uid) : '';
+      const prompt = `${profileBlock(profile)}\n\nCustomer: ${clip(businessName || to, 100)}\n${purpose === 'review_ask' ? (refLink ? 'Public review link the customer can use (the ONLY link you may include, exactly as written): ' + refLink + '\n' : 'No review link is set: ask them to reply and say you will send it.\n') : ''}${purpose === 'referral_ask' ? (refLink ? `Personal link the customer can pass on (the ONLY link you may include, exactly as written): ${refLink}\n` : 'No link is available: ask them to reply with an introduction.\n') : ''}Sign off as: ${clip(senderName || profile.businessName || 'the sender', 80)}\n\nWrite the email.`;
       const ai = await callAI({ uid, feature: 'customer_checkin', tier: 'fast', system, prompt, maxTokens: 400 });
       const subject = clip(ai.data?.subject, 150).replace(/[\r\n]+/g, ' ');
       const text = String(ai.data?.body || '').trim();

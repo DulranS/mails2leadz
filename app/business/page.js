@@ -9,6 +9,9 @@ import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
+import { computeCashCycle, supplierDays } from "../../lib/cash-cycle.js";
+import MarketingSpendPanel from "../components/MarketingSpendPanel";
+import OpsStatusCard from "../components/OpsStatusCard";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
 import { computeProfit, forecastProfit } from "../../lib/profit.js";
 import { computeCapacity } from "../../lib/capacity.js";
@@ -27,6 +30,7 @@ import { sanitizeRates, monthlyEmployerCost, epfReminder, prevYm } from "../../l
 import { computeBalance } from "../../lib/balance.js";
 import { computeContracts } from "../../lib/contracts.js";
 import { computePartners } from "../../lib/partners.js";
+import { sanitizeSeasonIndex, learnSeasonIndex, seasonAhead } from "../../lib/seasonality.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { pickBusinessName } from "../../lib/lead-name.js";
 import { stale as savedSnapshot, put } from "../../lib/swr-cache.js"; // (aliased: this page has its own "stale" list of stuck deals)
@@ -218,10 +222,11 @@ export default function BusinessValuePage() {
   const outlook = useMemo(() => computeOutlook({ metrics: m, recurring: rec, billing }), [m, rec, billing]);
   const payrollRates = useMemo(() => sanitizeRates(raw.payrollRates), [raw]);
   const payrollMonthly = useMemo(() => monthlyEmployerCost(raw.employees, payrollRates), [raw, payrollRates]);
-  const loanSummary = useMemo(() => computeBalance({ loans: raw.loans }), [raw]);
+  const loanSummary = useMemo(() => computeBalance({ assets: raw.assets, loans: raw.loans }), [raw]); // interest paid and received, rent and lease income
   const stock = useMemo(() => computeStock({ items: raw.stock, capitalBudget: raw.settings?.capitalBudget }), [raw]);
   const partnerState = useMemo(() => computePartners({ partners: raw.partners, deals: m.deals, paidInvoices: billing.rows.filter((r) => r.state === "paid"), payouts: raw.partnerPayouts }), [raw, m, billing]);
-  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock), payrollMonthly, loanInterestMonthly: loanSummary.totals.interestMonthly, partnerPayouts90: partnerState.totals.payouts90 }), [raw, payrollMonthly, loanSummary, partnerState]);
+  const cycle = useMemo(() => computeCashCycle({ avgDaysToPay: billing.avgDaysToPay, avgDaysToSell: stock.sold.avgDaysToSell, avgDaysToPaySuppliers: supplierDays(raw.bills).avg }), [billing, stock, raw]);
+  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock), payrollMonthly, loanInterestMonthly: loanSummary.totals.interestMonthly, partnerPayouts90: partnerState.totals.payouts90, otherIncomeMonthly: loanSummary.totals.otherIncomeMonthly }), [raw, payrollMonthly, loanSummary, partnerState]);
   const unitEco = useMemo(() => computeUnitEconomics({ roi: m.roi, recurring: rec, marginPct: profit.marginPct }), [m, rec, profit]);
   const profitNext30 = useMemo(() => forecastProfit({ profit, expectedRevenue: outlook.horizons?.[0]?.total, days: 30 }), [profit, outlook]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);
@@ -237,13 +242,14 @@ export default function BusinessValuePage() {
   }), [m, raw, billing, customers, rec, sopCoverage, profit]);
   const exps = useMemo(() => computeExperiments({ items: raw.experiments }), [raw]);
   const runway = useMemo(() => computeRunway({ cashOnHand: raw.settings?.cashOnHand ?? null, cashAsOf: raw.settings?.cashAsOf || "", netMonthly: profit.netMonthly, operatingMonthly: profit.operatingMonthly, profitReady: profit.ready, owedToYou: billing.outstanding }), [raw, profit, billing]);
-  const cashFlow = useMemo(() => computeCashForecast({ cash: raw.settings?.cashOnHand ?? null, invoices: billing.rows, bills: raw.bills, loans: raw.loans, operatingMonthly: profit.operatingMonthly - profit.loanInterestMonthly }), [raw, billing, profit]);
+  const cashFlow = useMemo(() => computeCashForecast({ cash: raw.settings?.cashOnHand ?? null, invoices: billing.rows, bills: raw.bills, loans: raw.loans, incomeMonthly: loanSummary.totals.assetIncomeMonthly, operatingMonthly: profit.operatingMonthly - profit.loanInterestMonthly }), [raw, billing, profit, loanSummary]);
   const nps = useMemo(() => computeNps(m.deals), [m]);
+  const seasonState = useMemo(() => seasonAhead({ declared: sanitizeSeasonIndex(raw.settings?.seasonIndex), learned: learnSeasonIndex(m.deals), runRateMonthly: m.future?.monthlyRunRate || 0 }), [raw, m]);
   const finderState = useMemo(() => (raw.finder ? { enabled: raw.finder.enabled, total: raw.finder.searches.length, dry: drySearches(raw.finder).map((x) => (x.location ? `${x.term} in ${x.location}` : x.term)) } : null), [raw]);
   const balance = useMemo(() => computeBalance({ assets: raw.assets, loans: raw.loans, cash: raw.settings?.cashOnHand ?? null, owedToYou: billing.outstanding, stockAtCost: stock.inStock.capitalTied }), [raw, billing, stock]);
   const contractsState = useMemo(() => computeContracts({ items: raw.contracts }), [raw]);
   const epf = useMemo(() => epfReminder({ employees: raw.employees, inputs: raw.payrollInputs, rates: payrollRates, paidMonths: raw.payrollPaid }), [raw, payrollRates]);
-  const risks = useMemo(() => computeRisks({ deals: m.deals, mrr: rec?.mrr || 0, supplierConcentrationPct: stock.supplierConcentrationPct, pricePct: whyChosen.pricePct, whyRecorded: whyChosen.recorded, capacity }), [m, rec, stock, whyChosen, capacity]);
+  const risks = useMemo(() => computeRisks({ deals: m.deals, mrr: rec?.mrr || 0, supplierConcentrationPct: stock.supplierConcentrationPct, pricePct: whyChosen.pricePct, whyRecorded: whyChosen.recorded, capacity, debtService: { monthlyPayments: loanSummary.totals.monthlyPayments, grossProfitMonthly: profit.grossProfit / 3 } }), [m, rec, stock, whyChosen, capacity, loanSummary, profit]);
   const validation = useMemo(() => { const f = Object.fromEntries((m.present?.funnel || []).map((x) => [x.key, x.count])); return computeValidation({ contacted: f.sent, replied: f.replied, qualified: f.qualified, won: f.won }); }, [m]);
   const teamReport = useMemo(() => computeTeam({ deals: raw.deals, invoices: raw.invoices, members: raw.team || [] }), [raw]);
   const qualGaps = useMemo(() => countQualificationGaps(raw.deals), [raw]);
@@ -302,7 +308,7 @@ export default function BusinessValuePage() {
         customers: customers.total, atRisk: customers.atRisk.count, stuckOnboarding: customers.stuckOnboarding, openIssues: customers.openIssues,
         weekly: Object.fromEntries(weekly.rows.map((r) => [r.key, { cur: r.cur, prev: r.prev }])),
         ...(capacity.set ? { capacity: { used: capacity.used, max: capacity.max, pct: capacity.pct, state: capacity.state } } : {}),
-        ...(profit.ready && ownerView ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
+        ...(profit.ready && ownerView ? { profit: { grossProfit: profit.grossProfit, marginPct: profit.marginPct, contributionPct: profit.contributionPct, costsEnteredPct: profit.coverage, runningCosts90: profit.operating90, netProfit90: profit.netProfit90, breakEvenMonthly: profit.breakEvenMonthly, lossMakingDeals: profit.losers.length } } : {}),
       };
       const res = await fetch("/api/ai-insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facts }) });
       const data = await res.json().catch(() => ({}));
@@ -319,7 +325,7 @@ export default function BusinessValuePage() {
     );
   }
 
-  const actions = loading ? [] : buildNextActions({ partners: ownerView ? partnerState : null, contracts: ownerView ? contractsState : null, epf: ownerView ? epf : null, finder: finderState, experiments: exps, runway: ownerView ? runway : null, capacity, metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
+  const actions = loading ? [] : buildNextActions({ season: seasonState, partners: ownerView ? partnerState : null, contracts: ownerView ? contractsState : null, epf: ownerView ? epf : null, finder: finderState, experiments: exps, runway: ownerView ? runway : null, capacity, metrics: m, unconvertedReplies: raw.unconverted, dueFollowUps: raw.dueFollowUps, monthlyGoal: Number(raw.settings?.monthlyGoal) || 0, hasProfile: !!raw.settings?.profile?.offer, sentRecently: raw.outreach.sent, billing, unbilled, customers, qualGaps, inbox: raw.inbox, content: raw.content, subsDue, recurring: rec, autopilot: raw.autopilot ? { settings: raw.autopilot, lastAutoSend: raw.autopilot.lastAutoSend } : null });
   const snapshot = { openCount: m.present.openCount, openValue: m.present.openValue, weighted: m.present.weightedPipeline, forecast30: m.future.horizons[0].expected, outstanding: billing.outstanding, overdueCount: billing.overdue.count, overdueAmount: billing.overdue.amount, customers: customers.total, atRiskCount: customers.atRisk.count, openIssues: customers.openIssues, ...(rec.any ? { mrr: rec.mrr, subscribers: rec.subscribers, netNewMrr30: rec.netNewMrr30, renewalsSoon: rec.renewals.dueSoon.count } : {}) };
   const reportText = () => weeklyReportText({ kpis: weekly, snapshot, money, businessName: raw.settings?.profile?.businessName || "" });
   const copyReport = async () => { try { await navigator.clipboard.writeText(reportText()); setReportMsg("Copied."); } catch { setReportMsg("Could not copy. Select the table and copy it by hand."); } };
@@ -334,6 +340,7 @@ export default function BusinessValuePage() {
 
   return (
     <DashboardLayout title="Business Value" subtitle="What you've earned, what's in play, and what to expect">
+      {user?.uid && <div className="mb-4"><OpsStatusCard uid={user.uid} /></div>}
       <div className="space-y-4 sm:space-y-6">
         {error && <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 rounded-lg p-3 text-sm">{error}</div>}
         {m.notes.length > 0 && !loading && (
@@ -560,11 +567,12 @@ export default function BusinessValuePage() {
         {!loading && ownerView && cashFlow.set && (
           <Card title="Will the money be there when bills are due? (13 weeks)">
             <p className={`text-sm font-semibold ${cashFlow.state === "short" ? "text-red-600 dark:text-red-300" : cashFlow.state === "tight" ? "text-amber-700 dark:text-amber-300" : "text-gray-900 dark:text-white"}`}>{cashFlow.message}</p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-3">
               <Stat label="Cash now" value={money(cashFlow.startCash)} hint={`${money(cashFlow.unpaidAmount)} unpaid invoices (${cashFlow.unpaidInvoices})`} />
               <Stat label="Lowest point, paid on time" value={money(cashFlow.onTime.lowest.amount)} hint={`week ${cashFlow.onTime.lowest.week}`} />
               <Stat label="Lowest point, paid late" value={money(cashFlow.late.lowest.amount)} hint={`week ${cashFlow.late.lowest.week}`} />
               <Stat label="Cash in 13 weeks" value={money(cashFlow.late.endCash)} hint={`${money(cashFlow.onTime.endCash)} if paid on time`} />
+              <Stat label="Cash cycle" value={cycle.days === null ? "n/a" : `${cycle.days} days`} hint={cycle.note} />
             </div>
             <div className="overflow-x-auto mt-3">
               <table className="w-full text-sm">
@@ -651,6 +659,16 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
+        {!loading && seasonState.set && seasonState.state !== "normal" && (
+          <Card title="The season ahead">
+            <div className="grid grid-cols-3 gap-3">
+              {seasonState.rows.map((r) => <Stat key={r.label} label={r.label} value={`${r.index}%`} hint={r.expected === null ? "of an average month" : `about ${money(r.expected)} in sales`} />)}
+            </div>
+            <p className={`text-sm mt-2 ${seasonState.state === "quiet" ? "text-amber-700 dark:text-amber-300" : "text-gray-700 dark:text-gray-200"}`}>{seasonState.message}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{seasonState.source === "declared" ? "From the pattern you set in Account." : "Learned from your own sales over more than a year."}</p>
+          </Card>
+        )}
+
         {!loading && capacity.set && (
           <Card title="Delivery capacity">
             <div className="flex flex-wrap items-center gap-4">
@@ -685,6 +703,9 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
+        {!loading && user?.uid && (
+          <div className="mt-4 sm:mt-6"><MarketingSpendPanel uid={user.uid} money={money} deals={raw.deals} /></div>
+        )}
         {!loading && stock.count > 0 && (
           <Card title="Stock and capital">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -741,6 +762,7 @@ export default function BusinessValuePage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <Stat label="Won revenue" value={money(profit.revenue)} hint={`${profit.wins} win${profit.wins === 1 ? "" : "s"}`} />
                   <Stat label="Gross profit" value={money(profit.grossProfit)} hint={profit.marginPct !== null ? `${profit.marginPct}% margin${profit.complete ? "" : " (costed wins only)"}` : "enter delivery costs to see margin"} />
+                  <Stat label="Contribution margin" value={profit.contributionPct === null ? "n/a" : `${profit.contributionPct}%`} hint={profit.contributionPct === null ? "needs a delivery cost on every sale" : "after delivery, partner commission and AI"} />
                   <Stat label="Running costs" value={money(profit.operating90)} hint={`${money(profit.operatingMonthly)}/month + AI ${money2(profit.aiCost90)}`} />
                   <Stat label="Net profit" value={money(profit.netProfit90)} hint={`${money(profit.netMonthly)}/month average`} />
                 </div>

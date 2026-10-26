@@ -10,7 +10,7 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
 const ghost = `${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`;
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
-const blank = () => ({ name: "", amount: "", dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), repeat: "once" });
+const blank = () => ({ name: "", amount: "", issuedAt: "", dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), repeat: "once" });
 
 export default function BillsPanel({ uid, money }) {
   const [bills, setBills] = useState([]);
@@ -50,12 +50,15 @@ export default function BillsPanel({ uid, money }) {
     <section className={card} aria-label="Bills you must pay">
       <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">Bills you must pay</h2>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Rent, suppliers, loan repayments, tools. Enter them with the day they are due, and Business Value shows whether the money will be there on that day, not just whether you are profitable.</p>
-      <form onSubmit={add} className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+      <form onSubmit={add} className="grid grid-cols-1 sm:grid-cols-7 gap-3">
         <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">What for
           <input className={`${field} mt-1`} value={form.name} maxLength={BILL_LIMITS.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Rent, supplier, loan" />
         </label>
         <label className="block text-xs text-gray-600 dark:text-gray-300">Amount
           <input className={`${field} mt-1`} type="number" inputMode="decimal" min="0" step="any" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+        </label>
+        <label className="block text-xs text-gray-600 dark:text-gray-300">Billed on (optional)
+          <input className={`${field} mt-1`} type="date" value={form.issuedAt} onChange={(e) => setForm({ ...form, issuedAt: e.target.value })} />
         </label>
         <label className="block text-xs text-gray-600 dark:text-gray-300">Due on
           <input className={`${field} mt-1`} type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />

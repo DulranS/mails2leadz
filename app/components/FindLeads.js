@@ -81,13 +81,22 @@ export function useLeadFinder({ enabled, onAdded }) {
     catch (e) { setError(e.message); return false; }
   }, []);
 
+  const saveAuto = useCallback(async (patch) => {
+    const cur = state.settings;
+    try {
+      setError("");
+      merge(await call("POST", { action: "settings", enabled: patch.enabled ?? cur.enabled, searches: cur.searches, autoFind: patch.autoFind ?? cur.autoFind, area: patch.area ?? cur.area }));
+      return true;
+    } catch (e) { setError(e.message); return false; }
+  }, [state.settings]);
+
   const addNightly = useCallback(async (terms, place) => {
     const cur = state.settings;
     const add = (Array.isArray(terms) ? terms : [terms]).map((term) => ({ term, location: place }));
     return saveSettings({ enabled: true, searches: [...cur.searches, ...add] });
   }, [saveSettings, state.settings]);
 
-  return { ...state, running, error, setError, start, importList, loop, cancel, saveSettings, addNightly, refresh };
+  return { ...state, running, error, setError, start, importList, loop, cancel, saveSettings, saveAuto, addNightly, refresh };
 }
 
 const pct = (job) => (job?.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : job?.status === "done" ? 100 : 0);
@@ -221,6 +230,16 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
           </ul>
         ) : <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">No saved searches yet. Type one above and save it, or use "Every night" on a suggestion below.</p>}
         <button type="button" onClick={saveThis} disabled={!canGo || settings.searches.length >= 5} className={`${btn} border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 mt-2`}>Save this search for every night</button>
+      </div>
+
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <label className="inline-flex items-center gap-2 min-h-[44px] text-sm text-gray-800 dark:text-gray-100">
+          <input type="checkbox" className="h-5 w-5" checked={settings.autoFind === true} onChange={(e) => finder.saveAuto({ autoFind: e.target.checked, enabled: e.target.checked ? true : settings.enabled })} />
+          Find businesses for me every night
+        </label>
+        <p className="text-xs text-gray-600 dark:text-gray-300">The app reads what you sell and your own results, suggests the kinds of business most likely to buy from you, and searches your area for them. New businesses land in your inbox for review. Nothing is sent. Describe your offer in Account first.</p>
+        <input key={settings.area} className="mt-2 w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" defaultValue={settings.area} placeholder="Your area, for example Colombo, Sri Lanka" aria-label="Area to search" onBlur={(e) => { const v = e.target.value.trim(); if (v !== settings.area) finder.saveAuto({ area: v }); }} />
+        {settings.autoNote && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Last update: {settings.autoNote}</p>}
       </div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">

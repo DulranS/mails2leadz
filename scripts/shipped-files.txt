@@ -37,6 +37,7 @@ app/api/list-whatsapp-contacts/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js
 app/api/notices/route.js
+app/api/ops-status/route.js
 app/api/research-company/route.js
 app/api/saas/checkout/route.js
 app/api/saas/portal/route.js
@@ -69,7 +70,9 @@ app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
 app/components/FindLeads.js
 app/components/LegalPage.js
+app/components/MarketingSpendPanel.js
 app/components/MemberAccount.js
+app/components/OpsStatusCard.js
 app/components/TeamAccess.js
 app/components/WorkerQueue.js
 app/components/ui/Button.js
@@ -129,6 +132,7 @@ lib/billing.js
 lib/brand.js
 lib/business-metrics.js
 lib/capacity.js
+lib/cash-cycle.js
 lib/cashflow.js
 lib/client-data.js
 lib/client-firestore.js
@@ -168,10 +172,12 @@ lib/lead-scoring-engine.js
 lib/lifecycle.js
 lib/lines.js
 lib/logger.js
+lib/marketing.js
 lib/next-actions.js
 lib/niche.js
 lib/nps.js
 lib/onboarding.js
+lib/ops-status.js
 lib/outlook.js
 lib/owner-report.js
 lib/partners.js
@@ -199,12 +205,15 @@ lib/request-deduplication.js
 lib/retry-queue.js
 lib/risk.js
 lib/runway.js
+lib/saas-metrics.js
 lib/sales-kit.js
+lib/seasonality.js
 lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
 lib/server/auto-post.js
+lib/server/auto-targets.js
 lib/server/autosend.js
 lib/server/bounces.js
 lib/server/content-plan.js
@@ -225,6 +234,7 @@ lib/server/prepare-drafts.js
 lib/server/queue-checks.js
 lib/server/reply-triage.js
 lib/server/route-helpers.js
+lib/server/shared-cache.js
 lib/server/stripe.js
 lib/server/suppress.js
 lib/server/system-mail.js
