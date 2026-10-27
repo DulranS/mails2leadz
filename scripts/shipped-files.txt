@@ -19,6 +19,8 @@ app/api/cron/autosend/route.js
 app/api/cron/check-replies/route.js
 app/api/cron/daily-ops/route.js
 app/api/cron/prepare-drafts/route.js
+app/api/deal-screen/route.js
+app/api/deal-watch/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
 app/api/find-leads/route.js
@@ -65,6 +67,8 @@ app/components/BillsPanel.js
 app/components/CRM.js
 app/components/ClientLayout.js
 app/components/ConnectionBanner.js
+app/components/DealScreen.js
+app/components/DealWatch.js
 app/components/DraftModal.js
 app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
@@ -147,9 +151,12 @@ lib/dashboard-config.js
 lib/dashboard-utils.js
 lib/deal-client.js
 lib/deal-extras.js
+lib/deal-screen.js
 lib/deal-utils.js
+lib/deal-watch.js
 lib/default-templates.js
 lib/draft-queue.js
+lib/enrich-extract.js
 lib/error-handler.js
 lib/errors.js
 lib/experiments.js
@@ -184,6 +191,7 @@ lib/partners.js
 lib/payroll.js
 lib/phone.js
 lib/plan.js
+lib/post-sale.js
 lib/post-webhook.js
 lib/profit.js
 lib/rate-limit.js
@@ -220,6 +228,7 @@ lib/server/content-plan.js
 lib/server/cron-auth.js
 lib/server/daily-count.js
 lib/server/daily-ops.js
+lib/server/deal-watch-job.js
 lib/server/draft-core.js
 lib/server/gmail-offline.js
 lib/server/googleGmailClient.js
@@ -232,6 +241,7 @@ lib/server/niche-evidence.js
 lib/server/owner-report.js
 lib/server/prepare-drafts.js
 lib/server/queue-checks.js
+lib/server/relationship-asks.js
 lib/server/reply-triage.js
 lib/server/route-helpers.js
 lib/server/shared-cache.js

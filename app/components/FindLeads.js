@@ -21,6 +21,9 @@ async function call(method, body) {
   return data;
 }
 
+import DealScreen from "./DealScreen";
+import DealWatch from "./DealWatch";
+
 export function useLeadFinder({ enabled, onAdded }) {
   const [state, setState] = useState({ job: { status: "idle" }, settings: { enabled: false, searches: [], next: 0 }, today: null, loaded: false });
   const [running, setRunning] = useState(false); // this tab is currently working through a search
@@ -241,6 +244,9 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
         <input key={settings.area} className="mt-2 w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" defaultValue={settings.area} placeholder="Your area, for example Colombo, Sri Lanka" aria-label="Area to search" onBlur={(e) => { const v = e.target.value.trim(); if (v !== settings.area) finder.saveAuto({ area: v }); }} />
         {settings.autoNote && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Last update: {settings.autoNote}</p>}
       </div>
+
+      <div className="mt-4"><DealScreen /></div>
+      <div className="mt-4"><DealWatch /></div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
         {today ? `Today: ${today.searches} of ${today.searchesPerDay} searches, ${today.sites} of ${today.sitesPerDay} websites. ` : ""}Map data © OpenStreetMap contributors (ODbL). Coverage differs by city: where the map is thin, import a list from Google Maps instead.

@@ -1,5 +1,37 @@
 # Changelog
 
+## Pass 57 - relationship asks are drafted automatically
+- **The gap this closes.** Review and feedback asks were created only when someone clicked the button on each customer. Now the nightly routine drafts them.
+- **Who gets asked.** Customers who meet the same rules as the button: delivered, settled, activated, not at risk, scoring 7 or more or not scored, and not asked in the last 90 days. A review ask is drafted only when the owner has saved a review link. Reviews come first, then feedback. At most 5 per night.
+- **Approval stays in place.** Drafts go to the same queue as the other drafts, marked as asks. Nothing is sent unless auto-send is on. Turning Autopilot off stops the nightly drafting.
+- **No duplicates.** An ask already waiting, sent or dismissed is not drafted again, and the date of each ask is recorded on the customer, so the button and the nightly job agree.
+- **One source of wording.** The follow-up route's customer messages moved into lib/post-sale.js, unchanged, so the button and the nightly job say the same things. Testing found a missing sender name in the shared builder; it is fixed in both callers.
+- **Not automated, on purpose.** Referral asks need a personal link built from the request, so they stay a button.
+- Limit: the nightly drafts asks inside the existing time box, and the queue shows them as follow-up items. Check how they appear in the drafts list on a live run.
+- Tests: 210 pass (4 new). The production build compiles.
+## Pass 56 - deal finding that runs by itself: listing feeds, a price memory, and a nightly watch
+- **The gap this closes.** Undervalued-deal screening needed a pasted list every time. The nightly search only found sales leads. Now the app watches listing feeds for you.
+- **Listing feeds** (Find leads > Watch listing feeds every night). Paste up to 5 RSS or Atom feed addresses that listing sites offer for your searches. Only web addresses are accepted. Each night the app reads only the new items, takes the price from the text (currency-marked amounts, k and lakh, mileage and years excluded), and keeps a note of prices per model or area.
+- **Judged against memory, not against themselves.** A new listing is compared with the prices seen before that night. It becomes a deal at 20% or more under the typical price with a profit after your sell fee and costs, and a check at more than 60% under. A group needs 4 prices before it can be judged, so the first night only learns.
+- **Pasted lists teach the watch.** Screening a CSV now remembers its prices by default (untick to skip), so the nightly watch starts from work already done.
+- **No extra schedule.** The watch runs inside the nightly job that already exists, with a 60-second time box, and never blocks drafts or the sales finder.
+- **Safety.** Feeds are read through the same safe fetch the crawler uses, which blocks private and internal addresses. Titles and descriptions are shown as plain text. Nothing is bought, contacted, or sent.
+- **Limits, stated plainly.** The watch can only see what the feeds contain, and many listing sites do not offer feeds. Groups are judged by the first three words of the title, so messy titles compare less well. Profit is an estimate before taxes and time.
+- Tests: 206 pass (9 new), including a full nightly run against a fake store. The production build compiles.
+## Pass 55 - an easier menu on phones and tablets
+- **The menu is grouped into five sections**: Today (Dashboard, Lead Inbox, Conversations), Sell (CRM & Deals, Content, Customers, Partners), Money (Business Value, Billing, Assets and loans, Stock), Run the business (Payroll, Contracts, SOPs, Experiments), and Account. Every page keeps its address and name.
+- **Mobile menu**: Escape closes it; the page behind it stops scrolling while it is open; and its links leave the tab order when it is closed, so a keyboard or screen reader does not reach hidden items.
+- Desktop layout is unchanged. Touch targets were already at least 44px in the shared buttons and inputs, so no sizes changed.
+- Tests: 198 pass. The production build compiles. The layout has not been viewed on real devices.
+## Pass 54 - the enrichment script's best features in the app, and a deal screen for undervalued listings
+- **Named decision makers** (`lib/enrich-extract.js`). A founder, owner, director or other leader named on the business's own public pages is recorded with their title, and their first name fills the first-name field, so outreach greets a real person. Ported from the Python enricher and checked against its test expectations. Marketing words alone ("owner", "our founder story") are not treated as people. Testimonials can name a person as an owner of a different business, so review names before a campaign.
+- **Company size** is estimated from explicit headcounts first, then weaker wording; unknown is shown as unknown, never guessed.
+- **Sitemap discovery.** For sites whose menus are built by JavaScript, the sitemap's contact, about and team pages are read even when the links are not visible. Same site only, at most 8 pages, nothing from blog or shop sections.
+- **Inbox keeps the name.** Moving a lead to the inbox no longer clears its first and last name.
+- **Deal screen** (Find leads page, `lib/deal-screen.js`). Paste or upload a CSV of listings (cars, land, anything with a price). Each listing is compared with the median of its comparable group (same model and year, or same area) using only the listings in the same file. Listings 20% or more under the median are shown as deals with an estimated profit after your sell fee and repair and transport costs. Listings more than 60% under are shown as "too cheap to be true" for checking, not as deals. Groups with fewer than 4 listings give no benchmark. Nothing is fetched from marketplaces.
+- **Not ported, on purpose:** the Google Maps search in the uploaded worker. The app's own search uses public OpenStreetMap data and works with EasyScraper or any CSV you import.
+- **Not ported yet:** resumable checkpoints for very long runs (the app's search jobs resume by step instead), a per-row enrichment status column, and sharing one crawl across duplicate websites.
+- Tests: 198 pass (10 new). The production build compiles.
 ## Pass 53 - silent failures become visible: "Needs your attention"
 - **The problem this solves.** The app's on-demand health check only helps if you think to press it. The worse case is a job that stopped days ago while nothing said so. A quiet night also used to look identical to a stopped one, because the nightly record was written only when something happened.
 - **A heartbeat.** The nightly routine now records when it last ran, on every run for an account with an Autopilot switch on, including quiet nights.

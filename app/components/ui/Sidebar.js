@@ -1,9 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { APP_NAME } from '../../../lib/brand.js';
 
 export const Sidebar = ({ isOpen, onToggle, children }) => {
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onToggle(); };
+    const previous = document.body.style.overflow;
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden'; // the page behind an open menu does not scroll
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen, onToggle]);
+
   return (
     <>
       {/* Mobile overlay */}
@@ -18,8 +30,8 @@ export const Sidebar = ({ isOpen, onToggle, children }) => {
       {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700
-        transform transition-transform duration-300 ease-in-out lg:translate-x-0
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        transform transition-[transform,visibility] duration-300 ease-in-out lg:translate-x-0 lg:visible
+        ${isOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'}
       `}>
         <div className="flex flex-col h-full">
           {/* Header */}

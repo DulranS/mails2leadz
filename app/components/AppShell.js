@@ -69,7 +69,14 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
 const Nav = React.memo(function Nav({ open, onToggle }) {
   return (
     <Sidebar isOpen={open} onToggle={onToggle}>
-      {NAV_ITEMS.map((item) => <SidebarItem key={item.href} href={item.href} icon={item.icon} label={item.label} />)}
+      {NAV_ITEMS.map((item, i) => (
+        <div key={item.href}>
+          {item.group && (i === 0 || NAV_ITEMS[i - 1].group !== item.group) && (
+            <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{item.group}</div>
+          )}
+          <SidebarItem href={item.href} icon={item.icon} label={item.label} />
+        </div>
+      ))}
     </Sidebar>
   );
 });
