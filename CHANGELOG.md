@@ -1,5 +1,9 @@
 # Changelog
 
+## Pass 59 - imports and searches finish overnight, without the page open
+- A search or list import used to move forward only while the Find leads page was open. Starting one now marks the owner for the nightly run, and the nightly run carries the job forward within the same time box and the same daily website limit (500 by default).
+- Stopping at the daily limit, finishing, or running out of time all end the carry cleanly. If the index update fails, the job still runs.
+- Tests: 214 pass (2 new). The production build compiles.
 ## Pass 58 - final: no re-prospecting of existing customers
 - A lead whose email is already in the CRM (any deal stage) is no longer put in the Lead Inbox. It is counted as "already in CRM" in the job's stats. Previously drafting already avoided cold email to them; now the inbox does not show them either.
 - The CRM's email list is cached for five minutes, so a long search does not re-read deals on every batch. If the deals cannot be read, nothing is skipped.

@@ -7,7 +7,7 @@ import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { listAutopilotUsers, prepareDraftsForUser, loadAutopilot } from '../../../../lib/server/prepare-drafts.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { defaultCtx } from '../../../../lib/server/lead-finder-io.js';
-import { listFinderUsers, runNightly } from '../../../../lib/server/lead-finder-job.js';
+import { listFinderUsers, runNightly, carryJobForward } from '../../../../lib/server/lead-finder-job.js';
 import { listDealWatchUsers, runDealWatch } from '../../../../lib/server/deal-watch-job.js';
 import { prepareRelationshipAsks } from '../../../../lib/server/relationship-asks.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
@@ -36,6 +36,9 @@ export async function GET(request) {
         if (!featureAllowed(await getEntitlement(db, uid), 'autopilot')) continue;
         const r = await runNightly(db, uid, { ctx, deadline: Math.min(finderDeadline, Date.now() + 60000) });
         summary.finderOwners++; summary.finderAdded += r.added || 0;
+        // A search or list import still in progress carries on overnight, within the same daily website limit.
+        const carried = await carryJobForward(db, uid, { ctx, until: Math.min(finderDeadline, Date.now() + 70000) });
+        summary.finderAdded += carried.added || 0;
       } catch (e) {
         console.error('[cron find-leads] owner failed:', uid, e?.message);
       }
