@@ -1,5 +1,9 @@
 # Changelog
 
+## Pass 58 - final: no re-prospecting of existing customers
+- A lead whose email is already in the CRM (any deal stage) is no longer put in the Lead Inbox. It is counted as "already in CRM" in the job's stats. Previously drafting already avoided cold email to them; now the inbox does not show them either.
+- The CRM's email list is cached for five minutes, so a long search does not re-read deals on every batch. If the deals cannot be read, nothing is skipped.
+- Tests: 212 pass (2 new). The production build compiles.
 ## Pass 57 - relationship asks are drafted automatically
 - **The gap this closes.** Review and feedback asks were created only when someone clicked the button on each customer. Now the nightly routine drafts them.
 - **Who gets asked.** Customers who meet the same rules as the button: delivered, settled, activated, not at risk, scoring 7 or more or not scored, and not asked in the last 90 days. A review ask is drafted only when the owner has saved a review link. Reviews come first, then feedback. At most 5 per night.
