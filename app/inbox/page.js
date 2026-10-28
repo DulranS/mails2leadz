@@ -243,6 +243,15 @@ export default function InboxPage() {
                       {l.email || "no email"}{l.whatsapp_number ? ` · ${l.whatsapp_number}` : ""}{l.first_name ? ` · contact: ${l.first_name} ${l.last_name || ""}` : ""}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{l.address}{l.rating ? ` · ${l.rating} stars (${l.review_count})` : ""}</div>
+                    {(l.decision_maker_name || (l.company_size && l.company_size !== "unknown") || l.enrich_status) && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {[
+                          l.decision_maker_name ? `${l.decision_maker_name}${l.decision_maker_title ? ` (${l.decision_maker_title})` : ""}` : "",
+                          l.company_size && l.company_size !== "unknown" ? `${l.company_size} business` : "",
+                          ({ email_found: "email on site", phone_only: "phone only on site", no_contact_on_site: "no contact on site", no_website: "no website", unreachable: "site unreachable", blocked_by_robots: "site blocks reading" })[l.enrich_status] || "",
+                        ].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
                   </div>
                 </label>
               </li>

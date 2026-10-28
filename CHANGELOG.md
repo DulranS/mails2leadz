@@ -1,5 +1,13 @@
 # Changelog
 
+## Pass 63 - referral asks are drafted automatically too
+- The nightly routine now drafts referral asks for customers who are ready for them, each with that customer's personal link. Order: review, then referral, then feedback; at most 5 a night. Nothing is sent without your approval.
+- Referral asks need your inbound key and an https public address (NEXT_PUBLIC_BASE_URL). Without both, referral asks stay a button on the Customers page, and the preflight check flags a missing or non-https address.
+- Each queued ask records its date on the customer, so the buttons and the nightly job agree.
+- Tests: 221 pass. The production build compiles.
+## Pass 62 - the Lead Inbox shows what was found about each lead
+- Each lead row now shows the decision maker and their title, the company size when known, and what the website gave (email on site, phone only, no contact on site, no website, unreachable, or blocks reading). Until now this was stored but not shown where leads are reviewed.
+- Tests: 220 pass. The production build compiles.
 ## Pass 61 - every imported business shows what its website gave us
 - Each business read by an import or search now gets one outcome: email found, phone only, no contact details on the site, no website listed, site unreachable, or site asks robots not to be read.
 - The Find leads screen summarises the outcomes for the job, for example "12 email found · 4 phone only · 3 no website listed". The totals carry across nights, so an overnight import keeps its count.

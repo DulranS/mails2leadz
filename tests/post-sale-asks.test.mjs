@@ -39,3 +39,9 @@ test('feedback asks never mention a review link', () => {
   assert.ok(m.system.includes(POST_SALE_BRIEF.feedback_ask));
   assert.ok(!/review link/i.test(m.prompt));
 });
+
+test('referral asks are picked after reviews and before feedback, and only when the owner can give a link', () => {
+  const c = { email: 'r@x.com', businessName: 'R', review: { eligible: false }, referral: { eligible: true }, feedback: { eligible: true } };
+  assert.equal(pickAsks([c], { referral: true })[0].purpose, 'referral_ask');
+  assert.equal(pickAsks([c], { referral: false })[0].purpose, 'feedback_ask');
+});
