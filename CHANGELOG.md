@@ -1,5 +1,10 @@
 # Changelog
 
+## Pass 61 - every imported business shows what its website gave us
+- Each business read by an import or search now gets one outcome: email found, phone only, no contact details on the site, no website listed, site unreachable, or site asks robots not to be read.
+- The Find leads screen summarises the outcomes for the job, for example "12 email found · 4 phone only · 3 no website listed". The totals carry across nights, so an overnight import keeps its count.
+- The outcome is stored on each lead row, so it can be used later when reviewing leads.
+- Tests: 220 pass (1 new). The production build compiles.
 ## Pass 60 - a preflight check for the live run
 - New command: npm run preflight. Reads .env.local and lists every setting a live run needs, marked OK, MISS (required) or skip (optional). It prints names and status only, never values. Required settings cover the database, the AI key, Gmail, the app address, the cron and opt-out secrets, and Stripe when SAAS_MODE is on.
 - Checked the database security rules against the new deal-watch data. The owner's own data and the server login are both covered, so no rule change was needed.

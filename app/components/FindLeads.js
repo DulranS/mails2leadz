@@ -174,6 +174,14 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
               Left out: {[st.noContact ? `${st.noContact} with no contact details` : "", ...left, st.skipped ? `${st.skipped} already in your inbox, already contacted, already a customer or deal, or opted out` : "", st.blocked ? `${st.blocked} whose site asks robots to stay away` : "", st.unreachable ? `${st.unreachable} websites that would not load` : "", st.alreadySeen ? `${st.alreadySeen} found by an earlier search` : ""].filter(Boolean).join(" · ")}.
             </p>
           )}
+          {!live && st.outcomes && Object.keys(st.outcomes).length > 0 && (
+            <p className="text-xs text-gray-600 dark:text-gray-300">
+              What the websites gave us: {[
+                ["email_found", "email found"], ["phone_only", "phone only"], ["no_contact_on_site", "no contact details on the site"],
+                ["no_website", "no website listed"], ["unreachable", "site unreachable"], ["blocked_by_robots", "site asks robots not to be read"],
+              ].filter(([k]) => st.outcomes[k]).map(([k, label]) => `${st.outcomes[k]} ${label}`).join(" · ")}.
+            </p>
+          )}
           {job.note && <p className="text-sm text-amber-800 dark:text-amber-200">{job.note}</p>}
           {job.full && !live && <p className="text-xs text-gray-600 dark:text-gray-300">This area has more businesses than one search can list. Try a smaller district to find the rest.</p>}
           {live && (
