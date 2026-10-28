@@ -17,6 +17,8 @@ const StageOptions = () =>
     </option>
   ));
 
+import { whatsappLink, smsLink } from "../../lib/channel-drafts.js";
+
 export const CRM = ({
   leads = [],
   contacts = {},
@@ -56,6 +58,18 @@ export const CRM = ({
     } catch { setClosing({ busy: false, error: "Could not reach the server.", draft: null }); }
   };
   const askClosingDraft = (lead) => askDraft("closing", lead, "Next step");
+  // Short WhatsApp and SMS drafts, and call briefs. The owner opens each one in their own app and presses send.
+  const [chat, setChat] = useState({ busy: false, error: "", kind: "", text: "", phone: "" });
+  const askChatDraft = async (lead, kind) => {
+    setChat({ busy: true, error: "", kind, text: "", phone: lead.phone || "" });
+    try {
+      const res = await fetch("/api/ai-channel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, email: lead.email, company: lead.company, stage: lead.stage, note: lead.note || lead.lastNote || "" }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.success) { setChat({ busy: false, error: d.error || "Could not create the draft right now.", kind, text: "", phone: "" }); return; }
+      setChat({ busy: false, error: "", kind, text: d.text, phone: lead.phone || "" });
+    } catch { setChat({ busy: false, error: "Could not reach the server.", kind, text: "", phone: "" }); }
+  };
+  const chatLink = () => (chat.kind === "whatsapp" ? whatsappLink(chat.phone, chat.text) : chat.kind === "sms" ? smsLink(chat.phone, chat.text) : "");
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -502,6 +516,22 @@ export const CRM = ({
                 {closing.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-1">{closing.error}</p>}
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button size="sm" loading={closing.busy} disabled={closing.busy} onClick={() => askClosingDraft(selectedLead)}>Draft the next-step email</Button>
+                  <Button size="sm" loading={chat.busy && chat.kind === "whatsapp"} disabled={chat.busy} onClick={() => askChatDraft(selectedLead, "whatsapp")}>Draft WhatsApp</Button>
+                  <Button size="sm" loading={chat.busy && chat.kind === "sms"} disabled={chat.busy} onClick={() => askChatDraft(selectedLead, "sms")}>Draft SMS</Button>
+                  <Button size="sm" loading={chat.busy && chat.kind === "call_brief"} disabled={chat.busy} onClick={() => askChatDraft(selectedLead, "call_brief")}>Call brief</Button>
+                  {chat.error && <p className="text-xs text-red-600 dark:text-red-300" role="alert">{chat.error}</p>}
+                  {chat.text && (
+                    <div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm whitespace-pre-wrap text-gray-900 dark:text-gray-100">
+                      {chat.text}
+                      {chat.kind !== "call_brief" && (
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          {chatLink()
+                            ? <a href={chatLink()} target="_blank" rel="noopener noreferrer" className="text-xs underline text-blue-600 dark:text-blue-300">{chat.kind === "whatsapp" ? "Open in WhatsApp" : "Open in SMS"} (you press send)</a>
+                            : <span className="text-xs text-gray-500 dark:text-gray-400">Add the phone number with its country code to open this in your app.</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <Button size="sm" variant="outline" disabled={closing.busy} onClick={() => askDraft("proposal", selectedLead, "Proposal")}>Draft a proposal</Button>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A proposal uses only your notes, the qualification answers, what you sell and the deal value. With no real value set, it leaves [price to confirm] for you to fill in.</p>

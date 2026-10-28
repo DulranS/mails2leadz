@@ -2,6 +2,7 @@ app/account/page.js
 app/admin/page.js
 app/analytics/page.js
 app/api/admin/tenants/route.js
+app/api/ai-channel/route.js
 app/api/ai-content/route.js
 app/api/ai-deal-draft/route.js
 app/api/ai-followup/route.js
@@ -138,6 +139,7 @@ lib/business-metrics.js
 lib/capacity.js
 lib/cash-cycle.js
 lib/cashflow.js
+lib/channel-drafts.js
 lib/client-data.js
 lib/client-firestore.js
 lib/config.js
@@ -217,6 +219,7 @@ lib/runway.js
 lib/saas-metrics.js
 lib/sales-kit.js
 lib/seasonality.js
+lib/send-ramp.js
 lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
@@ -245,6 +248,7 @@ lib/server/queue-checks.js
 lib/server/relationship-asks.js
 lib/server/reply-triage.js
 lib/server/route-helpers.js
+lib/server/send-ramp.js
 lib/server/shared-cache.js
 lib/server/stripe.js
 lib/server/suppress.js

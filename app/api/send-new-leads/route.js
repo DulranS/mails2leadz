@@ -132,6 +132,8 @@ const createMimeMessage = ({ from, to, subject, body, images = [], attachments =
 // ============================================================================
 // POST HANDLER
 // ============================================================================
+import { sendRampCap } from '../../../lib/server/send-ramp.js';
+
 export async function POST(request) {
   const headers = {
     'Content-Type': 'application/json',
@@ -174,7 +176,7 @@ export async function POST(request) {
     
     const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
     if (gate.response) return gate.response;
-    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS); // the plan can only LOWER the safety cap
+    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS, await sendRampCap(db, userId, { record: true })); // the plan can only LOWER the safety cap; a new account ramps up
 
     // Daily limit (dates are compared as ISO strings, see lib/server/daily-count.js)
     const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);

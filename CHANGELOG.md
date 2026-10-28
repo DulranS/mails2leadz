@@ -1,5 +1,18 @@
 # Changelog
 
+## Pass 65 - a new sending account warms up before it sends at volume
+- A sending account now starts at 20 emails a day and rises in weekly steps: 50 from day 7, 100 from day 14, 200 from day 21, then no extra limit of its own (the plan and the safety cap still apply). This protects a new Gmail account from being flagged for sudden bulk sending.
+- Accounts that were already sending before this rule existed keep their full cap. The ramp only starts for an account with no earlier sent email.
+- The dashboard's remaining-today count uses the same cap, so it shows the real limit.
+- Tests: 227 pass (3 new). The production build compiles.
+
+Housekeeping: the earlier test failures in this session came from a full disk in the working environment, not from the code. The suite is green on a clean install.
+## Pass 64 - AI drafts for WhatsApp, SMS and calls, with one tap to send
+- The deal drawer has three buttons: Draft WhatsApp, Draft SMS and Call brief. The AI writes a short message from the offer, the business, the stage and the notes. For WhatsApp and SMS, a link opens your own app with the text already filled in, and you press send.
+- A call brief gives four short lines before a call: where they are, what they care about, the likely objection with a reply, and an opening sentence. It says "not recorded" rather than guessing.
+- Nothing is sent or called by the app. No WhatsApp, SMS or calling API is used, so there is no per-message cost, no bulk-sending rule, and no carrier or call-recording setup from this feature.
+- Tests: 224 pass (3 new). The production build compiles.
+- Not built on purpose: automatic WhatsApp or SMS campaigns (per-message cost and sender registration), automatic outbound calls (cost and recording consent), and automatic Instagram messages (the platform prohibits automated direct messages). Existing Twilio calling and SMS remain available only where you have set up your own keys.
 ## Pass 63 - referral asks are drafted automatically too
 - The nightly routine now drafts referral asks for customers who are ready for them, each with that customer's personal link. Order: review, then referral, then feedback; at most 5 a night. Nothing is sent without your approval.
 - Referral asks need your inbound key and an https public address (NEXT_PUBLIC_BASE_URL). Without both, referral asks stay a button on the Customers page, and the preflight check flags a missing or non-https address.

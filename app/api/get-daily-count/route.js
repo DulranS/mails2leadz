@@ -29,6 +29,8 @@ const CONFIG = {
 };
 
 // Daily usage for the dashboard's quota meters. Dates are compared as ISO strings (see lib/server/daily-count.js).
+import { sendRampCap } from '../../../lib/server/send-ramp.js';
+
 export async function POST(request) {
   const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' };
   try {
@@ -46,15 +48,16 @@ export async function POST(request) {
     ]);
     const n = (v) => (typeof v === 'number' ? v : 0);
 
+    const rampLimit = Math.min(CONFIG.MAX_DAILY_EMAILS, await sendRampCap(db, userId));
     return NextResponse.json({
       count: n(emails),
       whatsappCount: n(whatsapp),
       smsCount: n(sms),
       callCount: n(calls),
-      limits: { emails: CONFIG.MAX_DAILY_EMAILS, whatsapp: CONFIG.MAX_DAILY_WHATSAPP, sms: CONFIG.MAX_DAILY_SMS, calls: CONFIG.MAX_DAILY_CALLS },
+      limits: { emails: rampLimit, whatsapp: CONFIG.MAX_DAILY_WHATSAPP, sms: CONFIG.MAX_DAILY_SMS, calls: CONFIG.MAX_DAILY_CALLS },
       resetTime: startOfTomorrowIso(),
       remaining: {
-        emails: Math.max(0, CONFIG.MAX_DAILY_EMAILS - n(emails)),
+        emails: Math.max(0, rampLimit - n(emails)),
         whatsapp: Math.max(0, CONFIG.MAX_DAILY_WHATSAPP - n(whatsapp)),
         sms: Math.max(0, CONFIG.MAX_DAILY_SMS - n(sms)),
         calls: Math.max(0, CONFIG.MAX_DAILY_CALLS - n(calls)),

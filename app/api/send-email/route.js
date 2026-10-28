@@ -15,6 +15,8 @@ import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { nicheFields } from '../../../lib/niche.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
+import { sendRampCap } from '../../../lib/server/send-ramp.js';
+
 export const maxDuration = 60;
 
 // Firebase Config
@@ -189,7 +191,7 @@ export async function POST(request) {
 
     const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
     if (gate.response) return gate.response;
-    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS); // the plan can only LOWER the safety cap
+    const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS, await sendRampCap(db, userId, { record: true })); // the plan can only LOWER the safety cap; a new account ramps up
 
     // Daily safety limit (protects the customer's Gmail account from being flagged for bulk sending).
     // If today's count cannot be read at all we continue, but the limit is also enforced inside the loop below.
