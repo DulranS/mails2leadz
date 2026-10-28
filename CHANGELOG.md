@@ -1,5 +1,9 @@
 # Changelog
 
+## Pass 60 - a preflight check for the live run
+- New command: npm run preflight. Reads .env.local and lists every setting a live run needs, marked OK, MISS (required) or skip (optional). It prints names and status only, never values. Required settings cover the database, the AI key, Gmail, the app address, the cron and opt-out secrets, and Stripe when SAAS_MODE is on.
+- Checked the database security rules against the new deal-watch data. The owner's own data and the server login are both covered, so no rule change was needed.
+- Tests: 219 pass (5 new). The production build compiles.
 ## Pass 59 - imports and searches finish overnight, without the page open
 - A search or list import used to move forward only while the Find leads page was open. Starting one now marks the owner for the nightly run, and the nightly run carries the job forward within the same time box and the same daily website limit (500 by default).
 - Stopping at the daily limit, finishing, or running out of time all end the carry cleanly. If the index update fails, the job still runs.

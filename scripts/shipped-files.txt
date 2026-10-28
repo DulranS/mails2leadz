@@ -193,6 +193,7 @@ lib/phone.js
 lib/plan.js
 lib/post-sale.js
 lib/post-webhook.js
+lib/preflight.js
 lib/profit.js
 lib/rate-limit.js
 lib/raw-email.js
