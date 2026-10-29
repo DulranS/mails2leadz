@@ -1,5 +1,15 @@
 # Changelog
 
+## Pass 67 - no second contact under a different email
+- A lead is no longer put in the Lead Inbox when its business name matches an existing deal under another email. Names are compared ignoring case, punctuation and company suffixes (Ltd, Pvt, Inc and similar), so "Kandy Dental Ltd" matches "Kandy Dental". Names shorter than four letters are never matched.
+- This prevents a second outreach, and a second invoice, to the same business. It is counted in the job's "already in CRM" total.
+- Tests: 233 pass (2 new). The production build compiles.
+## Pass 66 - optional sales tax or VAT on invoices
+- New setting under Account > Money settings: "Sales tax or VAT on invoices (%)". It defaults to 0, so nothing changes for businesses that do not charge tax.
+- Each invoice keeps its net price, so revenue reporting is unchanged, and records the tax and the total. The invoice email shows "plus tax X, total Y" when there is tax.
+- Applies to automatic subscription invoices, won one-off sales, and invoices created on the Billing page.
+- This is a calculation and display feature, not a tax filing. Check the rate and wording with your accountant.
+- Tests: 231 pass (4 new). The production build compiles.
 ## Pass 65 - a new sending account warms up before it sends at volume
 - A sending account now starts at 20 emails a day and rises in weekly steps: 50 from day 7, 100 from day 14, 200 from day 21, then no extra limit of its own (the plan and the safety cap still apply). This protects a new Gmail account from being flagged for sudden bulk sending.
 - Accounts that were already sending before this rule existed keep their full cap. The ramp only starts for an account with no earlier sent email.

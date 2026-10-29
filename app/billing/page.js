@@ -125,6 +125,7 @@ export default function BillingPage() {
         uid: user.uid, email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note,
         issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : undefined,
         termsDays: form.termsDays !== "" ? form.termsDays : terms,
+        taxRate: settings.taxRate,
       });
       if (!r.ok) { setError(r.error); return; }
       await addDoc(collection(db, "invoices"), r.write);

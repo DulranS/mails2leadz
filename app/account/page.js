@@ -48,6 +48,7 @@ export default function AccountPage() {
   const [gm, setGm] = useState({ loading: true, available: false, connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [tn, setTn] = useState({ loading: true, saas: false, busy: "", msg: "" }); // plan / billing state (SaaS mode only)
   const [termsDays, setTermsDays] = useState("");
+  const [taxRate, setTaxRate] = useState("");
   const [paymentInstructions, setPaymentInstructions] = useState("");
   const [bdrCost, setBdrCost] = useState("");
   const [bdrPct, setBdrPct] = useState("");
@@ -78,6 +79,7 @@ export default function AccountPage() {
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
+        if (d.taxRate) setTaxRate(String(d.taxRate));
         if (d.paymentInstructions) setPaymentInstructions(String(d.paymentInstructions));
         if (d.bdrMonthlyCost) setBdrCost(String(d.bdrMonthlyCost));
         if (d.bdrCommissionPct) setBdrPct(String(d.bdrCommissionPct));
@@ -272,6 +274,7 @@ export default function AccountPage() {
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
         paymentTermsDays: Math.min(180, Math.max(0, Math.round(Number(termsDays) || 0))) || 14,
+        taxRate: Math.min(30, Math.max(0, Number(taxRate) || 0)),
         paymentInstructions: String(paymentInstructions || "").trim().slice(0, 400),
         bdrMonthlyCost: Math.max(0, Number(bdrCost) || 0),
         bdrCommissionPct: Math.min(100, Math.max(0, Number(bdrPct) || 0)),
@@ -618,6 +621,7 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Getting paid <span className="text-xs font-normal text-gray-500">· used by Billing and payment reminders</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div><label className={label} htmlFor="pt">Payment terms (days)</label><input id="pt" type="number" min="0" max="180" inputMode="numeric" className={field} value={termsDays} onChange={(e) => setTermsDays(e.target.value)} placeholder="14" /><p className="text-xs text-gray-500 mt-1">How long customers have to pay. New invoices use this unless you change it.</p></div>
+            <div><label className={label} htmlFor="tax">Sales tax or VAT on invoices (%)</label><input id="tax" type="number" min="0" max="30" inputMode="decimal" className={field} value={taxRate} onChange={(e) => setTaxRate(e.target.value)} placeholder="0 if you do not charge tax" /><p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Leave at 0 unless you charge tax. The invoice keeps the price you set and shows the tax and total on top.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="pi">How customers pay you</label><textarea id="pi" rows={3} maxLength={400} className={field} value={paymentInstructions} onChange={(e) => setPaymentInstructions(e.target.value)} placeholder="e.g. Bank transfer to Account 123456, Example Bank, or pay at https://..." /><p className="text-xs text-gray-500 mt-1">Added word for word to overdue-invoice reminders. The AI never makes up payment details.</p></div>
           </div>
         </section>
