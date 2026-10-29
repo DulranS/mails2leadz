@@ -1,5 +1,14 @@
 # Changelog
 
+## Pass 69 - reminders ask only for what is still owed
+- Collection drafts (Billing page) and the nightly reminders now quote the balance still owed. A part-paid invoice is no longer chased for the full amount.
+- The prompt to the AI says "amount still owed", so the wording matches.
+- Tests: 237 pass (1 new). The production build compiles.
+## Pass 68 - part payments on invoices
+- Billing page: Record part payment. Enter what the customer paid; the invoice stays open with the balance still owed, shown as partial. Paying the balance settles it. Paying more than is owed is refused.
+- Outstanding and aging totals now count what is still owed, including tax. Paid invoices keep their full value.
+- Known limit: the reminder wording and the invoice email generated from the Billing page still quote the full invoice amount, not the balance. Check the wording before sending a reminder on a partly paid invoice.
+- Tests: 236 pass (3 new). The production build compiles.
 ## Pass 67 - no second contact under a different email
 - A lead is no longer put in the Lead Inbox when its business name matches an existing deal under another email. Names are compared ignoring case, punctuation and company suffixes (Ltd, Pvt, Inc and similar), so "Kandy Dental Ltd" matches "Kandy Dental". Names shorter than four letters are never matched.
 - This prevents a second outreach, and a second invoice, to the same business. It is counted in the job's "already in CRM" total.

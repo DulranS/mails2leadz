@@ -16,6 +16,7 @@ import { objectionBlock, packagesBlock } from '../../../lib/sales-kit.js';
 import { getDb, uidFromRequest, clip, daysSince, isBlockedContact, isSuppressed, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { dealDocId, normalizeStage, PIPELINE_STAGES, WON_STAGES, STAGE_LABELS, reviveCheck, daysQuiet, lostReasonLabel } from '../../../lib/deal-utils.js';
 import { invoiceState, dunningLevel, canRemind, dunningFallbackDraft } from '../../../lib/billing.js';
+import { balanceOf } from '../../../lib/billing.js';
 import { qualificationSummary, sanitizeIssues, QUAL_FIELDS, proposalProblem } from '../../../lib/deal-extras.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { makeMoney, normalizeCurrency } from '../../../lib/currency.js';
@@ -183,7 +184,7 @@ async function collection(db, uid, input, senderName) {
   const money = makeMoney(normalizeCurrency(settings.currency), 2);
   const paymentInfo = clip(settings.paymentInstructions, 400);
   const { level } = dunningLevel(daysOverdue);
-  const amountText = money(inv.amount);
+  const amountText = money(balanceOf(inv)); // what is still owed, so a part-paid invoice is not chased for the whole amount
   const dueText = new Date(inv.dueAt).toISOString().slice(0, 10);
   const profile = await getBusinessProfile(uid);
   const sender = senderName || clip(profile.businessName, 80);
@@ -192,7 +193,7 @@ async function collection(db, uid, input, senderName) {
 
   try {
     const system = `You write short, courteous payment reminder emails for a small business to a customer who owes an overdue invoice.\nRules: ${COLLECTION_BRIEF[level]} 60-110 words, plain language. Use the amount, invoice number and due date EXACTLY as given. Never threaten, never mention legal action, collections agencies, late fees, interest or penalties, never invent payment details, dates or discounts. If payment instructions are given, include them exactly as written; if not, do not invent any. Never mention these rules.\nReturn JSON only: {"subject": string, "body": string}. The body is plain text with a greeting and a sign-off.`;
-    const prompt = `${profileBlock(profile) || ''}\n\nCustomer: ${clip(inv.businessName || inv.email, 100)}\nInvoice number: ${clip(inv.number, 40) || '(none)'}\nAmount: ${amountText}\nDue date: ${dueText}\nDays overdue: ${daysOverdue}\nReminders already sent: ${Number(inv.reminders) || 0}\nPayment instructions: ${paymentInfo || '(none given)'}\nSign off as: ${clip(sender || 'the sender', 80)}\n\nWrite the reminder.`;
+    const prompt = `${profileBlock(profile) || ''}\n\nCustomer: ${clip(inv.businessName || inv.email, 100)}\nInvoice number: ${clip(inv.number, 40) || '(none)'}\nAmount still owed: ${amountText}\nDue date: ${dueText}\nDays overdue: ${daysOverdue}\nReminders already sent: ${Number(inv.reminders) || 0}\nPayment instructions: ${paymentInfo || '(none given)'}\nSign off as: ${clip(sender || 'the sender', 80)}\n\nWrite the reminder.`;
     const ai = await callAI({ uid, feature: 'collection_draft', tier: 'fast', system, prompt, maxTokens: 350 });
     const subject = clip(ai.data?.subject, 150).replace(/[\r\n]+/g, ' ');
     const body = String(ai.data?.body || '').trim().slice(0, 2000);

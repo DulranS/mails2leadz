@@ -13,6 +13,7 @@ import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeBilling, computeUnbilled, buildInvoiceWrite, canRemind, dunningLevel, DEFAULT_PAYMENT_TERMS_DAYS } from "../../lib/billing.js";
+import { recordPaymentPatch } from "../../lib/billing.js";
 import { setOnboardingStep } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { makeMoney, currencySymbol, normalizeCurrency } from "../../lib/currency.js";
@@ -148,7 +149,14 @@ export default function BillingPage() {
     finally { setSaving(""); }
   };
   const markPaid = (inv) => patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`);
-  const reopen = (inv) => patchInvoice(inv, { status: "open", paidAt: null }, "Invoice reopened.");
+  const reopen = (inv) => patchInvoice(inv, { status: "open", paidAt: null, amountPaid: 0 }, "Invoice reopened.");
+  const recordPart = (inv) => {
+    const raw = window.prompt(`How much did ${inv.businessName || inv.email} pay? (still owed: ${money2(inv.amount)})`);
+    if (raw === null) return;
+    const r = recordPaymentPatch(inv, Number(raw), new Date());
+    if (!r.ok) { setError(r.error); return; }
+    patchInvoice(inv, r.patch, r.settled ? `Settled: ${money2(Number(raw))} received.` : `Part payment recorded. ${money2(r.balance)} still owed.`);
+  };
   const voidInvoice = (inv) => { if (window.confirm("Void this invoice? It stops counting as money owed.")) patchInvoice(inv, { status: "void" }, "Invoice voided."); };
 
   const askForDraft = async (inv) => {
@@ -301,6 +309,7 @@ export default function BillingPage() {
                     <div className="flex flex-wrap gap-2 shrink-0">
                       {r.state === "overdue" && <button type="button" disabled={!gate.ok || saving === r.id} onClick={() => askForDraft(r)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`} title={gate.ok ? lvl.label : gate.reason}>{saving === r.id ? "Drafting..." : "Draft reminder"}</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => markPaid(r)} className={`${btn} bg-green-600 hover:bg-green-500 text-white`}>Mark paid</button>}
+                      {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => recordPart(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Record part payment</button>}
                       {r.state === "paid" && <button type="button" disabled={saving === r.id} onClick={() => reopen(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Undo paid</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => voidInvoice(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Void</button>}
                     </div>
