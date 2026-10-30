@@ -1,5 +1,58 @@
 # Changelog
 
+## Pass 76 - customer replies to quotes show on the quote (button and nightly)
+- "Check for replies" looks in the Gmail thread of each sent quote, and only reads it. When the customer has written back, the quote moves to "Customer replied: answer them" with a link to their reply. Nothing is sent or changed in Gmail.
+- A quote with a reply gets no follow-up reminder, so nobody is nudged after answering.
+- The check reads up to 25 quotes per press, to keep the Gmail calls small. "Mark as handled" moves it back to waiting once you have answered; a later check does not flag the same message again.
+- Quotes sent before this release have no thread recorded, so they cannot be checked; they still work normally.
+- Tests: the full suite passes, including 1 new case in tests/quotes.test.mjs. The production build compiles.
+- The nightly routine runs the same reply check before the quote reminder, so a reply is known before any reminder is considered. The check is read-only in Gmail.
+- Not built yet: replies from WhatsApp or SMS.
+## Pass 75 - send quotes and follow-ups from your own Gmail
+- The Quotes screen sends a quote, or a follow-up, from your connected Gmail with one press. Nothing goes out on its own. The accept link is included, and "sent" is recorded only when Gmail accepts the message, with the Gmail message id.
+- Refused, with a reason shown: a customer who opted out or whose deal is lost; a quote with no accept link (set your public https address first); a quote already sent (use a follow-up); a quote that is no longer open. A follow-up needs the quote to have been sent first.
+- Quote sends are recorded on the quote, not in the cold-outreach records. The automatic cold follow-up sequence never picks up a customer who was quoted, and quote sends do not count toward the cold-send daily limit.
+- If the email is sent but the app cannot record it, the screen says so and asks you not to send it again.
+- "I sent it" and "Open in my email" still work, for quotes sent outside the app.
+- Tests: the full suite passes, including 1 new case in tests/quotes.test.mjs. The production build compiles.
+- Not built yet: showing customer replies to a quote on the quote (replies arrive in your normal inbox); sending a quote from a connected WhatsApp or SMS line.
+## Pass 74 - quote reminders and invoice status on accepted quotes
+- The nightly routine now sends you, the owner, one reminder a day when quotes need a follow-up (no answer after 3 days, or expiring within 3 days). Nothing is sent to a customer. A quiet day sends nothing. It runs under the same switch as the morning brief (Account, Autopilot).
+- Accepted quotes on the Quotes screen show their invoice: created, emailed, or paid. The invoice is matched by customer, net amount and date, so another invoice to the same customer is never taken for this one. If none exists yet, the screen says the nightly routine creates it, or it can be created from Billing.
+- Expiry is counted in calendar days: a quote valid to 2 November, seen on 31 October, shows 2 days. A quote valid until today shows "expires today".
+- Tests: the full suite passes, including 3 new cases in tests/quotes.test.mjs. The production build compiles.
+- Not built yet: sending the owner's reminder by text or push (today it is email, like the morning brief); quote follow-up drafts written by AI (the drafts are fixed wording, so they cost nothing and cannot invent a price).
+## Pass 73 - the Quotes screen
+- New page, Quotes (under Sell). Write a quote with its lines, tax, valid-until date and terms. The app builds the email with the accept link: open it in your own mail app, check it, press send, then press "I sent it". Nothing is sent for you.
+- The screen sorts every quote: not yet sent, waiting for an answer, follow up now, accepted, and closed (declined, expired, withdrawn).
+- Follow up now: a quote with no answer after 3 days, or expiring within 3 days, gets a follow-up draft that opens in your mail app. "I sent a follow-up" restarts the 3-day clock. Nothing is sent automatically.
+- Withdraw: a quote can be withdrawn before it is accepted. The customer's link then says it was withdrawn, and it cannot be accepted.
+- Make a new quote from an earlier one: the lines, terms and customer are copied; the valid-until date is left blank for you to set.
+- Accepted quotes that could not update their deal are marked on the screen, so they can be fixed in the CRM.
+- Structure: the browser-safe quote logic is in lib/quote-core.js; the signed accept link stays server-only in lib/quotes.js. Nothing in the quote flow needs a browser-side secret.
+- Tests: the full suite passes, including 4 new cases in tests/quotes.test.mjs. The production build compiles.
+- Not built yet: reminders about follow-ups by email or in the nightly routine (today the follow-up list is shown when you open the screen), and a sent-date check against the real mail thread (sent is what you tell the app).
+## Pass 72 - an accepted quote wins the deal, and the existing routine invoices it
+- When a customer accepts a quote, the deal moves to Won at the quote's net price (before tax). From there the existing nightly routine creates the invoice and emails it, and the reminders follow as before. No second step for you.
+- Net price, not the quote total: the invoice adds your own tax setting, so using the total would charge tax twice. The quote's tax line stays on the quote.
+- A deal that is already Won is not changed, so a second accept cannot invoice twice. An existing deal keeps its source and name; a customer with no deal gets a new Won deal.
+- If the deal cannot be updated, the acceptance is still recorded and the quote is marked dealSyncError, so it can be checked. The customer is not shown an error.
+- Tests: the full suite passes, including 3 new cases in tests/quotes.test.mjs, one of which runs the accepted deal through the invoice planner. The production build compiles.
+- Not built yet: the screen to create and list quotes (the API works, the screen does not), reminders for quotes not yet answered, and expiry follow-up. These are the next automation steps.
+## Pass 71 - cost per outbound win
+- The Business page's marketing panel now shows cost per outbound win next to cost per inbound win. It is outreach-tool spend divided by the wins that came from email. Your own time is not counted, and the panel says so.
+- Withheld (n/a) until there is both outreach spend and an email-sourced win in the last three months. The partial-months warning applies as before.
+- Checked and already in place, no change needed: CAC by channel, lifetime value, LTV to cost, payback in months (revenue and margin), lead scraping and enrichment, inbound enquiries, follow-up drafts, win rate by source, template and angle.
+- Not built on purpose: automatic spend import from ad platforms (needs their API keys and a per-account setup; the owner enters spend by hand, which keeps the numbers honest).
+- Tests: the full suite passes, including 2 new cases in tests/marketing.test.mjs. The production build compiles.
+## Pass 70 - quotes the customer can accept online
+- New: a quote (title, lines with quantity and price, optional tax, valid-until date, terms) is saved for a customer. The totals are computed from the lines; nothing is invented.
+- The customer opens a signed link from the quote email, reads it, and presses Accept or Decline, with an optional name. Each answer is recorded once. An expired quote cannot be accepted. GET changes nothing, so mail scanners cannot accept a quote by accident.
+- The owner creates a quote through the quotes API and receives the email text, the accept link, and a mailto link that opens their own mail app with everything filled in. They press send.
+- The accept link needs a public https address (NEXT_PUBLIC_BASE_URL) and a signing secret (QUOTE_SECRET, or UNSUBSCRIBE_SECRET). Without them the quote is still saved, with a warning and no link.
+- Not built yet: a Quotes screen and a button on the CRM deal drawer. The quotes API works now, but the owner cannot create a quote from the screens yet. Not yet built: sending the quote from the app's Gmail connection (the mailto link is used instead). Not built on purpose: online payment on the quote; that needs a payment provider decision.
+- Public route /api/quote is registered in the public-route contract with its own proof (the signed token).
+- Tests: 407 pass (12 new in tests/quotes.test.mjs). The production build compiles.
 ## Pass 69 - reminders ask only for what is still owed
 - Collection drafts (Billing page) and the nightly reminders now quote the balance still owed. A part-paid invoice is no longer chased for the full amount.
 - The prompt to the AI says "amount still owed", so the wording matches.

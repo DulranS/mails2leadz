@@ -140,7 +140,7 @@ await t('requireAdmin(): only ADMIN_EMAILS, and only with a verified identity', 
 // ---- static contract over every API route: the tenant is never taken from the request body ----
 const files = [];
 (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'route.js') files.push(p); } })('app/api');
-const PUBLIC_OR_NO_TENANT = new Set(['auth/callback', 'health', 'unsubscribe', 'inbound', 'lead-inbox/ingest', 'lead-inbox/jobs', 'cron/prepare-drafts', 'cron/check-replies', 'cron/autosend', 'cron/daily-ops', 'gmail-offline/callback', 'stripe/webhook', 'call-webhook']);
+const PUBLIC_OR_NO_TENANT = new Set(['auth/callback', 'health', 'unsubscribe', 'quote', 'inbound', 'lead-inbox/ingest', 'lead-inbox/jobs', 'cron/prepare-drafts', 'cron/check-replies', 'cron/autosend', 'cron/daily-ops', 'gmail-offline/callback', 'stripe/webhook', 'call-webhook']);
 
 await t('CONTRACT: every route that acts for a tenant derives it from the verified identity (identify / uidFromRequest / requireAdmin)', () => {
   const offenders = [];
@@ -165,8 +165,8 @@ await t('CONTRACT: no route falls back to a userId from the request body when th
 await t('CONTRACT: public routes are exactly the intended ones, each with its own proof (secret / signature / signed state / key)', () => {
   const proxy = fs.readFileSync('proxy.js', 'utf8');
   const set = proxy.match(/const PUBLIC = new Set\(\[([^\]]*)\]/)[1].split(',').map((x) => x.trim().replace(/['"]/g, '').replace('/api/', ''));
-  assert.deepEqual(set.sort(), ['auth/callback', 'cron/autosend', 'cron/check-replies', 'cron/daily-ops', 'cron/prepare-drafts', 'gmail-offline/callback', 'health', 'inbound', 'lead-inbox/ingest', 'lead-inbox/jobs', 'stripe/webhook', 'unsubscribe'].sort());
-  const need = { 'cron/prepare-drafts': /CRON_SECRET|cronGate/, 'cron/check-replies': /CRON_SECRET|cronGate/, 'cron/autosend': /cronGate/, 'cron/daily-ops': /cronGate/, 'stripe/webhook': /verifyWebhook/, 'gmail-offline/callback': /verifyState/, inbound: /ownerFromKey/, 'lead-inbox/ingest': /verifySecret/, 'lead-inbox/jobs': /verifySecret/, unsubscribe: /verif|sig|token/i };
+  assert.deepEqual(set.sort(), ['auth/callback', 'cron/autosend', 'cron/check-replies', 'cron/daily-ops', 'cron/prepare-drafts', 'gmail-offline/callback', 'health', 'inbound', 'lead-inbox/ingest', 'lead-inbox/jobs', 'quote', 'stripe/webhook', 'unsubscribe'].sort());
+  const need = { 'cron/prepare-drafts': /CRON_SECRET|cronGate/, 'cron/check-replies': /CRON_SECRET|cronGate/, 'cron/autosend': /cronGate/, 'cron/daily-ops': /cronGate/, 'stripe/webhook': /verifyWebhook/, 'gmail-offline/callback': /verifyState/, inbound: /ownerFromKey/, 'lead-inbox/ingest': /verifySecret/, 'lead-inbox/jobs': /verifySecret/, unsubscribe: /verif|sig|token/i, quote: /verifyQuoteToken/ };
   for (const [rel, re] of Object.entries(need)) assert.ok(re.test(fs.readFileSync(`app/api/${rel}/route.js`, 'utf8')), `${rel} must prove its caller`);
   assert.ok(/CRON_SECRET/.test(fs.readFileSync('lib/server/cron-auth.js', 'utf8')) && /safeEqual/.test(fs.readFileSync('lib/server/cron-auth.js', 'utf8'))); // the shared gate really checks the secret, in constant time
 });

@@ -78,3 +78,25 @@ test('the recurring flag is kept when set and defaults off', () => {
   assert.equal(sanitizeSpend({ channel: 'events', amount: 5, month: '2026-10', recurring: true }).entry.recurring, true);
   assert.equal(sanitizeSpend({ channel: 'events', amount: 5, month: '2026-10' }).entry.recurring, false);
 });
+
+test('cost per outbound win uses only outreach-tool spend and email-sourced wins', () => {
+  const r = computeMarketing({
+    spend: [
+      { channel: 'outreach_tools', amount: 120, month: '2026-10' },
+      { channel: 'outreach_tools', amount: 80, month: '2026-09' },
+      { channel: 'paid_ads', amount: 300, month: '2026-10' }, // inbound spend, not outbound
+    ],
+    deals: [won('email', oct), won('email', sep), won('inbound', oct)],
+    now: NOW,
+  });
+  assert.equal(r.outboundSpend90, 200);
+  assert.equal(r.outboundWins90, 2);
+  assert.equal(r.costPerOutboundWin, 100);
+});
+
+test('cost per outbound win is n/a without outreach spend or without email-sourced wins', () => {
+  const noSpend = computeMarketing({ spend: [{ channel: 'paid_ads', amount: 300, month: '2026-10' }], deals: [won('email', oct)], now: NOW });
+  assert.equal(noSpend.costPerOutboundWin, null);
+  const noWins = computeMarketing({ spend: [{ channel: 'outreach_tools', amount: 90, month: '2026-10' }], deals: [won('inbound', oct)], now: NOW });
+  assert.equal(noWins.costPerOutboundWin, null);
+});

@@ -64,10 +64,12 @@ export default function MarketingSpendPanel({ uid, money, deals = [] }) {
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Won (3 months)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.wins90}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.blendedCostPerWin === null ? "n/a" : fmt(stats.blendedCostPerWin)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per inbound win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.costPerInboundWin === null ? "n/a" : fmt(stats.costPerInboundWin)}</div></div>
+        <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per outbound win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.costPerOutboundWin === null ? "n/a" : fmt(stats.costPerOutboundWin)}</div></div>
       </div>
       {!stats.ready && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{stats.spend90 === 0 ? "Enter spend to see cost per win." : "Cost per win appears once you have won customers in these months."}</p>}
       {stats.ready && stats.partial && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Only {stats.monthsEntered} of the last 3 months have spend entered, so cost per win is overstated. Enter a 0 for months with no spend.</p>}
       {stats.ready && stats.costPerInboundWin === null && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cost per inbound win needs inbound-tagged wins and spend on ads or content.</p>}
+      {stats.ready && stats.costPerOutboundWin === null && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Cost per outbound win needs spend on outreach tools and wins that came from email. Your own time is not counted.</p>}
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5 items-end">
         <label className="text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">Channel

@@ -41,6 +41,10 @@ app/api/make-call/route.js
 app/api/mark-replied/route.js
 app/api/notices/route.js
 app/api/ops-status/route.js
+app/api/quote/route.js
+app/api/quotes/replies/route.js
+app/api/quotes/route.js
+app/api/quotes/send/route.js
 app/api/research-company/route.js
 app/api/saas/checkout/route.js
 app/api/saas/portal/route.js
@@ -106,6 +110,7 @@ app/page.js
 app/partners/page.js
 app/payroll/page.js
 app/privacy/page.js
+app/quotes/page.js
 app/robots.js
 app/sitemap.js
 app/sops/page.js
@@ -197,6 +202,8 @@ lib/post-sale.js
 lib/post-webhook.js
 lib/preflight.js
 lib/profit.js
+lib/quote-core.js
+lib/quotes.js
 lib/rate-limit.js
 lib/raw-email.js
 lib/recurring.js
@@ -245,6 +252,7 @@ lib/server/niche-evidence.js
 lib/server/owner-report.js
 lib/server/prepare-drafts.js
 lib/server/queue-checks.js
+lib/server/quote-replies.js
 lib/server/relationship-asks.js
 lib/server/reply-triage.js
 lib/server/route-helpers.js

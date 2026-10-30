@@ -22,7 +22,7 @@ import { routeAccess } from './lib/workspace-access.js';
 // /api/stripe/webhook is Stripe: it carries no sign-in but must carry a valid Stripe signature over the raw body (verified in the route).
 // /api/cron/check-replies is the scheduler (CRON_SECRET). /api/gmail-offline/callback is Google's redirect after the owner's read-only
 // consent: it carries no sign-in, so it trusts ONLY the signed, 10-minute `state` created when the owner pressed Connect.
-const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/lead-inbox/ingest', '/api/lead-inbox/jobs', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/cron/autosend', '/api/cron/daily-ops', '/api/gmail-offline/callback', '/api/stripe/webhook', '/api/inbound']);
+const PUBLIC = new Set(['/api/health', '/api/auth/callback', '/api/unsubscribe', '/api/quote', '/api/lead-inbox/ingest', '/api/lead-inbox/jobs', '/api/cron/prepare-drafts', '/api/cron/check-replies', '/api/cron/autosend', '/api/cron/daily-ops', '/api/gmail-offline/callback', '/api/stripe/webhook', '/api/inbound']);
 const WEBHOOKS = new Set(['/api/call-webhook']);
 // Diagnostics that reveal configuration: owner/admin accounts only (ADMIN_EMAILS=a@x.com,b@y.com).
 const ADMIN_ONLY = new Set(['/api/email-debug', '/api/cache-clear', '/api/cache-stats', '/api/admin/tenants']);
