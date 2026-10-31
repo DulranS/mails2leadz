@@ -1,5 +1,9 @@
 # Changelog
 
+## Pass 88 - win-back for expired quotes
+- On the Quotes page, an expired quote has a "Draft win-back" button. It opens a note in your mail app, asking whether the customer still wants to go ahead and offering an updated quote. The note does not restate the old price, which may be out of date. Nothing is sent by the app.
+- Tests: the full suite passes, including 1 new case in tests/sales-ops.test.mjs. The production build compiles.
+- Not built, deliberately: quote price testing. It needs many quotes per price point before the results mean anything, so it is not worth building before there is that volume.
 ## Pass 87 - readiness is accurate; server settings and webhook addresses are on the Integrations page
 - FIXED: a service's readiness ignored deployment settings in SaaS mode, so card payments and the AI voice assistant showed "needs keys" even when the operator had set the server up. Deployment settings (public address, signing secret, AI key, Gmail sign-in) now always count. Account keys keep the rule that a SaaS account never uses the operator's keys.
 - The Integrations page lists the server settings, marked Set or Not set, with what each one is for. Names and states only; no values are shown.

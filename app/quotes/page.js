@@ -6,7 +6,7 @@ import { collection, doc, getDocs, limit, query, updateDoc, where } from "../../
 import { db } from "../../lib/firebase-client.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
-import { quoteBoard, quoteEmail, nudgeDraft, quoteMailto, invoiceForQuote } from "../../lib/quote-core.js";
+import { quoteBoard, quoteEmail, nudgeDraft, quoteMailto, invoiceForQuote, winBackDraft } from "../../lib/quote-core.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -286,6 +286,7 @@ export default function QuotesPage() {
                 <Row key={q.id} q={q}>
                   <span className="text-xs text-gray-500 dark:text-gray-400 self-center">{q.state === "declined" ? "Declined" : q.state === "expired" ? "Expired" : "Withdrawn"}</span>
                   <button type="button" onClick={() => duplicate(q)} className={ghost}>Make a new quote from this</button>
+                  {q.state === "expired" && <a href={quoteMailto(q.quote, winBackDraft({ quote: q.quote, senderName }))} className={ghost}>Draft win-back</a>}
                 </Row>
               ))}
             </ul>

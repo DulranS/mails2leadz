@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { eligibleOwners, loadByOwner, pickOwner, planAutoAssign, OWNER_KEY } from '../lib/assignment.js';
-import { quoteMargin, marginCheck, MARGIN_FLOOR_DEFAULT, sanitizeQuote, milestonesFor, nextMilestoneIndex, quoteSendPlan, dealForAcceptedQuote, parseSchedule, supersedeMilestones } from '../lib/quote-core.js';
+import { quoteMargin, marginCheck, MARGIN_FLOOR_DEFAULT, sanitizeQuote, milestonesFor, nextMilestoneIndex, quoteSendPlan, dealForAcceptedQuote, parseSchedule, supersedeMilestones, winBackDraft } from '../lib/quote-core.js';
 import { planWonInvoices } from '../lib/billing-automation.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
@@ -123,6 +123,15 @@ t('a revision of an accepted deal updates its value, and a second acceptance of 
   const rev = dealForAcceptedQuote({ uid: 'u1', quote: { customerEmail: 'c@example.com', subtotal: 1500, revisionOf: 'q-old' }, existing: won, now });
   assert.equal(rev.value, 1500);
   assert.equal(rev.stage, 'closed_won');
+});
+
+t('a win-back note for an expired quote offers an updated quote and restates no old price', () => {
+  const d = winBackDraft({ quote: { title: 'Care plan', customerName: 'Nimal', validUntil: '2026-10-01', total: 999 }, senderName: 'Hato' });
+  assert.equal(d.subject, 'Re: Quote: Care plan');
+  assert.match(d.text, /2026-10-01/);
+  assert.match(d.text, /updated quote/);
+  assert.doesNotMatch(d.text, /999/);
+  assert.doesNotMatch(d.text, /undefined/);
 });
 
 console.log(`sales-ops: ${n} passed`);
