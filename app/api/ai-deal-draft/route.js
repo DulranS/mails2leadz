@@ -18,6 +18,8 @@ import { dealDocId, normalizeStage, PIPELINE_STAGES, WON_STAGES, STAGE_LABELS, r
 import { invoiceState, dunningLevel, canRemind, dunningFallbackDraft } from '../../../lib/billing.js';
 import { balanceOf } from '../../../lib/billing.js';
 import { qualificationSummary, sanitizeIssues, QUAL_FIELDS, proposalProblem } from '../../../lib/deal-extras.js';
+import { secretsFor, PAYMENT_NAMES } from '../../../lib/server/integration-secrets.js';
+import { paymentsReady, payLinkFor, appendPayLine } from '../../../lib/server/payments.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { makeMoney, normalizeCurrency } from '../../../lib/currency.js';
 
@@ -189,7 +191,10 @@ async function collection(db, uid, input, senderName) {
   const profile = await getBusinessProfile(uid);
   const sender = senderName || clip(profile.businessName, 80);
   const fallback = dunningFallbackDraft({ level, name: inv.businessName, number: inv.number, amountText, dueText, senderName: sender, paymentInfo, daysOverdue });
-  const template = () => okDraft({ kind: 'collection', draft: fallback, level, daysOverdue, source: 'template' });
+  // The pay line is added by the server, after any AI wording, so it is always exact and never invented.
+  const payLink = paymentsReady(await secretsFor(db, uid, PAYMENT_NAMES)) ? payLinkFor(uid, id) : null;
+  const withPay = (d) => ({ ...d, body: appendPayLine(d.body, payLink) });
+  const template = () => okDraft({ kind: 'collection', draft: withPay(fallback), level, daysOverdue, source: 'template' });
 
   try {
     const system = `You write short, courteous payment reminder emails for a small business to a customer who owes an overdue invoice.\nRules: ${COLLECTION_BRIEF[level]} 60-110 words, plain language. Use the amount, invoice number and due date EXACTLY as given. Never threaten, never mention legal action, collections agencies, late fees, interest or penalties, never invent payment details, dates or discounts. If payment instructions are given, include them exactly as written; if not, do not invent any. Never mention these rules.\nReturn JSON only: {"subject": string, "body": string}. The body is plain text with a greeting and a sign-off.`;
@@ -202,7 +207,7 @@ async function collection(db, uid, input, senderName) {
     const hasAmount = digits.includes(String(Math.floor(Number(inv.amount))));
     const forbidden = /legal action|lawyer|solicitor|court|collections? agency|late fee|interest charge|penalt/i.test(body);
     if (!usable(subject, body) || !hasAmount || forbidden) return template();
-    return okDraft({ kind: 'collection', draft: { subject, body }, level, daysOverdue, source: 'ai', cached: ai.cached });
+    return okDraft({ kind: 'collection', draft: withPay({ subject, body }), level, daysOverdue, source: 'ai', cached: ai.cached });
   } catch (e) {
     if (e instanceof AiError) return template(); // AI off, over its limit, or down: the reminder still works
     throw e; // anything else is a real bug and must not be hidden

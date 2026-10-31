@@ -1,6 +1,7 @@
 app/account/page.js
 app/admin/page.js
 app/analytics/page.js
+app/api/ad-spend/sync/route.js
 app/api/admin/tenants/route.js
 app/api/ai-channel/route.js
 app/api/ai-content/route.js
@@ -32,6 +33,9 @@ app/api/gmail-offline/route.js
 app/api/health/route.js
 app/api/inbound-key/route.js
 app/api/inbound/route.js
+app/api/integrations/route.js
+app/api/integrations/secrets/route.js
+app/api/invoices/send/route.js
 app/api/lead-inbox/ingest/route.js
 app/api/lead-inbox/jobs/route.js
 app/api/lead-inbox/key/route.js
@@ -41,6 +45,8 @@ app/api/make-call/route.js
 app/api/mark-replied/route.js
 app/api/notices/route.js
 app/api/ops-status/route.js
+app/api/pay/route.js
+app/api/payments/webhook/route.js
 app/api/quote/route.js
 app/api/quotes/replies/route.js
 app/api/quotes/route.js
@@ -58,6 +64,12 @@ app/api/team/route.js
 app/api/tenant/route.js
 app/api/track-company/route.js
 app/api/unsubscribe/route.js
+app/api/voice/call/route.js
+app/api/voice/calls/route.js
+app/api/voice/consent/route.js
+app/api/voice/turn/route.js
+app/api/whatsapp/consent/route.js
+app/api/whatsapp/send/route.js
 app/api/worker-queue/route.js
 app/assets/page.js
 app/bets/page.js
@@ -103,10 +115,12 @@ app/dashboard/page.js
 app/enquire/page.js
 app/hooks/useAuth.js
 app/inbox/page.js
+app/integrations/page.js
 app/join/page.js
 app/layout.js
 app/leads/page.js
 app/page.js
+app/paid/page.js
 app/partners/page.js
 app/payroll/page.js
 app/privacy/page.js
@@ -177,6 +191,7 @@ lib/graceful-degradation.js
 lib/httpClient.js
 lib/inbound.js
 lib/independence.js
+lib/integrations.js
 lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
@@ -231,6 +246,8 @@ lib/send-timing.js
 lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
+lib/server/ad-import.js
+lib/server/ad-sync.js
 lib/server/auto-post.js
 lib/server/auto-targets.js
 lib/server/autosend.js
@@ -245,11 +262,13 @@ lib/server/gmail-offline.js
 lib/server/googleGmailClient.js
 lib/server/inbox-store.js
 lib/server/ingest-key.js
+lib/server/integration-secrets.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
 lib/server/niche-evidence.js
 lib/server/owner-report.js
+lib/server/payments.js
 lib/server/prepare-drafts.js
 lib/server/queue-checks.js
 lib/server/quote-replies.js
@@ -266,7 +285,10 @@ lib/server/template-vars.js
 lib/server/tenant-guard.js
 lib/server/tenant.js
 lib/server/token-vault.js
+lib/server/twilio-account.js
 lib/server/unsubscribe.js
+lib/server/voice-agent.js
+lib/server/whatsapp.js
 lib/server/worker-queue-store.js
 lib/server/workspace.js
 lib/service-account.js

@@ -5,7 +5,7 @@ import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
-import twilio from 'twilio';
+import { twilioFor } from '../../../lib/server/twilio-account.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION
@@ -26,12 +26,6 @@ const db = getFirestore(app);
 // ============================================================================
 // TWILIO CONFIGURATION
 // ============================================================================
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 
 // ============================================================================
 // FORMAT PHONE NUMBER
@@ -57,6 +51,8 @@ export async function POST(request) {
     
     const gate = await guardTenant(db, userId);
     if (gate.response) return gate.response;
+    const tw = await twilioFor(db, userId); // this account's own Twilio keys, never the operator's
+    if (!tw) return NextResponse.json({ error: 'SMS is not set up for this account yet. Add the Twilio keys on the Integrations page.' }, { status: 503 });
 
     const formattedPhone = formatForDialing(phone);
     if (!formattedPhone) {
@@ -91,9 +87,9 @@ export async function POST(request) {
     }
     
     // Send SMS via Twilio
-    const sms = await twilioClient.messages.create({
+    const sms = await tw.client.messages.create({
       body: message,
-      from: FROM_NUMBER,
+      from: tw.from,
       to: `+${formattedPhone}`
     });
     

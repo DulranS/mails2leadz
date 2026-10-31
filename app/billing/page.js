@@ -148,6 +148,17 @@ export default function BillingPage() {
     } catch { setError("Could not save that change."); }
     finally { setSaving(""); }
   };
+  const emailInvoice = async (inv) => {
+    setSaving(inv.id); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/invoices/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: inv.id }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Could not email the invoice."); return; }
+      setNotice(`Invoice emailed to ${inv.email}${data.payLink ? ", with the pay-by-card line" : ""}.`);
+      await load();
+    } catch (err) { console.error(err); setError("Could not email the invoice."); }
+    finally { setSaving(""); }
+  };
   const markPaid = (inv) => patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`);
   const reopen = (inv) => patchInvoice(inv, { status: "open", paidAt: null, amountPaid: 0 }, "Invoice reopened.");
   const recordPart = (inv) => {
@@ -308,6 +319,7 @@ export default function BillingPage() {
                     <div className="text-lg font-semibold text-gray-900 dark:text-white shrink-0">{money2(r.amount)}</div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                       {r.state === "overdue" && <button type="button" disabled={!gate.ok || saving === r.id} onClick={() => askForDraft(r)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`} title={gate.ok ? lvl.label : gate.reason}>{saving === r.id ? "Drafting..." : "Draft reminder"}</button>}
+                      {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => emailInvoice(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Email invoice</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => markPaid(r)} className={`${btn} bg-green-600 hover:bg-green-500 text-white`}>Mark paid</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => recordPart(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Record part payment</button>}
                       {r.state === "paid" && <button type="button" disabled={saving === r.id} onClick={() => reopen(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Undo paid</button>}

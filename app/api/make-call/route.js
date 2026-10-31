@@ -5,8 +5,8 @@ import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, setDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
-import twilio from 'twilio';
 import { getBusinessProfile } from '../../../lib/ai-client.js';
+import { twilioFor } from '../../../lib/server/twilio-account.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION
@@ -27,12 +27,6 @@ const db = getFirestore(app);
 // ============================================================================
 // TWILIO CONFIGURATION (created lazily: a missing key must never break the build or other routes)
 // ============================================================================
-let _twilio = null;
-const getTwilio = () => {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) return null;
-  if (!_twilio) _twilio = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  return _twilio;
-};
 
 // Twilio calls this back with call status. proxy.js only lets webhooks through with ?key=WEBHOOK_SECRET.
 const webhookUrl = () => {
@@ -100,9 +94,9 @@ export async function POST(request) {
     const gate = await guardTenant(db, userId);
     if (gate.response) return gate.response;
 
-    const client = getTwilio();
-    if (!client) {
-      return NextResponse.json({ error: 'Phone calls are not set up for this account yet.' }, { status: 503 });
+    const tw = await twilioFor(db, userId); // this account's own Twilio keys, never the operator's
+    if (!tw) {
+      return NextResponse.json({ error: 'Phone calls are not set up for this account yet. Add the Twilio keys on the Integrations page.' }, { status: 503 });
     }
     const hook = webhookUrl();
     if (!hook) {
@@ -135,10 +129,10 @@ export async function POST(request) {
 
     // Make call via Twilio. Recording third parties is OFF unless the owner of this deployment turns it on.
     const record = ['1', 'true', 'yes'].includes(String(process.env.TWILIO_RECORD_CALLS || '').toLowerCase());
-    const call = await client.calls.create({
+    const call = await tw.client.calls.create({
       twiml: twiml,
       to: `+${formattedPhone}`,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: tw.from,
       statusCallback: hook,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
       ...(record ? { record: true, recordingStatusCallback: hook } : {}),
