@@ -1,5 +1,14 @@
 # Changelog
 
+## Pass 90 - the money path tested through the real HTTP routes
+- New test, tests/routes-e2e.test.mjs, calls the actual route handlers over HTTP, against an in-memory database. It runs: create a quote with a 30/70 schedule; the customer opens the link; the customer accepts (deal won, deposit invoiced, number INV-0001); the owner releases the completion (INV-0002, once only); a real Stripe-signed payment marks the deposit paid; the same event again changes nothing; a wrongly-signed event is refused; a payment over the balance is flagged for review; a forged link and a pay link signed with another key are refused.
+- The test swaps only the database layer (tests/fixtures). Signatures use Stripe's own signing helper and the app's own encryption.
+- NOT covered by any test here: creating a Stripe Checkout page (GET /api/pay), since it calls Stripe's network API; the Gmail, Twilio, Meta, Google Ads, Hunter and AI calls; and how the real database behaves (the in-memory store is a simplification, and it has no transactions, so the invoice counter here runs on its non-atomic path).
+- Tests: the full suite passes, including the 9 route cases. The production build compiles.
+## Pass 89 - end-to-end test of the money path
+- New test, tests/money-path.test.mjs, runs one flow in memory from quote to paid invoice, using the same functions the routes call, in order: a plain quote (accept, won deal, invoice, card payment, repeated webhook ignored); a deposit and completion schedule (deposit invoiced on acceptance, the nightly routine skips the deal, part payment, full payment); a payment larger than the balance (refused for review); and a revision accepted after the deposit (deposit stays billed, completion replaced).
+- What it does NOT cover: the HTTP routes and the Firestore calls. Those run only in a live environment, and need the live check still to be done.
+- Tests: the full suite passes, including the 4 new end-to-end cases. The production build compiles.
 ## Pass 88 - win-back for expired quotes
 - On the Quotes page, an expired quote has a "Draft win-back" button. It opens a note in your mail app, asking whether the customer still wants to go ahead and offering an updated quote. The note does not restate the old price, which may be out of date. Nothing is sent by the app.
 - Tests: the full suite passes, including 1 new case in tests/sales-ops.test.mjs. The production build compiles.
