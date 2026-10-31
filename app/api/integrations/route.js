@@ -1,7 +1,7 @@
 // app/api/integrations/route.js - which outside services are connected for THIS account. Names and states only, never values.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
-import { integrationStatus } from '../../../lib/integrations.js';
+import { integrationStatus, serverSettingsStatus, webhookUrls } from '../../../lib/integrations.js';
 import { accountSecretBoxes, presenceFor, vaultConfigured, SECRET_NAMES } from '../../../lib/server/integration-secrets.js';
 import { saasEnabled } from '../../../lib/tenant.js';
 
@@ -17,5 +17,7 @@ export async function GET(request) {
     presence, // per key: 'account', 'server' or '' (names and places only)
     saas,
     vaultReady: vaultConfigured(),
+    serverSettings: serverSettingsStatus(process.env),
+    webhooks: webhookUrls(process.env),
   }, { headers: NO_STORE });
 }

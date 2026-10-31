@@ -50,6 +50,8 @@ export default function IntegrationsPage() {
   const [items, setItems] = useState([]);
   const [presence, setPresence] = useState({});
   const [vaultReady, setVaultReady] = useState(true);
+  const [serverSettings, setServerSettings] = useState([]);
+  const [webhooks, setWebhooks] = useState(null);
   const [saas, setSaas] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState("");
@@ -72,7 +74,7 @@ export default function IntegrationsPage() {
       const res = await fetch("/api/integrations");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error || "Could not read the connections."); return; }
-      setItems(data.items || []); setPresence(data.presence || {}); setVaultReady(data.vaultReady !== false); setSaas(data.saas === true);
+      setItems(data.items || []); setPresence(data.presence || {}); setVaultReady(data.vaultReady !== false); setSaas(data.saas === true); setServerSettings(data.serverSettings || []); setWebhooks(data.webhooks || null);
       setError("");
     } catch (e) { console.error(e); setError("Could not read the connections."); }
   }, []);
@@ -201,6 +203,26 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
         {notice && <p role="status" className="text-sm text-teal-700 dark:text-teal-300">{notice}</p>}
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Server settings</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">These are set once on the server, not on this page. Services that need one stay in "needs keys" until it is set.</p>
+          <ul className="space-y-1 text-sm">
+            {serverSettings.map((x) => (
+              <li key={x.name} className="text-gray-700 dark:text-gray-200"><span className={x.present ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"}>{x.present ? "Set" : "Not set"}</span> · {x.name}<span className="text-xs text-gray-500 dark:text-gray-400"> — {x.why}</span></li>
+            ))}
+          </ul>
+          {webhooks ? (
+            <div className="mt-3 text-sm text-gray-700 dark:text-gray-200">
+              <p className="font-medium text-gray-900 dark:text-white">Paste these into the provider consoles</p>
+              <p className="text-xs">Twilio, messaging webhook (SMS and WhatsApp), on the number: <code className="break-all">{webhooks.twilioMessages}</code></p>
+              <p className="text-xs">Twilio, voice webhook (inbound calls): <code className="break-all">{webhooks.twilioVoice}</code></p>
+              <p className="text-xs">Stripe, webhook endpoint for the payments account, event checkout.session.completed: <code className="break-all">{webhooks.stripePayments}</code></p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">Set NEXT_PUBLIC_BASE_URL to your public https address to get the webhook addresses to paste into Twilio and Stripe.</p>
+          )}
+        </section>
+
         {!vaultReady && (
           <section className={card}>
             <p className="text-sm text-amber-700 dark:text-amber-300">Keys cannot be saved for each account yet: the server owner needs to set TOKEN_ENC_KEY first. {saas ? "" : "Self-hosted owners can put these keys in the server settings instead."}</p>

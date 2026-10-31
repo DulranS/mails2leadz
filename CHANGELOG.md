@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 87 - readiness is accurate; server settings and webhook addresses are on the Integrations page
+- FIXED: a service's readiness ignored deployment settings in SaaS mode, so card payments and the AI voice assistant showed "needs keys" even when the operator had set the server up. Deployment settings (public address, signing secret, AI key, Gmail sign-in) now always count. Account keys keep the rule that a SaaS account never uses the operator's keys.
+- The Integrations page lists the server settings, marked Set or Not set, with what each one is for. Names and states only; no values are shown.
+- The page shows the exact addresses to paste into the provider consoles: Twilio messaging (SMS and WhatsApp), Twilio voice (inbound calls), and the Stripe webhook (checkout.session.completed). They are built from the public https address and shown once it is set.
+- Tests: the full suite passes, including 3 new cases in tests/integrations.test.mjs. The production build compiles.
+- Still set on the server, not on the page: the AI key, the public address, the signing secret, the Gmail sign-in, and the key-storage key (TOKEN_ENC_KEY). Each is listed on the page with its status.
+- Still done in the provider consoles, by you: pasting the webhook addresses. The page shows them.
 ## Pass 86 - the consciously left out items, implemented
 - Invoice numbers are automatic. Each invoice gets the next number with the account's prefix (default INV-, format INV-0042). A number typed by hand is kept. The next number never repeats one already in use, even one typed by hand or made before this release. Billing, the nightly routine and milestone invoices all use the same counter. The counter is atomic when the server SDK is in use. The client-side fallback is not atomic, and this is a known limit.
 - AI calls are recorded by default. The disclosure says so, both outbound and inbound. Recording can be turned off with VOICE_RECORD_CALLS=off, and then the disclosure says the call is not recorded. Recording status is returned to the app by Twilio, and the owner plays a recording from the call log. The audio is fetched with the account's own Twilio keys.

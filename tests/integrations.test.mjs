@@ -189,4 +189,30 @@ t('Meta and Google imports do not count as manual entries for each other, but a 
   assert.throws(() => planAdImport({ rows: [], existing: [], months: [], source: 'tiktok' }));
 });
 
+t('deployment settings count in SaaS mode too: an account with its own keys is ready when the server has its settings', () => {
+  const acct = { STRIPE_PAYMENTS_SECRET_KEY: 'account', STRIPE_PAYMENTS_WEBHOOK_SECRET: 'account', TWILIO_ACCOUNT_SID: 'account', TWILIO_AUTH_TOKEN: 'account', TWILIO_PHONE_NUMBER: 'account' };
+  const server = { NEXT_PUBLIC_BASE_URL: 'https://a.example', PAY_SECRET: 's', OPENAI_API_KEY: 'k' };
+  const s1 = integrationStatus(server, { account: acct, saas: true });
+  assert.equal(get(s1, 'stripe_payments').state, 'ready');
+  assert.equal(get(s1, 'voice_agent').state, 'ready');
+});
+
+t('account keys still never borrow the server settings in SaaS mode', () => {
+  const s1 = integrationStatus({ STRIPE_PAYMENTS_SECRET_KEY: 'operator', STRIPE_PAYMENTS_WEBHOOK_SECRET: 'operator', NEXT_PUBLIC_BASE_URL: 'https://a.example', PAY_SECRET: 's' }, { account: {}, saas: true });
+  assert.equal(get(s1, 'stripe_payments').state, 'needs_keys');
+  assert.ok(get(s1, 'stripe_payments').missing.some((m) => m.includes('STRIPE_PAYMENTS_SECRET_KEY')));
+});
+
+t('the webhook addresses come from the public https address; none without it', async () => {
+  const { webhookUrls, serverSettingsStatus } = await import('../lib/integrations.js');
+  assert.equal(webhookUrls({}), null);
+  assert.equal(webhookUrls({ NEXT_PUBLIC_BASE_URL: 'http://insecure.example' }), null);
+  const w = webhookUrls({ NEXT_PUBLIC_BASE_URL: 'https://a.example/' });
+  assert.equal(w.twilioMessages, 'https://a.example/api/inbound/twilio');
+  assert.equal(w.stripePayments, 'https://a.example/api/payments/webhook');
+  const st = serverSettingsStatus({ TOKEN_ENC_KEY: 'k' });
+  assert.equal(st.find((x) => x.name === 'TOKEN_ENC_KEY').present, true);
+  assert.equal(st.find((x) => x.name === 'NEXT_PUBLIC_BASE_URL').present, false);
+});
+
 console.log(`integrations: ${n} passed`);
