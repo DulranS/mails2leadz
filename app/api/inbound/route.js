@@ -11,6 +11,7 @@ import { NextResponse, after } from 'next/server';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, isAdminMode } from '../../../lib/server-firestore.js';
 import { getDb } from '../../../lib/server/route-helpers.js';
 import { parseIngestKey, verifySecret } from '../../../lib/server/ingest-key.js';
+import { ownerFromKey } from '../../../lib/server/owner-key.js';
 import { getBusinessProfile, AiError } from '../../../lib/ai-client.js';
 import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, intakeToQualification, intakeFit, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
 import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
@@ -43,14 +44,6 @@ function tooMany(id, limit) {
   return false;
 }
 
-async function ownerFromKey(db, rawKey) {
-  const parsed = parseIngestKey(rawKey);
-  if (!parsed) return null;
-  const snap = await getDoc(doc(db, 'users', parsed.uid, 'settings', 'inbound_key'));
-  const d = snap.exists() ? snap.data() : null;
-  if (!d || d.revokedAt || !verifySecret(d.hash, parsed.secret)) return null;
-  return parsed.uid;
-}
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });

@@ -45,6 +45,10 @@ export async function POST(request) {
       return reply({ received: true, review: true });
     }
     await updateDoc(ref, r.patch);
+    if (invoice.bookingId && r.patch.status === 'paid') {
+      const { confirmPaidBooking } = await import('../../../../lib/server/booking-confirm.js');
+      await confirmPaidBooking(db, uid, invoice.bookingId).catch((e) => console.error('[payments webhook] booking confirm failed:', String(e?.message || '').slice(0, 120)));
+    }
     return reply({ received: true, applied: true });
   } catch (e) {
     console.error('[payments webhook]', String(e?.message || '').slice(0, 120));

@@ -134,4 +134,31 @@ t('a win-back note for an expired quote offers an updated quote and restates no 
   assert.doesNotMatch(d.text, /undefined/);
 });
 
+import { sanitizeProduct, reorderCandidates, reorderDraft } from '../lib/products.js';
+t('a product needs a name and a price above zero', () => {
+  assert.equal(sanitizeProduct({ name: 'Mug', price: '12.5' }).product.price, 12.5);
+  assert.match(sanitizeProduct({ name: '', price: 5 }).error, /name/);
+  assert.match(sanitizeProduct({ name: 'Mug', price: 0 }).error, /above zero/);
+});
+
+t('reorder: a customer who paid long ago is due, a recent buyer is not, and anyone with an unpaid invoice is left out', () => {
+  const now = Date.UTC(2026, 9, 31);
+  const day = 86400000;
+  const inv = (email, status, paidDaysAgo, note) => ({ email, status, note, amount: 50, issuedAt: new Date(now - (paidDaysAgo + 5) * day).toISOString(), paidAt: status === 'paid' ? new Date(now - paidDaysAgo * day).toISOString() : null });
+  const list = reorderCandidates({ now, invoices: [
+    inv('old@x.com', 'paid', 90, 'Mug'),
+    inv('recent@x.com', 'paid', 10, 'Mug'),
+    inv('owing@x.com', 'paid', 120, 'Mug'), inv('owing@x.com', 'open', 0, 'Mug'),
+  ] });
+  assert.deepEqual(list.map((c) => c.email), ['old@x.com']);
+  assert.equal(list[0].daysSince, 90);
+  assert.equal(list[0].lastPurchase, 'Mug');
+});
+
+t('a reorder note restates no price and offers a new payment link', () => {
+  const d = reorderDraft({ customer: 'Nimal', lastPurchase: 'Mug', senderName: 'Hato' });
+  assert.match(d.text, /reply to this email/);
+  assert.doesNotMatch(d.text, /undefined|NaN/);
+});
+
 console.log(`sales-ops: ${n} passed`);

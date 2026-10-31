@@ -51,7 +51,7 @@ export async function getDocs(q) {
   const rows = [];
   for (const [path, data] of store) {
     if (!path.startsWith(prefix) || path.slice(prefix.length).includes('/')) continue;
-    if (wheres.every(([f, op, v]) => (op === '==' ? data[f] === v : true))) rows.push({ path, data });
+    if (wheres.every(([f, op, v]) => (op === '==' ? data[f] === v : op === 'in' ? v.includes(data[f]) : true))) rows.push({ path, data });
   }
   const docs = (lim ? rows.slice(0, lim) : rows).map((r) => ({ id: r.path.split('/').pop(), data: () => ({ ...r.data }), ref: mk(r.path) }));
   return { docs, empty: docs.length === 0, size: docs.length };
