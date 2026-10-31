@@ -10,7 +10,7 @@ export async function GET(request) {
     const snap = await getDocs(query(collection(getDb(), 'voice_calls'), where('userId', '==', who.uid), limit(50)));
     const items = snap.docs.map((d) => {
       const c = d.data();
-      return { id: d.id, email: c.email, purpose: c.purpose, status: c.status, endReason: c.endReason || '', startedAt: c.startedAt, turns: (c.turns || []).map((t) => ({ role: t.role, text: t.text })) };
+      return { id: d.id, direction: c.direction || 'outbound', email: c.email, phone: c.phone, purpose: c.purpose, status: c.status, endReason: c.endReason || '', startedAt: c.startedAt, turns: (c.turns || []).map((t) => ({ role: t.role, text: t.text })), recording: c.recording?.url ? { duration: c.recording.duration || 0 } : null };
     }).sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
     return NextResponse.json({ items }, { headers: NO_STORE });
   } catch (e) {

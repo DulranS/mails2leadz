@@ -39,8 +39,8 @@ export async function POST(request) {
   if (!snap.exists()) return json({ error: 'This quote could not be found.' }, 404);
   const quote = { id, ...snap.data() };
 
-  const plan = quoteSendPlan({ quote, kind });
-  if (plan.error) return json({ error: plan.error }, 409);
+  const plan = quoteSendPlan({ quote, kind, acknowledgeMargin: body?.acknowledgeMargin === true });
+  if (plan.error) return json({ error: plan.error, code: plan.code || null }, 409);
   if (await isBlockedContact(db, uid, quote.customerEmail)) {
     return json({ error: 'This customer has opted out, or their deal is lost. Nothing was sent.' }, 409);
   }

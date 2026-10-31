@@ -54,13 +54,17 @@ export async function POST(request) {
   const token = signVoiceToken(uid, callId);
   if (!token) return json({ error: 'The server has no signing key set (PAY_SECRET, UNSUBSCRIBE_SECRET or WEBHOOK_SECRET).' }, 409);
   const startedAt = new Date().toISOString();
+  const recorded = process.env.VOICE_RECORD_CALLS !== 'off';
   await setDoc(doc(db, 'voice_calls', callId), {
-    id: callId, userId: uid, email, phone: consent.phone, purpose, business, status: 'ringing', turns: [], ended: false, startedAt,
+    id: callId, userId: uid, email, phone: consent.phone, purpose, business, status: 'ringing', turns: [], ended: false, startedAt, recorded,
   });
   try {
-    const placed = await tw.client.calls.create({ to: consent.phone, from: tw.from, url: `${base}/api/voice/turn?t=${encodeURIComponent(token)}`, method: 'POST' });
+    const placed = await tw.client.calls.create({
+      to: consent.phone, from: tw.from, url: `${base}/api/voice/turn?t=${encodeURIComponent(token)}`, method: 'POST',
+      ...(recorded ? { record: true, recordingStatusCallback: `${base}/api/voice/recording?t=${encodeURIComponent(token)}`, recordingStatusCallbackMethod: 'POST' } : {}),
+    });
     await updateDoc(doc(db, 'voice_calls', callId), { twilioCallSid: placed.sid || null });
-    return json({ ok: true, callId, greeting: greetingFor({ business, purpose }) });
+    return json({ ok: true, callId, recorded, greeting: greetingFor({ business, purpose, recorded }) });
   } catch (e) {
     console.error('[voice call] placing failed:', String(e?.message || '').slice(0, 120));
     await updateDoc(doc(db, 'voice_calls', callId), { status: 'failed', ended: true, endReason: 'not_placed' }).catch(() => {});

@@ -129,11 +129,14 @@ export default function BillingPage() {
         taxRate: settings.taxRate,
       });
       if (!r.ok) { setError(r.error); return; }
-      await addDoc(collection(db, "invoices"), r.write);
+      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
+      const savedData = await saved.json().catch(() => ({}));
+      if (!saved.ok) { setError(savedData.error || "Could not save the invoice. Please try again."); return; }
+      r.write.number = savedData.number;
       // First invoice to a customer ticks that step on their onboarding checklist.
       await updateDealExtras(db, user.uid, r.write.email, (d) => ({ onboardingDone: setOnboardingStep(d.onboardingDone, "invoice", true) })).catch(() => null);
       setForm(EMPTY_FORM); setShowForm(false);
-      setNotice(`Invoice saved. Due ${ymd(new Date(r.write.dueAt).getTime())}.`);
+      setNotice(`Invoice ${savedData.number} saved. Due ${ymd(new Date(r.write.dueAt).getTime())}.`);
       await load();
     } catch (err) { console.error(err); setError("Could not save the invoice. Please try again."); }
     finally { setSaving(""); }

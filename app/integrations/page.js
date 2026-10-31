@@ -23,6 +23,9 @@ const KEY_GROUPS = [
     ["GOOGLE_ADS_CLIENT_SECRET", "Google Ads client secret", true], ["GOOGLE_ADS_REFRESH_TOKEN", "Google Ads refresh token", true],
     ["GOOGLE_ADS_CUSTOMER_ID", "Google Ads customer id", false], ["GOOGLE_ADS_LOGIN_CUSTOMER_ID", "Google Ads manager id (optional)", false],
   ] },
+  { title: "Company contact lookup (Hunter)", items: [
+    ["HUNTER_API_KEY", "Hunter API key", true],
+  ] },
   { title: "Card payments on invoices (your own Stripe account)", items: [
     ["STRIPE_PAYMENTS_SECRET_KEY", "Stripe secret key", true], ["STRIPE_PAYMENTS_WEBHOOK_SECRET", "Stripe webhook secret", true],
   ] },
@@ -57,6 +60,12 @@ export default function IntegrationsPage() {
   const [voiceConsent, setVoiceConsent] = useState({ email: "", phone: "", agreed: false });
   const [call, setCall] = useState({ email: "", purpose: "" });
   const [calls, setCalls] = useState([]);
+  const [replies, setReplies] = useState([]);
+  const [unmatched, setUnmatched] = useState([]);
+  const [domain, setDomain] = useState("");
+  const [attach, setAttach] = useState({});
+  const [checks, setChecks] = useState({});
+  const [contacts, setContacts] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +85,14 @@ export default function IntegrationsPage() {
     } catch (e) { console.error(e); }
   }, []);
   useEffect(() => { if (ready && user) loadCalls(); }, [ready, user, loadCalls]);
+  const loadReplies = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inbound/messages");
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { setReplies(data.items || []); setUnmatched(data.unmatched || []); }
+    } catch (e) { console.error(e); }
+  }, []);
+  useEffect(() => { if (ready && user) loadReplies(); }, [ready, user, loadReplies]);
 
   const run = async (fn) => { setBusy(true); setError(""); setNotice(""); try { await fn(); } catch (e) { console.error(e); setError("Something went wrong. Try again."); } finally { setBusy(false); } };
 
@@ -123,6 +140,43 @@ export default function IntegrationsPage() {
     await loadCalls();
   });
 
+  const testConnection = (service) => run(async () => {
+    const r = await post("/api/integrations/test", { service });
+    setChecks((c) => ({ ...c, [service]: { ok: !!r.data.ok, message: r.data.message || r.data.error || "No answer." } }));
+  });
+
+  const attachNumber = (phone) => run(async () => {
+    const a = attach[phone] || {};
+    const r = await post("/api/inbound/attach", { phone, email: a.email, businessName: a.businessName });
+    if (!r.ok) { setError(r.data.error || "Could not make the lead."); return; }
+    setNotice(`Lead made for ${r.data.email}. Earlier replies from this number are linked to it.`);
+    await loadReplies();
+  });
+
+  const listenToCall = async (id) => {
+    setError("");
+    try {
+      const res = await fetch(`/api/voice/recording-audio?id=${encodeURIComponent(id)}`);
+      if (!res.ok) { const data = await res.json().catch(() => ({})); setError(data.error || "The recording could not be played."); return; }
+      const audio = new Audio(URL.createObjectURL(await res.blob()));
+      audio.play();
+    } catch (e) { console.error(e); setError("The recording could not be played."); }
+  };
+
+  const addContactsToInbox = () => run(async () => {
+    const r = await post("/api/contacts/inbox", { domain: domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0], contacts: contacts.map((c) => ({ email: c.email, name: c.name, position: c.position })) });
+    if (!r.ok) { setError(r.data.error || "Could not add the contacts."); return; }
+    const sk = r.data.skipped || {};
+    setNotice(`${r.data.added} added to the outreach inbox. Skipped: ${sk.blocked || 0} opted out, ${sk.contacted || 0} already emailed, ${sk.known || 0} already customers or enquiries, ${sk.duplicate || 0} duplicates, ${sk.invalid || 0} invalid.`);
+  });
+
+  const lookupCompany = () => run(async () => {
+    const r = await post("/api/contacts/lookup", { domain });
+    if (!r.ok) { setError(r.data.error || "The lookup did not run."); setContacts([]); return; }
+    setContacts(r.data.contacts || []);
+    setNotice(r.data.contacts?.length ? `${r.data.contacts.length} contact${r.data.contacts.length === 1 ? "" : "s"} found at ${r.data.domain}. Nothing was saved.` : `No public contacts found at ${r.data.domain}.`);
+  });
+
   const find = (id) => items.find((i) => i.id === id);
   const adReady = ["meta_ads", "google_ads"].some((id) => find(id)?.state === "ready");
   const waReady = find("whatsapp")?.state === "ready";
@@ -166,6 +220,12 @@ export default function IntegrationsPage() {
               {i.state !== "not_built" && <p className="text-sm text-gray-700 dark:text-gray-200 mt-1"><span className="font-medium">Consent and limits:</span> {i.consent}</p>}
               {i.state === "needs_keys" && <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">Still needed: {i.missing.join("; ")}</p>}
               {i.state === "not_built" && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{i.reason}</p>}
+              {i.state === "ready" && (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={busy} onClick={() => testConnection(i.id)} className={ghost}>Test this connection</button>
+                  {checks[i.id] && <span className={`text-sm ${checks[i.id].ok ? "text-teal-700 dark:text-teal-300" : "text-red-600 dark:text-red-300"}`}>{checks[i.id].message}</span>}
+                </div>
+              )}
             </section>
           );
         })}
@@ -244,14 +304,73 @@ export default function IntegrationsPage() {
               <ul className="space-y-3">
                 {calls.slice(0, 20).map((c) => (
                   <li key={c.id} className="border-b border-gray-100 dark:border-gray-700 pb-3 last:border-0">
-                    <p className="text-sm text-gray-900 dark:text-white">{c.purpose} <span className="text-gray-500 dark:text-gray-400">with {c.email}</span></p>
+                    <p className="text-sm text-gray-900 dark:text-white">{c.direction === "inbound" ? "Inbound call" : c.purpose} <span className="text-gray-500 dark:text-gray-400">{c.direction === "inbound" ? `from ${c.phone}` : `with ${c.email}`}</span></p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{c.startedAt ? c.startedAt.slice(0, 16).replace("T", " ") : ""} · {c.status === "ended" ? `ended${c.endReason ? ` (${c.endReason.replace(/_/g, " ")})` : ""}` : c.status}</p>
+                    {c.recording && <button type="button" onClick={() => listenToCall(c.id)} className="text-xs text-teal-700 dark:text-teal-300 underline mt-1">Listen to the recording ({c.recording.duration}s)</button>}
                     {c.turns.length > 0 && <details className="mt-1"><summary className="text-xs text-teal-700 dark:text-teal-300 cursor-pointer">What was said</summary><div className="mt-1 space-y-1">{c.turns.map((t, i) => <p key={i} className="text-xs text-gray-700 dark:text-gray-200"><span className="font-medium">{t.role === "caller" ? "Them" : "Assistant"}:</span> {t.text}</p>)}</div></details>}
                   </li>
                 ))}
               </ul>
             </section>
           </>
+        )}
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Replies by SMS and WhatsApp</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Every reply sent to your numbers is recorded here. A STOP withdraws that person's consent and stops emails to them. Numbers saved before this update need to be saved again once, so their replies can be matched.</p>
+          {replies.length === 0 && <p className="text-sm text-gray-500 dark:text-gray-400">No replies yet.</p>}
+          <ul className="space-y-2">
+            {replies.slice(0, 30).map((r) => (
+              <li key={r.id} className="text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0">
+                <span className="text-xs text-gray-500 dark:text-gray-400">{r.receivedAt ? r.receivedAt.slice(0, 16).replace("T", " ") : ""} · {r.channel} · {r.from}{r.matchedEmail ? ` · ${r.matchedEmail}` : " · not matched to a customer"}</span>
+                <p className="text-gray-900 dark:text-white">{r.body || <span className="text-gray-400">(empty)</span>}</p>
+              </li>
+            ))}
+          </ul>
+          {unmatched.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">Numbers with no matching customer</p>
+              <ul className="space-y-1">
+                {unmatched.map((u) => (
+                  <li key={u.phone} className="text-xs text-gray-700 dark:text-gray-200 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <div>{u.phone} · {u.channel} · {u.count} message{u.count === 1 ? "" : "s"} · last: "{u.lastBody}"</div>
+                    {u.attachedEmail ? <div className="text-teal-700 dark:text-teal-300">Linked to {u.attachedEmail} as a lead</div> : (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        <input className={field} style={{ maxWidth: 260 }} placeholder="Their email" value={attach[u.phone]?.email || ""} onChange={(e) => setAttach({ ...attach, [u.phone]: { ...(attach[u.phone] || {}), email: e.target.value } })} />
+                        <input className={field} style={{ maxWidth: 200 }} placeholder="Business name (optional)" value={attach[u.phone]?.businessName || ""} onChange={(e) => setAttach({ ...attach, [u.phone]: { ...(attach[u.phone] || {}), businessName: e.target.value } })} />
+                        <button type="button" disabled={busy || !attach[u.phone]?.email} onClick={() => attachNumber(u.phone)} className={solid}>Make a lead</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">A lead is made only when you add the person's email. It does not give consent to any messages.</p>
+            </div>
+          )}
+        </section>
+
+        {find("contact_lookup")?.state === "ready" && (
+          <section className={card}>
+            <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Find contacts at a company</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Public business contacts at a company's website. Nothing is saved; choose who to add in the CRM. Each lookup uses your Hunter credits.</p>
+            <div className="flex flex-wrap gap-2 items-end">
+              <label className="text-sm text-gray-700 dark:text-gray-200 flex-1 min-w-[200px]">Company website<input className={field} value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="example.com" /></label>
+              <button type="button" disabled={busy || !domain.trim()} onClick={lookupCompany} className={solid}>Look up</button>
+            </div>
+            {contacts.length > 0 && (
+              <div className="mt-3"><button type="button" disabled={busy} onClick={addContactsToInbox} className={solid}>Add all {contacts.length} to the outreach inbox</button></div>
+            )}
+            {contacts.length > 0 && (
+              <ul className="mt-3 space-y-2">
+                {contacts.map((c) => (
+                  <li key={c.email} className="text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0">
+                    <span className="text-gray-900 dark:text-white">{c.email}</span>
+                    <span className="text-gray-500 dark:text-gray-400"> {c.name ? `· ${c.name}` : ""} {c.position ? `· ${c.position}` : ""} · confidence {c.confidence}%</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         )}
       </div>
     </DashboardLayout>

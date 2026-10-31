@@ -4,7 +4,8 @@
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, setDoc, doc } from '../../../lib/server-firestore.js';
-import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote } from '../../../lib/quotes.js';
+import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote, milestonesFor, supersedeMilestones } from '../../../lib/quotes.js';
+import { releaseMilestone } from '../../../lib/server/milestones.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
@@ -101,6 +102,28 @@ export async function POST(request) {
     } catch (e) {
       console.error('[quote] deal update failed:', e.message);
       await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { dealSyncError: true }).catch(() => {});
+    }
+    if (loaded.quote.revisionOf) {
+      try {
+        const origRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.quote.revisionOf);
+        const orig = await getDoc(origRef);
+        if (orig.exists()) await updateDoc(origRef, { milestones: supersedeMilestones(orig.data().milestones), supersededBy: loaded.who.id, supersededAt: new Date().toISOString() });
+      } catch (e) {
+        console.error('[quote] revision link failed:', String(e?.message || '').slice(0, 120));
+      }
+    }
+    if (Array.isArray(loaded.quote.schedule) && loaded.quote.schedule.length) {
+      // A payment schedule: the milestones are set, and the first (e.g. the deposit) is invoiced now.
+      try {
+        const ms = milestonesFor(loaded.quote);
+        const quoteRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id);
+        await updateDoc(quoteRef, { milestones: ms });
+        const biz = await getDoc(doc(loaded.db, 'users', loaded.who.uid, 'settings', 'business'));
+        await releaseMilestone(loaded.db, loaded.who.uid, { ...loaded.quote, milestones: ms }, 0, biz.exists() ? biz.data() : {});
+      } catch (e) {
+        console.error('[quote] milestone invoice failed:', String(e?.message || '').slice(0, 120));
+        await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { milestoneSyncError: true }).catch(() => {});
+      }
     }
   }
   return page(`<h1 style="font-size:22px">Thank you</h1><p>${result.patch.status === 'accepted'

@@ -2,12 +2,20 @@
 // URL is the only proof of who the call is for. Each reply is one AI sentence or two, spoken back; "stop" is honoured at once.
 import { NextResponse } from 'next/server';
 import { getDb } from '../../../../lib/server/route-helpers.js';
-import { getDoc, updateDoc, doc } from '../../../../lib/server-firestore.js';
+import { getDoc, updateDoc, doc, getDocs, collection, query, where } from '../../../../lib/server-firestore.js';
+import { normalizePhone } from '../../../../lib/phone.js';
 import { callAI } from '../../../../lib/ai-client.js';
 import { suppressContact } from '../../../../lib/server/suppress.js';
 import {
   verifyVoiceToken, buildTwiml, wantsStop, systemPromptFor, greetingFor, fallbackLine, stopLine, endLine, MAX_TURNS,
 } from '../../../../lib/server/voice-agent.js';
+
+/** Withdraws AI-call consent for a phone number (used when an inbound caller asks not to be called). */
+async function withdrawVoiceByPhone(db, uid, phone) {
+  const p = normalizePhone(phone) || phone;
+  const snap = await getDocs(query(collection(db, 'users', uid, 'voice_consent'), where('phone', '==', p))).catch(() => null);
+  for (const d of snap?.docs || []) await updateDoc(d.ref, { consent: false, withdrawnAt: new Date().toISOString(), withdrawnBy: 'voice-stop' }).catch(() => {});
+}
 
 const xml = (body, status = 200) => new NextResponse(body, { status, headers: { 'Content-Type': 'text/xml; charset=utf-8', 'Cache-Control': 'no-store' } });
 const hangup = (say, status = 200) => xml(buildTwiml({ say, hangup: true }), status);
@@ -38,7 +46,7 @@ export async function POST(request) {
   };
 
   if (!heard && turns.length === 0) {
-    const say = greetingFor({ business, purpose: call.purpose });
+    const say = greetingFor({ business, purpose: call.purpose, recorded: call.recorded !== false });
     await updateDoc(ref, { status: 'in_progress', turns: [{ role: 'assistant', text: say }] }).catch(() => {});
     return xml(buildTwiml({ say, gatherAction: turnUrl }));
   }
@@ -46,7 +54,8 @@ export async function POST(request) {
 
   const next = [...turns, { role: 'caller', text: heard }];
   if (wantsStop(heard)) {
-    await suppressContact(db, { uid: who.uid, email: call.email, reason: 'unsubscribed', source: 'voice_call' }).catch(() => {});
+    if (call.email) await suppressContact(db, { uid: who.uid, email: call.email, reason: 'unsubscribed', source: 'voice_call' }).catch(() => {});
+    else if (call.phone) await withdrawVoiceByPhone(db, who.uid, call.phone); // an inbound caller is not in the email list
     return end('opted_out', stopLine(business), next);
   }
   if (next.filter((t) => t.role === 'caller').length >= MAX_TURNS) return end('max_turns', endLine(business), next);

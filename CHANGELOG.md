@@ -1,5 +1,62 @@
 # Changelog
 
+## Pass 86 - the consciously left out items, implemented
+- Invoice numbers are automatic. Each invoice gets the next number with the account's prefix (default INV-, format INV-0042). A number typed by hand is kept. The next number never repeats one already in use, even one typed by hand or made before this release. Billing, the nightly routine and milestone invoices all use the same counter. The counter is atomic when the server SDK is in use. The client-side fallback is not atomic, and this is a known limit.
+- AI calls are recorded by default. The disclosure says so, both outbound and inbound. Recording can be turned off with VOICE_RECORD_CALLS=off, and then the disclosure says the call is not recorded. Recording status is returned to the app by Twilio, and the owner plays a recording from the call log. The audio is fetched with the account's own Twilio keys.
+- Contacts found by a company lookup go into the lead inbox, the same path every other lead takes. The inbox applies its own rules: opted-out people, people already emailed, and existing customers are skipped. The lookup still does not contact anyone by itself.
+- Revising an accepted quote: a new quote can revise an accepted one. When the revision is accepted, the earlier quote's milestones that are not yet invoiced are replaced. Milestones already invoiced stay as billed, so the owner reconciles any difference between the old and new totals. The deal's value updates to the revised net price.
+- Tests: the full suite passes, including 3 invoice-numbering cases and 2 revision cases. The production build compiles.
+- Not built: streaming (low-lag) voice. It needs a separate real-time audio service and is not a business-rule choice.
+- Not verified: the live database, the Twilio recording callbacks and audio playback, and the invoice counter under concurrent use.
+## Pass 85 - payment milestones, and the margin floor blocks sending
+- Payment schedule on a quote: type it as "Deposit:30, Completion:70" (up to six milestones, each 1 to 100%, adding up to exactly 100%). Each milestone is a share of the NET price; the last takes any rounding, so they add up to the net price exactly.
+- On acceptance, the first milestone (e.g. the deposit) is invoiced at once. Later milestones are invoiced in order by the "Invoice next milestone" button on the accepted quote, once each. Milestone invoices carry the tax rate and payment terms from Account, as other invoices do. Email a milestone invoice from Billing with its Email button.
+- A scheduled deal is marked as billed by its milestones, so the nightly routine does not also invoice it in full. Deals without a schedule are unchanged.
+- Margin floor now blocks sending from the app: a quote below the floor cannot be sent until the owner confirms the choice. A quote below the floor also asks for confirmation before its email is opened in the mail app. Follow-ups are not blocked by the floor, because the quote was already sent.
+- Tests: the full suite passes, including 4 new cases in tests/sales-ops.test.mjs. The production build compiles.
+- Not verified: the milestone invoice writes are checked by the build and by the logic tests, not against the live database.
+- Consciously left out: changing a schedule after a quote is accepted (a changed schedule is a new quote), and invoice numbering (the owner types numbers, as before).
+## Pass 84 - deal owners, and a margin floor on quotes
+- Deal owners page (under Sell). Each open deal can be given to the owner or to a team manager. Viewers cannot own a deal. The page shows how many open deals each owner has.
+- Spread unowned deals: gives every unowned open deal to the owner with the fewest open deals, so the work spreads without a rota. Closed deals and deals that already have an owner are left alone.
+- New inbound leads (from an unmatched number, see Pass 82) go to the least-loaded owner straight away.
+- Margin floor on quotes. Each quote is checked against the deal's recorded delivery cost. Below the floor (default 30%) the quote is flagged before it is sent. The floor is set on the Quotes page. The delivery cost is kept internally and is never shown to the customer or put in the email.
+- A quote with no recorded delivery cost is not checked, and the app says so.
+- Tests: the full suite passes, including 6 new cases in tests/sales-ops.test.mjs. The production build compiles.
+- Not built: deposit and milestone invoicing (invoices for part of a deal before the rest; this changes how invoices are created, so it is a separate change); blocking a quote below the floor (the app warns, the owner decides).
+## Pass 83 - connect and verify: a test button per service, and a setup check
+- Every ready service on the Integrations page has a "Test this connection" button. The check is READ-ONLY: it reads the account's status and sends, posts, charges or changes nothing. Checks: Twilio (SMS, calls, WhatsApp and AI calls), Stripe, Meta (account active), Google Ads (sign-in works), Hunter (key works, with searches left this month), and Gmail (your connected mailbox).
+- AI keys are not tested by button: they are checked the first time the AI is used. This avoids spending tokens on a test.
+- A failed check says which key to look at. It never shows a secret.
+- Command-line setup check: `npm run setup:check` lists every connection as READY, NEEDS KEYS or NOT BUILT, with the exact keys still missing. It prints names and states only, never values.
+- Tests: the full suite passes, including 5 new cases in tests/connection-test.test.mjs. The production build compiles.
+- Important: the checks have NOT been run against live accounts. They are written to the services' documented read-only endpoints and checked only with fake responses here. Run them once with your real keys before relying on any connection.
+- Still not built: streaming (low-lag) voice (needs a separate real-time audio service); Google Ads spend import needs a developer token that Google must approve, which is outside the app.
+- Consciously left out: audio recording of AI calls; importing lookup contacts straight into outreach.
+## Pass 82 - a number with no customer can become a lead
+- On the Integrations page, a number in "Numbers with no matching customer" can be made into a lead by adding the person's email (and an optional business name). The lead is a normal inbound lead in the first stage, source "Inbound enquiry", channel "SMS reply" or "WhatsApp reply", with the number kept on the deal.
+- Earlier replies from that number are linked to the lead, and later replies from it match the lead too.
+- Making a lead does NOT give consent to any messages. Consent is recorded separately, as before.
+- Refused, with a reason: an email that is not valid; a number not in the list; a number already linked; an email that already has a deal (open that deal in the CRM instead).
+- Tests: the full suite passes, including 1 new case in tests/enrich-inbound.test.mjs. The production build compiles.
+- Reclassified: AUDIO RECORDING of AI calls is CONSCIOUSLY LEFT OUT. Recording a call needs consent rules that differ by country and by party; the transcript already records what was said. STREAMING (low-lag) VOICE is NOT BUILT in this app: it needs a separate real-time audio service with a persistent connection, which a Next.js route cannot host. It is a separate build.
+- Consciously left out (unchanged): importing contacts found by lookup straight into outreach; each contact is still chosen by the owner.
+## Pass 81 - unmatched numbers, company contact lookup, inbound AI calls
+- Replies from a number with no matching customer are kept per number (count, last message, channel) and listed on the Integrations page. No lead is created automatically, because a lead needs an email address; add the person in the CRM to act on it.
+- Company contact lookup (Hunter, the account's own key): enter a company website and see the public contacts found there. Nothing is saved or sent by the lookup. Each lookup uses the account's Hunter credits. Route: /api/contacts/lookup. (The older app/api/enrich route stays retired: it sent lead lists to a third-party endpoint. This one sends only a domain.)
+- Inbound AI calls (/api/voice/inbound): when someone rings the business's number, the AI answers with the same rules as an outbound call: it says it is an automated assistant, stops on request, keeps a transcript, and is limited to six turns. You must point the number's voice webhook at /api/voice/inbound in Twilio. Inbound calls are not capped by the daily limit, so Twilio and AI costs apply to every call.
+- A stop said on an inbound call withdraws that caller's AI-call consent, where a matching record exists.
+- Tests: the full suite passes, including 4 new cases in tests/enrich-inbound.test.mjs. The production build compiles.
+- Consciously left out: importing lookup results straight into outreach. Each contact is still chosen by the owner, so consent is not assumed.
+- Not built: a lead created from an unmatched number (needs the email address); audio recording of calls; streaming (low-lag) voice.
+## Pass 80 - replies by SMS and WhatsApp are recorded; STOP is honoured
+- Inbound SMS and WhatsApp replies are received at /api/inbound/twilio. Each is recorded for the account that owns the number it was sent to, and shown on the Integrations page under "Replies by SMS and WhatsApp".
+- Twilio's signature is checked against the account's own auth token before anything is recorded. A request that does not match is refused.
+- A reply that is exactly STOP, STOPALL, UNSUBSCRIBE, CANCEL, END or QUIT withdraws that person's SMS, WhatsApp and AI-call consent and suppresses their email. Words inside a sentence ("please stop calling") are recorded as replies, not opt-outs. START does not restore consent: the owner records it again.
+- A reply is never answered automatically.
+- Numbers are indexed when saved. A number saved before this release must be saved once more so its replies can be matched; the Integrations page says so. A number used by two accounts is indexed to the last account saved (known limit).
+- Tests: the full suite passes, including 5 new cases in tests/inbound.test.mjs. The production build compiles.
+- Not built: creating a lead from a reply by a number that matches no customer (the reply is listed, unmatched); third-party contact enrichment (lead enrichment is still scraping-based); inbound AI calls; one number per account is assumed for SMS and WhatsApp.
 ## Pass 79 - SMS and calls use the account's own keys; invoices emailed from Billing; AI phone assistant
 - CLOSED, the SaaS blocker from Pass 78: SMS (send-sms) and phone calls (make-call) now use the account's own Twilio keys, never the server's. A SaaS account with no keys is told to add them on the Integrations page.
 - CORRECTION to the Pass 78 note: call-webhook never used Twilio keys. It only checks the shared WEBHOOK_SECRET. The leak was in send-sms and make-call only, and both are fixed.

@@ -14,7 +14,7 @@ const ghost = `${btn} border border-gray-300 dark:border-gray-600 text-gray-700 
 const solid = `${btn} bg-teal-600 hover:bg-teal-500 text-white`;
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const blankLine = () => ({ description: "", qty: "1", unitPrice: "" });
-const blankForm = () => ({ title: "", email: "", customerName: "", currency: "", lines: [blankLine()], taxPercent: "", validUntil: "", terms: "" });
+const blankForm = () => ({ title: "", email: "", customerName: "", currency: "", lines: [blankLine()], taxPercent: "", validUntil: "", terms: "", schedule: "" });
 const money = (n, cur) => `${cur ? `${cur} ` : ""}${Number(n || 0).toFixed(2)}`;
 
 export default function QuotesPage() {
@@ -28,6 +28,8 @@ export default function QuotesPage() {
   const [copied, setCopied] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [notice, setNotice] = useState("");
+  const [floorInput, setFloorInput] = useState(30);
+  const [revisionOf, setRevisionOf] = useState(null);
 
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
@@ -53,11 +55,12 @@ export default function QuotesPage() {
     e.preventDefault();
     setBusy(true); setError(""); setCreated(null); setCopied(false);
     try {
-      const res = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, senderName }) });
+      const res = await fetch("/api/quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, senderName, revisionOf }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) { setError(data.error || "Could not create the quote."); return; }
       setCreated(data);
       setForm(blankForm());
+      setRevisionOf(null);
       await load();
     } catch (err) { console.error(err); setError("Could not create the quote right now."); }
     finally { setBusy(false); }
@@ -70,11 +73,18 @@ export default function QuotesPage() {
     catch (err) { console.error(err); setError("Could not save right now."); }
     finally { setBusy(false); }
   };
-  const sendFromApp = async (q, kind) => {
+  const belowFloor = (q) => q.quote?.marginPct !== null && q.quote?.marginPct !== undefined && q.quote?.marginFloor !== undefined && Number(q.quote.marginPct) < Number(q.quote.marginFloor);
+
+  const sendFromApp = async (q, kind, ack = false) => {
     setBusy(true); setError(""); setNotice("");
     try {
-      const res = await fetch("/api/quotes/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: q.id, kind, senderName }) });
+      const res = await fetch("/api/quotes/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: q.id, kind, senderName, acknowledgeMargin: ack }) });
       const data = await res.json().catch(() => ({}));
+      if (!res.ok && data.code === "MARGIN_BELOW_FLOOR" && !ack) {
+        setBusy(false);
+        if (window.confirm(`${data.error}\n\nSend it anyway?`)) await sendFromApp(q, kind, true);
+        return;
+      }
       if (!res.ok || !data.ok) { setError(data.error || "Could not send it right now."); return; }
       setNotice(`${kind === "followup" ? "Follow-up" : "Quote"} sent to ${q.customerEmail} from your Gmail.${data.warning ? ` ${data.warning}` : ""}`);
       await load();
@@ -92,14 +102,42 @@ export default function QuotesPage() {
     } catch (err) { console.error(err); setError("Could not check replies right now."); }
     finally { setBusy(false); }
   };
+  const saveFloor = async () => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/quotes/floor", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ percent: floorInput }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Could not save the margin floor."); return; }
+      setNotice(`Margin floor set to ${data.percent}%. New quotes are checked against it.`);
+    } catch (err) { console.error(err); setError("Could not save the margin floor."); }
+    finally { setBusy(false); }
+  };
+  const invoiceNext = async (q) => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/quotes/milestone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: q.id }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Could not create the invoice."); return; }
+      setNotice(`Invoice created for ${data.invoiced}. Email it from Billing when you are ready.`);
+      await load();
+    } catch (err) { console.error(err); setError("Could not create the invoice."); }
+    finally { setBusy(false); }
+  };
   const markSent = (q) => patch(q.id, { sentAt: new Date().toISOString() });
   const markFollowUpSent = (q) => patch(q.id, { lastFollowUpAt: new Date().toISOString() });
   const withdraw = (q) => { if (window.confirm(`Withdraw the quote "${q.title}"? The customer will see it is no longer valid.`)) patch(q.id, { status: "withdrawn", withdrawnAt: new Date().toISOString() }); };
   const duplicate = (q) => {
-    setForm({ title: q.title, email: q.customerEmail, customerName: q.customerName || "", currency: q.currency || "", taxPercent: q.taxPercent ? String(q.taxPercent) : "", validUntil: "", terms: q.terms || "",
+    setRevisionOf(null);
+    setForm({ title: q.title, email: q.customerEmail, customerName: q.customerName || "", currency: q.currency || "", taxPercent: q.taxPercent ? String(q.taxPercent) : "", validUntil: "", terms: q.terms || "", schedule: "",
       lines: (q.lines || []).map((l) => ({ description: l.description, qty: String(l.qty), unitPrice: String(l.unitPrice) })) });
     setCreated(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const reviseQuote = (q) => {
+    duplicate(q);
+    setRevisionOf(q.id);
+    setNotice("Revising an accepted quote. When the customer accepts this one, the milestones of the earlier quote that are not yet invoiced are replaced. Invoices already sent stay as they are.");
   };
 
   const copyText = async (text) => {
@@ -119,7 +157,7 @@ export default function QuotesPage() {
 
   const sendLinks = (q) => {
     const email = quoteEmail({ quote: q.quote, senderName, acceptUrl: q.acceptUrl });
-    return <a href={quoteMailto(q.quote, email)} className={ghost}>Open in my email</a>;
+    return <a href={quoteMailto(q.quote, email)} className={ghost} onClick={(e) => { if (belowFloor(q) && !window.confirm(`This quote's margin (${q.quote.marginPct}%) is below your ${q.quote.marginFloor}% floor. Open it in your email anyway?`)) e.preventDefault(); }}>Open in my email</a>;
   };
 
   return (
@@ -143,6 +181,7 @@ export default function QuotesPage() {
           <section className={card} aria-live="polite">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Quote ready to send</h2>
             {created.warning && <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">{created.warning}</p>}
+            {created.margin?.message && <p className={`text-sm mb-2 ${created.margin.warn ? "text-red-600 dark:text-red-300" : "text-gray-600 dark:text-gray-300"}`}>{created.margin.message}</p>}
             <p className="text-sm text-gray-700 dark:text-gray-200 mb-2">Open it in your email app, check it, and press send. Then come back and press "I sent it".</p>
             <div className="flex flex-wrap gap-2">
               <a href={created.mailto} className={solid}>Open in my email</a>
@@ -211,7 +250,15 @@ export default function QuotesPage() {
               {board.accepted.map((q) => (
                 <Row key={q.id} q={q}>
                   <span className="text-xs text-gray-600 dark:text-gray-300 self-center">{q.acceptedAt ? `Accepted ${q.acceptedAt.slice(0, 10)}` : "Accepted"}{q.quote.acceptedBy ? ` by ${q.quote.acceptedBy}` : ""}</span>
+                  {q.quote.supersededBy && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Revised by a later quote</span>}
+                  <button type="button" onClick={() => reviseQuote(q)} className={ghost}>Revise</button>
                   {q.dealSyncError && <span className="text-xs text-red-600 dark:text-red-300 self-center">The deal could not be updated. Check it in the CRM.</span>}
+                  {Array.isArray(q.quote.milestones) && q.quote.milestones.length > 0 && (
+                    <div className="w-full text-xs text-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-2">
+                      {q.quote.milestones.map((m) => <span key={m.index} className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">{m.label} {m.percent}% ({money(m.amount, q.currency)}): {m.invoiceId ? "invoiced" : "not yet"}</span>)}
+                      {q.quote.milestones.some((m) => !m.invoiceId) && <button type="button" disabled={busy} onClick={() => invoiceNext(q)} className={ghost}>Invoice next milestone</button>}
+                    </div>
+                  )}
                   {(() => { const inv = invoiceForQuote(q.quote, invoices); return (
                     <span className="text-xs text-gray-600 dark:text-gray-300 self-center">
                       {inv ? `Invoice ${inv.status === "paid" ? "paid" : inv.status === "emailed" ? "emailed" : "created"} (${money(inv.amount, q.currency)})` : "Invoice not created yet: the nightly routine creates it, or create it from Billing"}
@@ -246,7 +293,18 @@ export default function QuotesPage() {
         )}
 
         <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Margin floor</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">A quote below this margin gets a warning before you send it. The margin is worked out from each deal's recorded delivery cost, and the cost is never shown to the customer.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="number" min="0" max="95" step="0.5" className={field} style={{ maxWidth: 120 }} value={floorInput} onChange={(e) => setFloorInput(e.target.value)} aria-label="Margin floor percent" />
+            <span className="text-sm text-gray-700 dark:text-gray-200">%</span>
+            <button type="button" disabled={busy} onClick={saveFloor} className={ghost}>Save floor</button>
+          </div>
+        </section>
+
+        <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-2">New quote</h2>
+          {revisionOf && <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">This is a revision. <button type="button" onClick={() => { setRevisionOf(null); setForm(blankForm()); }} className="underline">Cancel the revision</button></p>}
           <form onSubmit={create} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm text-gray-700 dark:text-gray-200">Title<input className={field} required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Website care plan" /></label>
@@ -270,6 +328,7 @@ export default function QuotesPage() {
               <label className="text-sm text-gray-700 dark:text-gray-200">Tax % (optional)<input className={field} inputMode="decimal" value={form.taxPercent} onChange={(e) => setForm({ ...form, taxPercent: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Valid until (optional)<input className={field} type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></label>
             </div>
+            <label className="block text-sm text-gray-700 dark:text-gray-200">Payment schedule (optional: milestones that add up to 100%)<input className={field} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder="Deposit:30, Completion:70" /></label>
             <label className="block text-sm text-gray-700 dark:text-gray-200">Terms (optional)<textarea className={field} rows={2} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} placeholder="Payment within 7 days of acceptance." /></label>
             <button type="submit" disabled={busy || loading} className={solid}>{busy ? "Saving..." : "Create quote"}</button>
           </form>
