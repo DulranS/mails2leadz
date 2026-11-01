@@ -1,5 +1,15 @@
 # Changelog
 
+## Pass 97 - revisions settle what was billed; a number belongs to one account; the invoice counter is atomic on both SDKs
+- A revised quote settles what was already billed under the quote it revises. Scheduled earlier quotes: the invoiced milestones are the exact amount billed. Each milestone of the revision is credited against that amount, earliest first; a milestone fully covered is marked "covered by an earlier invoice" and is never invoiced again.
+- Earlier quote without a schedule: the amount billed is the sum of invoices sent to the same customer since that quote was accepted. This is the best available figure, because invoices do not name their quote. It can include an unrelated invoice to the same customer in that period, so check it.
+- A revision that costs more than was billed gets one adjustment invoice for the difference (unscheduled revisions). A revision that costs less records a refund due on the quote, with "Mark refund returned" once you have returned it. The app does not move money for refunds.
+- A revision is billed only by its own adjustment or schedule. The nightly routine does not bill it again.
+- A Twilio number can belong to one account only. Saving a number that another account already uses is refused.
+- The invoice counter is atomic on the client-SDK setup too (a client transaction), as on the server SDK.
+- Tests: the full suite passes, including 1 new credit case (tests/sales-ops.test.mjs) and 2 new end-to-end steps (now 29 through the real routes). The production build compiles.
+- Not closable inside the app: live verification of the external services; the Google Ads developer-token approval; streaming low-lag voice (needs a separate real-time audio service); the calendar provider's refresh delay.
+- Still not covered by an automated test: the public enquiry route, outbound drafting and sending from the lead inbox, Gmail sends, Twilio calls and SMS, and reminders.
 ## Pass 96 - AI keys per account; the SaaS AI limit closed
 - The AI provider keys (DeepSeek, OpenAI, Anthropic) are per account, stored encrypted, and entered on the Integrations page, like the other service keys.
 - In SaaS mode an account uses its own AI keys. It never uses the operator's, so an account without its own key gets "AI not configured" rather than being billed to the operator. To keep paying for AI on your plans, set SAAS_OPERATOR_AI=on on the server (the operator then pays; the default is off).

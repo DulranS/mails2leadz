@@ -251,11 +251,13 @@ export default function QuotesPage() {
                 <Row key={q.id} q={q}>
                   <span className="text-xs text-gray-600 dark:text-gray-300 self-center">{q.acceptedAt ? `Accepted ${q.acceptedAt.slice(0, 10)}` : "Accepted"}{q.quote.acceptedBy ? ` by ${q.quote.acceptedBy}` : ""}</span>
                   {q.quote.supersededBy && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Revised by a later quote</span>}
+                  {q.quote.refundDue > 0 && !q.quote.refundSettled && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Refund due: {money(q.quote.refundDue, q.currency)} (return it outside the app)</span>}
+                  {q.quote.refundDue > 0 && !q.quote.refundSettled && <button type="button" disabled={busy} onClick={() => patch(q.id, { refundSettled: true, refundSettledAt: new Date().toISOString() })} className={ghost}>Mark refund returned</button>}
                   <button type="button" onClick={() => reviseQuote(q)} className={ghost}>Revise</button>
                   {q.dealSyncError && <span className="text-xs text-red-600 dark:text-red-300 self-center">The deal could not be updated. Check it in the CRM.</span>}
                   {Array.isArray(q.quote.milestones) && q.quote.milestones.length > 0 && (
                     <div className="w-full text-xs text-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-2">
-                      {q.quote.milestones.map((m) => <span key={m.index} className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">{m.label} {m.percent}% ({money(m.amount, q.currency)}): {m.invoiceId ? "invoiced" : "not yet"}</span>)}
+                      {q.quote.milestones.map((m) => <span key={m.index} className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">{m.label} {m.percent}% ({money(m.amount, q.currency)}): {m.invoiceId === "credited" ? "covered by an earlier invoice" : m.invoiceId ? "invoiced" : "not yet"}</span>)}
                       {q.quote.milestones.some((m) => !m.invoiceId) && <button type="button" disabled={busy} onClick={() => invoiceNext(q)} className={ghost}>Invoice next milestone</button>}
                     </div>
                   )}

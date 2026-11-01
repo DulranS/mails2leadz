@@ -4,8 +4,8 @@
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, setDoc, doc } from '../../../lib/server-firestore.js';
-import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote, milestonesFor, supersedeMilestones } from '../../../lib/quotes.js';
-import { releaseMilestone } from '../../../lib/server/milestones.js';
+import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote, milestonesFor, supersedeMilestones, nextMilestoneIndex } from '../../../lib/quotes.js';
+import { releaseMilestone, billedNetForQuote, issueAdjustmentInvoice } from '../../../lib/server/milestones.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
@@ -103,23 +103,37 @@ export async function POST(request) {
       console.error('[quote] deal update failed:', e.message);
       await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { dealSyncError: true }).catch(() => {});
     }
+    let revisionBilled = 0;
     if (loaded.quote.revisionOf) {
       try {
         const origRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.quote.revisionOf);
         const orig = await getDoc(origRef);
-        if (orig.exists()) await updateDoc(origRef, { milestones: supersedeMilestones(orig.data().milestones), supersededBy: loaded.who.id, supersededAt: new Date().toISOString() });
+        if (orig.exists()) {
+          const od = { id: orig.id, ...orig.data() };
+          revisionBilled = await billedNetForQuote(loaded.db, loaded.who.uid, od);
+          await updateDoc(origRef, { milestones: supersedeMilestones(od.milestones), supersededBy: loaded.who.id, supersededAt: new Date().toISOString() });
+          const subtotal = Number(loaded.quote.subtotal) || 0;
+          const refundDue = Math.max(0, Math.round((revisionBilled - subtotal) * 100) / 100);
+          await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { billedNet: revisionBilled, refundDue, refundSettled: false });
+          const adjustment = Math.max(0, Math.round((subtotal - revisionBilled) * 100) / 100);
+          if (!(Array.isArray(loaded.quote.schedule) && loaded.quote.schedule.length) && adjustment > 0) {
+            const biz = await getDoc(doc(loaded.db, 'users', loaded.who.uid, 'settings', 'business'));
+            await issueAdjustmentInvoice(loaded.db, loaded.who.uid, { ...loaded.quote, id: loaded.who.id }, adjustment, 'Revision adjustment', biz.exists() ? biz.data() : {});
+          }
+        }
       } catch (e) {
-        console.error('[quote] revision link failed:', String(e?.message || '').slice(0, 120));
+        console.error('[quote] revision settlement failed:', String(e?.message || '').slice(0, 120));
       }
     }
     if (Array.isArray(loaded.quote.schedule) && loaded.quote.schedule.length) {
       // A payment schedule: the milestones are set, and the first (e.g. the deposit) is invoiced now.
       try {
-        const ms = milestonesFor(loaded.quote);
+        const ms = milestonesFor(loaded.quote, revisionBilled);
         const quoteRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id);
         await updateDoc(quoteRef, { milestones: ms });
         const biz = await getDoc(doc(loaded.db, 'users', loaded.who.uid, 'settings', 'business'));
-        await releaseMilestone(loaded.db, loaded.who.uid, { ...loaded.quote, milestones: ms }, 0, biz.exists() ? biz.data() : {});
+        const idx = nextMilestoneIndex(ms);
+        if (idx >= 0) await releaseMilestone(loaded.db, loaded.who.uid, { ...loaded.quote, milestones: ms }, idx, biz.exists() ? biz.data() : {});
       } catch (e) {
         console.error('[quote] milestone invoice failed:', String(e?.message || '').slice(0, 120));
         await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { milestoneSyncError: true }).catch(() => {});

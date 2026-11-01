@@ -373,4 +373,36 @@ await t('27. an owner calendar that cannot be read blocks the owner\'s times rat
   assert.ok(res.body.slots.some((x) => x.staffId === 'staffTwo'), 'the second person is still offered');
 });
 
+// ---- revision settlement, and a number that belongs to one account ----
+let revisionQuoteId; let revisionUrl;
+await t('28. a revision that costs less than was billed: no new invoice, and the difference is recorded as refund due', async () => {
+  const before = fake.__all('invoices').length;
+  const made = await json(await quoteRoute.POST(new Request('https://app.example.com/api/quotes', {
+    method: 'POST', headers: H, body: JSON.stringify({ title: 'Website care plan (revised)', email: 'Client@Example.com', customerName: 'Nimal', currency: 'USD', lines: [{ description: 'Build, smaller', qty: 1, unitPrice: 800 }], taxPercent: 0, validUntil: '2099-01-01', schedule: 'Full:100', revisionOf: quoteId }),
+  })));
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  revisionQuoteId = made.body.id;
+  revisionUrl = made.body.acceptUrl;
+  const form = new URLSearchParams({ action: 'accept', name: 'Nimal' });
+  const res = await acceptRoute.POST(new Request(revisionUrl, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form }));
+  assert.equal(res.status, 200);
+  const rev = fake.__read(`users/${UID}/quotes/${revisionQuoteId}`);
+  assert.equal(rev.status, 'accepted');
+  assert.equal(rev.billedNet, 1000, 'both milestones of the earlier quote were billed');
+  assert.equal(rev.refundDue, 200, 'the revision is 200 less than was billed');
+  assert.equal(rev.milestones[0].invoiceId, 'credited', 'the revised milestone is fully covered by earlier invoices');
+  assert.equal(fake.__all('invoices').length, before, 'no new invoice');
+  assert.equal(fake.__read(`deals/${dealDocId(UID, 'client@example.com')}`).value, 800, 'the deal now stands at the revised price');
+});
+
+await t('29. a number already used by one account cannot be taken by another', async () => {
+  const { writeAccountSecret } = await import('../lib/server/integration-secrets.js');
+  const { getDb } = await import('../lib/server/route-helpers.js');
+  const db = getDb();
+  await writeAccountSecret(db, UID, 'TWILIO_PHONE_NUMBER', '+94110000111');
+  await assert.rejects(() => writeAccountSecret(db, 'otherOwnerUid002', 'TWILIO_PHONE_NUMBER', '+94110000111'), /already used by another account/);
+  // the owner may keep their own number
+  await writeAccountSecret(db, UID, 'TWILIO_PHONE_NUMBER', '+94110000111');
+});
+
 console.log(`routes-e2e: ${n} passed`);

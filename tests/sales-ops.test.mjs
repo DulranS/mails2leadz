@@ -161,4 +161,15 @@ t('a reorder note restates no price and offers a new payment link', () => {
   assert.doesNotMatch(d.text, /undefined|NaN/);
 });
 
+t('a revision credits what was already billed against its own schedule, earliest milestone first; a fully covered milestone is "credited"', () => {
+  const q = { subtotal: 1000, schedule: [{ label: 'Deposit', percent: 30 }, { label: 'Completion', percent: 70 }] };
+  const part = milestonesFor(q, 300);
+  assert.equal(part[0].invoiceId, 'credited');
+  assert.equal(part[1].amount, 700);
+  assert.equal(nextMilestoneIndex(part), 1);
+  const over = milestonesFor({ ...q, subtotal: 800 }, 1000);
+  assert.ok(over.every((m) => m.invoiceId === 'credited' && m.amount === 0), 'nothing left to invoice');
+  assert.equal(nextMilestoneIndex(over), -1);
+});
+
 console.log(`sales-ops: ${n} passed`);
