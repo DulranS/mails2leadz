@@ -7,7 +7,7 @@ import { getDb } from '../../../../lib/server/route-helpers.js';
 import { setDoc, doc } from '../../../../lib/server-firestore.js';
 import { normalizePhone } from '../../../../lib/phone.js';
 import { getBusinessProfile } from '../../../../lib/ai-client.js';
-import { secretsFor, accountForNumber } from '../../../../lib/server/integration-secrets.js';
+import { secretsFor, accountForNumber, aiKeysFor } from '../../../../lib/server/integration-secrets.js';
 import { verifyTwilioSignature, twilioNumber } from '../../../../lib/server/inbound-messages.js';
 import { signVoiceToken, buildTwiml, inboundGreetingFor } from '../../../../lib/server/voice-agent.js';
 
@@ -29,8 +29,10 @@ export async function POST(request) {
   if (!verifyTwilioSignature(`${base}${new URL(request.url).pathname}`, params, secrets.TWILIO_AUTH_TOKEN, request.headers.get('x-twilio-signature'))) {
     return xml('<Response/>', 403);
   }
-  if (!AI_KEYS.some((k) => String(process.env[k] || '').trim())) return say('Sorry, our assistant is not available right now. Please try again later.');
 
+
+  const ai = await aiKeysFor(db, uid);
+  if (!ai.deepseek && !ai.openai && !ai.anthropic) return say('Sorry, our assistant is not available right now. Please try again later.');
   const business = String((await getBusinessProfile(uid))?.businessName || '').replace(/[\r\n]/g, ' ').trim().slice(0, 80) || 'the business';
   const callId = randomUUID();
   const token = signVoiceToken(uid, callId);

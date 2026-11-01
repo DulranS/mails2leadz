@@ -1,5 +1,12 @@
 # Changelog
 
+## Pass 96 - AI keys per account; the SaaS AI limit closed
+- The AI provider keys (DeepSeek, OpenAI, Anthropic) are per account, stored encrypted, and entered on the Integrations page, like the other service keys.
+- In SaaS mode an account uses its own AI keys. It never uses the operator's, so an account without its own key gets "AI not configured" rather than being billed to the operator. To keep paying for AI on your plans, set SAAS_OPERATOR_AI=on on the server (the operator then pays; the default is off).
+- Self-hosted: the server settings are used, as before, and an account key, if set, takes precedence.
+- The voice assistant's outbound and inbound checks use the account's own AI keys.
+- Tests: the full suite passes, including 1 new AI-key case and an updated readiness case in tests/integrations.test.mjs (28 cases in that file). The production build compiles.
+- Still open, and not closable inside the app: live verification of all external services; the Google Ads developer-token approval (Google's decision); streaming low-lag voice (needs a separate real-time audio service); provider calendar refresh delay (Google publishes calendars every few hours); reconciling revised quotes with invoices already sent (needs a decision: credit notes or manual adjustment).
 ## Pass 95 - the booking limits closed: any calendar rule, named time zones, team managers' calendars
 - Calendars are now read with a maintained iCalendar parser (node-ical). It handles named time zones, any repeat rule (daily, weekly, monthly, yearly, and the rest), exceptions (EXDATE), single occurrences moved or cancelled in the calendar (RECURRENCE-ID), all-day events, and "free" events.
 - Times with no zone are read as the owner's own local time, whatever zone the server runs in.

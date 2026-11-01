@@ -191,10 +191,12 @@ t('Meta and Google imports do not count as manual entries for each other, but a 
 
 t('deployment settings count in SaaS mode too: an account with its own keys is ready when the server has its settings', () => {
   const acct = { STRIPE_PAYMENTS_SECRET_KEY: 'account', STRIPE_PAYMENTS_WEBHOOK_SECRET: 'account', TWILIO_ACCOUNT_SID: 'account', TWILIO_AUTH_TOKEN: 'account', TWILIO_PHONE_NUMBER: 'account' };
-  const server = { NEXT_PUBLIC_BASE_URL: 'https://a.example', PAY_SECRET: 's', OPENAI_API_KEY: 'k' };
-  const s1 = integrationStatus(server, { account: acct, saas: true });
+  const server = { NEXT_PUBLIC_BASE_URL: 'https://a.example', PAY_SECRET: 's' };
+  const s1 = integrationStatus(server, { account: { ...acct, OPENAI_API_KEY: 'account' }, saas: true });
   assert.equal(get(s1, 'stripe_payments').state, 'ready');
   assert.equal(get(s1, 'voice_agent').state, 'ready');
+  const noAi = integrationStatus(server, { account: acct, saas: true });
+  assert.equal(get(noAi, 'voice_agent').state, 'needs_keys', 'in SaaS mode an operator AI key is not used for an account');
 });
 
 t('account keys still never borrow the server settings in SaaS mode', () => {
@@ -213,6 +215,12 @@ t('the webhook addresses come from the public https address; none without it', a
   const st = serverSettingsStatus({ TOKEN_ENC_KEY: 'k' });
   assert.equal(st.find((x) => x.name === 'TOKEN_ENC_KEY').present, true);
   assert.equal(st.find((x) => x.name === 'NEXT_PUBLIC_BASE_URL').present, false);
+});
+
+t('AI keys: with no key the AI is not configured; the account key is used; the server key only where the server is the account', async () => {
+  const { aiConfig } = await import('../lib/ai-client.js');
+  assert.equal(aiConfig({ keys: { deepseek: '', openai: '', anthropic: '' } }).provider, null);
+  assert.equal(aiConfig({ keys: { deepseek: '', openai: 'acct-key', anthropic: '' } }).provider, 'openai');
 });
 
 console.log(`integrations: ${n} passed`);

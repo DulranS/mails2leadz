@@ -10,6 +10,7 @@ import { dealDocId } from '../../../../lib/deal-utils.js';
 import { countToday } from '../../../../lib/server/daily-count.js';
 import { getBusinessProfile } from '../../../../lib/ai-client.js';
 import { twilioFor } from '../../../../lib/server/twilio-account.js';
+import { aiKeysFor } from '../../../../lib/server/integration-secrets.js';
 import { signVoiceToken, withinCallingHours, DEFAULT_DAILY_CAP, greetingFor } from '../../../../lib/server/voice-agent.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -29,7 +30,8 @@ export async function POST(request) {
   const purpose = String(body?.purpose || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
   if (!email) return json({ error: 'Choose the person to call.' }, 400);
   if (purpose.length < 8) return json({ error: 'Say what the call is about, in a sentence.' }, 400);
-  if (!AI_KEYS.some((k) => String(process.env[k] || '').trim())) return json({ error: 'The AI is not set up on the server, so no call can be made.' }, 409);
+  const ai = await aiKeysFor(db, uid);
+  if (!ai.deepseek && !ai.openai && !ai.anthropic) return json({ error: 'Add an AI key for this account on the Integrations page, so the assistant can speak. No call was made.' }, 409);
   const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
   if (!/^https:\/\//i.test(base)) return json({ error: 'Calls need a public https address on the server (NEXT_PUBLIC_BASE_URL).' }, 409);
 

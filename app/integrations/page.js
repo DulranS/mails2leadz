@@ -23,6 +23,9 @@ const KEY_GROUPS = [
     ["GOOGLE_ADS_CLIENT_SECRET", "Google Ads client secret", true], ["GOOGLE_ADS_REFRESH_TOKEN", "Google Ads refresh token", true],
     ["GOOGLE_ADS_CUSTOMER_ID", "Google Ads customer id", false], ["GOOGLE_ADS_LOGIN_CUSTOMER_ID", "Google Ads manager id (optional)", false],
   ] },
+  { title: "AI writing (DeepSeek, OpenAI or Anthropic: one is enough)", items: [
+    ["DEEPSEEK_API_KEY", "DeepSeek API key", true], ["OPENAI_API_KEY", "OpenAI API key", true], ["ANTHROPIC_API_KEY", "Anthropic API key", true],
+  ] },
   { title: "Company contact lookup (Hunter)", items: [
     ["HUNTER_API_KEY", "Hunter API key", true],
   ] },
