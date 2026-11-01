@@ -123,6 +123,19 @@ export default function QuotesPage() {
     } catch (err) { console.error(err); setError("Could not create the invoice."); }
     finally { setBusy(false); }
   };
+  const creditNoteCall = async (body, okMessage) => {
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/credit-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, userId: user?.uid }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Could not save the credit note."); return; }
+      setNotice(okMessage(data));
+      await load();
+    } catch (err) { console.error(err); setError("Could not save the credit note."); }
+    finally { setBusy(false); }
+  };
+  const issueCreditNote = (q) => creditNoteCall({ action: "issue", quoteId: q.id }, (d) => `Credit note ${d.number} issued. Hold it as credit for the next invoice, or refund it in cash.`);
+  const settleCreditNote = (q, action) => creditNoteCall({ action, id: q.quote.creditNoteId }, (d) => (action === "refund" ? "Recorded as refunded in cash." : "Held as credit for the next invoice."));
   const markSent = (q) => patch(q.id, { sentAt: new Date().toISOString() });
   const markFollowUpSent = (q) => patch(q.id, { lastFollowUpAt: new Date().toISOString() });
   const withdraw = (q) => { if (window.confirm(`Withdraw the quote "${q.title}"? The customer will see it is no longer valid.`)) patch(q.id, { status: "withdrawn", withdrawnAt: new Date().toISOString() }); };
@@ -251,9 +264,12 @@ export default function QuotesPage() {
                 <Row key={q.id} q={q}>
                   <span className="text-xs text-gray-600 dark:text-gray-300 self-center">{q.acceptedAt ? `Accepted ${q.acceptedAt.slice(0, 10)}` : "Accepted"}{q.quote.acceptedBy ? ` by ${q.quote.acceptedBy}` : ""}</span>
                   {q.quote.supersededBy && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Revised by a later quote</span>}
-                  {q.quote.refundDue > 0 && !q.quote.refundSettled && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Refund due: {money(q.quote.refundDue, q.currency)} (return it outside the app)</span>}
-                  {q.quote.refundDue > 0 && !q.quote.refundSettled && <button type="button" disabled={busy} onClick={() => patch(q.id, { refundSettled: true, refundSettledAt: new Date().toISOString() })} className={ghost}>Mark refund returned</button>}
-                  <button type="button" onClick={() => reviseQuote(q)} className={ghost}>Revise</button>
+                  {q.quote.refundDue > 0 && !q.quote.creditNoteId && <span className="text-xs text-amber-700 dark:text-amber-300 self-center">Owed back: {money(q.quote.refundDue, q.currency)}</span>}
+                  {q.quote.refundDue > 0 && !q.quote.creditNoteId && <button type="button" disabled={busy} onClick={() => issueCreditNote(q)} className={ghost}>Issue credit note</button>}
+                  {q.quote.creditNoteId && <span className="text-xs text-gray-700 dark:text-gray-200 self-center">Credit note {q.quote.creditNoteNumber}: {money(q.quote.refundDue, q.currency)}</span>}
+                  {q.quote.creditNoteId && <button type="button" disabled={busy} onClick={() => settleCreditNote(q, "hold")} className={ghost}>Hold as credit for next invoice</button>}
+                  {q.quote.creditNoteId && <button type="button" disabled={busy} onClick={() => settleCreditNote(q, "refund")} className={ghost}>Refunded in cash</button>}
+                                    <button type="button" onClick={() => reviseQuote(q)} className={ghost}>Revise</button>
                   {q.dealSyncError && <span className="text-xs text-red-600 dark:text-red-300 self-center">The deal could not be updated. Check it in the CRM.</span>}
                   {Array.isArray(q.quote.milestones) && q.quote.milestones.length > 0 && (
                     <div className="w-full text-xs text-gray-700 dark:text-gray-200 flex flex-wrap items-center gap-2">
@@ -275,7 +291,7 @@ export default function QuotesPage() {
           <section className={card}>
             <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Waiting for an answer</h2>
             <ul>
-              {board.waiting.map((q) => <Row key={q.id} q={q}><span className="text-xs text-gray-500 dark:text-gray-400 self-center">Sent {q.quote.sentVia === "gmail" ? "Sent from your Gmail" : "Sent"} {q.sentAt ? q.sentAt.slice(0, 10) : ""}</span></Row>)}
+              {board.waiting.map((q) => <Row key={q.id} q={q}><span className="text-xs text-gray-500 dark:text-gray-400 self-center">Sent {q.quote.sentVia === "gmail" ? "Sent from your Gmail" : "Sent"} {q.sentAt ? q.sentAt.slice(0, 10) : ""}{q.quote.openedAt ? ` · opened ${q.quote.openCount || 1} time${(q.quote.openCount || 1) === 1 ? "" : "s"} (opens are approximate)` : ""}{q.quote.viewedAt ? ` · page viewed ${q.quote.viewCount || 1}×` : ""}</span></Row>)}
             </ul>
           </section>
         )}

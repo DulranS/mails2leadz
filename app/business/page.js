@@ -1,6 +1,7 @@
 "use client";
 // Business Value: past (what you earned), present (what's in play), future (what to expect),
 // ROI (what it cost) and AI usage. Everything is computed from the user's own deals.
+import { linearTrend } from '../../lib/trends.js';
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { collection, query, where, getDocs, getDoc, setDoc, doc, limit } from "../../lib/client-firestore.js";
@@ -933,6 +934,7 @@ export default function BusinessValuePage() {
           <Card title="Revenue won, last 6 months">
             {m.past.wonByMonth.every((x) => x.revenue === 0) ? <p className="text-sm text-gray-500 dark:text-gray-400">No won deals yet. Mark a deal "Won" below and it will show here.</p> :
               m.past.wonByMonth.map((x) => <Bar key={x.month} label={x.month} value={x.revenue} max={maxMonth} right={`${money(x.revenue)} · ${x.deals}`} />)}
+            {(() => { const tr = linearTrend(m.past.wonByMonth.map((x) => x.revenue)); return tr ? <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">Trend: {tr.direction === "up" ? "rising" : tr.direction === "down" ? "falling" : "flat"}. Next month about {money(tr.next)} if the last months' pattern holds; it is an estimate, not a forecast.</p> : null; })()}
             <div className="grid grid-cols-3 gap-2 mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
               <div><div className="text-base font-semibold text-gray-900 dark:text-white">{m.past.avgWonValue ? money(m.past.avgWonValue) : "—"}</div>avg deal</div>
               <div><div className="text-base font-semibold text-gray-900 dark:text-white">{m.past.avgCycleDays ? `${m.past.avgCycleDays}d` : "—"}</div>avg time to win</div>

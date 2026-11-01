@@ -26,6 +26,14 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 
 export default function AccountPage() {
   const { user, ready, workspace, raw } = useAuthUser();
+  const [senderDomain, setSenderDomain] = useState("");
+  const [senderBusy, setSenderBusy] = useState(false);
+  const [senderMsg, setSenderMsg] = useState("");
+  const [senderReport, setSenderReport] = useState(null);
+  const [eraseEmail, setEraseEmail] = useState("");
+  const [eraseConfirm, setEraseConfirm] = useState("");
+  const [eraseBusy, setEraseBusy] = useState(false);
+  const [eraseMsg, setEraseMsg] = useState("");
   const [profile, setProfile] = useState({ businessName: "", offer: "", valueProp: "", audience: "", tone: "friendly and professional", phone: "", address: "", bookingLink: "", proofText: "", objectionsText: "", leanAngle: "", guarantee: "", firstStep: "", costOfInaction: "", beforeAfter: "", honestLimit: "", availability: "", packagesText: "", intakeQuestions: false });
   const [avgDealValue, setAvgDealValue] = useState("");
   const [monthlyCost, setMonthlyCost] = useState("");
@@ -231,6 +239,26 @@ export default function AccountPage() {
     } catch { setHook((h) => ({ ...h, busy: false, ok: false, msg: "Could not reach the server." })); }
   };
   useEffect(() => { if (user?.uid) refreshAutopilot(); }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  const checkSender = async () => {
+    setSenderBusy(true); setSenderMsg(""); setSenderReport(null);
+    try {
+      const res = await fetch(`/api/sender-check?domain=${encodeURIComponent(senderDomain.trim())}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setSenderMsg(data.error || "Could not check the domain."); return; }
+      setSenderReport(data);
+    } catch { setSenderMsg("Could not reach the server."); }
+    finally { setSenderBusy(false); }
+  };
+  const eraseContactData = async () => {
+    setEraseBusy(true); setEraseMsg("");
+    try {
+      const res = await fetch("/api/contacts/erase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: eraseEmail.trim(), confirm: eraseConfirm, userId: user?.uid }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setEraseMsg(data.error || "Could not erase the data."); return; }
+      setEraseMsg(data.message); setEraseEmail(""); setEraseConfirm("");
+    } catch { setEraseMsg("Could not reach the server."); }
+    finally { setEraseBusy(false); }
+  };
   const saveAutopilot = async (patch) => {
     const next = { ...ap.settings, ...patch };
     if (!next.senderName && user?.displayName) next.senderName = user.displayName;
@@ -674,6 +702,40 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Your data</h2>
           <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Your leads, deals and settings belong to you. Download a copy any time.</p>
           <button onClick={doExport} disabled={busy === "export" || !user} className="mt-3 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">{busy === "export" ? "Preparing…" : "Download my data (JSON)"}</button>
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Can your emails reach inboxes?</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Enter the domain you send from. We read its public DNS records (SPF, DKIM and DMARC) that Gmail and Yahoo check before delivering mail.</p>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            <input type="text" inputMode="url" placeholder="example.com" value={senderDomain} onChange={(e) => setSenderDomain(e.target.value)} aria-label="Sending domain" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+            <button type="button" disabled={!senderDomain.trim() || senderBusy} onClick={checkSender} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{senderBusy ? "Checking..." : "Check domain"}</button>
+          </div>
+          {senderMsg && <p role="status" className="text-sm text-red-700 dark:text-red-300 mt-2">{senderMsg}</p>}
+          {senderReport && !senderReport.error && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{senderReport.label}</p>
+              {senderReport.freeMail ? <p className="text-sm text-gray-600 dark:text-gray-300">{senderReport.message}</p> : senderReport.checks.map((c) => (
+                <div key={c.id} className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                  <p className="text-sm text-gray-800 dark:text-gray-100"><span className={c.ok ? "text-green-700 dark:text-green-300 font-medium" : "text-amber-700 dark:text-amber-300 font-medium"}>{c.ok ? "Pass" : "Fix"}</span> {c.name}: {c.message}</p>
+                  {c.warnings.map((w) => <p key={w} className="text-xs text-amber-700 dark:text-amber-300 mt-1">{w}</p>)}
+                  {!c.ok && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{c.example}</p>}
+                </div>
+              ))}
+              {senderReport.notes?.map((n) => <p key={n} className="text-xs text-gray-500 dark:text-gray-400">{n}</p>)}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Erase one person&apos;s data</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">For a request from one contact to delete their data. This removes their leads, deals, drafts, follow-ups and messages, and clears the address and text from their sent emails (the counts stay). Invoices and credit notes are kept, because tax law requires it. Their address stays on the opt-out list so they are never contacted again.</p>
+          <div className="flex flex-col sm:flex-row gap-2 mt-3">
+            <input type="email" placeholder="contact@example.com" value={eraseEmail} onChange={(e) => setEraseEmail(e.target.value)} aria-label="Contact email to erase" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+            <input type="text" placeholder="Type ERASE to confirm" value={eraseConfirm} onChange={(e) => setEraseConfirm(e.target.value)} aria-label="Type ERASE to confirm" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+            <button type="button" disabled={!eraseEmail.trim() || eraseConfirm.trim() !== "ERASE" || eraseBusy} onClick={eraseContactData} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-500 text-white disabled:opacity-50">{eraseBusy ? "Erasing..." : "Erase this contact"}</button>
+          </div>
+          {eraseMsg && <p role="status" className="text-sm text-gray-800 dark:text-gray-100 mt-2">{eraseMsg}</p>}
         </section>
 
         <section className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl p-4 sm:p-5">

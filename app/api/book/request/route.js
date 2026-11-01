@@ -13,6 +13,7 @@ import { nextInvoiceNumber } from '../../../../lib/server/invoice-number.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 import { signBookingToken } from '../../../../lib/server/booking-manage.js';
+import { emitWebhook } from '../../../../lib/server/webhooks.js';
 import { availabilityFor } from '../../../../lib/server/availability.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -85,6 +86,7 @@ export async function POST(request) {
     const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
     const manageToken = signBookingToken('manage', uid, bookingId);
     const manageLink = /^https:\/\//i.test(base) && manageToken ? `${base}/manage?t=${encodeURIComponent(manageToken)}` : '';
+    await emitWebhook(db, uid, 'booking.requested', { bookingId, serviceName: s.name, startIso: req.request.startIso, endIso, customerEmail: req.request.email, status });
     return json({ ok: true, bookingId, status, startIso: req.request.startIso, endIso, payLink, manageLink, needsReview: flagged });
   } catch (e) {
     console.error('[book request] failed:', String(e?.message || '').slice(0, 120));

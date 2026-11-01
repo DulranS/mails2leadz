@@ -9,7 +9,8 @@ import { normalizePhone } from '../../../../lib/phone.js';
 import { dealDocId } from '../../../../lib/deal-utils.js';
 import { inboundLeadWrite } from '../../../../lib/server/inbound-messages.js';
 import { loadRoster } from '../../../../lib/server/team-store.js';
-import { eligibleOwners, pickOwner } from '../../../../lib/assignment.js';
+import { pickOwner, territoryOf } from '../../../../lib/assignment.js';
+import { ownersFor } from '../../../../lib/server/owner-settings.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 
@@ -40,9 +41,9 @@ export async function POST(request) {
     await setDoc(dealRef, inboundLeadWrite({ uid, email, phone, channel: um.data().channel, businessName: body?.businessName, now: new Date() }), { merge: true });
     await updateDoc(unmatchedRef, { attachedEmail: email, attachedAt: new Date().toISOString() });
     // A new lead goes to the least-loaded owner, so the work is spread from the first moment.
-    const owners = eligibleOwners((await loadRoster(db, uid)).members);
+    const owners = await ownersFor(db, uid);
     const all = (await getDocs(query(collection(db, 'deals'), where('userId', '==', uid), limit(2000)))).docs.map((d) => d.data());
-    const assignee = pickOwner(owners, all);
+    const assignee = pickOwner(owners, all, { territory: territoryOf(email) });
     if (assignee) await updateDoc(dealRef, { assignedTo: assignee, assignedAt: new Date().toISOString(), assignedBy: 'auto' });
     // Link the replies already received from this number.
     const earlier = await getDocs(query(collection(db, 'users', uid, 'inbound_messages'), where('from', '==', phone), limit(200)));

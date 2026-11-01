@@ -6,6 +6,7 @@ import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, setDoc, doc } from '../../../lib/server-firestore.js';
 import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote, milestonesFor, supersedeMilestones, nextMilestoneIndex } from '../../../lib/quotes.js';
 import { releaseMilestone, billedNetForQuote, issueAdjustmentInvoice } from '../../../lib/server/milestones.js';
+import { emitWebhook } from '../../../lib/server/webhooks.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
@@ -46,6 +47,11 @@ export async function GET(request) {
   const { quote } = loaded;
   const cur = quote.currency || '';
   const state = quoteState(quote);
+  try {
+    const viewRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id);
+    const now = new Date().toISOString();
+    await updateDoc(viewRef, { viewedAt: quote.viewedAt || now, viewCount: (Number(quote.viewCount) || 0) + 1, lastViewedAt: now });
+  } catch (e) { console.error('[quote] view record failed:', String(e?.message || '').slice(0, 120)); }
   const rows = (quote.lines || []).map((l) => `<tr><td>${esc(l.description)}${l.qty !== 1 ? ` <span>(x${esc(l.qty)})</span>` : ''}</td><td class="n">${money(l.qty * l.unitPrice, cur)}</td></tr>`).join('');
   const taxRow = quote.tax ? `<tr><td>Tax (${esc(quote.taxPercent)}%)</td><td class="n">${money(quote.tax, cur)}</td></tr>` : '';
   const answer = {
@@ -139,6 +145,9 @@ export async function POST(request) {
         await updateDoc(doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id), { milestoneSyncError: true }).catch(() => {});
       }
     }
+  }
+  if (result.patch.status === 'accepted') {
+    await emitWebhook(loaded.db, loaded.who.uid, 'quote.accepted', { quoteId: loaded.who.id, title: loaded.quote.title, customerEmail: loaded.quote.customerEmail, total: loaded.quote.total, currency: loaded.quote.currency || '' });
   }
   return page(`<h1 style="font-size:22px">Thank you</h1><p>${result.patch.status === 'accepted'
     ? 'Your acceptance is recorded. The sender will be in touch to confirm the next steps.'

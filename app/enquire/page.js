@@ -16,7 +16,7 @@ function Form() {
   const [booking, setBooking] = useState("");
   const [intake, setIntake] = useState(false);
   const [state, setState] = useState({ status: "idle", error: "", business: "" });
-  const [f, setF] = useState({ name: "", email: "", phone: "", message: "", company_site: "", budget: "", authority: "", timeline: "" });
+  const [f, setF] = useState({ name: "", email: "", phone: "", country: "", message: "", company_site: "", budget: "", authority: "", timeline: "" });
 
   useEffect(() => {
     let live = true;
@@ -54,6 +54,7 @@ function Form() {
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-name">Your name</label><input id="eq-name" className={field} maxLength={80} autoComplete="name" value={f.name} onChange={set("name")} /></div>
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-email">Email <span aria-hidden="true">*</span></label><input id="eq-email" type="email" required className={field} maxLength={120} autoComplete="email" value={f.email} onChange={set("email")} /></div>
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-phone">Phone (optional)</label><input id="eq-phone" type="tel" className={field} maxLength={30} autoComplete="tel" value={f.phone} onChange={set("phone")} /></div>
+      <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-country">Country (2 letters, e.g. LK, GB, AU)</label><input id="eq-country" className={field} maxLength={2} value={f.country} onChange={(e) => setF({ ...f, country: e.target.value.toUpperCase() })} /></div>
       <div><label className="block text-sm font-medium text-gray-700" htmlFor="eq-msg">How can we help?</label><textarea id="eq-msg" rows={5} className={field} maxLength={1500} value={f.message} onChange={set("message")} /></div>
       {intake && (
         <fieldset className="space-y-3 border-t border-gray-200 pt-3">

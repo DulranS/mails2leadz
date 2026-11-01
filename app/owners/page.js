@@ -19,6 +19,7 @@ export default function OwnersPage() {
   const [deals, setDeals] = useState([]);
   const [owners, setOwners] = useState([]);
   const [choice, setChoice] = useState({});
+  const [prefs, setPrefs] = useState({});
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -30,7 +31,7 @@ export default function OwnersPage() {
       setDeals(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       const res = await fetch("/api/deals/assignees");
       const data = await res.json().catch(() => ({}));
-      if (res.ok) setOwners(data.owners || []);
+      if (res.ok) { setOwners(data.owners || []); setPrefs(Object.fromEntries((data.owners || []).map((o) => [o.key, { away: o.away, maxOpen: o.maxOpen ?? "", territories: (o.territories || []).join(", ") }]))); }
       setError("");
     } catch (e) { console.error(e); setError("Could not load the deals."); }
   }, [user]);
@@ -47,6 +48,13 @@ export default function OwnersPage() {
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok, data };
   };
+
+  const savePref = (key) => run(async () => {
+    const p = prefs[key] || {};
+    const r = await post("/api/deals/owner-settings", { key, away: !!p.away, maxOpen: p.maxOpen, territories: p.territories });
+    if (!r.ok) { setError(r.data.error || "Could not save."); return; }
+    setNotice("Saved."); await load();
+  });
 
   const assign = (d) => run(async () => {
     const r = await post("/api/deals/assign", { email: d.email, assignee: choice[d.id] ?? (d.assignedTo || "") });
@@ -67,6 +75,22 @@ export default function OwnersPage() {
       <div className="space-y-4">
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
         {notice && <p role="status" className="text-sm text-teal-700 dark:text-teal-300">{notice}</p>}
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Availability and territories</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Away people are skipped. A cap limits open deals per person (blank means no cap). Territories are country codes from the email domain (for example lk, uk); a deal goes to a person who covers its territory first. A deal is never left without an owner.</p>
+          <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+            {owners.map((o) => (
+              <li key={o.key} className="py-2 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                <span className="sm:col-span-3 text-sm text-gray-900 dark:text-white">{o.label}</span>
+                <label className="sm:col-span-2 text-sm flex items-center gap-2"><input type="checkbox" checked={!!prefs[o.key]?.away} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], away: e.target.checked } })} />Away</label>
+                <input className={`${field} sm:col-span-2`} type="number" min="1" placeholder="No cap" value={prefs[o.key]?.maxOpen ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], maxOpen: e.target.value } })} aria-label={`Open deal cap for ${o.label}`} />
+                <input className={`${field} sm:col-span-3`} placeholder="Territories, e.g. lk, uk" value={prefs[o.key]?.territories ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], territories: e.target.value } })} aria-label={`Territories for ${o.label}`} />
+                <button type="button" disabled={busy} onClick={() => savePref(o.key)} className={`${btn} sm:col-span-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Save</button>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section className={card}>
           <div className="flex flex-wrap items-center justify-between gap-3">

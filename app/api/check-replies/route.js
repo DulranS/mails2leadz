@@ -8,6 +8,7 @@ import { suppressContact } from '../../../lib/server/suppress.js';
 import { google } from 'googleapis';
 import { cancelPendingFollowUps, pickEmailsToCheck, REPLY_CHECK_BATCH } from '../../../lib/reply-sync.js';
 import { triageReply } from '../../../lib/server/reply-triage.js';
+import { emitWebhook, HOT_REPLY_INTENTS } from '../../../lib/server/webhooks.js';
 import { loadAutopilot } from '../../../lib/server/prepare-drafts.js';
 import { quickIntent, ownWords } from '../../../lib/reply-intents.js';
 import { extractPlainText } from '../../../lib/gmail-text.js';
@@ -248,6 +249,8 @@ export async function POST(request) {
             if (isAdminMode()) {
               const t = await triageReply(db, { uid: userId, sentRef: doc.ref, email: toEmail, businessName: sentEmail.businessName, replyText: `${headers.subject || ''}\n${snippet}`, originalSubject: subject, settings: apSettings });
               if (t) triage.push(t);
+              // A hot reply reaches the owner's own tools now (Zapier, Make, a CRM), signed like every other webhook event.
+              if (t && HOT_REPLY_INTENTS.includes(t.intent)) await emitWebhook(db, userId, 'reply.hot', { email: toEmail, businessName: sentEmail.businessName || '', intent: t.intent, label: t.label || '', summary: t.summary || '', subject: headers.subject || '' }).catch(() => {});
             }
 
             // Track company reply (non-blocking; forward the caller's token, /api is auth-gated)

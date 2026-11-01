@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { loadRoster } from '../../../../lib/server/team-store.js';
-import { eligibleOwners, planAutoAssign } from '../../../../lib/assignment.js';
+import { planAutoAssign } from '../../../../lib/assignment.js';
+import { ownersFor } from '../../../../lib/server/owner-settings.js';
 import { collection, doc, getDocs, limit, query, updateDoc, where } from '../../../../lib/server-firestore.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -18,8 +19,7 @@ export async function POST(request) {
   const gate = await guardTenant(db, uid);
   if (gate.response) return gate.response;
   try {
-    const roster = await loadRoster(db, uid);
-    const owners = eligibleOwners(roster.members);
+    const owners = await ownersFor(db, uid);
     const deals = (await getDocs(query(collection(db, 'deals'), where('userId', '==', uid), limit(2000)))).docs.map((d) => ({ id: d.id, ...d.data() }));
     const changes = planAutoAssign(owners, deals);
     for (const c of changes) {

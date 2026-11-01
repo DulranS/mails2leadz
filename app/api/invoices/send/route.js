@@ -9,6 +9,7 @@ import { buildRawEmail } from '../../../../lib/raw-email.js';
 import { invoiceEmailText } from '../../../../lib/billing-automation.js';
 import { invoiceState } from '../../../../lib/billing.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
+import { openPixelUrl, trackedHtml } from '../../../../lib/server/open-track.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -55,7 +56,9 @@ export async function POST(request) {
   });
   let sent;
   try {
-    sent = await box.sendRaw(buildRawEmail({ from: box.email, fromName: senderName, to: inv.email, subject: text.subject, body: text.body }));
+    const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+    const pixel = process.env.TRACK_OPENS === 'off' ? '' : openPixelUrl(who.uid, id, base, 'open-invoice');
+    sent = await box.sendRaw(buildRawEmail({ from: box.email, fromName: senderName, to: inv.email, subject: text.subject, body: text.body, html: pixel ? trackedHtml(text.body, pixel) : '' }));
   } catch (e) {
     console.error('[invoices/send] gmail failed:', String(e?.message || '').slice(0, 120));
     return json({ error: 'Gmail did not accept the message. Nothing was recorded as sent. Try again.' }, 502);

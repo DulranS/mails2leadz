@@ -66,6 +66,9 @@ export default function IntegrationsPage() {
   const [call, setCall] = useState({ email: "", purpose: "" });
   const [calls, setCalls] = useState([]);
   const [replies, setReplies] = useState([]);
+  const [hooks, setHooks] = useState({ items: [], events: [] });
+  const [hookForm, setHookForm] = useState({ url: "", events: [] });
+  const [newSecret, setNewSecret] = useState("");
   const [unmatched, setUnmatched] = useState([]);
   const [domain, setDomain] = useState("");
   const [attach, setAttach] = useState({});
@@ -98,6 +101,16 @@ export default function IntegrationsPage() {
     } catch (e) { console.error(e); }
   }, []);
   useEffect(() => { if (ready && user) loadReplies(); }, [ready, user, loadReplies]);
+  const loadHooks = useCallback(async () => {
+    try { const r = await fetch("/api/webhooks"); const d = await r.json().catch(() => ({})); if (r.ok) setHooks({ items: d.items || [], events: d.events || [] }); } catch (e) { console.error(e); }
+  }, []);
+  useEffect(() => { if (ready && user) loadHooks(); }, [ready, user, loadHooks]);
+  const addHook = () => run(async () => {
+    const r = await post("/api/webhooks", { action: "add", url: hookForm.url, events: hookForm.events });
+    if (!r.ok) { setError(r.data.error || "Could not add the address."); return; }
+    setNewSecret(r.data.secret); setHookForm({ url: "", events: [] }); setNotice("Address added. Copy its signing secret now; it is not shown again."); await loadHooks();
+  });
+  const removeHook = (id) => run(async () => { const r = await post("/api/webhooks", { action: "remove", id }); if (!r.ok) { setError("Could not remove it."); return; } await loadHooks(); });
 
   const run = async (fn) => { setBusy(true); setError(""); setNotice(""); try { await fn(); } catch (e) { console.error(e); setError("Something went wrong. Try again."); } finally { setBusy(false); } };
 
@@ -254,6 +267,21 @@ export default function IntegrationsPage() {
             </section>
           );
         })}
+
+        <section className={card}>
+          <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Send events to other tools (Zapier, Make, a CRM)</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Each event is sent as a signed request to an https address you choose. Verify the signature with the secret shown once when you add it. A failed delivery never undoes the action that caused it.</p>
+          <ul className="space-y-1 text-sm mb-3">
+            {hooks.items.length === 0 && <li className="text-gray-500 dark:text-gray-400">No addresses yet.</li>}
+            {hooks.items.map((h) => (
+              <li key={h.id} className="flex flex-wrap justify-between gap-2"><span className="break-all text-gray-900 dark:text-white">{h.url} <span className="text-gray-500 dark:text-gray-400">· {h.events.join(", ")}{h.lastStatus !== undefined ? ` · last ${h.lastStatus || "failed"}` : ""}</span></span><button type="button" onClick={() => removeHook(h.id)} className={ghost}>Remove</button></li>
+            ))}
+          </ul>
+          <input className={field} placeholder="https://hooks.zapier.com/…" value={hookForm.url} onChange={(e) => setHookForm({ ...hookForm, url: e.target.value })} />
+          <div className="flex flex-wrap gap-3 mt-2">{hooks.events.map((ev) => (<label key={ev} className="text-sm flex items-center gap-1 min-h-[44px]"><input type="checkbox" checked={hookForm.events.includes(ev)} onChange={(e) => setHookForm({ ...hookForm, events: e.target.checked ? [...hookForm.events, ev] : hookForm.events.filter((x) => x !== ev) })} />{ev}</label>))}</div>
+          <button type="button" disabled={busy || !hookForm.url || hookForm.events.length === 0} onClick={addHook} className={`${solid} mt-2`}>Add address</button>
+          {newSecret && <p className="text-sm mt-3 break-all text-gray-900 dark:text-white">Signing secret (shown once): <code>{newSecret}</code></p>}
+        </section>
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-2">Keys</h2>

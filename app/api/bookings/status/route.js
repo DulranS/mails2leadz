@@ -7,6 +7,7 @@ import { collection, doc, getDoc, getDocs, limit, query, setDoc, updateDoc, wher
 import { clashes, overlapsBusy } from '../../../../lib/booking.js';
 import { availabilityFor } from '../../../../lib/server/availability.js';
 import { sendBookingConfirmation } from '../../../../lib/server/booking-mail.js';
+import { emitWebhook } from '../../../../lib/server/webhooks.js';
 import { dealDocId } from '../../../../lib/deal-utils.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -42,6 +43,7 @@ export async function POST(request) {
     }
     await updateDoc(ref, { status: body.status, statusAt: new Date().toISOString(), needsReview: false });
     const confirmation = body.status === 'confirmed' ? await sendBookingConfirmation(db, who.uid, { id, ...b }) : null;
+    if (body.status === 'confirmed') await emitWebhook(db, who.uid, 'booking.confirmed', { bookingId: id, serviceName: b.serviceName, startIso: b.startIso, endIso: b.endIso, customerEmail: b.email });
     return json({ ok: true, status: body.status, confirmation });
   } catch (e) {
     console.error('[bookings status] failed:', String(e?.message || '').slice(0, 120));

@@ -1,4 +1,5 @@
 // app/layout.js
+import PwaRegister from './components/PwaRegister';
 import './globals.css';
 import ExtensionCleaner from './components/ExtensionCleaner';
 import AuthFetch from './components/AuthFetch';
@@ -17,6 +18,8 @@ const SITE_URL = (() => { try { return new URL(String(process.env.NEXT_PUBLIC_BA
 
 export const metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'AutoLeads', statusBarStyle: 'default' },
   title: { default: APP_NAME, template: `%s | ${APP_NAME}` },
   description: APP_DESCRIPTION,
   openGraph: { title: APP_NAME, description: APP_DESCRIPTION, siteName: APP_NAME, type: 'website' },
@@ -43,7 +46,7 @@ export default function RootLayout({ children }) {
                   <AuthFetch />
                   <AccessNotice />
                   <ConnectionBanner />
-                  <AppShell>{children}</AppShell>
+                  <PwaRegister /><AppShell>{children}</AppShell>
                 </AuthProvider>
               </NotificationProvider>
             </ThemeProvider>

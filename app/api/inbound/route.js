@@ -126,6 +126,7 @@ export async function POST(request) {
           business: e.company || e.name || e.email, quality: intakeFit(e.intake).level === 'light' ? 'WARM' : 'HOT', score: intakeFit(e.intake).level === 'light' ? 60 : 100, subject: r.draft.subject, body: r.draft.body,
           context: enquiryContext(e), createdAt: new Date().toISOString(),
         });
+      if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
         await setDoc(enqRef, { drafted: true }, { merge: true });
       } catch (err) {
         if (!(err instanceof DraftError || err instanceof AiError)) console.warn('[inbound] draft skipped:', err?.message);

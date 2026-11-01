@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { loadRoster } from '../../../../lib/server/team-store.js';
-import { eligibleOwners, OWNER_KEY } from '../../../../lib/assignment.js';
+import { OWNER_KEY } from '../../../../lib/assignment.js';
+import { ownersFor } from '../../../../lib/server/owner-settings.js';
 import { doc, getDoc, updateDoc } from '../../../../lib/server-firestore.js';
 import { dealDocId } from '../../../../lib/deal-utils.js';
 
@@ -28,8 +29,7 @@ export async function POST(request) {
     await updateDoc(ref, { assignedTo: null, assignedAt: new Date().toISOString() });
     return json({ ok: true, assignedTo: null });
   }
-  const roster = await loadRoster(db, uid);
-  const owners = eligibleOwners(roster.members);
+  const owners = await ownersFor(db, uid);
   if (!owners.some((o) => o.key === choice)) return json({ error: 'Only the owner or a team manager can own a deal.' }, 400);
   await updateDoc(ref, { assignedTo: choice, assignedAt: new Date().toISOString() });
   return json({ ok: true, assignedTo: choice, isOwner: choice === OWNER_KEY });

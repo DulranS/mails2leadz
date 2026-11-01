@@ -1,5 +1,52 @@
+## Pass 105 - credit notes for revised quotes, sender-domain check, erase one contact, hot-reply webhook
+- Credit notes replace the "refund due" flag on revised quotes. Each one gets its own number (CN-0001, CN-0002...), references the quote, and can be held as credit for the next invoice, or recorded as refunded in cash. The amount must be more than zero, and a credit note is issued once per quote.
+- Sender-domain check (Account, "Can your emails reach inboxes?"): reads the public SPF, DKIM and DMARC records for the domain you type and says what to fix, with the record to publish. Free-mail domains are explained, not judged. Limited to 12 checks a minute per account.
+- Erase one person's data (Account, "Erase one person's data"): removes that contact's leads, deals, drafts, follow-ups, notes and messages, and clears the address and text from their sent emails (the counts stay). Requires typing ERASE. Limited to 5 requests a minute. Invoices and credit notes are kept for tax records, and their opt-out address stays on the list so they are not contacted again. Each erasure writes an audit entry holding a fingerprint, not the address.
+- Hot replies (interested, meeting request, pricing question) emit a signed "reply.hot" webhook event to the owner's existing webhook endpoints.
+- Tests: the full suite passes, including tests/sender-auth.test.mjs, tests/erase-contact.test.mjs and tests/credit-notes.test.mjs. The production build compiles.
+- Not built: applying held credit to the next invoice automatically (it is applied by hand); a sender-domain check for providers other than public DNS (for example, Google Postmaster complaint rates, which need the owner's Google account).
+
 # Changelog
 
+## Pass 104 - open and click tracking for outbound emails (the dashboard counts now fill in)
+- Found a gap: the dashboard and the sent-leads list read opened and clicked counts on each sent email, but nothing ever wrote them, so they stayed at zero.
+- Outbound emails now carry an open image signed to their sent-email record, so the first open and count are recorded.
+- Links in outbound emails go through a click redirect. The reader still sees the same address; the redirect records the click and goes straight on to it. A click can only go to the address signed into its link; a changed address or a non-web address is refused.
+- Unsubscribe links are never rewritten. Follow-up emails are recorded against the original email's record.
+- Text in outbound emails is escaped in the HTML version.
+- Tests: the full suite passes, including 3 new cases in tests/reach.test.mjs. The production build compiles.
+- Opens are approximate: some mail apps load images automatically, so an open can be recorded without a person reading the email. Set TRACK_OPENS=off to turn tracking off.
+- Not built: a store app (App Store or Play). The installable web app is the route to a phone app without one.
+## Pass 103 - customer page views, and open tracking for invoices
+- Quotes: the accept page records when a customer views a quote (first view and count). It changes nothing else: viewing never accepts or declines a quote, and link scanners that open the page do not count as an accept. Shown on the Quotes page as "page viewed".
+- Invoices: invoice emails, nightly and manual, carry a signed tracking image. The first open and count are recorded on the invoice. Opens are approximate, as for quotes.
+- A tracking image for a quote cannot record an invoice open, and the reverse.
+- Tests: the full suite passes, including 1 new case in tests/reach.test.mjs. The production build compiles.
+- Not built: open tracking for outbound campaign emails (the outbound sending path builds plain text; it would need the same image added); click tracking beyond the quote view; a store app.
+## Pass 102 - country on enquiries, open tracking for quotes, an installable app
+- Enquiries take a 2-letter country. It is stored on the deal and used for territory routing before the email domain. Territories are now exact where the buyer gives a country.
+- Open tracking for quote emails sent from the app. A 1x1 image, signed to that quote, records the first open and the count, shown on the Quotes page. Opens are approximate: some mail apps load images automatically. Quote emails are now HTML with the tracking image; the text is escaped. Set TRACK_OPENS=off to turn tracking off.
+- Installable app: a web manifest, an icon, and a service worker that installs the app to a phone home screen. The service worker caches nothing, so quotes and invoices are never stale.
+- Tests: the full suite passes, including 4 new cases in tests/reach.test.mjs. The production build compiles.
+- Not built: a store app (App Store or Play) — the installable web app is the route to a phone app without a store; click tracking (only opens are tracked); open tracking for outbound campaigns and invoices (only quote emails are tracked).
+## Pass 101 - territories, availability and caps for owners; an alert for unclaimed deals
+- Territories: each owner can cover territories (country codes). A deal goes to a person who covers its territory first. The territory comes from the email's country domain (for example .lk), which is a proxy for location, not a true location. Deals on other domains are treated as 'com'.
+- Availability: an owner can be marked away, and is then skipped for new deals. A cap limits open deals per owner; a person at their cap is skipped.
+- A deal is never left without an owner. If everyone is away or full, the least-loaded owner takes it.
+- Auto-assign, manual assignment and new inbound leads all use these rules.
+- Alert for unclaimed deals: once a day, under the morning-brief switch, the owner gets one email listing open deals with no owner for more than 24 hours. A quiet day sends nothing.
+- Owners page: per owner, away, cap and territories, with Save.
+- Tests: the full suite passes, including 6 new cases in tests/owners.test.mjs. The production build compiles.
+- Limits: territories are read from the email domain, so a deal on a .com address with a Sri Lankan buyer goes to the 'com' pool. An enquiry form that records the buyer's country would be more exact; not built. Away status is set by hand, not from a calendar's out-of-office.
+## Pass 100 - checked against published CRM and sales-tool feature lists; outgoing webhooks added
+- Research: compared against common small-business CRM feature checklists and sales-routing tools (2026 guides: round-robin and weighted routing, territory routing by region, industry or size, out-of-office cover, unclaimed-lead alerts, outgoing webhooks to Zapier and Make, scheduling, and lead capture).
+- ADDED: outgoing webhooks. Owners add an https address and choose events: quote.accepted, payment.received, booking.requested, booking.confirmed. Each delivery is a POST signed with a per-address secret (HMAC-SHA256 over timestamp and body), so the receiver can check it came from AutoLeads and reject replays older than five minutes. The secret is shown once. A failed delivery never undoes the action that caused it. Integrations page, "Send events to other tools".
+- Tests: the full suite passes, including 5 new cases in tests/webhooks.test.mjs. The production build compiles.
+- Still not built (from the research): territory routing by region, industry or company size (routing is by least-loaded owner only); out-of-office and capacity limits on owners; an alert for open deals with no owner after a set time (the Owners page shows the count, but nothing notifies you); a native mobile app (the web app works on a phone; no installable app); email open and click tracking (consciously left out: tracking pixels and link rewriting conflict with the consent and deliverability rules the app follows, so this is a deliberate choice, not an omission).
+- Not verified: delivery to a live Zapier or Make address.
+## Pass 99 - revenue trend on the Business page
+- Under the monthly won-revenue bars, the Business page now shows the trend (rising, falling or flat) and a rough next-month figure from a straight-line fit of the last six months. It is an estimate, labelled as one, not a forecast. Fewer than three months gives no trend.
+- Tests: the full suite passes, including 3 new cases in tests/trends.test.mjs. The production build compiles.
 ## Pass 98 - landing page, and the business-type coverage
 - Landing page (Landing page, under Sell). The owner writes a tagline and an about paragraph. The public page at /site?k=<enquiry key> shows the business name, those texts, the services (name, length, price), the public product prices and descriptions, and buttons to get in touch or book. It never shows costs, margins, customers, invoices, staff or SKUs. Enforced by the public-content function and tested.
 - Coverage by business type, as checked against the code (sales and marketing only):

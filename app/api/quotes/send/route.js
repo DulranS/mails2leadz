@@ -9,6 +9,7 @@ import { doc, getDoc, updateDoc } from '../../../../lib/server-firestore.js';
 import { openMailbox } from '../../../../lib/server/autosend.js';
 import { buildRawEmail } from '../../../../lib/raw-email.js';
 import { quoteSendPlan, quoteEmail, nudgeDraft } from '../../../../lib/quotes.js';
+import { openPixelUrl, trackedHtml } from '../../../../lib/server/open-track.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 const MAILBOX_MESSAGE = {
@@ -55,7 +56,9 @@ export async function POST(request) {
 
   let sent;
   try {
-    const raw = buildRawEmail({ from: box.email, fromName: senderName, to: quote.customerEmail, subject: email.subject, body: email.text });
+    const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+    const pixel = process.env.TRACK_OPENS === 'off' ? '' : openPixelUrl(uid, id, base);
+    const raw = buildRawEmail({ from: box.email, fromName: senderName, to: quote.customerEmail, subject: email.subject, body: email.text, html: trackedHtml(email.text, pixel) });
     sent = await box.sendRaw(raw);
   } catch (e) {
     console.error('[quotes/send] gmail send failed:', e.message);
