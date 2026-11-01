@@ -81,6 +81,8 @@ app/api/send-email/route.js
 app/api/send-followup/route.js
 app/api/send-new-leads/route.js
 app/api/send-sms/route.js
+app/api/site/route.js
+app/api/site/settings/route.js
 app/api/stripe/webhook/route.js
 app/api/system-check/route.js
 app/api/team/route.js
@@ -145,6 +147,7 @@ app/hooks/useAuth.js
 app/inbox/page.js
 app/integrations/page.js
 app/join/page.js
+app/landing/page.js
 app/layout.js
 app/leads/page.js
 app/manage/page.js
@@ -157,6 +160,7 @@ app/privacy/page.js
 app/products/page.js
 app/quotes/page.js
 app/robots.js
+app/site/page.js
 app/sitemap.js
 app/sops/page.js
 app/stock/page.js
@@ -340,6 +344,7 @@ lib/server/worker-queue-store.js
 lib/server/workspace.js
 lib/service-account.js
 lib/service-health.js
+lib/site.js
 lib/smart-followup-engine.js
 lib/sops.js
 lib/stock.js

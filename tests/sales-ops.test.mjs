@@ -172,4 +172,23 @@ t('a revision credits what was already billed against its own schedule, earliest
   assert.equal(nextMilestoneIndex(over), -1);
 });
 
+import { publicSite, sanitizeSite } from '../lib/site.js';
+t('the public landing page shows only public details: no costs, no customers, no invoices', () => {
+  const page = publicSite({
+    businessName: 'Kandy Studio', site: { tagline: 'Design, built well', about: 'We build things.' },
+    services: [{ name: 'Consultation', minutes: 60, price: 0, staffIds: ['owner'], email: 'secret@x.com' }],
+    products: [{ name: 'Mug', price: 12, sku: 'M1', description: 'Ceramic', deliveryCost: 4, customerEmail: 'c@x.com' }],
+  });
+  const json = JSON.stringify(page);
+  assert.equal(page.businessName, 'Kandy Studio');
+  assert.deepEqual(page.products[0], { name: 'Mug', price: 12, description: 'Ceramic' });
+  assert.ok(!json.includes('deliveryCost') && !json.includes('secret@x.com') && !json.includes('c@x.com') && !json.includes('staffIds') && !json.includes('sku'));
+});
+
+t('the landing page text is cleaned and length-limited', () => {
+  const { site } = sanitizeSite({ tagline: 'x'.repeat(500) + '\n<b>', about: '  hi  ' });
+  assert.ok(site.tagline.length <= 140);
+  assert.equal(site.about, 'hi');
+});
+
 console.log(`sales-ops: ${n} passed`);
