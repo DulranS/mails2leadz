@@ -24,6 +24,61 @@ const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-l
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
 const ymd = (ms) => new Date(ms).toISOString().slice(0, 10);
 
+function AccountantTools({ user }) {
+  const [format, setFormat] = useState("xero");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const [statementEmail, setStatementEmail] = useState("");
+  const [statementUrl, setStatementUrl] = useState("");
+  const download = async () => {
+    setBusy("export"); setMsg("");
+    try {
+      const qs = new URLSearchParams({ format, ...(from ? { from } : {}), ...(to ? { to } : {}) });
+      const res = await fetch(`/api/exports/accounting?${qs}`);
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setMsg(d.error || "Could not build the export."); return; }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url; a.download = `autoleads-${format}-${from || "start"}-to-${to || "today"}.csv`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } catch { setMsg("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
+  const getStatement = async () => {
+    setBusy("statement"); setMsg(""); setStatementUrl("");
+    try {
+      const res = await fetch(`/api/statement/link?email=${encodeURIComponent(statementEmail.trim())}`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setMsg(d.error || "Could not make the link."); return; }
+      setStatementUrl(d.url);
+    } catch { setMsg("Could not reach the server."); }
+    finally { setBusy(""); }
+  };
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(statementUrl); setMsg("Link copied. It works for 90 days."); }
+    catch { setMsg("Select the link and copy it."); }
+  };
+  return (
+    <Card title="Accountant and customer statements">
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">Download your invoices for an accountant or bookkeeping software, or send a customer their statement of account.</p>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div><label className="text-sm text-gray-700 dark:text-gray-200" htmlFor="acc-format">File</label><select id="acc-format" className={field} value={format} onChange={(e) => setFormat(e.target.value)}><option value="xero">Xero invoice import</option><option value="ledger">Ledger (any bookkeeping tool)</option></select></div>
+        <div><label className="text-sm text-gray-700 dark:text-gray-200" htmlFor="acc-from">From</label><input id="acc-from" type="date" className={field} value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+        <div><label className="text-sm text-gray-700 dark:text-gray-200" htmlFor="acc-to">To</label><input id="acc-to" type="date" className={field} value={to} onChange={(e) => setTo(e.target.value)} /></div>
+        <div className="flex items-end"><button type="button" disabled={busy === "export"} onClick={download} className={`${btn} w-full bg-indigo-600 hover:bg-indigo-500 text-white`}>{busy === "export" ? "Preparing..." : "Download CSV"}</button></div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-4 mt-4">
+        <div className="sm:col-span-2"><label className="text-sm text-gray-700 dark:text-gray-200" htmlFor="stmt-email">Customer email</label><input id="stmt-email" type="email" className={field} value={statementEmail} onChange={(e) => { setStatementEmail(e.target.value); setStatementUrl(""); }} /></div>
+        <div className="flex items-end"><button type="button" disabled={!statementEmail.trim() || busy === "statement"} onClick={getStatement} className={`${btn} w-full border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100`}>{busy === "statement" ? "Making link..." : "Get statement link"}</button></div>
+        {statementUrl && <div className="flex items-end"><button type="button" onClick={copyLink} className={`${btn} w-full bg-indigo-600 hover:bg-indigo-500 text-white`}>Copy link</button></div>}
+      </div>
+      {statementUrl && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 break-all">{statementUrl}</p>}
+      {msg && <p role="status" className="text-sm mt-3 text-gray-700 dark:text-gray-200">{msg}</p>}
+    </Card>
+  );
+}
+
 function Card({ title, children, className = "", id }) {
   return (
     <section id={id} className={`${card} ${className}`}>
@@ -52,7 +107,7 @@ function Bar({ value, max, label, right, color = "bg-blue-600" }) {
   );
 }
 
-const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "" };
+const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "", stockProduct: "", stockQty: "1", chargeCurrency: "" };
 
 export default function BillingPage() {
   const { user, ready: authReady } = useAuthUser();
@@ -65,6 +120,18 @@ export default function BillingPage() {
   const [settings, setSettings] = useState(snap0?.settings || {});
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  // The products to choose from when the invoice form is open (for product lines that take stock off the shelf).
+  const [catalog, setCatalog] = useState([]);
+  useEffect(() => {
+    if (!showForm || !user?.uid) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/products");
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) setCatalog((d.items || []).filter((p) => !p.archived));
+      } catch { /* the form still works without product lines */ }
+    })();
+  }, [showForm, user]);
   const [saving, setSaving] = useState("");
   const [draft, setDraft] = useState(null); // { invoice, to, title, subject, body, source, note }
   const [filter, setFilter] = useState("open"); // open | paid | all
@@ -118,6 +185,7 @@ export default function BillingPage() {
     setForm((f) => ({ ...f, email: value, businessName: f.businessName || known?.businessName || "", amount: f.amount || (known && !known.estimated ? String(known.value) : "") }));
   };
 
+  const fxRateFor = (c) => Number((settings.fxDisplay || []).find((x) => x.code === c)?.rate) || 0;
   const saveInvoice = async (e) => {
     e.preventDefault();
     setSaving("invoice"); setError(""); setNotice("");
@@ -127,9 +195,10 @@ export default function BillingPage() {
         issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : undefined,
         termsDays: form.termsDays !== "" ? form.termsDays : terms,
         taxRate: settings.taxRate,
+        chargeCurrency: form.chargeCurrency, fxRate: fxRateFor(form.chargeCurrency),
       });
       if (!r.ok) { setError(r.error); return; }
-      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
+      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, chargeCurrency: form.chargeCurrency, stockLines: form.stockProduct ? [{ productId: form.stockProduct.split("|")[0], variantId: form.stockProduct.split("|")[1] || "", quantity: Number(form.stockQty) || 1 }] : [], issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
       const savedData = await saved.json().catch(() => ({}));
       if (!saved.ok) { setError(savedData.error || "Could not save the invoice. Please try again."); return; }
       r.write.number = savedData.number;
@@ -149,6 +218,17 @@ export default function BillingPage() {
       if (message) setNotice(message);
       await load();
     } catch { setError("Could not save that change."); }
+    finally { setSaving(""); }
+  };
+  const applyHeldCredit = async (inv) => {
+    setSaving(inv.id); setError(""); setNotice("");
+    try {
+      const res = await fetch("/api/credit-notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "applyToInvoice", invoiceId: inv.id, userId: user?.uid }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Could not apply the credit."); return; }
+      setNotice(data.applied > 0 ? `Credit of ${data.applied.toFixed(2)} applied. The invoice now asks for ${Number(data.total).toFixed(2)}.` : (data.message || "No credit to apply."));
+      await load();
+    } catch (err) { console.error(err); setError("Could not apply the credit."); }
     finally { setSaving(""); }
   };
   const emailInvoice = async (inv) => {
@@ -275,6 +355,13 @@ export default function BillingPage() {
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Amount ({currencySymbol(currency)})
                 <input required type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={field} />
               </label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Charge the customer in
+                <select value={form.chargeCurrency} onChange={(e) => setForm({ ...form, chargeCurrency: e.target.value })} className={field}>
+                  <option value="">{currency} (your currency)</option>
+                  {(settings.fxDisplay || []).map((x) => <option key={x.code} value={x.code}>{x.code} (1 {currency} = {x.rate} {x.code})</option>)}
+                </select>
+                <span className="block text-xs font-normal text-gray-500 dark:text-gray-400 mt-1">{(settings.fxDisplay || []).length ? "The rate is fixed on this invoice. Your books stay in your currency." : "To charge in another currency, add its rate on Account first."}</span>
+              </label>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Your invoice number (optional)
                 <input value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} className={field} maxLength={40} placeholder="INV-0042" />
               </label>
@@ -288,6 +375,17 @@ export default function BillingPage() {
               <label className="sm:col-span-2 text-sm font-medium text-gray-700 dark:text-gray-200">What it is for (optional)
                 <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={field} maxLength={200} />
               </label>
+              <label className="sm:col-span-1 text-sm font-medium text-gray-700 dark:text-gray-200">Product sold from your stock (optional)
+                <select value={form.stockProduct} onChange={(e) => setForm({ ...form, stockProduct: e.target.value })} className={field}>
+                  <option value="">None</option>
+                  {catalog.flatMap((p) => (Array.isArray(p.variants) && p.variants.length
+                    ? p.variants.map((v) => <option key={`${p.id}|${v.id}`} value={`${p.id}|${v.id}`}>{p.name} ({v.label})</option>)
+                    : [<option key={`${p.id}|`} value={`${p.id}|`}>{p.name}</option>]))}
+                </select>
+              </label>
+              <label className="sm:col-span-1 text-sm font-medium text-gray-700 dark:text-gray-200">How many taken from stock
+                <input type="number" min="1" step="1" value={form.stockQty} onChange={(e) => setForm({ ...form, stockQty: e.target.value })} className={field} />
+              </label>
               <p className="sm:col-span-2 text-xs text-gray-500 dark:text-gray-400">This is a record so you can track and chase it. Issue the actual invoice from your own invoicing or accounting tool.</p>
               <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                 <button type="button" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Cancel</button>
@@ -297,6 +395,7 @@ export default function BillingPage() {
           </Card>
         )}
 
+        <AccountantTools user={user} />
         <Card title={filter === "paid" ? "Paid invoices" : filter === "open" ? "Invoices to collect" : "All invoices"}>
           {loading ? <p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p> : shown.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">{filter === "open" ? "Nothing to collect. Add an invoice when you win a deal." : "No invoices here yet."}</p>
@@ -319,10 +418,11 @@ export default function BillingPage() {
                       {r.reminders > 0 && r.state !== "paid" && <div className="text-xs text-gray-500 dark:text-gray-400">{r.reminders} reminder{r.reminders === 1 ? "" : "s"} sent{r.lastReminderAt ? `, last ${ymd(r.lastReminderAt)}` : ""}</div>}
                       {r.state === "overdue" && !gate.ok && <div className="text-xs text-amber-700 dark:text-amber-300">{gate.reason}</div>}
                     </div>
-                    <div className="text-lg font-semibold text-gray-900 dark:text-white shrink-0">{money2(r.amount)}</div>
+                    <div className="text-lg font-semibold text-gray-900 dark:text-white shrink-0">{money2(r.amount)}{r.chargeCurrency ? <div className="text-xs font-normal text-gray-500 dark:text-gray-400">charged {r.chargeCurrency} {Number(r.chargeTotal).toFixed(2)}</div> : null}</div>
                     <div className="flex flex-wrap gap-2 shrink-0">
                       {r.state === "overdue" && <button type="button" disabled={!gate.ok || saving === r.id} onClick={() => askForDraft(r)} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`} title={gate.ok ? lvl.label : gate.reason}>{saving === r.id ? "Drafting..." : "Draft reminder"}</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => emailInvoice(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Email invoice</button>}
+                      {(r.state === "overdue" || r.state === "open") && !r.creditApplied && !(Number(r.amountPaid) > 0) && <button type="button" disabled={saving === r.id} onClick={() => applyHeldCredit(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100`}>Apply held credit</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => markPaid(r)} className={`${btn} bg-green-600 hover:bg-green-500 text-white`}>Mark paid</button>}
                       {(r.state === "overdue" || r.state === "open") && <button type="button" disabled={saving === r.id} onClick={() => recordPart(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Record part payment</button>}
                       {r.state === "paid" && <button type="button" disabled={saving === r.id} onClick={() => reopen(r)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Undo paid</button>}

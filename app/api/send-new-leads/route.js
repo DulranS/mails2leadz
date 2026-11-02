@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
+import { getFirestore, collection, addDoc, query, where, getDocs, doc as fsDoc, updateDoc } from '../../../lib/server-firestore.js';
+import { inboxDocId } from '../../../lib/server/ingest-key.js';
+import { inboxKey } from '../../../lib/lead-inbox.js';
 import { google } from 'googleapis';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
@@ -265,6 +267,8 @@ export async function POST(request) {
           requestBody: { raw: rawMessage }
         });
         
+        // The lead has now actually been emailed, so it leaves the Lead Inbox (it was only handed to the sender before).
+        await updateDoc(fsDoc(db, 'lead_inbox', inboxDocId(userId, inboxKey({ email: String(email).toLowerCase() }))), { status: 'loaded', loadedAt: new Date().toISOString() }).catch(() => {});
         await addDoc(collection(db, 'sent_emails'), {
           userId,
           to: email,

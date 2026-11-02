@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { offeredCurrencies } from "../../lib/currency.js";
+import PipelineAlerts from "../components/PipelineAlerts.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -58,7 +60,7 @@ try {
 }
 
 const EMPTY_CRM = {
-  leads: [], contacts: {}, repliedLeads: {}, leadScores: {}, dealStages: {}, dealValues: {}, dealQual: {}, dealOwners: {}, dealLost: {}, team: [], defaultDealValue: 1000,
+  leads: [], contacts: {}, repliedLeads: {}, leadScores: {}, dealStages: {}, dealValues: {}, dealCurrencies: {}, currencyOptions: [], dealQual: {}, dealOwners: {}, dealLost: {}, team: [], defaultDealValue: 1000,
 };
 
 export default function CRMPage() {
@@ -138,6 +140,7 @@ export default function CRMPage() {
 
       const dealStages = {};
       const dealValues = {};
+      const dealCurrencies = {};
       const dealNotes = {};
       const dealQual = {};
       const dealOwners = {};
@@ -149,6 +152,7 @@ export default function CRMPage() {
         if (!email) return;
         dealStages[email] = normalizeStage(deal.stage);
         if (Number(deal.value) > 0 && deal.valueIsEstimate !== true) dealValues[email] = Number(deal.value);
+        if (deal.chargeCurrency) dealCurrencies[email] = String(deal.chargeCurrency);
         if (Array.isArray(deal.notes)) dealNotes[email] = deal.notes;
         if (deal.qualification) dealQual[email] = deal.qualification;
         if (deal.ownerId) dealOwners[email] = deal.ownerId;
@@ -177,6 +181,7 @@ export default function CRMPage() {
 
       let defaultDealValue = 1000;
       if (settingsSnap?.exists?.() && Number(settingsSnap.data().avgDealValue) > 0) defaultDealValue = Number(settingsSnap.data().avgDealValue);
+      const currencyOptions = offeredCurrencies(settingsSnap?.exists?.() ? settingsSnap.data() : {});
 
       const leads = [...byEmail.values()].map((lead) => {
         const seen = new Set();
@@ -214,7 +219,7 @@ export default function CRMPage() {
       });
 
       const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
-      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealQual, dealOwners, dealLost, team, defaultDealValue };
+      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealCurrencies, currencyOptions, dealQual, dealOwners, dealLost, team, defaultDealValue };
       put(`${user.uid}|page|crm`, next);
       setData(next);
     } catch (error) {
@@ -244,6 +249,7 @@ export default function CRMPage() {
       touch: changes.touch,
     });
     if (changes.notes) write.notes = changes.notes;
+    if (changes.chargeCurrency !== undefined) write.chargeCurrency = String(changes.chargeCurrency || "").toUpperCase().slice(0, 3);
     await setDoc(ref, write, { merge: true });
     return { write, existing };
   };
@@ -266,6 +272,12 @@ export default function CRMPage() {
           return { ...prev, dealOwners, dealStages: { ...prev.dealStages, [e]: write.stage } };
         });
         addNotification(write.ownerId ? "Owner saved" : "Owner cleared", "success");
+        return;
+      }
+      if (updates.chargeCurrency !== undefined) {
+        const { write } = await writeDeal(e, { chargeCurrency: updates.chargeCurrency });
+        setData((prev) => ({ ...prev, dealCurrencies: { ...prev.dealCurrencies, [e]: write.chargeCurrency || undefined } }));
+        addNotification("Charge currency saved", "success");
         return;
       }
       if (updates.qualification || updates.touch) {
@@ -426,6 +438,7 @@ export default function CRMPage() {
       title="CRM & Deals"
       subtitle="Manage leads, deals, and customer interactions"
     >
+      <PipelineAlerts db={db} uid={user.uid} />
       <CRM
         leads={data.leads}
         contacts={data.contacts}
@@ -433,6 +446,8 @@ export default function CRMPage() {
         leadScores={data.leadScores}
         dealStages={data.dealStages}
         dealValues={data.dealValues}
+        dealCurrencies={data.dealCurrencies}
+        currencyOptions={data.currencyOptions}
         dealQual={data.dealQual}
         dealOwners={data.dealOwners}
         dealLost={data.dealLost}

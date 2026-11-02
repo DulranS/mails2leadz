@@ -1,3 +1,382 @@
+## Pass 137 - alert list, editable thresholds, monthly summary
+
+- The CRM page lists open pipeline alerts with their reason. The owner marks each done. Marking done closes the alert only; the deal is not changed.
+- Stall thresholds per stage are set on the Account page as "proposal 7, negotiation 14". Only open stages and whole days from 1 to 180 are kept; blank keeps the defaults.
+- On the first day of each month, the owner's digest adds last month's won and lost counts, win rate, and the most common reasons lost.
+- Tests run here: the threshold parsing, the monthly summary and digest (3 new groups of checks), the full npm test chain (exit 0, 604 checks), and a production Next.js build (exit 0). The build prints Firebase environment warnings because the build environment has no Firebase variables; it still completes.
+
+Limits, plainly:
+- The alert list loads when the CRM page opens; it does not update live.
+- Marking done does not change the deal.
+- The monthly summary is in the digest only, not on screen.
+- Not run here: the CRM page in a browser, the digest arriving in an inbox, and the daily run.
+
+## Pass 136 - pipeline alerts, renewals and booking reminders
+
+- Each day, from the owner's own deals: an open deal that has sat in its stage past the stage's threshold gets one alert per stage entry; a lost deal for a revisitable reason gets one suggestion 90 days after it was lost; a subscription renewing within 14 days gets one alert.
+- Alerts are stored in their own collection. They never enter the follow-up queue, which drafts and sends customer email. Nothing is sent to a customer for an alert.
+- The owner gets one digest a day, only in the morning-brief window and under the same switch.
+- A confirmed booking starting within two days gets one reminder to the customer, from the owner's Gmail, with the manage link when one can be made. Reminders are sent in the send window and recorded on the booking, so each is sent once.
+- Tests run here: the new pipeline tests (9 checks), the full npm test chain (exit 0, 600+ checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Thresholds are fixed defaults. There is no in-app alert list yet; alerts appear in the digest.
+- The digest is daily, not instant.
+- The booking reminder reaches a customer who has unsubscribed from marketing, because it is part of a booking they made.
+- Not run here: live Gmail, the daily run, and the digest arriving in an inbox.
+
+## Pass 135 - bookings, automatic invoices and deal currency
+
+- A deal has a charge currency, chosen in the CRM table beside its value (only the currencies the owner has saved rates for).
+- Subscriptions and won-deal invoices are charged in the deal's currency at the owner's rate on the day they are made. The daily email for these invoices states the charge currency and amount, and the fixed rate.
+- A booking that takes payment at booking is charged in the currency the customer picks on the public booking page. The booking request refuses a currency the owner does not offer.
+- The owner's buy-link form on Products offers the saved currencies.
+- A won deal whose currency has been removed from the saved rates is not invoiced. It is not invoiced in the wrong currency.
+- Tests run here: the new automatic-invoice checks (3 more), the full npm test chain (exit 0, 592 checks), and a production Next.js build (exit 0), which compiles the changed screens.
+
+Limits, plainly:
+- Quotes made before this release keep their old free-text currency label; their amounts are not converted.
+- A won deal whose currency has been removed is skipped until the owner re-offers it or changes the deal.
+- The CRM, Products, booking and public pages have not been run in a browser. Stripe, email and the booking calendar have not been run live.
+
+## Pass 134 - sales charged in another currency
+
+- Quotes, storefront orders and buy links can be charged in a saved currency. The rate comes from the owner's saved rates on the server and is fixed when the sale is made. The public page offers the owner's currencies with an approximate amount; the order confirmation says what was charged.
+- Quotes are priced in the business currency. The quote email, the follow-up, and the customer's quote page show the charge currency at the quote's fixed rate. Milestone and adjustment invoices take the quote's charge currency and rate.
+- The owner's quote form offers the saved currencies in place of the free-text currency code. A quote made with an unsaved currency is refused with a message.
+- Tests run here: the new sales test (8 checks) and the full npm test chain (exit 0).
+
+Limits, plainly:
+- Bookings that take payment at booking, and automatic invoices (subscriptions and won deals), stay in the business currency.
+- Quotes made before this release keep their old free-text currency label and their amounts are not converted.
+- The buy link can be charged in another currency through the API; the owner's buy-link button has no currency choice yet.
+- The public page and the Quotes page have not been run in a browser. Stripe and email have not been run live.
+
+## Pass 133 - invoices charged in another currency
+
+- On the Billing page the owner can charge an invoice in any currency they have a saved rate for (Account page). The server takes the rate from the saved rates, never from the browser, and fixes it on the invoice when issued; the charge total (tax included) is stored with it.
+- Stripe checkout charges the amount still owed in the charge currency. The payment webhook checks the currency, converts the charge back to the business currency at the fixed rate, and settles the books in the business currency (a charge equal to what is owed settles it exactly, so no cent is left open).
+- Card refunds of a foreign payment go to Stripe in the charge currency, at the fixed rate. Refund capacity is still checked in the business currency.
+- The invoice email, overdue reminders and the statement line show the charge currency and amount. The ledger keeps business-currency totals and adds the charge currency and total columns. Discount codes are refused on foreign invoices.
+- Test-suite fixes made along the way: the edge public-route list in tests/saas.test.mjs was out of date (four routes added in Passes 124-130 were not listed), and the nine routes that resolve their owner without a session (OAuth callbacks with signed state, cron with its secret, storefront with its key, shipment webhook, signed statement link) are now named in the static route contract with their proof. Those checks were failing in the uploaded v131 too.
+- Tests run here: the new foreign-invoice test (13 checks), the full npm test chain (exit 0). The dependencies were installed in the build environment for this run.
+
+Limits, plainly:
+- Only invoices created on the Billing page can be charged in another currency. Storefront orders, quotes and milestones, bookings, buy links, and automatic invoices (subscriptions and won deals) stay in the business currency.
+- The rate is the owner's, fixed at issue; the app does not fetch rates and does not update an issued invoice.
+- Manual payments are recorded in the business currency: the owner enters the equivalent.
+- Realised FX gains and losses are not booked. The bank may add a conversion charge, so the amount received can differ from the books.
+- Stripe must accept the currency for the owner's account. Checkout fails cleanly if it does not.
+- Not run here: live Stripe, live email, and the Billing page in a browser.
+
+## Pass 132 - approximate amounts in other currencies
+
+- The owner types up to five indicative rates on the Account page (for example "EUR 0.92": how many euros for 1 unit of the business currency). The rates date is recorded when they change.
+- Invoice emails (the send button and the automatic email), overdue payment reminders and storefront order nudges show the approximate amount beside the amount, with a sentence saying the figures are indicative, when the rates were set, and that payment is in the business currency only.
+- Tests run here: the rate parsing (business currency, repeats, bad rates and the five-currency cap dropped), the rounding and listing, the sentence wording, and the three email builders with and without rates. Existing billing, invoice-tax, reminder, accounting-export, owner-report and release-file tests still pass. The import checker passes across all source files. Not run here: Gmail, Stripe, Firestore, the nightly run, and the Account page in a browser.
+
+Limits, plainly:
+- The app never fetches exchange rates. The owner types them and must update them; the rates date shows how old they are.
+- The customer's bank sets the exact amount. Figures are shown as an approximation only.
+- Nothing is charged, invoiced, stored or reported in a second currency. Stripe charges the business currency; the ledger, statements, receipts and the public page show no approximate amounts.
+
+Still open: invoicing, charging and reconciling in a foreign currency (needs a currency on every invoice, payment and ledger row, and a conversion rule for reports); tax by destination (for the owner's accountant).
+
+## Pass 131 - buying-signal feed alerts
+
+- The owner adds up to five public RSS or Atom feeds. New items become alerts, tagged by keyword (tender, planning, hiring, funding, new business, or other). The alerts show on the Integrations page, newest first, capped at 100. Feeds are read nightly with the same safe reader the deal watch uses.
+- Tests run here: the tagging rules (a plain item stays untagged), that only unseen items become alerts (including repeats inside one batch, a bug the test found and fixed in this pass), and the newest-first cap. Not run here: live feeds, the nightly run, and the page in a browser.
+
+Limits, plainly:
+- Tags come from keywords and can be wrong. They describe the item, not the company's intent.
+- Alerts do not identify the company behind an item or contact anyone. Turning an alert into a lead is the owner's decision.
+- No alert emails: they are seen on the Integrations page.
+- Feeds must publish RSS or Atom. Many job boards and planning portals do not; the owner must find a feed for each source.
+
+Still open: currency conversion (invoices, prices, the ledger and the statement are all in one currency; supporting several needs a currency on every price, invoice and report, and a rate source the owner trusts).
+Left out by decision: real-time voice agents and autonomous outreach that contacts people without review.
+
+## Pass 130 - shipping labels and carrier tracking
+
+- On a paid storefront order, the owner presses "Buy the cheapest label". The weight is taken from the products on the order (an option's own weight when it has one). The carrier label is bought through the owner's own EasyPost account. The parcel is recorded on the order with its label link and tracking number, and the customer is emailed the tracking link.
+- Carrier status comes back by webhook. The webhook does not trust its own body: it reads the tracker back from EasyPost with the owner's key before updating the parcel. Delivered parcels are reported to the customer once.
+- International parcels get a customs declaration from the order's lines and their unit prices.
+- Tests run here: the address rules (including the country bug found and fixed in this pass), the order weight with options and unweighed items, the cheapest-rate choice, the customs lines, and the status map. The import checker passes across all source files. Not run here: the EasyPost calls, labels, the webhook delivery, Firestore, and the mail.
+
+Limits, plainly:
+- Each label is paid from the owner's EasyPost account at the moment of the press. The app cannot undo a label once it is bought.
+- Customs codes (HS) are not generated. Some carriers require them for international parcels. The owner must check the declaration before buying.
+- The export declaration uses fixed codes for low-value goods. Other goods, and high-value shipments, may need different declarations.
+- Currency is the EasyPost account's currency, not the shop's.
+- No return labels, no insurance, no multi-parcel split of one order.
+- The customer's address is the free text from the order, so the owner checks it on the form.
+- If a label is bought but cannot be recorded on the order, the owner is shown the label link and must record the parcel by hand.
+
+Still open: currency conversion; buying signals beyond Companies House (job postings, planning applications, tenders).
+Left out by decision: real-time voice agents and autonomous outreach.
+
+## Pass 129 - Outlook / Microsoft 365 calendar write-back
+
+- The owner can connect Outlook or Microsoft 365, with calendar permission only. Confirmed bookings are added as events; cancelled, declined or moved bookings lose their event. Google and Outlook are kept separately, so one booking can appear on both calendars, each with its own event.
+- The booking sync now runs for every connected calendar. A failure on one never blocks the booking or the other calendar.
+- Tests run here: the Outlook event shape (subject, UTC times, busy), and the per-calendar create, keep and remove rules. Not run here: Microsoft's consent screen, Graph, token rotation, and Firestore.
+
+Limits, plainly:
+- The Microsoft app registration and the redirect address must be set up on the server first.
+- Disconnecting removes the app's copy of the token. Microsoft keeps its own record of the grant until the owner removes it under "My apps".
+- Same limits as Google: first name only, no two-way sync, and a change made directly in the calendar is not pushed back.
+
+Still open: shipping labels and carrier status; currency conversion; buying signals beyond Companies House (job postings, planning applications, tenders).
+Left out by decision: real-time voice agents and autonomous outreach.
+
+## Pass 128 - Google Calendar write-back for bookings
+
+- The owner can connect Google Calendar, with calendar permission only. A confirmed booking is added to the calendar as an event, with the service name and the customer's first name. A cancelled, declined or moved booking loses its event, so the calendar matches the bookings.
+- Hooks: payment confirms a booking, the owner confirms, cancels or declines it, and the customer cancels or moves it. A booking is never given two events.
+- The connection is stored encrypted, like the Gmail connection, and can be disconnected at any time.
+- Tests run here: the rules for when an event is created, removed, or left alone, and the event content (service and first name only; no email or phone). Not run here: Google's consent screen, the calendar API, the redirect address registration, and Firestore.
+
+Limits, plainly:
+- Google treats calendar write access as a sensitive permission. Until Google has reviewed the app, consent lapses after seven days for apps in testing, and the owner must connect again.
+- Only the customer's first name goes on the calendar.
+- A change made directly in the calendar is not pushed back into the app.
+- An event added before a booking changes outside these routes (for example a booking edited on another system) is not updated.
+- If the event could not be written (for example the connection has lapsed), the booking is still confirmed and the owner is not told by this feature; check the Integrations page.
+
+Still open: Outlook calendar writing; shipping labels and carrier status; currency conversion; buying signals beyond Companies House (job postings, planning applications, tenders).
+Left out by decision: real-time voice agents and autonomous outreach.
+
+## Pass 127 - stock for hand-made invoices; gift cards
+
+- Hand-made invoices can take a product (or option) and a quantity off the shelf. The stock is taken in one transaction and refused if the shelf cannot cover it. The stock is kept in its own field, so the release that returns stock from unpaid storefront orders never touches it. Cancelling an unpaid hand-made invoice that took stock returns it once.
+- Gift cards: a product flagged as a gift card gives the buyer held store credit equal to its value when a storefront order is paid, applied to their next invoice. It is issued once per order in the daily run. The ledger leaves gift credit out so the sale is not counted twice.
+- Tests run here: targeted checks of the stock-line rules, the hand-made sale rules, and the gift-card rules. Not run here: Firestore, the transactions, the daily run, and the Billing form in a browser.
+
+Limits, plainly:
+- A paid hand-made invoice keeps its stock taken. Put it back with a stock adjustment.
+- Only one product line appears on the Billing form. The API accepts up to ten.
+- Gift credit is issued in the daily run, up to a day after payment.
+- Gift credit goes to the buyer's email. The app has no recipient field.
+- Gift sales are revenue on the invoice. Whether they should be deferred is a question for the owner's accountant.
+
+Still open, and not finished in this pass: shipping labels and carrier status; Google and Outlook calendar write-back; currency conversion; buying signals beyond Companies House (job postings, planning applications, tenders).
+Left out by decision: real-time voice agents and autonomous outreach.
+
+## Pass 126 - abandoned-basket reminder; register corrected for ad spend
+
+- Abandoned-basket reminder. A customer who asked for their basket by email, and has not ordered from that address within 1 to 3 days, gets one reminder with a fresh link to the same basket. The link is made from the basket's items and the storefront key the basket was saved from. No reminder after an order, a block (opt-out) is respected, and the owner's key is re-checked before anything is sent. A reminder is never reminded about in turn. The reminder goes out in the owner's send window, with the same send rules as other daily emails.
+- Erasure: basket records are on the erasure scan list.
+- Register correction: the Google Ads spend import was already built (read-only monthly import of Meta and Google Ads spend). The register listed it as not built. It is now listed as built, with Google's developer-token approval as the only outside step.
+- Tests run here: targeted checks of the reminder rules (time window, unreminded, linkable, not a reminder, an order after saving cancels it, an earlier or non-storefront order does not, wording without false urgency). Not run here: Firestore, the mail send, the key re-check against live data, and the daily run.
+
+Limits, plainly:
+- The storefront key is stored on each basket record so a reminder can link back. The key already appears in every public-page URL; it is kept server side only. If the owner revokes the key, reminders stop.
+- One reminder per basket. A customer who orders later from a different address is not connected to the basket.
+- Reminders need the site's public address to be set (https). Without it, none are sent.
+
+Still not built: discovery from other buying signals (job postings, planning applications, tenders); shipping labels and carrier status; Google and Outlook calendar write-back; stock taken for invoices made by hand; gift cards; currency conversion. Real-time voice and autonomous outreach remain left out by decision.
+
+## Pass 125 - buying signals (newly registered companies), back-in-stock requests, erasure covers the new records
+
+- Buying signals. Each night, companies newly registered at Companies House in the owner's SIC codes are found (optional area, look-back of 1 to 30 days). Each company is matched to a domain only when that domain's homepage carries the company's name in its title or main heading; otherwise it is not used. Confirmed domains go into the contact lookup (the owner's Hunter key), which puts a confident contact into the Lead Inbox. Nothing is sent. Each company is handled once, and at most 25 homepage checks run per owner per night.
+- Settings: a "Newly registered companies" card on the Integrations page, with the Companies House key stored like the other keys (free, from the Companies House developer hub).
+- Contact lookup is now one nightly phase for every owner with either the finder or signals switched on, so signal-only owners get contacts too.
+- Back in stock. On a sold-out item or option, a visitor can ask once to be told when it can be ordered again. The request is stored with their address; the daily run sends one email when the item is orderable and marks it notified. Requests are rate limited and answered the same way whether or not the address is new.
+- Erasure: the two new places that hold an email (restock requests and the contact-lookup queue) are on the erasure scan list.
+- Tests run here: targeted checks with fake network responses: settings validation, company name to domain candidates, homepage matching (a matching page, a different company, a generic page), register parsing, the register request (key and filters), and back-in-stock timing. Not run here: the real Companies House service, real company websites, Hunter, Firestore, the mail send, and the cron.
+
+Limits, plainly:
+- Companies House gives no website or email. A company whose homepage does not carry its registered name is not contacted. Trading names that differ from the registered name will be missed.
+- The domain check reads one homepage per candidate domain. It is a name check, not proof of ownership.
+- A signal needs a Companies House key and a Hunter key. Without either, nothing is contacted.
+- Back-in-stock sends one email per request, to the address the customer gave. It has no separate unsubscribe link; a customer who replies is handled by the owner.
+
+Still not built: discovery from other signal sources (job postings, planning applications, tenders), shipping labels and carrier status, Google and Outlook calendar write-back, stock taken for invoices made by hand, gift cards, abandoned-basket reminders, currency conversion, live Google Ads import. Real-time voice and autonomous outreach remain left out by decision.
+
+## Pass 124 - prospecting: contact recovery and deliverability checks
+
+- Contact recovery. Good businesses that the lead finder reads but finds no email, phone or WhatsApp for were dropped and never revisited. They are now queued by domain. Each night, up to 20 domains per owner (highest score first) are looked up with the owner's own contact-lookup key (Hunter). A contact at Hunter confidence 70 or more becomes a normal Lead Inbox lead (status "new", nothing sent), with a named person filled in when Hunter has one. A domain is looked up once; its result is kept.
+- Deliverability check before every send. Autosend and the review window hold a draft whose domain cannot receive mail (no MX and no address record). The result is cached for 30 days per domain. A temporary DNS failure never holds a send.
+- Nightly cron: the contact recovery step runs for each owner with the finder switched on, after the finder itself.
+- Tests run here: targeted checks of the recovery rules (domain extraction, which businesses are queued, the confidence bar, naming a person when confidence is close, and that the recovered lead passes the inbox sanitizer). Not run here: the DNS lookup against live domains, Hunter itself, Firestore, and the cron.
+
+Limits, plainly:
+- Contact recovery needs a Hunter key. Without one, queued businesses wait and nothing is looked up.
+- It finds contacts Hunter already holds for the domain. A business with no published contact at all may still have none.
+- The deliverability check cannot tell whether a mailbox exists, only whether the domain takes mail. It is not a substitute for a bounce list.
+
+Still not built: discovery from buying signals (new company registrations, job postings, planning applications, tenders). The app searches OpenStreetMap by business type, and watches RSS or Atom feeds for listings. A signal source needs the owner to choose it, because each one has its own terms and some need a key. Autonomous AI agents that contact people without review remain left out by design; the AI drafts for review and the existing autosend stay the path to sending.
+
+## Pass 123 - products can be edited, options get their own price and weight, returns and refunds made complete
+
+- Products can now be edited, taken off the public page and put back on it. Before this, a product's price, name or options could not be changed after it was added (the stock panel pointed to an edit that did not exist). An edit never changes stock: stock moves only through the stock panel, checkout, returns and cancellations, inside one transaction, so an edit cannot overwrite a sale.
+- Options: each option can have its own price and its own weight for postage (blank = the product's). The option id is editable on the Products page; keeping the id when renaming keeps old orders and returns matched. An option that still has stock cannot be removed by an edit.
+- Archived products are hidden from the public page and cannot be ordered.
+- Low-stock alert on the Products page (products and options with 3 or fewer left).
+- Returns: fixed a bug in the return form. Quantities were stored under the product id but read under product and option, so every return failed with "Choose at least one line". Returns now work.
+- Returns on orders placed before Pass 119: the owner picks the line and names the product whose stock goes back (or none).
+- Card refunds on payments made before Pass 120: the owner enters the Stripe payment ID (pi_...). The server asks Stripe for the payment and accepts it only if it succeeded and belongs to the order (tagged to it, or its amount equals what the order paid).
+- Refunds paid by hand: "Mark paid by hand" clears the amount owed, keeps a dated record, and shows on the customer statement.
+- Accounting export (ledger): card refunds and refunds paid by hand are rows, split into net and tax in the same ratio as the invoice.
+- Review request: one fixed-wording email a week after a storefront order's last parcel (or after payment for collected orders), using the review link already in business settings. Not sent without a link, not for orders with a return, not for orders older than 60 days.
+- Tests run here: a targeted check of the new logic (edit keeps stock, option price and weight, legacy returns, Stripe payment matching, review timing, archived products hidden). JSX in the three changed screens parsed. Not run here: the full test suite, the production build, and anything that calls Firebase, Stripe or Gmail.
+
+Limits, plainly:
+- A return on an older order restocks only the product the owner names. Nothing is guessed.
+- Stripe payment IDs: an older payment is matched by its amount when Stripe holds no order tag, so an order whose exact amount was paid by two other payments could still be ambiguous. The owner sees the match before refunding.
+- Refunds paid by hand are recorded, not verified against the bank.
+- Review requests are one email per order; the app does not chase, collect or write reviews.
+
+Still not built: shipping labels and carrier status; Google or Outlook calendar write-back; stock taken for invoices made by hand; gift cards; back-in-stock alerts; abandoned-basket reminders for customers who gave an email; autonomous AI agents that contact customers (kept approval-gated by design).
+
+## Pass 122 - product options (sizes, colours) with their own stock
+- Products can have up to 30 options. Each option has its own stock count (blank = not tracked). Options are entered on the Products page as "name, stock", one per line; an option's id is its name in lower case with dashes, and duplicate names are refused.
+- Storefront: one row per option; a basket line carries the option id; the price is the product's price for every option; sold-out is shown per option.
+- Checkout takes stock per option inside one transaction; returns put stock back per option; the stock panel counts each option; the emailed basket keeps option ids.
+- Returns: lines are matched by product and option. An option that has been renamed cannot be matched on older orders.
+- Tests: tests/growth-pass115.test.mjs now 34 checks (option stock, duplicate names, option returns, option holds). Run here: growth (34), sales-ops (19), owners (6), release-files (5), import resolution (0 problems), and a parse of every changed file. Not run: tests that need firebase, stripe, next, twilio or redis.
+- Limits, plainly: one price for all options; no per-option weight, so postage uses the product weight; renaming an option changes its id; the product safety buffer does not apply to options; nothing has been run against live services.
+
+## Pass 121 - card refunds on the customer statement
+- The customer statement lists each card refund as a debit ("Refund to card") and includes it in the outstanding balance and a refunded total.
+- Tests: tests/growth-pass115.test.mjs now 33 checks. Run here: growth (33), sales-ops (19), owners (6), import resolution (0 problems). Not run here: the statement route itself (needs firebase).
+- Limits: refunds made by hand (outside the card refund button) are not on the statement; the accounting export does not include refunds.
+
+## Pass 120 - card refunds through the owner's Stripe account
+- Card refunds: a recorded refund owed to a customer can be refunded to their card. The payment's Stripe reference is now stored when a payment is applied (onlinePaymentIntents). The refund is planned from that record (never more than is owed, never more than the payment still holds, one payment at a time), a pending flag blocks a second refund running at once, Stripe is called with the owner's own key and an idempotency key, and the refund is recorded only after Stripe confirms it.
+- Orders panel: a "Refund to the customer's card" button where a refund is owed and a payment reference is stored.
+- Tests: tests/growth-pass115.test.mjs now 32 checks (card refund planning). Run here: growth (32), owners, sales-ops, release-files, import resolution (0 problems), and a parse of every changed file. The Stripe call itself has not been run.
+- Limits, plainly: payments before this release cannot be refunded here; refunds are not yet on the statement or accounting export; if Stripe makes a refund but the record cannot be saved, the response says so and the owner notes it by hand; nothing has been run against Stripe.
+
+## Pass 119 - returns on storefront orders, cancelling unpaid orders, tax rates by country
+- Returns: the owner records which lines of a paid storefront order come back, with a quantity per line (never more than was bought, and never a line returned twice). Sellable stock goes back for products that track stock, in the same transaction as the record. Refund or store credit; an optional restocking fee of 0 to 50%. Store credit is a held credit note for the customer, applied to their next invoice. A refund is recorded as owed (the app moves no money).
+- Cancel: an unpaid storefront order can be voided; any stock it held goes back once. A paid order is returned instead.
+- Tax by country: the owner enters a rate per country on the landing page; storefront orders to that country use it; others use the business default. The app does not decide registrations, thresholds, OSS/IOSS or reduced rates.
+- Basket lines now carry product ids (needed for returns). Orders placed before this release do not, so the return form cannot match their lines.
+- Fixed in review: a return does not add stock back when the order's hold had already lapsed (that stock had been returned when the hold lapsed).
+- Tests: tests/growth-pass115.test.mjs now 31 checks (returns, caps, double return, store credit, tax rates). Run here: growth (31), sales-ops (19), owners (6), release-files (5), import resolution (0 problems), and a parse of every changed file. Not run: tests that need firebase, stripe, next, twilio or redis.
+- Limits, plainly: no money moves; no automatic card refunds; orders from before this release cannot be returned through the form; tax rates are owner-entered and country codes are checked only for format; nothing has been run against live services.
+
+## Pass 118 - postage by weight and country, several parcels, stock adjustments, weight on products
+- Postage bands: the owner sets bands (max kg, fee, optional countries) on the landing page. The checkout works out the fee on the server from the weight of the order and the customer's country (two letters). Bands are tried cheapest first; an order is refused, not guessed, when no band fits: the country has no band, the order is too heavy, or a product has no weight. With no bands, the flat postage charge still applies.
+- Product weight in kg (Products page), used for postage. Blank means not weighed; a weighed quote refuses a basket that holds an unweighed product.
+- Several parcels: each storefront parcel is recorded in order (up to 20), listed on the order, and emailed to the customer, numbered when there is more than one. The parcel is recorded in a transaction.
+- Stock adjustments: a panel on the Products page adds stock that arrived or takes off stock sold elsewhere, with a note. Stock never goes below zero. No invoice is created.
+- Public page: asks for the country when posting, shows the postage bands in words, and says postage is added at checkout when bands are used.
+- Changed: the ship route records each parcel inside a transaction, keeps the full parcel list on the invoice, and still stores the latest carrier and tracking number on the invoice for the existing screens.
+- Tests: tests/growth-pass115.test.mjs now 27 checks (postage rules, weight, parcel wording). Run here: growth (27), sales-ops (19), owners (6), release-files (5), import resolution (0 problems), and a parse of every changed file. Not run here: any test that needs firebase, stripe, next, twilio or redis.
+- Limits, plainly: postage weights are the owner's figures; no tax by destination; no currency conversion; no label or carrier status; no variants; manual invoices do not reduce stock; stock adjustments do not create invoices; nothing has been run against live services.
+
+## Pass 117 - stock on hand, postage and shipment tracking, company-size routing, find-my-orders, basket by email, calendar links
+- Stock on hand: a product can track stock on hand, a safety buffer kept back from the website, and a most-per-order limit (Products page). A basket takes its stock in one transaction. Sold-out products show as sold out; exact counts are never public. Stock taken by an order that is still unpaid after two days goes back; the invoice stays open.
+- Postage: the owner sets one postage charge per order (landing page). A customer chooses collect or post; posting needs an address and adds the charge to the invoice.
+- Shipment tracking: on the Products page, paid storefront orders take carrier, tracking number, optional https tracking link and expected delivery. The customer is emailed from the owner's Gmail. Labels are not printed.
+- Company-size routing: optional size band on the enquiry form; owners list the bands they take; enquiries route to a free owner who lists the band, after the territory and industry rules.
+- Find my orders: a public-page form emails a signed link to the orders and invoices of an address that has them. The answer is the same whether or not the address has orders. Three links an hour per address.
+- Basket by email: a link restores a basket on another device, expires in seven days, and only a hash of its secret is stored.
+- Booking confirmations carry add-to-Google-Calendar and add-to-Outlook links. The app writes nothing into calendars.
+- New public routes: /api/shop/orders-link, /api/shop/basket-link, /api/shop/basket (each proved by the account's public key); the public-route contract test lists them.
+- Fixed: the sales-ops test expected the old public-product shape; it now expects id, soldOut and maxPerOrder.
+- GAP_STATUS.md rewritten: every item sits under exactly one status word.
+- Tests: tests/growth-pass115.test.mjs now 24 checks. Run here: sales-ops (19), owners (6), release-files (5), growth (24), import resolution (0 problems), and a parse of every changed file. Not run here (packages missing from this environment): saas, routes-e2e, proxy, team-gate, money-path and the others that need firebase, stripe, next, twilio or redis. The public-route list was checked against the contract test by parsing both (35 routes, identical).
+- Limits, plainly: no live run of any change; stock holds lapse after two days but a late payment is still accepted; postage is flat; tracking is entered by hand; find-my-orders and basket links depend on the owner's Gmail and an https public address; company size is what the buyer says.
+
+## Pass 116 - untouched hand-offs move once, receipts for paid storefront orders, basket kept on the device
+- Untouched hand-offs: a new deal with no update or recorded touch for an hour after it was handed to an owner moves once to another free owner, by the same rule as arrivals (territory, industry, least loaded). Runs hourly through the new cron route /api/cron/reassign (listed in vercel.json; host cron must call it with CRON_SECRET). Never moves a deal already moved, a deal whose touch time is unknown, or to an owner who is away or full. Up to 50 accounts and 1,000 candidate deals per run.
+- Receipts: a paid storefront order gets one receipt from the owner's mail in the next daily run, listing the invoice, the amount and the lines bought. Only orders paid in the last 7 days; older paid orders are not mailed later.
+- Basket: the quantities on the public page stay on the device between visits, cleared after a successful order. Name and email are never stored on the device.
+- Gap register (GAP_STATUS.md) updated: these three move to Built with their limits; stock deduction is kept as not built, with the reason stated.
+- Tests: tests/growth-pass115.test.mjs now 16 checks (reroute rules and receipt rules added); the SaaS contract test includes the new cron route, which is proved by its CRON_SECRET gate. Import resolution: no problems. Changed files parse. The shipped-file list is regenerated.
+- Limits, plainly: the hourly and daily jobs have not run on a host; "touched" depends on the app recording touches, so a send the app does not record as a touch will not stop a move; no email goes to the new owner.
+
+## Pass 115 - industry routing, cohorts, testimonials, storefront basket, unpaid-order nudge
+- Industry routing: owners list the industries they take (on the Owners page). A deal whose industry contains one of those words goes to a free owner who lists it; otherwise the usual rule applies (territory, then least loaded). Arrivals with an industry on the deal use the same rule. Enquiries carry no industry and route as before.
+- Repeat-buying cohorts on the business page: paid invoices grouped by the month of each customer's first payment, with repeat rates at 1, 3, 6 and 12 months. A rate shows only once every customer in that month has had the full window; cohorts under 5 are flagged.
+- Testimonials on the public page: entered by the owner, and saved and shown only when the owner ticks that the customer agreed in writing. A text-only save of the landing page no longer wipes them.
+- Storefront: the public page has an order form for public products. Guest checkout (name and email). Prices come from the server's product list. One invoice per order, with any held credit applied and a card pay link when card payment is set up. Rate limit 10 orders per 15 minutes per address; a filled honeypot is answered without recording anything. Not in a basket: discount codes, stock deduction, shipping, a pipeline deal, a receipt email.
+- Unpaid storefront orders: one fixed-wording nudge a day after the order if still unpaid and not yet overdue, sent from the owner's mail with the pay link. Needs card payment set up. Overdue invoices stay with the existing reminder routine.
+- New file GAP_STATUS.md: every business gap in one place, sorted into Built, Not built, Consciously left out, Not applicable now, and Outside what code can settle. Compliance-based external integrations are listed as consciously left out, by instruction.
+- Tests: tests/growth-pass115.test.mjs (10 checks, no packages needed); the SaaS contract test now includes the new public checkout route with its key proof; the shipped-file list is regenerated. Import resolution: no problems. Changed files parse. The full test suite and the production build were not run here (no packages installed in this environment); nothing has been run against live services.
+- Limits, plainly: none of the new features has been run against a live Stripe, Gmail or Firestore; cohort rates are only as good as the invoice data (paid invoices, matched by email); the storefront does not email a receipt and does not reduce stock.
+
+## Pass 114 - Lead Inbox, assignment on arrival, WhatsApp outreach recorded
+- Lead Inbox no longer loses leads. Handing leads to the sender used to mark them as loaded on the server straight away, so a lead vanished from the inbox if the hand-off was lost (another device, a closed tab, or a hand-off older than six hours). Now a lead leaves the inbox only when its email is actually sent.
+- Lead Inbox imports are create-only inside a transaction. Two imports running at once can no longer overwrite a lead that was already loaded and reset it to "new".
+- WhatsApp contacts are recorded in one list, users/{uid}/whatsapp_sent, the same list the official WhatsApp send route writes to. Conversations opened from the follow-up and reminder screens are logged there too (phone digits and the address, if known; never the message). Lead Inbox imports skip anyone already messaged on WhatsApp.
+- A new enquiry or booking is assigned to an owner straight away when there is a team (two or more owners), using the same rule as the Owners page. A deal that already has an owner is left alone. Before this, assignment ran only when someone opened the Owners page.
+- Checked and left as they are: the morning brief already lists follow-ups that are due and replies with no deal yet.
+- Limits: the WhatsApp log accepts 120 records a minute per account, and phone numbers of 6 to 15 digits. Assignment considers the 2,000 most recent open deals when counting each owner's load.
+- Not covered: WhatsApp conversations opened in other places than the three dashboard screens are not yet recorded; the end-to-end test does not run the Lead Inbox import (it needs the live transaction).
+- Tests: the full suite passes, including tests/lead-pipeline.test.mjs. The production build compiles.
+
+## Pass 113 - inbound to outbound hand-off (enquiry and booking)
+- An enquiry or booking request now stops any scheduled cold follow-up to that address. Previously, a person who had just asked to talk could still receive a sales follow-up from the outbound sequence.
+- The buyer's country is saved on the deal. It was previously written in the wrong place, so an enquiry with a country was saved without it, and the draft-complete flag was not recorded (which also affected the daily draft cap).
+- The owner is notified of each new enquiry through the webhook "enquiry.received" (for Zapier, Slack, or a CRM), so a new lead is not left until the next day.
+- Limits: the stop check looks at up to 50 sent-email records per address, and only at the moment of enquiry.
+- Tests: the full suite passes, including tests/inbound-stop.test.mjs. The production build compiles. The enquiry route itself is not in the end-to-end test (it uses Next's after() hook), so its changes are checked by reading and by the helper's test.
+
+## Pass 112 - race-safe credit and discount codes; held credit on existing invoices
+- Held credit can no longer be used twice. Each credit note is read again inside the transaction that saves the invoice; if it changed, the save is retried from the start (up to three times) and nothing is written in between.
+- A discount code's last use can no longer be taken by two buyers at once. The use is claimed atomically before the invoice is saved, and given back if the save fails. This applies to product buy links and to codes typed on the pay page.
+- Held credit can now be applied to an existing unpaid invoice (Billing, "Apply held credit"). It is refused if the invoice has a payment or earlier credit, so balances stay correct.
+- Tests: the full suite passes, including tests/promo-tx.test.mjs. The production build compiles. The race protection is tested against a stand-in transactional database, not a live Firestore.
+
+## What is deliberately limited (kept on purpose)
+These are safety limits, not gaps: sending caps (500 newsletter emails a day per account; 12 batches an hour platform-wide; 3 follow-ups per lead; Gmail's own limits); rate limits on sign-up, code guessing, cron and owner actions; 90-day expiry on statement, confirmation and pay links; a 5-minute minimum on scheduled sends; AI daily and monthly spending caps; 5,000-row caps on exports, statements and per-account reads; and the requirement of an https public address before any link or unsubscribe is produced.
+
+## Still outside what code can settle
+Live behaviour against Gmail, Stripe, DNS and Meta/Google; browser checks of the new screens; syncing audiences to ad platforms through their APIs.
+
+## Pass 111 - held credit is applied to the next invoice
+- When a customer has credit held for them (a revised quote refunded as credit), it is applied automatically to their next invoice: from the manual invoice form, a milestone invoice, a booking deposit, or a product buy link. Credit is used oldest first and never more than the invoice total. If the credit covers the whole invoice, the invoice is recorded as paid at zero.
+- The credit is only marked as used after the invoice has been saved, so a failed save never uses up a customer's credit.
+- The invoice keeps its original billed amounts, so statements and accounting exports count the bill once and the credit once. Net and tax are split in proportion when credit is taken off.
+- Credit still open (not yet decided) or already used is never applied. Credit can be applied only to invoices created after this release; existing unpaid invoices are not changed.
+- Tests: the full suite passes, including tests/credit-apply.test.mjs. The production build compiles.
+
+## Pass 110 - landing page and pipeline review
+- Pipeline: a stage label the app does not recognise no longer moves a deal back to "New" (a prospect). An existing deal keeps its stage, so a won customer stays a customer. Common spellings are understood: "closed won", "Closed-Lost", "negotiating", "proposal sent", "in progress" and similar, with spaces, hyphens and capitals treated alike. A brand-new deal with an unknown label is still a new prospect.
+- Landing page (front door): corrected the claim "Nothing goes out on its own". Automatic sending exists and is off by default; the page now says so. Added the newsletter and discount-code features, and described them only as far as they are built (double opt-in, scheduled sends within daily limits).
+- Public business page: a "Join our mailing list" button. The sign-up form opens with the same key as the public page, so no second key is needed. Revoking the public-page key also stops new sign-ups.
+- Checked and left as they are: the forecast does show a range and says so when there are fewer than five closed deals; the daily and monthly AI spend caps are enforced; the follow-up cap of three is enforced.
+- Tests: the full suite passes, including tests/deal-stage.test.mjs. The production build compiles.
+
+## Pass 109 - scheduled newsletters, discount codes at checkout, lead finder review
+- Scheduled newsletters: set a start time on a draft (at least 5 minutes ahead, within 90 days) and it starts by itself. An hourly job starts due newsletters and sends them in batches with no page open. The job is shared fairly across accounts, sends at most 12 batches of 10 an hour platform-wide, and keeps the 500-a-day cap per account. A newsletter whose start fails (for example, nobody confirmed yet) goes back to draft with the reason.
+- Discount codes at checkout: when a business has active codes and an invoice is unpaid, the customer is offered an optional code box before paying. A valid code reprices that invoice (price, tax and total follow the discount; the due date does not change) and is recorded on the invoice with the list price. Codes work only before any payment, once per invoice, and once per customer where the code says so.
+- Limits: 10 code attempts per invoice link every 10 minutes; a code is refused if the business has switched it off, it has expired, or it has been used up.
+- Lead finder review (no change): searches run against OpenStreetMap under a daily search and site budget, with 4 to 10 second timeouts, a 600 KB page cap, three sites at a time, and robots.txt respected.
+- Still open: syncing audiences to Meta and Google through their APIs (needs your ad accounts and platform approval); a live website chat widget (WhatsApp conversations already exist for this); checkout codes on invoices that have already had a payment.
+- Tests: the full suite passes, including tests/promo.test.mjs (checkout pricing) and tests/broadcast.test.mjs (scheduling and fair batching). The production build compiles.
+
+## Pass 108 - newsletters to the confirmed list, lead magnet
+- Newsletter (Products page): draft a subject and message, start it, and send it in batches of 10 from your connected Gmail, paced about two seconds apart. Only people who confirmed are sent to; anyone unsubscribed or suppressed is skipped, checked again at send time. {{name}} becomes the first name, or "there".
+- Every newsletter email carries an unsubscribe link and a line saying why the person is receiving it. A newsletter is refused when the public address is not https, because the unsubscribe link could not work then.
+- Limits: 150 characters for the subject; 10 to 5,000 for the message; at most 5,000 people in one newsletter; 500 newsletter emails a day per account; the snapshot of recipients is taken when you start, so people who join later get the next one. One newsletter sends at a time. Cancel stops it at the next batch.
+- Newsletter sends are not recorded as outbound sales emails, so they do not inflate the sales funnel. They are counted on the newsletter itself.
+- Welcome download: a https link (for example a guide) emailed to each new subscriber after they confirm. Skipped quietly when none is set; it never blocks the confirmation.
+- Account deletion now covers newsletter drafts.
+- Known limits: sends happen only while the owner is pressing Send next batch (the page continues for up to 30 batches per press); there is no scheduled sending yet. Gmail's own daily limits still apply on top of the 500 cap. Each email is a plain-text message.
+- Tests: the full suite passes, including tests/broadcast.test.mjs. The production build compiles.
+
+## Pass 107 - discount codes, mailing list with double opt-in
+- Discount codes for your own products (Products page). Make a code as a percent or a fixed amount, with an optional end date, a minimum price, a total number of uses, and a one-use-per-customer rule. Type the code on a buy link and the invoice is made at the discounted price, with the original price and the discount recorded. A code can never make the price zero, and an expired, used-up, switched-off or not-yet-valid code is refused.
+- Mailing list. A hosted sign-up form (a link from Products, "Make sign-up link") with a consent box that says what the person agrees to. Each sign-up is confirmed by an emailed link before the person is added (double opt-in). The form has a hidden field that catches bots; the confirmation link expires after 7 days; the confirmation page changes nothing until the person presses its button, so mail scanners cannot confirm people by opening the link. The answer to a sign-up is the same whether or not the address is already on the list.
+- Exports: a contacts file for your own tools (confirmed people by default), and an audience file of SHA-256 hashes for Meta and Google custom audiences (no plain addresses). Unsubscribed and suppressed addresses are never exported. Account deletion and single-person erasure now cover both the codes and the list.
+- Limits: the list holds up to 50,000 people; 10 sign-ups per minute per address source; 20 owner list changes per minute; 200 codes per account; an export holds up to 10,000 rows; codes are 3 to 20 letters or numbers.
+- Assumptions and known limits: the total-uses count is updated after the invoice is made, so two buyers at the very same moment can both take the last use (a best-effort cap). The sign-up link key is shown once; making a new one stops the old one working. The sign-up form and the confirmation email need a working mail provider; without one, sign-up says it is not available rather than storing people who were never confirmed.
+- Not built: sending broadcast emails to the list (export it to your mail tool for now); automatic sending of a lead magnet on sign-up.
+- Tests: the full suite passes, including tests/promo.test.mjs and tests/signup.test.mjs. The production build compiles.
+
+## Pass 106 - customer statements, accountant exports
+- Statement of account for any customer: everything billed, paid and credited, with the running balance, the amount still owed, and how long each open invoice has been overdue (not yet due, 1 to 30, 31 to 60, 61 to 90, over 90 days). Voided invoices are left out; credit notes reduce what is owed; a credit larger than the bill shows as a credit balance owed to the customer.
+- Get a statement link from Billing ("Accountant and customer statements") and send it to the customer. The link opens a read-only page showing only that customer, with pay links for open invoices when the public address is https. It expires after 90 days, and a changed or forged link is refused. The page is marked not to be indexed and sends no scripts.
+- Accountant export from Billing: a Xero sales-invoice import file (Xero's column names, dates as day/month/year, tax type only where there is tax), or a ledger (one row per invoice and per credit note, credit notes negative) for QuickBooks, Sage, or a spreadsheet. Filter by issue date. Cells that could run as formulas in a spreadsheet are neutralised; numbers, including negative credit notes, stay numbers.
+- Limits: 5,000 invoices and 5,000 credit notes per export or statement (a notice shows on a statement that is cut short). Both features are read-only and use no AI.
+- Tests: the full suite passes, including tests/statement.test.mjs and tests/accounting-export.test.mjs. The production build compiles.
+- Assumptions: a payment without a recorded paid date (part payments) is dated by the invoice's issue date. Xero's date format and tax-type names depend on your Xero region and chart; check the import preview in Xero before importing.
+
 ## Pass 105 - credit notes for revised quotes, sender-domain check, erase one contact, hot-reply webhook
 - Credit notes replace the "refund due" flag on revised quotes. Each one gets its own number (CN-0001, CN-0002...), references the quote, and can be held as credit for the next invoice, or recorded as refunded in cash. The amount must be more than zero, and a credit note is issued once per quote.
 - Sender-domain check (Account, "Can your emails reach inboxes?"): reads the public SPF, DKIM and DMARC records for the domain you type and says what to fix, with the record to publish. Free-mail domains are explained, not judged. Limited to 12 checks a minute per account.

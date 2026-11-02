@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, collection, doc, getDoc, getDocs, limit, query } from '../../../lib/server-firestore.js';
+import { offeredCurrencies } from '../../../lib/currency.js';
 import { ownerFromKey } from '../../../lib/server/owner-key.js';
 import { publicSite } from '../../../lib/site.js';
 
@@ -17,12 +18,13 @@ export async function GET(request) {
       getDocs(query(collection(db, 'users', uid, 'services'), limit(20))),
       getDocs(query(collection(db, 'users', uid, 'products'), limit(50))),
     ]);
-    return NextResponse.json(publicSite({
+    const bizData = biz.exists() ? biz.data() : {};
+    return NextResponse.json({ ...publicSite({
       businessName: biz.exists() ? biz.data().businessName : '',
       site: site.exists() ? site.data() : {},
       services: svcs.docs.map((d) => d.data()),
-      products: prods.docs.map((d) => d.data()),
-    }), { headers: NO_STORE });
+      products: prods.docs.map((d) => ({ id: d.id, ...d.data() })),
+    }), currencies: offeredCurrencies(bizData) }, { headers: NO_STORE });
   } catch (e) {
     console.error('[site] read failed:', String(e?.message || '').slice(0, 120));
     return NextResponse.json({ error: 'Could not load the page.' }, { status: 500, headers: NO_STORE });

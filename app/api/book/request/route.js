@@ -3,12 +3,16 @@
 // A priced service waits for card payment (an invoice with a pay link) and is confirmed when paid. Otherwise the owner confirms it.
 // A customer with two or more no-shows pays in advance, or, for a free service, is flagged for the owner's review.
 import { NextResponse } from 'next/server';
+import { chargeTerms } from '../../../../lib/currency.js';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { isAdminMode, collection, doc, getDoc, getDocs, limit, query, setDoc, addDoc, where } from '../../../../lib/server-firestore.js';
 import { ownerFromKey } from '../../../../lib/server/owner-key.js';
 import { sanitizeRequest, isSlotAllowed } from '../../../../lib/booking.js';
 import { buildDealWrite, dealDocId } from '../../../../lib/deal-utils.js';
+import { stopColdFollowUps } from '../../../../lib/server/inbound-stop.js';
+import { assignArrival } from '../../../../lib/server/assign-arrival.js';
 import { buildInvoiceWrite, DEFAULT_PAYMENT_TERMS_DAYS } from '../../../../lib/billing.js';
+import { addInvoiceWithCredit } from '../../../../lib/server/credit-apply.js';
 import { nextInvoiceNumber } from '../../../../lib/server/invoice-number.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
@@ -58,15 +62,18 @@ export async function POST(request) {
     if (payFirst) {
       const biz = await getDoc(doc(db, 'users', uid, 'settings', 'business'));
       const bs = biz.exists() ? biz.data() : {};
+      const terms = chargeTerms(bs, body?.chargeCurrency);
+      if (terms.error) return json({ error: terms.error }, 400);
       const built = buildInvoiceWrite({
         uid, email: req.request.email, businessName: req.request.name, amount: Number(s.price),
         termsDays: Number.isFinite(Number(bs.paymentTermsDays)) ? Number(bs.paymentTermsDays) : DEFAULT_PAYMENT_TERMS_DAYS,
         taxRate: Number(bs.taxRate) > 0 ? Number(bs.taxRate) : 0, note: `${s.name} (booking)`.slice(0, 120), now: new Date(),
+        chargeCurrency: terms.chargeCurrency, fxRate: terms.fxRate,
       });
       if (!built.ok) return json({ error: built.error }, 400);
       built.write.number = await nextInvoiceNumber(db, uid);
       built.write.bookingId = bookingId;
-      const ref = await addDoc(collection(db, 'invoices'), built.write);
+      const ref = await addInvoiceWithCredit(db, uid, built.write);
       invoiceId = ref.id;
       payLink = payLinkFor(uid, invoiceId) || '';
     }
@@ -77,9 +84,11 @@ export async function POST(request) {
       name: req.request.name, email: req.request.email, phone: req.request.phone, status, invoiceId, price: s.price ?? null,
       needsReview: flagged, createdAt: new Date().toISOString(),
     });
+    await stopColdFollowUps(db, uid, req.request.email, 'booking_request').catch(() => {});
     const ref = doc(db, 'deals', dealDocId(uid, req.request.email));
     if (!(await getDoc(ref)).exists()) {
       await setDoc(ref, buildDealWrite({ uid, email: req.request.email, stage: 'new', businessName: req.request.name, source: 'inbound', sourceDetail: 'Booking request', now: new Date() }), { merge: true });
+    await assignArrival(db, uid, req.request.email, '').catch(() => {}); // speed to lead: an owner now
     } else {
       await setDoc(ref, { lastInboundAt: new Date().toISOString(), lastUpdate: new Date().toISOString() }, { merge: true });
     }

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { isAdminMode, collection, doc, getDoc, getDocs, limit, query } from '../../../../lib/server-firestore.js';
 import { ownerFromKey } from '../../../../lib/server/owner-key.js';
+import { offeredCurrencies } from '../../../../lib/currency.js';
 import { slotsAcross, BOOKING_LIMITS } from '../../../../lib/booking.js';
 import { availabilityFor } from '../../../../lib/server/availability.js';
 import { loadRoster } from '../../../../lib/server/team-store.js';
@@ -26,7 +27,9 @@ export async function GET(request) {
     const services = svcs.docs.map((d) => ({ id: d.id, name: d.data().name, minutes: d.data().minutes, price: d.data().price ?? null, staffIds: d.data().staffIds || [d.data().staffId || 'owner'] }));
     const chosen = services.find((s) => s.id === sp.get('service')) || services[0] || null;
     const cfg = cfgSnap.exists() ? cfgSnap.data() : {};
-    if (!chosen) return json({ services, service: null, slots: [] });
+    const bizSnap = await getDoc(doc(db, 'users', uid, 'settings', 'business')).catch(() => null);
+    const currencies = offeredCurrencies(bizSnap?.exists?.() ? bizSnap.data() : {});
+    if (!chosen) return json({ services, service: null, slots: [], currencies });
 
     const now = Date.now();
     const roster = await loadRoster(db, uid).catch(() => ({ members: [] }));
@@ -41,7 +44,7 @@ export async function GET(request) {
     }
     const slots = slotsAcross({ now, staff, minutes: chosen.minutes, horizonDays: BOOKING_LIMITS.horizonDays })
       .map((s) => ({ ...s, staffName: names[s.staffId] || 'Our team' }));
-    return json({ services, service: chosen, slots, staffNames: names, calendarWarning });
+    return json({ services, service: chosen, slots, staffNames: names, calendarWarning, currencies });
   } catch (e) {
     console.error('[book slots] failed:', String(e?.message || '').slice(0, 120));
     return json({ error: 'Could not load the times. Try again.' }, 500);

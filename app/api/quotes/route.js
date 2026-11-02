@@ -7,6 +7,7 @@ import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { doc, setDoc } from '../../../lib/server-firestore.js';
 import { sanitizeQuote, quoteLink, quoteEmail, quoteMailto, quoteMargin, marginCheck, MARGIN_FLOOR_DEFAULT } from '../../../lib/quotes.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
+import { chargeTerms, normalizeCurrency } from '../../../lib/currency.js';
 import { getDoc as getDocSnap } from '../../../lib/server-firestore.js';
 
 export async function POST(request) {
@@ -24,6 +25,14 @@ export async function POST(request) {
   const made = sanitizeQuote(body, { id });
   if (made.error) return NextResponse.json({ error: made.error }, { status: 400, headers: NO_STORE });
   const quote = made.quote;
+  // Lines are priced in the business currency. A quote may be charged in another saved currency; its rate is fixed here.
+  const bizSnap = await getDocSnap(doc(db, 'users', uid, 'settings', 'business')).catch(() => null);
+  const biz = bizSnap?.exists?.() ? bizSnap.data() : {};
+  const terms = chargeTerms(biz, body?.chargeCurrency ?? body?.currency);
+  if (terms.error) return NextResponse.json({ error: terms.error }, { status: 400, headers: NO_STORE });
+  quote.currency = normalizeCurrency(biz.currency);
+  quote.chargeCurrency = terms.chargeCurrency;
+  quote.fxRate = terms.fxRate;
 
   let revisionOf = null;
   if (body?.revisionOf) {

@@ -101,7 +101,8 @@ export default function InboxPage() {
     try {
       const batch = chosen.slice(0, MAX_LOAD);
       window.localStorage.setItem(INBOX_HANDOFF_KEY, JSON.stringify({ csv: leadsToCsv(batch), count: batch.length, at: Date.now() }));
-      await mark(batch, INBOX_STATUS.LOADED);
+      // Not marked as loaded yet: that happens when the email is actually sent. If the hand-off is lost (another device, a closed tab, or stale), the lead stays in the inbox.
+      for (const l of batch) await setDoc(doc(db, "lead_inbox", l._id), { handedOffAt: new Date().toISOString() }, { merge: true });
       router.push("/dashboard");
     } catch (e) {
       console.error(e);

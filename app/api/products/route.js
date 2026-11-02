@@ -1,5 +1,7 @@
 // app/api/products/route.js - the owner's product list: GET lists it, POST adds a product.
 import { NextResponse } from 'next/server';
+import { getDoc as getBizDoc, doc as bizDoc } from '../../../lib/server-firestore.js';
+import { offeredCurrencies } from '../../../lib/currency.js';
 import { randomUUID } from 'node:crypto';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
@@ -14,7 +16,8 @@ export async function GET(request) {
   try {
     const snap = await getDocs(query(collection(getDb(), 'users', who.uid, 'products'), limit(300)));
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
-    return json({ items });
+    const bizSnap = await getBizDoc(bizDoc(getDb(), 'users', who.uid, 'settings', 'business')).catch(() => null);
+    return json({ items, currencies: offeredCurrencies(bizSnap?.exists?.() ? bizSnap.data() : {}) });
   } catch (e) {
     console.error('[products] read failed:', e.message);
     return json({ error: 'Could not read the products. Try again.' }, 500);

@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/autosend",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/broadcasts",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/reassign",
+      "schedule": "40 * * * *"
     }
   ]
 }

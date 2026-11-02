@@ -7,6 +7,7 @@ import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { addDoc, collection, doc, getDoc, updateDoc } from '../../../lib/server-firestore.js';
 import { buildCreditNote, settleCredit } from '../../../lib/credit-notes.js';
 import { nextCreditNumber } from '../../../lib/server/credit-number.js';
+import { applyHeldCreditToInvoice } from '../../../lib/server/credit-apply.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 const SETTLE_ACTIONS = ['hold', 'apply', 'refund'];
@@ -50,6 +51,14 @@ export async function POST(request) {
       if (!r.ok) return json({ error: r.error }, 409);
       await updateDoc(ref, r.patch);
       return json({ ok: true, status: r.patch.status });
+    }
+
+    if (action === 'applyToInvoice') {
+      const invoiceId = String(body?.invoiceId || '').trim();
+      if (!invoiceId) return json({ error: 'Choose an invoice.' }, 400);
+      const r = await applyHeldCreditToInvoice(db, uid, invoiceId);
+      if (r.error) return json({ error: r.error }, 409);
+      return json({ ok: true, ...r });
     }
 
     return json({ error: 'Unknown action.' }, 400);

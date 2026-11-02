@@ -46,7 +46,7 @@ export async function POST(request) {
       return reply({ received: true, review: true });
     }
     await updateDoc(ref, r.patch);
-    await emitWebhook(db, uid, 'payment.received', { invoiceId: invoice.id, number: invoice.number || '', customerEmail: invoice.email, amount: Number(s.amount_total) / 100, status: r.patch.status });
+    await emitWebhook(db, uid, 'payment.received', { invoiceId: invoice.id, number: invoice.number || '', customerEmail: invoice.email, amount: Number(r.baseAmount ?? Number(s.amount_total) / 100), status: r.patch.status });
     if (invoice.bookingId && r.patch.status === 'paid') {
       const { confirmPaidBooking } = await import('../../../../lib/server/booking-confirm.js');
       await confirmPaidBooking(db, uid, invoice.bookingId).catch((e) => console.error('[payments webhook] booking confirm failed:', String(e?.message || '').slice(0, 120)));

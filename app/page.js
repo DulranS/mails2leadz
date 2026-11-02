@@ -5,14 +5,15 @@ import { APP_NAME, APP_DESCRIPTION, CONTACT_EMAIL } from '../lib/brand.js';
 
 const STEPS = [
   { n: '1', title: 'Add your leads', text: 'Upload a spreadsheet, or load the day\'s best finds from your Lead Inbox. Duplicates and invalid emails are skipped for you.' },
-  { n: '2', title: 'Reach out', text: 'Email from your own Gmail, or use SMS, WhatsApp and calls. You choose who gets contacted and when.' },
+  { n: '2', title: 'Reach out', text: 'Email from your own Gmail, or use SMS, WhatsApp and calls. You choose who gets contacted and when, and nothing sends until you turn it on.' },
   { n: '3', title: 'Follow up on time', text: 'See who needs a nudge today. Follow-ups stop the moment someone replies, and never go past three.' },
   { n: '4', title: 'See what it earns', text: 'Move replies into a pipeline and watch real numbers: deals, win rate, expected revenue and return on cost.' },
 ];
 
 const FEATURES = [
   { title: 'Leads found for you', text: 'An optional free helper finds local businesses on OpenStreetMap, reads their public websites, scores them and drops the best in your Lead Inbox. Nothing is sent from there.' },
-  { title: 'AI drafts you approve', text: 'The AI writes follow-ups and answers to replies from what you sell. You read, edit and send. Nothing goes out on its own.' },
+  { title: 'AI drafts you approve', text: 'The AI writes follow-ups and answers to replies from what you sell. You read and edit them. They go out only when you send them, or when you switch on automatic sending yourself, within the limits you set.' },
+  { title: 'Grow your list', text: 'A sign-up form for your website. People join by ticking a box and confirming by email, and you can send newsletters to them, on a schedule, within daily limits. Discount codes work on your payment links too.' },
   { title: 'Replies handled', text: 'Replies are picked up for you and sorted by what the person wants, so interested leads do not get lost in the inbox.' },
   { title: 'A pipeline that tells the truth', text: 'Only deals you have qualified count as pipeline. Forecasts come with an honest range and say so when there is too little data.' },
   { title: 'Look after customers too', text: 'After a sale, get timed reminders to check in: onboarding, first week, one month and every quarter.' },

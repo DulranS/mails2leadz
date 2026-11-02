@@ -8,6 +8,7 @@ export default function BookPage() {
   const [key, setKey] = useState("");
   const [data, setData] = useState(null);
   const [serviceId, setServiceId] = useState("");
+  const [chargeCur, setChargeCur] = useState("");
   const [picked, setPicked] = useState("");
   const [form, setForm] = useState({ name: "", email: "", phone: "", honeypot: "" });
   const [error, setError] = useState("");
@@ -35,7 +36,7 @@ export default function BookPage() {
     setError("");
     try {
       const [startIso, staffId] = picked.split("|");
-      const res = await fetch("/api/book/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, k: key, serviceId, startIso, staffId }) });
+      const res = await fetch("/api/book/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, k: key, serviceId, startIso, staffId, chargeCurrency: chargeCur }) });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setError(d.error || "Could not send the request."); if (res.status === 409) load(key, serviceId); return; }
       setDone({ startIso: picked.split("|")[0], ...d });
@@ -80,6 +81,7 @@ export default function BookPage() {
               <label>Your email<input className={field} type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
               <label>Phone (optional)<input className={field} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
               <label aria-hidden="true" style={{ position: "absolute", left: -10000, width: 1, height: 1, overflow: "hidden" }}>Leave this empty<input tabIndex={-1} autoComplete="off" value={form.honeypot} onChange={(e) => setForm({ ...form, honeypot: e.target.value })} /></label>
+      {(data?.currencies || []).length > 1 && <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>Pay in{" "}<select value={chargeCur} onChange={(e) => setChargeCur(e.target.value)} style={{ marginLeft: 6 }}>{data.currencies.map((c, i) => <option key={c.code} value={i === 0 ? "" : c.code}>{i === 0 ? `${c.code} (your currency)` : c.code}</option>)}</select></label>}
               <button type="submit" disabled={!picked} style={{ minHeight: 44, borderRadius: 8, border: 0, background: "#0d9488", color: "#fff", padding: "0 18px" }}>Send request</button>
             </form>
           )}

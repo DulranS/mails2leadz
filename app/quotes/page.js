@@ -3,6 +3,7 @@
 // Accepting a quote moves its deal to Won, and the nightly routine invoices it (see lib/quote-core.js and lib/billing-automation.js).
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, doc, getDocs, limit, query, updateDoc, where } from "../../lib/client-firestore.js";
+import { offeredCurrencies } from "../../lib/currency.js";
 import { db } from "../../lib/firebase-client.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
@@ -20,6 +21,7 @@ const money = (n, cur) => `${cur ? `${cur} ` : ""}${Number(n || 0).toFixed(2)}`;
 export default function QuotesPage() {
   const { user, ready } = useAuthUser();
   const [items, setItems] = useState([]);
+  const [currencyOptions, setCurrencyOptions] = useState([]);
   const [form, setForm] = useState(blankForm());
   const [created, setCreated] = useState(null); // the last quote created: its email is ready to send
   const [busy, setBusy] = useState(false);
@@ -34,6 +36,9 @@ export default function QuotesPage() {
   const load = useCallback(async () => {
     if (!user?.uid || !db) return;
     try {
+      const bizDocs = await getDocs(query(collection(db, "users", user.uid, "settings"), limit(20))).catch(() => null);
+      const bizData = bizDocs?.docs?.find((d) => d.id === "business")?.data?.() || {};
+      setCurrencyOptions(offeredCurrencies(bizData));
       const snap = await getDocs(query(collection(db, "users", user.uid, "quotes"), limit(300)));
       setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       const inv = await getDocs(query(collection(db, "invoices"), where("userId", "==", user.uid), limit(500)));
@@ -141,7 +146,7 @@ export default function QuotesPage() {
   const withdraw = (q) => { if (window.confirm(`Withdraw the quote "${q.title}"? The customer will see it is no longer valid.`)) patch(q.id, { status: "withdrawn", withdrawnAt: new Date().toISOString() }); };
   const duplicate = (q) => {
     setRevisionOf(null);
-    setForm({ title: q.title, email: q.customerEmail, customerName: q.customerName || "", currency: q.currency || "", taxPercent: q.taxPercent ? String(q.taxPercent) : "", validUntil: "", terms: q.terms || "", schedule: "",
+    setForm({ title: q.title, email: q.customerEmail, customerName: q.customerName || "", currency: q.chargeCurrency || "", taxPercent: q.taxPercent ? String(q.taxPercent) : "", validUntil: "", terms: q.terms || "", schedule: "",
       lines: (q.lines || []).map((l) => ({ description: l.description, qty: String(l.qty), unitPrice: String(l.unitPrice) })) });
     setCreated(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -329,7 +334,7 @@ export default function QuotesPage() {
               <label className="text-sm text-gray-700 dark:text-gray-200">Title<input className={field} required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Website care plan" /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Customer email<input className={field} type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Customer name (optional)<input className={field} value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} /></label>
-              <label className="text-sm text-gray-700 dark:text-gray-200">Currency code (optional, for example LKR or USD)<input className={field} maxLength={3} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} /></label>
+              <label className="text-sm text-gray-700 dark:text-gray-200">Charge the customer in<select className={field} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>{currencyOptions.map((c) => <option key={c.code} value={c.code === currencyOptions[0]?.code ? "" : c.code}>{c.code === currencyOptions[0]?.code ? `${c.code} (your currency)` : `${c.code} (1 ${currencyOptions[0]?.code} = ${c.rate} ${c.code}, fixed on this quote)`}</option>)}</select></label>
             </div>
             <div className="space-y-2">
               <p className="text-sm text-gray-700 dark:text-gray-200">What it includes</p>

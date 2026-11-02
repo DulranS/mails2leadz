@@ -31,7 +31,7 @@ export default function OwnersPage() {
       setDeals(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       const res = await fetch("/api/deals/assignees");
       const data = await res.json().catch(() => ({}));
-      if (res.ok) { setOwners(data.owners || []); setPrefs(Object.fromEntries((data.owners || []).map((o) => [o.key, { away: o.away, maxOpen: o.maxOpen ?? "", territories: (o.territories || []).join(", ") }]))); }
+      if (res.ok) { setOwners(data.owners || []); setPrefs(Object.fromEntries((data.owners || []).map((o) => [o.key, { away: o.away, maxOpen: o.maxOpen ?? "", territories: (o.territories || []).join(", "), industries: (o.industries || []).join(", "), sizes: (o.sizes || []).join(", ") }]))); }
       setError("");
     } catch (e) { console.error(e); setError("Could not load the deals."); }
   }, [user]);
@@ -51,7 +51,7 @@ export default function OwnersPage() {
 
   const savePref = (key) => run(async () => {
     const p = prefs[key] || {};
-    const r = await post("/api/deals/owner-settings", { key, away: !!p.away, maxOpen: p.maxOpen, territories: p.territories });
+    const r = await post("/api/deals/owner-settings", { key, away: !!p.away, maxOpen: p.maxOpen, territories: p.territories, industries: p.industries, sizes: p.sizes });
     if (!r.ok) { setError(r.data.error || "Could not save."); return; }
     setNotice("Saved."); await load();
   });
@@ -78,14 +78,16 @@ export default function OwnersPage() {
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Availability and territories</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Away people are skipped. A cap limits open deals per person (blank means no cap). Territories are country codes from the email domain (for example lk, uk); a deal goes to a person who covers its territory first. A deal is never left without an owner.</p>
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">Away people are skipped. A cap limits open deals per person (blank means no cap). Industries are words such as software or retail: a deal in that industry goes to a person who lists it, when one is free. Company sizes (1-10, 11-50, 51-200, 201+) work the same way for enquiries that give a size. Territories are country codes from the email domain (for example lk, uk); a deal goes to a person who covers its territory first. A deal is never left without an owner.</p>
           <ul className="divide-y divide-gray-100 dark:divide-gray-700">
             {owners.map((o) => (
               <li key={o.key} className="py-2 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                <span className="sm:col-span-3 text-sm text-gray-900 dark:text-white">{o.label}</span>
-                <label className="sm:col-span-2 text-sm flex items-center gap-2"><input type="checkbox" checked={!!prefs[o.key]?.away} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], away: e.target.checked } })} />Away</label>
-                <input className={`${field} sm:col-span-2`} type="number" min="1" placeholder="No cap" value={prefs[o.key]?.maxOpen ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], maxOpen: e.target.value } })} aria-label={`Open deal cap for ${o.label}`} />
-                <input className={`${field} sm:col-span-3`} placeholder="Territories, e.g. lk, uk" value={prefs[o.key]?.territories ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], territories: e.target.value } })} aria-label={`Territories for ${o.label}`} />
+                <span className="sm:col-span-2 text-sm text-gray-900 dark:text-white">{o.label}</span>
+                <label className="sm:col-span-1 text-sm flex items-center gap-2"><input type="checkbox" checked={!!prefs[o.key]?.away} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], away: e.target.checked } })} />Away</label>
+                <input className={`${field} sm:col-span-1`} type="number" min="1" placeholder="No cap" value={prefs[o.key]?.maxOpen ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], maxOpen: e.target.value } })} aria-label={`Open deal cap for ${o.label}`} />
+                <input className={`${field} sm:col-span-2`} placeholder="Territories, e.g. lk, uk" value={prefs[o.key]?.territories ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], territories: e.target.value } })} aria-label={`Territories for ${o.label}`} />
+                <input className={`${field} sm:col-span-2`} placeholder="Company sizes: 1-10, 11-50, 51-200, 201+" aria-label="Company sizes" value={prefs[o.key]?.sizes ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], sizes: e.target.value } })} />
+                <input className={`${field} sm:col-span-2`} placeholder="Industries, e.g. software" aria-label="Industries" value={prefs[o.key]?.industries ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], industries: e.target.value } })} />
                 <button type="button" disabled={busy} onClick={() => savePref(o.key)} className={`${btn} sm:col-span-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Save</button>
               </li>
             ))}

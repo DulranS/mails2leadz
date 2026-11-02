@@ -41,7 +41,7 @@ t('a delivery is one signed POST that includes the event; a failing receiver is 
 });
 
 t('the events the app can send are the ones that matter to a sales cycle', () => {
-  assert.deepEqual(WEBHOOK_EVENTS, ['quote.accepted', 'payment.received', 'booking.requested', 'booking.confirmed', 'reply.hot']);
+  assert.deepEqual(WEBHOOK_EVENTS, ['quote.accepted', 'payment.received', 'booking.requested', 'booking.confirmed', 'reply.hot', 'enquiry.received']);
 });
 
 console.log(`webhooks: ${n} passed`);

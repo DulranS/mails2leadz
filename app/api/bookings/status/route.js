@@ -1,6 +1,7 @@
 // app/api/bookings/status/route.js - the owner confirms, declines, cancels, or records a no-show or a completed visit.
 // A confirmation is refused if it clashes with another booking for the same staff member. Confirming moves the deal to "demo".
 import { NextResponse } from 'next/server';
+import { syncBookingCalendar } from '../../../../lib/server/calendar-write.js';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { collection, doc, getDoc, getDocs, limit, query, setDoc, updateDoc, where } from '../../../../lib/server-firestore.js';
@@ -42,6 +43,7 @@ export async function POST(request) {
       if ((await getDoc(dealRef)).exists()) await setDoc(dealRef, { stage: 'demo', lastUpdate: new Date().toISOString() }, { merge: true });
     }
     await updateDoc(ref, { status: body.status, statusAt: new Date().toISOString(), needsReview: false });
+    await syncBookingCalendar(db, who.uid, { ...b, id }, body.status).catch(() => {}); // confirmed: added; cancelled or declined: removed
     const confirmation = body.status === 'confirmed' ? await sendBookingConfirmation(db, who.uid, { id, ...b }) : null;
     if (body.status === 'confirmed') await emitWebhook(db, who.uid, 'booking.confirmed', { bookingId: id, serviceName: b.serviceName, startIso: b.startIso, endIso: b.endIso, customerEmail: b.email });
     return json({ ok: true, status: body.status, confirmation });

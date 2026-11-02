@@ -26,6 +26,8 @@ export const CRM = ({
   leadScores = {},
   dealStages = {},
   dealValues = {},
+  dealCurrencies = {},
+  currencyOptions = [],
   dealQual = {},
   dealOwners = {},
   dealLost = {},
@@ -210,6 +212,11 @@ export const CRM = ({
             }}
             className="w-24 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700"
           />
+          {currencyOptions.length > 1 && (
+            <select aria-label={`Charge currency for ${lead.email}`} value={dealCurrencies[lead.email] || ""} onChange={(e) => onUpdateLead?.(lead.email, { chargeCurrency: e.target.value })} className="border border-gray-300 dark:border-gray-600 rounded px-1 py-1 bg-white dark:bg-gray-700">
+              {currencyOptions.map((c, i) => <option key={c.code} value={i === 0 ? "" : c.code}>{c.code}</option>)}
+            </select>
+          )}
         </label>
       ),
     },

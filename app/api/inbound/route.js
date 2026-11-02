@@ -15,6 +15,9 @@ import { ownerFromKey } from '../../../lib/server/owner-key.js';
 import { getBusinessProfile, AiError } from '../../../lib/ai-client.js';
 import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, intakeToQualification, intakeFit, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
 import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
+import { stopColdFollowUps } from '../../../lib/server/inbound-stop.js';
+import { assignArrival } from '../../../lib/server/assign-arrival.js';
+import { emitWebhook } from '../../../lib/server/webhooks.js';
 import { queueDocId, QUEUE_KINDS, QUEUE_STATUS } from '../../../lib/draft-queue.js';
 import { draftInboundReply, DraftError } from '../../../lib/server/draft-core.js';
 import { loadAutopilot } from '../../../lib/server/prepare-drafts.js';
@@ -97,6 +100,8 @@ export async function POST(request) {
     await setDoc(enqRef, { userId: uid, ...e, day, receivedAt: now.toISOString(), drafted: false });
 
     // The deal: a new enquiry opens one (source "inbound" + channel). A person who is already a deal keeps their stage; we only note the contact.
+    // They have just asked to talk: any scheduled cold follow-up to them stops now.
+    await stopColdFollowUps(db, uid, e.email, 'inbound_enquiry', now).catch(() => {});
     const dealRef = doc(db, 'deals', dealDocId(uid, e.email));
     const dealSnap = await getDoc(dealRef);
     const existing = dealSnap.exists() ? dealSnap.data() : null;
@@ -105,10 +110,17 @@ export async function POST(request) {
       const write = buildDealWrite({ uid, email: e.email, stage: 'new', businessName: e.company || e.name || '', source: isReferralSrc(e.src) ? 'referral' : 'inbound', sourceDetail: e.src || 'form' });
       if (e.intake) write.qualification = { ...intakeToQualification(e.intake), updatedAt: now.toISOString() }; // what they said fills budget, authority and timeline
       write.inboundAt = now.toISOString();
+      if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
+      if (e.size) write.companySize = e.size; // the company size band, for routing
       await setDoc(dealRef, write, { merge: true });
+      await assignArrival(db, uid, e.email, e.country || '', '', e.size || '').catch(() => {}); // speed to lead: an owner now, not when someone opens the Owners page
     } else {
-      await setDoc(dealRef, { lastInboundAt: now.toISOString(), lastUpdate: now.toISOString() }, { merge: true });
+      const patch = { lastInboundAt: now.toISOString(), lastUpdate: now.toISOString() };
+      if (e.country && !existing.country) patch.country = e.country;
+      await setDoc(dealRef, patch, { merge: true });
     }
+    // Speed to lead: the owner hears about a new enquiry straight away (Zapier, Slack, a CRM), not at the end of the day.
+    await emitWebhook(db, uid, 'enquiry.received', { email: e.email, name: e.name || '', company: e.company || '', src: e.src || 'form', hasIntake: !!e.intake, receivedAt: now.toISOString() }).catch(() => {});
 
     // The reply is drafted AFTER the visitor has their "thank you" (AI takes seconds). Draft only; the owner presses Send.
     after(async () => {
@@ -126,7 +138,6 @@ export async function POST(request) {
           business: e.company || e.name || e.email, quality: intakeFit(e.intake).level === 'light' ? 'WARM' : 'HOT', score: intakeFit(e.intake).level === 'light' ? 60 : 100, subject: r.draft.subject, body: r.draft.body,
           context: enquiryContext(e), createdAt: new Date().toISOString(),
         });
-      if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
         await setDoc(enqRef, { drafted: true }, { merge: true });
       } catch (err) {
         if (!(err instanceof DraftError || err instanceof AiError)) console.warn('[inbound] draft skipped:', err?.message);

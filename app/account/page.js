@@ -10,7 +10,8 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
 import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
-import { CURRENCIES, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
+import { CURRENCIES, normalizeCurrency, currencySymbol, sanitizeFxDisplay } from "../../lib/currency.js";
+import { sanitizeStallDays } from "../../lib/pipeline-alerts.js";
 import { sanitizeLines } from "../../lib/lines.js";
 import { sanitizeSeasonIndex, MONTH_LABELS } from "../../lib/seasonality.js";
 import TeamAccess from "../components/TeamAccess";
@@ -48,6 +49,9 @@ export default function AccountPage() {
   const [monthlyGoal, setMonthlyGoal] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
+  const [fxText, setFxText] = useState("");
+  const [stallText, setStallText] = useState("");
+  const [fxLoaded, setFxLoaded] = useState({ json: "[]", asOf: "" });
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
   const [team, setTeam] = useState({ members: [], busy: false, msg: "", ok: false });
@@ -86,6 +90,8 @@ export default function AccountPage() {
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
+        if (d.stallDays && typeof d.stallDays === "object") setStallText(Object.entries(sanitizeStallDays(d.stallDays)).map(([k, v]) => `${k} ${v}`).join(", "));
+        if (Array.isArray(d.fxDisplay)) { setFxText(d.fxDisplay.map((x) => `${x.code} ${x.rate}`).join(", ")); setFxLoaded({ json: JSON.stringify(sanitizeFxDisplay(d.fxDisplay, d.currency || "USD")), asOf: d.fxDisplayUpdatedAt || "" }); }
         if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
         if (d.taxRate) setTaxRate(String(d.taxRate));
         if (d.paymentInstructions) setPaymentInstructions(String(d.paymentInstructions));
@@ -283,6 +289,11 @@ export default function AccountPage() {
   };
 
   const save = async () => {
+    const fx = sanitizeFxDisplay(fxText, currency);
+    const typed = String(fxText || "").split(/[,;\n]+/).filter((x) => x.trim()).length;
+    if (typed > fx.length) { setMsg({ type: "error", text: `Check the other-currency rates: write each as CODE and a number, like EUR 0.92. Not the business currency, one per code, up to five.` }); return; }
+    const fxJson = JSON.stringify(fx);
+    const fxAsOf = fx.length === 0 ? null : fxJson !== fxLoaded.json || !fxLoaded.asOf ? new Date().toISOString() : fxLoaded.asOf;
     setBusy("save"); setMsg(null);
     try {
       const probabilities = Object.fromEntries(OPEN_STAGES.map((s) => [s, Math.min(100, Math.max(0, Number(probs[s]) || 0)) / 100]));
@@ -301,6 +312,9 @@ export default function AccountPage() {
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
+        fxDisplay: fx,
+        stallDays: sanitizeStallDays(stallText),
+        fxDisplayUpdatedAt: fxAsOf,
         paymentTermsDays: Math.min(180, Math.max(0, Math.round(Number(termsDays) || 0))) || 14,
         taxRate: Math.min(30, Math.max(0, Number(taxRate) || 0)),
         paymentInstructions: String(paymentInstructions || "").trim().slice(0, 400),
@@ -455,6 +469,8 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Money settings <span className="text-xs font-normal text-gray-500">· makes your forecasts honest</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="stall">Days before a deal counts as stalled, by stage (optional)</label><input id="stall" type="text" className={field} value={stallText} onChange={(e) => setStallText(e.target.value)} placeholder="proposal 7, negotiation 14" /><p className="text-xs text-gray-500 mt-1">Stages: new, contacted, qualified, demo, proposal, negotiation. Each daily check flags a deal that has sat in one stage at least this many days. Blank keeps the defaults.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="fxd">Approximate amounts for customers in other currencies (optional)</label><input id="fxd" type="text" className={field} value={fxText} onChange={(e) => setFxText(e.target.value)} placeholder="e.g. EUR 0.92, GBP 0.79" /><p className="text-xs text-gray-500 mt-1">For each currency, how many you get for 1 {currency}. Up to five. Invoice emails and reminders show the approximate amount with these rates, as an indication only. Payment, the invoice and your books stay in {currency}. You type the rates; the app does not fetch them.</p></div>
             {currency !== "USD" && <div className="sm:col-span-2"><label className={label} htmlFor="fx">1 US dollar = how many {currency}? <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="fx" type="number" min="0" inputMode="decimal" className={field} value={usdRate} onChange={(e) => setUsdRate(e.target.value)} placeholder="e.g. 300" /><p className="text-xs text-gray-500 mt-1">The AI provider bills in US dollars. This converts that small cost so your ROI is in {currency}. Leave empty to count it 1:1.</p></div>}
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>

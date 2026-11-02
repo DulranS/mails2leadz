@@ -181,7 +181,7 @@ t('the public landing page shows only public details: no costs, no customers, no
   });
   const json = JSON.stringify(page);
   assert.equal(page.businessName, 'Kandy Studio');
-  assert.deepEqual(page.products[0], { name: 'Mug', price: 12, description: 'Ceramic' });
+  assert.deepEqual(page.products[0], { id: '', name: 'Mug', price: 12, description: 'Ceramic', soldOut: false, maxPerOrder: null, variants: [] });
   assert.ok(!json.includes('deliveryCost') && !json.includes('secret@x.com') && !json.includes('c@x.com') && !json.includes('staffIds') && !json.includes('sku'));
 });
 

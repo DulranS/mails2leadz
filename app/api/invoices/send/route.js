@@ -7,6 +7,8 @@ import { getDoc, updateDoc, doc } from '../../../../lib/server-firestore.js';
 import { openMailbox } from '../../../../lib/server/autosend.js';
 import { buildRawEmail } from '../../../../lib/raw-email.js';
 import { invoiceEmailText } from '../../../../lib/billing-automation.js';
+import { sanitizeFxDisplay, approxSentence, fixedRateSentence } from '../../../../lib/currency.js';
+import { isForeignInvoice } from '../../../../lib/billing.js';
 import { invoiceState } from '../../../../lib/billing.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
 import { openPixelUrl, trackedHtml } from '../../../../lib/server/open-track.js';
@@ -50,10 +52,13 @@ export async function POST(request) {
   const box = await openMailbox(db, uid);
   if (!box.ok) return json({ error: MAILBOX_MESSAGE[box.reason] || 'Gmail is not available right now.' }, 409);
 
-  const text = invoiceEmailText({
-    name: inv.businessName, amount: inv.amount, currency, dueAt: inv.dueAt, note: inv.note, senderName, paymentInfo,
-    taxAmount: inv.taxAmount, total: inv.total, payLink,
-  });
+  const foreign = isForeignInvoice(inv);
+  const approx = foreign
+    ? fixedRateSentence({ base: currency, charge: inv.chargeCurrency, rate: inv.fxRate, asOf: inv.fxRateAt })
+    : approxSentence({ amount: inv.total || inv.amount, base: currency, fx: sanitizeFxDisplay(bs.fxDisplay, currency), asOf: bs.fxDisplayUpdatedAt });
+  const text = foreign
+    ? invoiceEmailText({ name: inv.businessName, amount: inv.chargeTotal, currency: inv.chargeCurrency, dueAt: inv.dueAt, note: inv.note, senderName, paymentInfo, taxAmount: 0, total: inv.chargeTotal, payLink, approx })
+    : invoiceEmailText({ name: inv.businessName, amount: inv.amount, currency, dueAt: inv.dueAt, note: inv.note, senderName, paymentInfo, taxAmount: inv.taxAmount, total: inv.total, payLink, approx });
   let sent;
   try {
     const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');

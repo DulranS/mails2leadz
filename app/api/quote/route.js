@@ -6,6 +6,7 @@ import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, setDoc, doc } from '../../../lib/server-firestore.js';
 import { verifyQuoteToken, quoteState, respondToQuote, dealForAcceptedQuote, milestonesFor, supersedeMilestones, nextMilestoneIndex } from '../../../lib/quotes.js';
 import { releaseMilestone, billedNetForQuote, issueAdjustmentInvoice } from '../../../lib/server/milestones.js';
+import { quoteDisplay } from '../../../lib/currency.js';
 import { emitWebhook } from '../../../lib/server/webhooks.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
 
@@ -45,15 +46,16 @@ export async function GET(request) {
   if (loaded.error) return failure(loaded.error, loaded.status);
 
   const { quote } = loaded;
-  const cur = quote.currency || '';
+  const disp = quoteDisplay(quote);
+  const cur = disp.cur;
   const state = quoteState(quote);
   try {
     const viewRef = doc(loaded.db, 'users', loaded.who.uid, 'quotes', loaded.who.id);
     const now = new Date().toISOString();
     await updateDoc(viewRef, { viewedAt: quote.viewedAt || now, viewCount: (Number(quote.viewCount) || 0) + 1, lastViewedAt: now });
   } catch (e) { console.error('[quote] view record failed:', String(e?.message || '').slice(0, 120)); }
-  const rows = (quote.lines || []).map((l) => `<tr><td>${esc(l.description)}${l.qty !== 1 ? ` <span>(x${esc(l.qty)})</span>` : ''}</td><td class="n">${money(l.qty * l.unitPrice, cur)}</td></tr>`).join('');
-  const taxRow = quote.tax ? `<tr><td>Tax (${esc(quote.taxPercent)}%)</td><td class="n">${money(quote.tax, cur)}</td></tr>` : '';
+  const rows = (quote.lines || []).map((l) => `<tr><td>${esc(l.description)}${l.qty !== 1 ? ` <span>(x${esc(l.qty)})</span>` : ''}</td><td class="n">${money(disp.conv(l.qty * l.unitPrice), cur)}</td></tr>`).join('');
+  const taxRow = quote.tax ? `<tr><td>Tax (${esc(quote.taxPercent)}%)</td><td class="n">${money(disp.conv(quote.tax), cur)}</td></tr>` : '';
   const answer = {
     open: `<form method="post" action="/api/quote?t=${encodeURIComponent(t)}">`
       + '<label>Your name (optional)<input name="name" maxlength="120" autocomplete="name"></label>'
@@ -66,7 +68,7 @@ export async function GET(request) {
   }[state] || '';
   const body = `<h1 style="font-size:22px;margin:0 0 4px">${esc(quote.title)}</h1>`
     + (quote.customerName ? `<p style="margin:0 0 16px">For ${esc(quote.customerName)}</p>` : '<p style="margin:0 0 16px"></p>')
-    + `<table>${rows}${taxRow}<tr class="t"><td>Total</td><td class="n">${money(quote.total, cur)}</td></tr></table>`
+    + `<table>${rows}${taxRow}<tr class="t"><td>Total</td><td class="n">${money(disp.conv(quote.total), cur)}</td></tr></table>`
     + (quote.validUntil ? `<p>Valid until ${esc(quote.validUntil)}.</p>` : '')
     + (quote.terms ? `<p>${esc(quote.terms)}</p>` : '')
     + answer;

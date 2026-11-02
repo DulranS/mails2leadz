@@ -5,6 +5,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { useAuthUser } from "../components/AuthProvider";
+import SignalsCard from "../components/SignalsCard";
+import CalendarConnect from "../components/CalendarConnect";
+import OutlookConnect from "../components/OutlookConnect";
+import SignalFeedsCard from "../components/SignalFeedsCard";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -28,6 +32,12 @@ const KEY_GROUPS = [
   ] },
   { title: "Company contact lookup (Hunter)", items: [
     ["HUNTER_API_KEY", "Hunter API key", true],
+  ] },
+  { title: "Shipping labels and tracking (EasyPost)", items: [
+    ["EASYPOST_API_KEY", "EasyPost API key (your own EasyPost account)", true],
+  ] },
+  { title: "Newly registered companies (UK Companies House)", items: [
+    ["COMPANIES_HOUSE_KEY", "Companies House API key (free, from the Companies House developer hub)", true],
   ] },
   { title: "Card payments on invoices (your own Stripe account)", items: [
     ["STRIPE_PAYMENTS_SECRET_KEY", "Stripe secret key", true], ["STRIPE_PAYMENTS_WEBHOOK_SECRET", "Stripe webhook secret", true],
@@ -426,6 +436,10 @@ export default function IntegrationsPage() {
           </section>
         )}
       </div>
+      <div className="mt-4"><SignalsCard /></div>
+      <div className="mt-4"><CalendarConnect /></div>
+      <div className="mt-4"><OutlookConnect /></div>
+      <div className="mt-4"><SignalFeedsCard /></div>
     </DashboardLayout>
   );
 }

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { isAdminMode, collection, doc, getDoc, getDocs, limit, query, updateDoc, where } from '../../../../lib/server-firestore.js';
 import { verifyBookingToken, customerMayChange, CHANGE_NOTICE_HOURS } from '../../../../lib/server/booking-manage.js';
+import { syncBookingCalendar } from '../../../../lib/server/calendar-write.js';
 import { slotsFor, isSlotAllowed, BOOKING_LIMITS } from '../../../../lib/booking.js';
 import { availabilityFor } from '../../../../lib/server/availability.js';
 
@@ -45,6 +46,7 @@ export async function POST(request) {
   try {
     if (body?.action === 'cancel') {
       await updateDoc(ref, { status: 'cancelled', statusAt: new Date().toISOString(), cancelledBy: 'customer' });
+      await syncBookingCalendar(db, uid, b, 'cancelled').catch(() => {});
       return json({ ok: true, status: 'cancelled' });
     }
     if (body?.action === 'reschedule') {
@@ -60,6 +62,7 @@ export async function POST(request) {
       const endIso = new Date(Date.parse(startIso) + b.minutes * 60000).toISOString();
       // A moved booking needs the owner to confirm the new time again.
       await updateDoc(ref, { startIso, endIso, status: 'requested', statusAt: new Date().toISOString(), movedBy: 'customer' });
+      await syncBookingCalendar(db, uid, b, 'requested').catch(() => {}); // moved: the old event comes off until the owner confirms the new time
       return json({ ok: true, status: 'requested', startIso, endIso });
     }
     return json({ error: 'Choose cancel or reschedule.' }, 400);

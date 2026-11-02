@@ -97,6 +97,7 @@ import {
   normalizeContactKey,
 } from "../../lib/dashboard-utils.js";
 import { INBOX_HANDOFF_KEY } from "../../lib/lead-inbox.js";
+import { logWhatsAppOpen } from "../../lib/whatsapp-log.js";
 import { pickFirstEmailCandidates, followUpTasksFor } from "../../lib/first-email-batch.js";
 import { useContactTracking } from "../../hooks/useContactTracking.js";
 import { useDailyQuotas } from "../../hooks/useDailyQuotas.js";
@@ -3045,6 +3046,7 @@ function DashboardComponent() {
       const phoneToUse = contact?.phone || task.leadPhone;
       const formattedPhone = formatForDialing(phoneToUse);
       const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+      logWhatsAppOpen({ email: String(contact?.email || task.leadEmail || task.email || ""), number: String(phoneToUse || "") });
       window.open(whatsappUrl, "_blank");
 
       // Mark task as completed
@@ -4565,6 +4567,7 @@ function DashboardComponent() {
 
       const formattedPhone = formatForDialing(contact.phone);
       const whatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+      logWhatsAppOpen({ email: String(contact.email || ""), number: String(contact.phone || "") });
 
       window.open(whatsappUrl, "_blank");
 
@@ -5423,6 +5426,7 @@ function DashboardComponent() {
         window.location.href = `tel:${dialNumber}`;
       } else {
         // Desktop - open WhatsApp as fallback
+        logWhatsAppOpen({ number: String(dialNumber || "") });
         window.open(`https://wa.me/${dialNumber}`, "_blank");
         addNotification("Desktop detected - opened WhatsApp instead", "info");
       }

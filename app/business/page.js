@@ -12,6 +12,7 @@ import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeCashCycle, supplierDays } from "../../lib/cash-cycle.js";
 import MarketingSpendPanel from "../components/MarketingSpendPanel";
+import CohortPanel from "../components/CohortPanel";
 import OpsStatusCard from "../components/OpsStatusCard";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
 import { computeProfit, forecastProfit } from "../../lib/profit.js";
@@ -706,6 +707,9 @@ export default function BusinessValuePage() {
 
         {!loading && user?.uid && (
           <div className="mt-4 sm:mt-6"><MarketingSpendPanel uid={user.uid} money={money} deals={raw.deals} /></div>
+        )}
+        {!loading && user?.uid && (
+          <div className="mt-4 sm:mt-6"><CohortPanel /></div>
         )}
         {!loading && stock.count > 0 && (
           <Card title="Stock and capital">
