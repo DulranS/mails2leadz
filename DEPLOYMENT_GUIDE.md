@@ -70,7 +70,7 @@ What keeps your Gmail safe (all enforced on every run, and tested): a daily cap 
 Notes:
 - The first invoice to a customer is never automatic (it may include a setup fee). Only customers already invoiced once, with a monthly amount set on the Customers page, get the next one, about a month later. Reminders are the fixed friendly/firm/final wording, at most 3 per invoice, never more than every 3 days.
 - Posting to social networks is still one tap: each network needs its own approved developer app. The app writes, schedules and tracks the posts.
-- On Vercel's free plan a cron can run up to an hour late: the default times leave room for that. On a paid plan you may run `/api/cron/autosend` hourly (it is safe: caps and window are checked every run).
+- Vercel's Hobby plan allows daily cron jobs only. The shipped `vercel.json` runs every job once a day (broadcasts 09:15 UTC, reassignment 05:40 UTC, the rest as listed above). A cron can run up to an hour late, so the times leave room for that. A paid plan may run more often; that is optional, not required.
 - Test once: `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-APP/api/cron/daily-ops` and the same for `/api/cron/autosend` (inside your window, with drafts waiting). The reply lists what was sent and why anything stopped.
 
 ## Publishing posts automatically (optional)

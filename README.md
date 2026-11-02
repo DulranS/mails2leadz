@@ -71,4 +71,4 @@ cannot be reopened from the app. Opt-outs are not counted as lost sales in win r
 `UNSUBSCRIBE_SECRET` (or `WEBHOOK_SECRET`) and the Firebase service account; **Account → Run connection check** shows
 whether it is active. Re-publish `firestore.rules` after deploying.
 
-**Bounces.** When "Check replies" runs, the app also looks for the mail system's "address not found" notices (last 14 days) for people you emailed and puts those addresses on the same do-not-contact list (deal marked Lost, reason "bounced", not counted as a lost sale). Full mailboxes, spam rejections and temporary errors never suppress anyone
+**Bounces.** When "Check replies" runs, the app also looks for the mail system's "address not found" notices (last 14 days) for people you emailed and puts those addresses on the same do-not-contact list (deal marked Lost, reason "bounced", not counted as a lost sale). Full mailboxes, spam rejections and temporary errors never suppress anyone.

@@ -1,4 +1,4 @@
-// app/api/cron/reassign/route.js - hourly: hands an untouched new deal to another free owner, once. Called by the host's scheduler
+// app/api/cron/reassign/route.js - once a day (05:40 UTC): hands an untouched new deal to another free owner, once. A deal untouched for an hour moves at the first daily run after that. Called by the host's scheduler
 // with "Authorization: Bearer <CRON_SECRET>".
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';

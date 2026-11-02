@@ -1,3 +1,15 @@
+## Pass 138 - every cron job runs once a day (Vercel Hobby)
+
+- vercel.json had two hourly jobs: newsletters (15 * * * *) and untouched-deal reassignment (40 * * * *). Vercel's Hobby plan allows daily jobs only, so the deploy would fail. Both are now daily: newsletters 09:15 UTC, reassignment 05:40 UTC. The other four jobs were already daily.
+- Effects, plainly:
+  - Scheduled newsletters start at the first daily run after their time, so up to a day late. A newsletter sends at most about 120 emails a day across all accounts (12 batches of 10 in one run). Before, that was about 120 an hour. Per-account daily limits are unchanged.
+  - An untouched new deal moves to another free owner at the first daily run after the hour has passed, so up to a day later.
+  - Autosend, drafts and reply checks were already daily and are unchanged.
+- A test (tests/cron-schedule.test.mjs) fails if any job is scheduled more often than once a day.
+- Comments and DEPLOYMENT_GUIDE.md now describe the daily schedule. A paid plan may run more often; that is optional.
+- Known limit, not changed here: the digest and morning brief send only when the owner's local hour is between 6 and 22 at the daily run (05:30 UTC). For owners far west of UTC, the daily run falls outside that window and those emails are skipped that day.
+- Tests run here: the cron schedule test, the full npm test chain (exit 0), and a production Next.js build (exit 0).
+
 ## Pass 137 - alert list, editable thresholds, monthly summary
 
 - The CRM page lists open pipeline alerts with their reason. The owner marks each done. Marking done closes the alert only; the deal is not changed.

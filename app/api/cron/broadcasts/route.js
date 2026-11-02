@@ -1,4 +1,4 @@
-// app/api/cron/broadcasts/route.js - the scheduled newsletter run (hourly). Starts due newsletters and sends a bounded number of
+// app/api/cron/broadcasts/route.js - the scheduled newsletter run (once a day, 09:15 UTC: Vercel's Hobby plan allows daily cron jobs only). Starts due newsletters and sends a bounded number of
 // batches, fairly across accounts. Called by the host's scheduler with "Authorization: Bearer <CRON_SECRET>".
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
