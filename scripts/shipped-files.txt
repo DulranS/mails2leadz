@@ -36,6 +36,7 @@ app/api/cron/autosend/route.js
 app/api/cron/broadcasts/route.js
 app/api/cron/check-replies/route.js
 app/api/cron/daily-ops/route.js
+app/api/cron/pipeline/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
 app/api/deal-screen/route.js
@@ -58,6 +59,7 @@ app/api/inbound/attach/route.js
 app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
+app/api/integrations/meta-leads/route.js
 app/api/integrations/route.js
 app/api/integrations/secrets/route.js
 app/api/integrations/test/route.js
@@ -297,8 +299,10 @@ lib/lead-scoring-engine.js
 lib/lifecycle.js
 lib/lines.js
 lib/logger.js
+lib/mailbox-verify.js
 lib/manual-stock.js
 lib/marketing.js
+lib/meta-leads.js
 lib/money.js
 lib/next-actions.js
 lib/niche.js
@@ -320,6 +324,7 @@ lib/products.js
 lib/profit.js
 lib/promo-tx.js
 lib/promo.js
+lib/push.js
 lib/quote-core.js
 lib/quotes.js
 lib/rate-limit.js
@@ -399,6 +404,7 @@ lib/server/invoice-number.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
+lib/server/mailbox-verify.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
 lib/server/open-track.js
@@ -407,8 +413,10 @@ lib/server/owner-key.js
 lib/server/owner-report.js
 lib/server/owner-settings.js
 lib/server/payments.js
+lib/server/pipeline-run.js
 lib/server/prepare-drafts.js
 lib/server/promo.js
+lib/server/push.js
 lib/server/queue-checks.js
 lib/server/quote-replies.js
 lib/server/relationship-asks.js
@@ -450,6 +458,7 @@ lib/signals.js
 lib/signup-html.js
 lib/signup.js
 lib/site.js
+lib/slack.js
 lib/smart-followup-engine.js
 lib/sops.js
 lib/statement-html.js

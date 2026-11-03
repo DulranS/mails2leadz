@@ -137,3 +137,30 @@ Use this when you cannot or do not want to create a service-account key (some Go
 4. On the host set `FIREBASE_SERVER_EMAIL` and `FIREBASE_SERVER_PASSWORD`, then redeploy.
 5. Sign in and press **Account → Run connection check**: "Database" should say *Working (server login)*.
 **Good to know.** The server user can read and write everything, exactly like a service account would, so keep its password only in the host's environment variables. Nobody else gets anything from the rule (it matches that one UID). If your Firebase web API key has a "websites" (HTTP referrer) restriction, the server's sign-in is refused: remove the restriction (or use a key without one). Each new server instance signs in once (a fraction of a second).
+
+## Push alerts: one key away
+
+Pipeline alerts can reach a phone or browser. Off until the keys are set; nothing is sent without them.
+
+1. Generate a key pair once: `npx web-push generate-vapid-keys`.
+2. On the server set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (the pair), and `VAPID_SUBJECT` (for example `mailto:you@yourdomain.com`).
+3. Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` to the same public key. It is read at build time, so redeploy after setting it.
+4. In Account, each device taps "Turn on alerts for this device" and allows notifications.
+
+## Hourly checks: one command, Vercel Pro
+
+Vercel's Hobby plan allows daily jobs only, so the shipped timetable is daily. On Vercel Pro, the pipeline check, sends and reply checks can run hourly:
+
+- `npm run schedule:hourly`, then redeploy.
+- `npm run schedule:daily` goes back to the Hobby timetable, then redeploy.
+
+Hourly runs read more from the database: each hour each autopilot owner reads up to 2,000 deals and 3,000 alerts.
+
+## Integrations: one key or one URL each
+
+Each switches on by itself. Without its key or URL nothing changes and nothing is sent.
+
+- **Slack alerts:** no server key. Each owner creates an incoming webhook in Slack and pastes the URL in Account, "Slack alerts".
+- **Mailbox check before a send:** set `HUNTER_API_KEY` (the same key as company lookup). Addresses Hunter calls invalid or disposable are held; results are cached 30 days.
+- **Meta Lead Ads:** set `META_APP_SECRET` (the app secret), `META_VERIFY_TOKEN` (any string you choose), `META_PAGE_ACCESS_TOKEN` (the Page token), `META_PAGE_ID`, and `META_OWNER_UID` (the owner's Firebase user id). In Meta's app settings, point the Page's leadgen webhook at `https://YOUR-APP/api/integrations/meta-leads` with the verify token. Redeploy after setting the variables.
+

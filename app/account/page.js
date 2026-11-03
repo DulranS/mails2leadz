@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut, deleteUser } from "firebase/auth";
-import { doc, setDoc } from "../../lib/client-firestore.js";
+import { arrayUnion, doc, setDoc } from "../../lib/client-firestore.js";
+import { urlBase64ToUint8Array } from "../../lib/push.js";
+import { isSlackWebhook } from "../../lib/slack.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
@@ -51,6 +53,8 @@ export default function AccountPage() {
   const [usdRate, setUsdRate] = useState("");
   const [fxText, setFxText] = useState("");
   const [stallText, setStallText] = useState("");
+  const [pushMsg, setPushMsg] = useState("");
+  const [slackUrl, setSlackUrl] = useState("");
   const [fxLoaded, setFxLoaded] = useState({ json: "[]", asOf: "" });
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
@@ -90,6 +94,7 @@ export default function AccountPage() {
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
+        if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
         if (d.stallDays && typeof d.stallDays === "object") setStallText(Object.entries(sanitizeStallDays(d.stallDays)).map(([k, v]) => `${k} ${v}`).join(", "));
         if (Array.isArray(d.fxDisplay)) { setFxText(d.fxDisplay.map((x) => `${x.code} ${x.rate}`).join(", ")); setFxLoaded({ json: JSON.stringify(sanitizeFxDisplay(d.fxDisplay, d.currency || "USD")), asOf: d.fxDisplayUpdatedAt || "" }); }
         if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
@@ -314,6 +319,7 @@ export default function AccountPage() {
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
         fxDisplay: fx,
         stallDays: sanitizeStallDays(stallText),
+        slackWebhookUrl: isSlackWebhook(slackUrl) ? slackUrl.trim() : "",
         fxDisplayUpdatedAt: fxAsOf,
         paymentTermsDays: Math.min(180, Math.max(0, Math.round(Number(termsDays) || 0))) || 14,
         taxRate: Math.min(30, Math.max(0, Number(taxRate) || 0)),
@@ -469,6 +475,28 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Money settings <span className="text-xs font-normal text-gray-500">· makes your forecasts honest</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="slack">Slack alerts (optional)</label><input id="slack" type="text" className={field} value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." /><p className="text-xs text-gray-500 mt-1">Paste a Slack incoming-webhook URL. Hot replies, new enquiries, bookings, payments and accepted quotes are posted there. Leave blank to turn it off.</p></div>
+            <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <p className={label}>Pipeline alerts on this phone or browser</p>
+              {!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (
+                <p className="text-xs text-gray-500 mt-1">Not set up yet. Your administrator adds the push keys to the server (see DEPLOYMENT_GUIDE.md, "Push alerts"). Until then nothing is sent to your devices; alerts still appear on the CRM page.</p>
+              ) : (
+                <>
+                  <button type="button" onClick={async () => {
+                    setPushMsg("");
+                    try {
+                      if (!("serviceWorker" in navigator) || !("PushManager" in window)) { setPushMsg("This browser cannot receive push alerts."); return; }
+                      if ((await Notification.requestPermission()) !== "granted") { setPushMsg("Notifications were not allowed. Allow them in your browser settings to turn this on."); return; }
+                      const reg = await navigator.serviceWorker.ready;
+                      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) });
+                      await setDoc(doc(db, "users", user.uid, "settings", "push"), { subscriptions: arrayUnion(sub.toJSON()), updatedAt: new Date().toISOString() }, { merge: true });
+                      setPushMsg("Alerts are on for this device.");
+                    } catch (e) { setPushMsg("Could not turn alerts on here. Try again, or check the browser's notification settings."); }
+                  }} className="mt-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm">Turn on alerts for this device</button>
+                  {pushMsg ? <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{pushMsg}</p> : null}
+                </>
+              )}
+            </div>
             <div className="sm:col-span-2"><label className={label} htmlFor="stall">Days before a deal counts as stalled, by stage (optional)</label><input id="stall" type="text" className={field} value={stallText} onChange={(e) => setStallText(e.target.value)} placeholder="proposal 7, negotiation 14" /><p className="text-xs text-gray-500 mt-1">Stages: new, contacted, qualified, demo, proposal, negotiation. Each daily check flags a deal that has sat in one stage at least this many days. Blank keeps the defaults.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="fxd">Approximate amounts for customers in other currencies (optional)</label><input id="fxd" type="text" className={field} value={fxText} onChange={(e) => setFxText(e.target.value)} placeholder="e.g. EUR 0.92, GBP 0.79" /><p className="text-xs text-gray-500 mt-1">For each currency, how many you get for 1 {currency}. Up to five. Invoice emails and reminders show the approximate amount with these rates, as an indication only. Payment, the invoice and your books stay in {currency}. You type the rates; the app does not fetch them.</p></div>
             {currency !== "USD" && <div className="sm:col-span-2"><label className={label} htmlFor="fx">1 US dollar = how many {currency}? <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="fx" type="number" min="0" inputMode="decimal" className={field} value={usdRate} onChange={(e) => setUsdRate(e.target.value)} placeholder="e.g. 300" /><p className="text-xs text-gray-500 mt-1">The AI provider bills in US dollars. This converts that small cost so your ROI is in {currency}. Leave empty to count it 1:1.</p></div>}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { collection, doc, getDocs, limit, query, updateDoc, where } from "../../lib/client-firestore.js";
+import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "../../lib/client-firestore.js";
 
 const KIND_LABEL = { stall_alert: "Stalled", lost_revival: "Lost, worth a look", renewal_due: "Renewing soon" };
 
@@ -10,14 +10,13 @@ export default function PipelineAlerts({ db, uid }) {
 
   useEffect(() => {
     if (!db || !uid) return;
-    let alive = true;
-    getDocs(query(collection(db, "users", uid, "pipeline_alerts"), where("status", "==", "pending"), limit(200)))
-      .then((snap) => {
-        if (!alive) return;
-        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))));
-      })
-      .catch(() => {});
-    return () => { alive = false; };
+    // Live: an alert the daily run writes appears here without a reload, and a closed one disappears.
+    const unsub = onSnapshot(
+      query(collection(db, "users", uid, "pipeline_alerts"), where("status", "==", "pending"), limit(200)),
+      (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))),
+      () => {}
+    );
+    return () => unsub();
   }, [db, uid]);
 
   const markDone = async (id) => {

@@ -1,3 +1,41 @@
+## Pass 141 - Slack, mailbox checks and Meta Lead Ads
+
+- Slack alerts: the owner pastes a Slack incoming-webhook URL in Account. Hot replies, new enquiries, bookings requested or confirmed, payments and accepted quotes are posted there. No server key; a slow Slack gives up after five seconds.
+- Mailbox check: with HUNTER_API_KEY set, an address Hunter's verifier calls invalid or disposable is held before a draft is sent. Results are cached 30 days per address. Without the key, or if the check fails, nothing is held.
+- Meta Lead Ads: a webhook (/api/integrations/meta-leads) verifies Meta's signature with the app secret, reads the lead through the Graph API, and stores it in the inbox as new. Nothing is sent to the lead. Switched on by five server settings.
+- The integration status page lists Meta Lead Ads with its settings.
+- Tests run here: the new integration tests (7 checks), the full npm test chain (exit 0, 619 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Meta Lead Ads serves one Page and one owner per deployment.
+- The Hunter check uses credits: one per new address a month.
+- Slack, Hunter and Meta were not called live here.
+- Native Google Sheets, Shopify, HubSpot and Pipedrive sync is not built; outgoing webhooks cover pushing events to them.
+
+## Pass 140 - push alerts and hourly checks, switched by keys and one command
+
+- Push alerts for pipeline alerts. The owner taps "Turn on alerts for this device" on Account; the server sends a notification for new alerts once the three VAPID keys are set. Without them the Account page says it is not set up and nothing is sent.
+- The pipeline check is its own job (/api/cron/pipeline). It was inside the daily run; now it runs on whatever timetable is active, and sends the push for new alerts.
+- Two timetables: vercel.daily.json (Hobby, the default) and vercel.hourly.json (Pro). `npm run schedule:hourly` / `npm run schedule:daily` copy one into vercel.json; redeploy after.
+- The service worker shows the push and opens the CRM on tap.
+- The daily digest is sent once per local day (it used to be gated on the pipeline run; now it has its own flag).
+- Tests run here: push helpers and the no-keys path (4 checks), the timetables (4 checks), the full npm test chain, and a production Next.js build (see result below).
+
+Limits, plainly:
+- Push and hourly checks are off by default; they need keys or Vercel Pro.
+- Hourly checks read more data each hour.
+- Nothing has been sent through a real push service or to a real device here.
+- Not run here: the Account switch in a browser, a live push, and the hourly job on a Pro host.
+
+## Pass 139 - the alert list updates live
+
+- The pipeline alert list on the CRM page now listens to the alerts collection. A new alert appears, and a closed one disappears, without a reload.
+- Tests run here: the full npm test chain and a production Next.js build (see the result line below).
+
+Limits, plainly:
+- Live only while the CRM page is open. There is no push notification.
+- Not run here in a browser.
+
 ## Pass 138 - every cron job runs once a day (Vercel Hobby)
 
 - vercel.json had two hourly jobs: newsletters (15 * * * *) and untouched-deal reassignment (40 * * * *). Vercel's Hobby plan allows daily jobs only, so the deploy would fail. Both are now daily: newsletters 09:15 UTC, reassignment 05:40 UTC. The other four jobs were already daily.
