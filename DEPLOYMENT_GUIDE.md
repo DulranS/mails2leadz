@@ -164,3 +164,19 @@ Each switches on by itself. Without its key or URL nothing changes and nothing i
 - **Mailbox check before a send:** set `HUNTER_API_KEY` (the same key as company lookup). Addresses Hunter calls invalid or disposable are held; results are cached 30 days.
 - **Meta Lead Ads:** set `META_APP_SECRET` (the app secret), `META_VERIFY_TOKEN` (any string you choose), `META_PAGE_ACCESS_TOKEN` (the Page token), `META_PAGE_ID`, and `META_OWNER_UID` (the owner's Firebase user id). In Meta's app settings, point the Page's leadgen webhook at `https://YOUR-APP/api/integrations/meta-leads` with the verify token. Redeploy after setting the variables.
 
+## Google Ads lead forms and GA4 conversions
+
+- **Google Ads lead forms:** set `GOOGLE_ADS_LEAD_KEY` (a secret you choose) and `GOOGLE_ADS_OWNER_UID` (the owner's Firebase user id). In the lead form's webhook settings, point the URL at `https://YOUR-APP/api/integrations/google-ads-leads` and use the same key. Redeploy after setting the variables.
+- **GA4 conversions:** set `GA4_MEASUREMENT_ID` (G-XXXX) and `GA4_API_SECRET` (created in GA4 under Admin, Data streams, Measurement Protocol). In GA4, mark `purchase`, `generate_lead`, `quote_accepted` and `booking_confirmed` as key events, then import them into Google Ads.
+
+## Optional switches: each one turns on with its keys
+
+Turn each on in Account, under "Switches for optional features". It runs only when it is on there and the server has its keys.
+
+- **Deal enrichment (Apollo):** set `APOLLO_API_KEY`. Switch: "Enrich deals". Up to 20 deals a run.
+- **TikTok sign-up events:** set `TIKTOK_PIXEL_CODE` and `TIKTOK_EVENTS_TOKEN`. Switch: "Send confirmed sign-ups to TikTok", plus the data-sharing box.
+- **Claim hold:** no keys. On by default. Drafts with price, result, guarantee, urgency or superlative wording wait for your review.
+- **Autosend:** off by default. After you switch it on, press "I reviewed the first batch: approve" once. Nothing is sent before that.
+
+Before switching on Apollo or TikTok, check their current API documentation: the endpoints and payloads here follow them as they were when this was written.
+

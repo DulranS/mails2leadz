@@ -15,6 +15,8 @@ import { featureAllowed } from '../../../lib/tenant.js';
 import { defaultCtx, FinderError } from '../../../lib/server/lead-finder-io.js';
 import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, refreshAutoSearches, limits } from '../../../lib/server/lead-finder-job.js';
 import { needsAutoRefresh } from '../../../lib/lead-finder.js';
+import { buyListGate } from '../../../lib/consent-rules.js';
+import { mapImportRows } from '../../../lib/lead-import.js';
 import { suggestTargets } from '../../../lib/server/auto-targets.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../lib/draft-queue.js';
@@ -71,6 +73,9 @@ export async function POST(request) {
     if (action === 'import-list') {
       const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
       if (!rows.length) return fail(400, 'The list is empty.', 'BAD_LIST');
+      // A bought or borrowed list needs its source and lawful basis; personal addresses need consent (lib/consent-rules.js).
+      const listCheck = buyListGate({ source: String(body.listSource || '').trim().slice(0, 120), lawfulBasis: String(body.lawfulBasis || '') }, mapImportRows(rows).candidates);
+      if (!listCheck.ok) return fail(400, listCheck.reasons.join(' '), 'LIST_BLOCKED');
       await startImport(db, uid, { label: String(body.label || '').slice(0, 80), rows });
       return ok(await overview(db, uid));
     }

@@ -1,3 +1,80 @@
+## Pass 147 - quote economics (estimated hours and the rate a quote pays)
+
+- A quote can carry optional estimated hours (0 to 10,000). The quote list shows the rate it pays per hour, and flags it when it is below the owner's hourly rate.
+- Tests run here: the quote economics and validation tests (4 checks), the full npm test chain (exit 0, 643 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- The rate uses the estimate, not logged hours. There is no time-entry log yet.
+- Project management, HR records, purchase orders and multi-location stock are not built. They support operations rather than sales in this scope.
+- Not run here in a browser.
+
+## Pass 146 - on/off switches for the optional features
+
+- Account has one switch per optional feature. Each runs only when the owner turns it on and the server has its keys.
+- Deal enrichment through Apollo (APOLLO_API_KEY): job title and company size on up to 20 deals a run.
+- TikTok sign-up events, hashed, with the same data-sharing box as Meta (TIKTOK_PIXEL_CODE, TIKTOK_EVENTS_TOKEN).
+- Claim hold, on by default: drafts with price, result, guarantee, urgency or superlative wording are held for review.
+- Autosend requires the owner's first-batch approval before it sends anything.
+- Tests run here: the switch, claim-check, Apollo and TikTok tests (6 checks), the full npm test chain, and a production Next.js build (see result).
+
+Limits, plainly:
+- The claim check is rule-based and never approves a draft.
+- The first-batch approval is per account, not per campaign.
+- Apollo and TikTok endpoints follow their documentation as known at writing; verify before switching on.
+- Google Customer Match is not built: it needs OAuth and developer-token approval.
+- Not run here against Apollo, TikTok, or a live autosend.
+
+## Pass 145 - confirmed sign-ups to Meta, hashed
+
+- Each run sends the double opt-in sign-ups confirmed since the last run to Meta as hashed Lead events. Unsubscribed and suppressed addresses are never sent.
+- Off unless the server has META_DATASET_ID and META_CAPI_TOKEN, and the owner ticks the data-sharing box in Account (the tick is recorded; the app does not verify the owner's right to share).
+- Tests run here: the Meta selection and body tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0).
+
+Decisions recorded (not built yet): autonomous outreach is off by default, with the owner approving the first batch of each campaign.
+
+Limits, plainly:
+- Meta only; Google and TikTok are not built.
+- Not run here against Meta.
+- Lead events carry no value.
+
+## Pass 144 - bought-list import asks for source and lawful basis
+
+- The lead-finder CSV import asks where the list came from and the lawful basis (business contacts, consent, or an existing contract). Both are required; personal addresses need consent.
+- The server checks the same rules on the import route before any row is queued. A blocked import returns the reasons.
+- Consent rules moved to lib/consent-rules.js (pure, safe in the browser). Hashing stays in lib/consent-guard.js.
+- Tests run here: the full npm test chain and a production Next.js build (see result).
+
+Limits, plainly:
+- The check covers the import path. A lead added any other way is not checked.
+- The source and basis are kept with the import but not shown back afterwards.
+- Automatic hashed audience sync is not built; the signups page already exports hashed audiences for manual upload.
+- Not run here in a browser.
+
+## Pass 143 - consent guards for bought lists and hashed sync
+
+- A bought list is stored only when its source and lawful basis are recorded. Personal addresses in a bought list need consent as the basis. Enforced in the lead store.
+- Hashed sync helpers: SHA-256 of the trimmed lowercase email; only customers with recorded marketing consent, a consent source and no withdrawal; a Meta Conversions API payload that carries hashes only.
+- Tests run here: the consent-guard tests (5 checks), the full npm test chain (exit 0, 630 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- No screen collects the source and basis yet, so the bought-list path is not reachable from the app.
+- The hashed-sync helpers send nothing. The sender, its schedule and the owner's data-sharing confirmation are not built.
+- Autonomous outreach is not built; it awaits your decision on the default.
+- Not run here against any platform.
+
+## Pass 142 - Google Ads lead forms and GA4 conversions
+
+- Google Ads lead-form submissions are stored in the inbox as new. The request is checked against a shared key before anything is read. Switched on by two server settings.
+- Payments, enquiries, accepted quotes and confirmed bookings are sent to GA4 (Measurement Protocol) as purchase, generate_lead, quote_accepted and booking_confirmed. Only the event name, value and currency are sent: no customer data. Switched on by two server settings.
+- The integration status page lists both.
+- Tests run here: the new tests (6 checks), the full npm test chain (exit 0, 625 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Google Ads lead forms serve one owner per deployment.
+- A failed GA4 send is not retried.
+- Not run here against Google or GA4.
+- Server-side conversion APIs with hashed customer data (Meta, TikTok, Google Ads) are consciously left out, as audience sync is.
+
 ## Pass 141 - Slack, mailbox checks and Meta Lead Ads
 
 - Slack alerts: the owner pastes a Slack incoming-webhook URL in Account. Hot replies, new enquiries, bookings requested or confirmed, payments and accepted quotes are posted there. No server key; a slow Slack gives up after five seconds.

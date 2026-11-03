@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, doc, getDocs, limit, query, updateDoc, where } from "../../lib/client-firestore.js";
 import { offeredCurrencies } from "../../lib/currency.js";
+import { quoteEconomics, quoteEconomicsLine } from "../../lib/quote-economics.js";
 import { db } from "../../lib/firebase-client.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
@@ -15,7 +16,7 @@ const ghost = `${btn} border border-gray-300 dark:border-gray-600 text-gray-700 
 const solid = `${btn} bg-teal-600 hover:bg-teal-500 text-white`;
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const blankLine = () => ({ description: "", qty: "1", unitPrice: "" });
-const blankForm = () => ({ title: "", email: "", customerName: "", currency: "", lines: [blankLine()], taxPercent: "", validUntil: "", terms: "", schedule: "" });
+const blankForm = () => ({ title: "", email: "", customerName: "", currency: "", lines: [blankLine()], taxPercent: "", validUntil: "", terms: "", schedule: "", estimatedHours: "" });
 const money = (n, cur) => `${cur ? `${cur} ` : ""}${Number(n || 0).toFixed(2)}`;
 
 export default function QuotesPage() {
@@ -169,6 +170,7 @@ export default function QuotesPage() {
         <p className="text-sm font-semibold text-gray-900 dark:text-white">{money(q.total, q.currency)}</p>
       </div>
       {q.validUntil && <p className="text-xs text-gray-500 dark:text-gray-400">Valid until {q.validUntil}</p>}
+      {q.estimatedHours ? <p className="text-xs text-gray-600 dark:text-gray-300">{quoteEconomicsLine(quoteEconomics({ total: q.total, estimatedHours: q.estimatedHours }))}</p> : null}
       <div className="flex flex-wrap gap-2 mt-2">{children}</div>
     </li>
   );
@@ -352,6 +354,7 @@ export default function QuotesPage() {
               <label className="text-sm text-gray-700 dark:text-gray-200">Tax % (optional)<input className={field} inputMode="decimal" value={form.taxPercent} onChange={(e) => setForm({ ...form, taxPercent: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Valid until (optional)<input className={field} type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></label>
             </div>
+            <label className="block text-sm text-gray-700 dark:text-gray-200">Estimated hours for the work (optional: shows the rate this quote pays per hour)<input className={field} type="number" min="0" step="any" value={form.estimatedHours} onChange={(e) => setForm({ ...form, estimatedHours: e.target.value })} /></label>
             <label className="block text-sm text-gray-700 dark:text-gray-200">Payment schedule (optional: milestones that add up to 100%)<input className={field} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder="Deposit:30, Completion:70" /></label>
             <label className="block text-sm text-gray-700 dark:text-gray-200">Terms (optional)<textarea className={field} rows={2} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} placeholder="Payment within 7 days of acceptance." /></label>
             <button type="submit" disabled={busy || loading} className={solid}>{busy ? "Saving..." : "Create quote"}</button>

@@ -6,6 +6,7 @@ import { signOut, deleteUser } from "firebase/auth";
 import { arrayUnion, doc, setDoc } from "../../lib/client-firestore.js";
 import { urlBase64ToUint8Array } from "../../lib/push.js";
 import { isSlackWebhook } from "../../lib/slack.js";
+import { SWITCHES, sanitizeSwitches } from "../../lib/switches.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
@@ -55,6 +56,9 @@ export default function AccountPage() {
   const [stallText, setStallText] = useState("");
   const [pushMsg, setPushMsg] = useState("");
   const [slackUrl, setSlackUrl] = useState("");
+  const [dataShare, setDataShare] = useState(false);
+  const [switches, setSwitches] = useState({ enrichDeals: false, tiktokSync: false, holdClaimRisk: true });
+  const [approvalMsg, setApprovalMsg] = useState("");
   const [fxLoaded, setFxLoaded] = useState({ json: "[]", asOf: "" });
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
@@ -95,6 +99,8 @@ export default function AccountPage() {
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
+        if (typeof d.dataSharingConfirmed === "boolean") setDataShare(d.dataSharingConfirmed);
+        if (d.switches && typeof d.switches === "object") setSwitches((prev) => ({ ...prev, ...sanitizeSwitches(d.switches) }));
         if (d.stallDays && typeof d.stallDays === "object") setStallText(Object.entries(sanitizeStallDays(d.stallDays)).map(([k, v]) => `${k} ${v}`).join(", "));
         if (Array.isArray(d.fxDisplay)) { setFxText(d.fxDisplay.map((x) => `${x.code} ${x.rate}`).join(", ")); setFxLoaded({ json: JSON.stringify(sanitizeFxDisplay(d.fxDisplay, d.currency || "USD")), asOf: d.fxDisplayUpdatedAt || "" }); }
         if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
@@ -320,6 +326,8 @@ export default function AccountPage() {
         fxDisplay: fx,
         stallDays: sanitizeStallDays(stallText),
         slackWebhookUrl: isSlackWebhook(slackUrl) ? slackUrl.trim() : "",
+        dataSharingConfirmed: !!dataShare,
+        switches: sanitizeSwitches(switches),
         fxDisplayUpdatedAt: fxAsOf,
         paymentTermsDays: Math.min(180, Math.max(0, Math.round(Number(termsDays) || 0))) || 14,
         taxRate: Math.min(30, Math.max(0, Number(taxRate) || 0)),
@@ -475,7 +483,31 @@ export default function AccountPage() {
           <h2 className="font-semibold text-gray-900 dark:text-white">Money settings <span className="text-xs font-normal text-gray-500">· makes your forecasts honest</span></h2>
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
+            <div className="sm:col-span-2"><label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" className="mt-1" checked={dataShare} onChange={(e) => setDataShare(e.target.checked)} /><span>Send new confirmed sign-ups to Meta as hashed Lead events, to improve your ads. Only people who confirmed their address are sent. I confirm I may share these contacts with Meta under my privacy notice and Meta's terms. Requires the Meta keys on the server.</span></label></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="slack">Slack alerts (optional)</label><input id="slack" type="text" className={field} value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." /><p className="text-xs text-gray-500 mt-1">Paste a Slack incoming-webhook URL. Hot replies, new enquiries, bookings, payments and accepted quotes are posted there. Leave blank to turn it off.</p></div>
+            <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <p className={label}>Switches for optional features</p>
+              <p className="text-xs text-gray-500 mt-1">Each one runs only when you turn it on here and the server has its keys (DEPLOYMENT_GUIDE.md). Nothing runs by default.</p>
+              <div className="mt-2 space-y-2">
+                {Object.entries(SWITCHES).map(([id, def]) => (
+                  <label key={id} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <input type="checkbox" className="mt-1" checked={!!switches[id]} onChange={(e) => setSwitches({ ...switches, [id]: e.target.checked })} />
+                    <span>{def.label}{def.needs.length ? <span className="block text-xs text-gray-500">Needs server keys: {def.needs.join(", ")}</span> : null}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <p className={label}>Autosend: first-batch approval</p>
+              <p className="text-xs text-gray-500 mt-1">Autosend sends nothing until you approve the first batch. Review the drafts in the queue first, then approve here.</p>
+              <button type="button" onClick={async () => {
+                try {
+                  await setDoc(doc(db, "users", user.uid, "settings", "autopilot"), { autoSendApprovedAt: new Date().toISOString() }, { merge: true });
+                  setApprovalMsg("Approved. Autosend can now send within your rules.");
+                } catch (e) { setApprovalMsg("Could not save the approval. Try again."); }
+              }} className="mt-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm">I reviewed the first batch: approve</button>
+              {approvalMsg ? <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{approvalMsg}</p> : null}
+            </div>
             <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <p className={label}>Pipeline alerts on this phone or browser</p>
               {!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ? (

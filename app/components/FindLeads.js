@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Papa from "papaparse";
 import { mapImportRows, detectColumns, importLabel, IMPORT_MAX_ROWS } from "../../lib/lead-import.js";
+import { buyListGate } from "../../lib/consent-rules.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -62,12 +63,12 @@ export function useLeadFinder({ enabled, onAdded }) {
   }, [loop, running]);
 
   // The owner's own scraped list (Google Maps extension export, purchased list, CRM export): same website reading and scoring, no map request.
-  const importList = useCallback(async (label, rows) => {
+  const importList = useCallback(async (label, rows, meta = {}) => {
     if (running) return false;
     setError("");
     try {
       setRunning(true);
-      merge(await call("POST", { action: "import-list", label, rows }));
+      merge(await call("POST", { action: "import-list", label, rows, listSource: meta.listSource || "", lawfulBasis: meta.lawfulBasis || "" }));
     } catch (e) { setError(e.message); setRunning(false); return false; }
     setRunning(false);
     await loop();
@@ -107,6 +108,8 @@ const pct = (job) => (job?.total ? Math.min(100, Math.round((job.done / job.tota
 export function FindLeadsPanel({ finder, place, setPlace }) {
   const [what, setWhat] = useState("");
   const [list, setList] = useState(null); // { name, rows, preview } once a file has been read in the browser
+  const [listSource, setListSource] = useState("");
+  const [listBasis, setListBasis] = useState("");
   const [listError, setListError] = useState("");
   const { job, settings, today, running, error } = finder;
   const live = job.status === "running";
@@ -135,7 +138,11 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
       error: () => setListError("That file could not be read. Save it as CSV (UTF-8) and try again."),
     });
   };
-  const runImport = async () => { if (await finder.importList(list.name, list.rows)) setList(null); };
+  const runImport = async () => {
+    const check = buyListGate({ source: listSource, lawfulBasis: listBasis }, list.preview.candidates || []);
+    if (!check.ok) { setListError(check.reasons.join(" ")); return; }
+    if (await finder.importList(list.name, list.rows, { listSource, lawfulBasis: listBasis })) setList(null);
+  };
   const removeAt = (i) => finder.saveSettings({ enabled: settings.enabled, searches: settings.searches.filter((_, x) => x !== i) });
 
   return (
@@ -197,6 +204,11 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
       <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Already have a list? Import it</h3>
         <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Scraped Google Maps with an extension, bought a list, or exporting from a CRM? Drop the CSV here. Each website is read for an email and phone, every business is scored, and the good ones land in your inbox. The map is not used, so this does not touch your daily search allowance. Up to {IMPORT_MAX_ROWS} businesses per file.</p>
+        <div className="grid sm:grid-cols-2 gap-2 mt-2">
+          <label className="text-sm text-gray-700 dark:text-gray-200">Where did this list come from?<input value={listSource} onChange={(e) => setListSource(e.target.value)} maxLength={120} placeholder="e.g. Trade show 2026 delegate list" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Lawful basis for using it<select value={listBasis} onChange={(e) => setListBasis(e.target.value)} className={input}><option value="">Choose one</option><option value="legitimate_interests_b2b">Business contacts (legitimate interests, B2B)</option><option value="consent">The people consented</option><option value="contract">Existing contract with them</option></select></label>
+        </div>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Both are required before a list is imported and are kept with it. Personal addresses (gmail, yahoo and similar) need "The people consented".</p>
         <label className={`${btn} inline-flex items-center border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 mt-2 cursor-pointer ${live || running ? "opacity-50 pointer-events-none" : ""}`}>
           Choose a CSV file
           <input type="file" accept=".csv,text/csv" className="sr-only" onChange={pickFile} disabled={live || running} />

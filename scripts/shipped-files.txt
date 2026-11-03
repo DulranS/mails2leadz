@@ -59,6 +59,7 @@ app/api/inbound/attach/route.js
 app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
+app/api/integrations/google-ads-leads/route.js
 app/api/integrations/meta-leads/route.js
 app/api/integrations/route.js
 app/api/integrations/secrets/route.js
@@ -232,6 +233,7 @@ lib/angles.js
 lib/api-retry.js
 lib/api-writes.js
 lib/apiResponse.js
+lib/apollo.js
 lib/app-routes.js
 lib/assignment.js
 lib/attribution.js
@@ -251,11 +253,14 @@ lib/capacity.js
 lib/cash-cycle.js
 lib/cashflow.js
 lib/channel-drafts.js
+lib/claim-risk.js
 lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js
 lib/config.js
 lib/connection-status.js
+lib/consent-guard.js
+lib/consent-rules.js
 lib/content.js
 lib/contracts.js
 lib/conversations.js
@@ -282,8 +287,10 @@ lib/firebase-client.js
 lib/firebase-operations.js
 lib/firebase.js
 lib/first-email-batch.js
+lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js
+lib/google-leads.js
 lib/graceful-degradation.js
 lib/httpClient.js
 lib/inbound.js
@@ -302,6 +309,7 @@ lib/logger.js
 lib/mailbox-verify.js
 lib/manual-stock.js
 lib/marketing.js
+lib/meta-capi.js
 lib/meta-leads.js
 lib/money.js
 lib/next-actions.js
@@ -326,6 +334,7 @@ lib/promo-tx.js
 lib/promo.js
 lib/push.js
 lib/quote-core.js
+lib/quote-economics.js
 lib/quotes.js
 lib/rate-limit.js
 lib/raw-email.js
@@ -388,9 +397,11 @@ lib/server/deal-watch-job.js
 lib/server/domain-mx.js
 lib/server/draft-core.js
 lib/server/easypost.js
+lib/server/enrich-deals.js
 lib/server/enrich.js
 lib/server/erase-contact.js
 lib/server/external-busy.js
+lib/server/ga4.js
 lib/server/gift-card-job.js
 lib/server/gmail-offline.js
 lib/server/googleGmailClient.js
@@ -405,6 +416,7 @@ lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
 lib/server/mailbox-verify.js
+lib/server/meta-capi-sync.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
 lib/server/open-track.js
@@ -439,6 +451,7 @@ lib/server/team-store.js
 lib/server/template-vars.js
 lib/server/tenant-guard.js
 lib/server/tenant.js
+lib/server/tiktok-sync.js
 lib/server/token-vault.js
 lib/server/twilio-account.js
 lib/server/tx.js
@@ -465,11 +478,13 @@ lib/statement-html.js
 lib/statement-token.js
 lib/statement.js
 lib/stock.js
+lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js
 lib/tax-rates.js
 lib/team.js
 lib/tenant.js
+lib/tiktok-sync.js
 lib/trends.js
 lib/validation.js
 lib/weekly-kpi.js
