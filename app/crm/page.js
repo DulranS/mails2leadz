@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { offeredCurrencies } from "../../lib/currency.js";
 import PipelineAlerts from "../components/PipelineAlerts.js";
+import LiveVoice from "../components/LiveVoice.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -438,6 +439,7 @@ export default function CRMPage() {
       title="CRM & Deals"
       subtitle="Manage leads, deals, and customer interactions"
     >
+      <LiveVoice />
       <PipelineAlerts db={db} uid={user.uid} />
       <CRM
         leads={data.leads}

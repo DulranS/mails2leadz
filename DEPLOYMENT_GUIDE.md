@@ -192,3 +192,12 @@ Before switching on Apollo or TikTok, check their current API documentation: the
 
 - Set `LINKEDIN_LEAD_KEY` (a secret you choose) and `FORMS_OWNER_UID`. In the lead-gen form's webhook settings, point the URL at `https://YOUR-APP/api/integrations/linkedin-leads?key=YOUR-KEY`. Check the payload against LinkedIn's current docs first.
 
+## Google Ads Customer Match and live voice
+
+- **Google Customer Match:** set GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET and GOOGLE_ADS_REFRESH_TOKEN (from an OAuth consent for the Google Ads API). Optional: GOOGLE_ADS_LOGIN_CUSTOMER_ID for a manager account. Then turn on Google Ads Customer Match in Account and tick the data-sharing box.
+- **Live voice:** set OPENAI_API_KEY, optionally REALTIME_MODEL. Then turn on Live voice in Account, and use Start live voice on the CRM page.
+
+## Commission
+
+- Set the commission percentage in Account. It appears in the monthly digest on the first of each month.
+

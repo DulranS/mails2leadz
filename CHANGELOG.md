@@ -1,4 +1,23 @@
-## Pass 153 - setup status and a .env template\n\n- `npm run setup:status` lists every optional feature as on, partly set or off, with the keys each one still needs.\n- `npm run setup:env` writes .env.example with each key once, grouped by feature.\n- The AI agents already in the app are recorded in GAP_STATUS.md. No new agent that sends without review is added.\n- Tests run here: the setup-status tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0).\n\n## Pass 152 - LinkedIn lead-gen forms
+## Pass 155 - commission on won deals and the cross-industry framework mapping
+
+- Commission: set a percentage in Account. The monthly digest, on the first of the month, lists each salesperson's deals won last month with their value and commission. Deals with no owner are shown as Unassigned.
+- Google Ads Customer Match and browser live voice (Pass 154) are recorded in the register, with their setup steps in DEPLOYMENT_GUIDE.md.
+- The register now maps the cross-industry framework's 35 areas and routes to market, with a status for each.
+- The register and changelog had been damaged by an escaping error in the Pass 153 write. Both are repaired; the earlier sections are intact.
+- Tests run here: the commission tests (3 checks), the full npm test chain, and a production Next.js build.
+
+Limits, plainly:
+- Commission is a single percentage on value. No tiers, splits or clawbacks.
+- Nothing has run against live deals or a live digest.
+
+## Pass 153 - setup status and a .env template
+
+- `npm run setup:status` lists every optional feature as on, partly set or off, with the keys each one still needs.
+- `npm run setup:env` writes .env.example with each key once, grouped by feature.
+- The AI agents already in the app are recorded in GAP_STATUS.md. No new agent that sends without review is added.
+- Tests run here: the setup-status tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0).
+
+## Pass 152 - LinkedIn lead-gen forms
 
 - LinkedIn lead-gen submissions are stored in the inbox as new, checked against a key in the webhook URL before anything is read.
 - Name, email, phone and company are mapped by question text.

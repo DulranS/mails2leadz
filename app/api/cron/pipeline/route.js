@@ -10,6 +10,7 @@ import { runPipelineForUser } from '../../../../lib/server/pipeline-run.js';
 import { syncConfirmedToMeta } from '../../../../lib/server/meta-capi-sync.js';
 import { syncConfirmedToTiktok } from '../../../../lib/server/tiktok-sync.js';
 import { enrichDealsForUser } from '../../../../lib/server/enrich-deals.js';
+import { syncConfirmedToGoogle } from '../../../../lib/server/google-customer-match.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
@@ -39,6 +40,8 @@ export async function GET(request) {
       if (meta.sent) summary.metaSent = (summary.metaSent || 0) + meta.sent;
       const tt = await syncConfirmedToTiktok(db, uid, { now });
       if (tt.sent) summary.tiktokSent = (summary.tiktokSent || 0) + tt.sent;
+      const gg = await syncConfirmedToGoogle(db, uid, { now });
+      if (gg.sent) summary.googleSent = (summary.googleSent || 0) + gg.sent;
       const en = await enrichDealsForUser(db, uid, { now: new Date(now) });
       if (en.enriched) summary.enriched = (summary.enriched || 0) + en.enriched;
       summary.owners++;

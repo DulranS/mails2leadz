@@ -56,6 +56,7 @@ export default function AccountPage() {
   const [stallText, setStallText] = useState("");
   const [pushMsg, setPushMsg] = useState("");
   const [slackUrl, setSlackUrl] = useState("");
+  const [commissionPct, setCommissionPct] = useState(0);
   const [dataShare, setDataShare] = useState(false);
   const [switches, setSwitches] = useState({ enrichDeals: false, tiktokSync: false, holdClaimRisk: true });
   const [approvalMsg, setApprovalMsg] = useState("");
@@ -100,6 +101,7 @@ export default function AccountPage() {
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
+        if (Number(d.commissionPct) > 0) setCommissionPct(Number(d.commissionPct));
         if (typeof d.dataSharingConfirmed === "boolean") setDataShare(d.dataSharingConfirmed);
         if (d.switches && typeof d.switches === "object") setSwitches((prev) => ({ ...prev, ...sanitizeSwitches(d.switches) }));
         if (Array.isArray(d.autoSendApprovedAngles)) setAngleText(d.autoSendApprovedAngles.join(", "));
@@ -328,6 +330,7 @@ export default function AccountPage() {
         fxDisplay: fx,
         stallDays: sanitizeStallDays(stallText),
         slackWebhookUrl: isSlackWebhook(slackUrl) ? slackUrl.trim() : "",
+        commissionPct: Math.min(100, Math.max(0, Number(commissionPct) || 0)),
         dataSharingConfirmed: !!dataShare,
         switches: sanitizeSwitches(switches),
         fxDisplayUpdatedAt: fxAsOf,
@@ -486,6 +489,7 @@ export default function AccountPage() {
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
             <div className="sm:col-span-2"><label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" className="mt-1" checked={dataShare} onChange={(e) => setDataShare(e.target.checked)} /><span>Send new confirmed sign-ups to Meta as hashed Lead events, to improve your ads. Only people who confirmed their address are sent. I confirm I may share these contacts with Meta under my privacy notice and Meta's terms. Requires the Meta keys on the server.</span></label></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="commission">Commission on won deals, percent (optional)</label><input id="commission" type="number" min="0" max="100" step="0.5" className={field} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} /><p className="text-xs text-gray-500 mt-1">Shown in the monthly digest per salesperson, from deals won in the month. Blank or 0 turns it off.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="slack">Slack alerts (optional)</label><input id="slack" type="text" className={field} value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." /><p className="text-xs text-gray-500 mt-1">Paste a Slack incoming-webhook URL. Hot replies, new enquiries, bookings, payments and accepted quotes are posted there. Leave blank to turn it off.</p></div>
             <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <p className={label}>Switches for optional features</p>

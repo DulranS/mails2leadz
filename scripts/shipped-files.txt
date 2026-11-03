@@ -136,6 +136,7 @@ app/api/voice/call/route.js
 app/api/voice/calls/route.js
 app/api/voice/consent/route.js
 app/api/voice/inbound/route.js
+app/api/voice/live-session/route.js
 app/api/voice/recording-audio/route.js
 app/api/voice/recording/route.js
 app/api/voice/turn/route.js
@@ -168,6 +169,7 @@ app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
 app/components/FindLeads.js
 app/components/LegalPage.js
+app/components/LiveVoice.js
 app/components/MarketingSpendPanel.js
 app/components/MemberAccount.js
 app/components/OpsStatusCard.js
@@ -261,6 +263,7 @@ lib/claim-risk.js
 lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js
+lib/commissions.js
 lib/config.js
 lib/connection-status.js
 lib/consent-guard.js
@@ -295,6 +298,7 @@ lib/form-webhooks.js
 lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js
+lib/google-customer-match.js
 lib/google-leads.js
 lib/graceful-degradation.js
 lib/httpClient.js
@@ -344,6 +348,7 @@ lib/quote-economics.js
 lib/quotes.js
 lib/rate-limit.js
 lib/raw-email.js
+lib/realtime-voice.js
 lib/recovery.js
 lib/recurring.js
 lib/redis.js
@@ -410,6 +415,7 @@ lib/server/external-busy.js
 lib/server/ga4.js
 lib/server/gift-card-job.js
 lib/server/gmail-offline.js
+lib/server/google-customer-match.js
 lib/server/googleGmailClient.js
 lib/server/ids.js
 lib/server/inbound-messages.js
@@ -421,6 +427,7 @@ lib/server/invoice-number.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
+lib/server/live-voice.js
 lib/server/mailbox-verify.js
 lib/server/meta-capi-sync.js
 lib/server/milestones.js
