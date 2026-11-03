@@ -170,6 +170,8 @@ export default function BusinessValuePage() {
       const costMonth = Number(monthDoc?.costUsd) || 0;
       const cost90 = costMonth + costOf(aiPrev1) + costOf(aiPrev2);
       // Don't nag about people who already answered: a reply ends the follow-up sequence.
+      const timeSnap = await getDocs(query(collection(db, "users", user.uid, "time_entries"), limit(2000))).catch(() => null);
+      const timeEntries = timeSnap ? timeSnap.docs.map((d) => d.data()) : [];
       const dueFollowUps = taskSnap.docs.filter((d) => {
         const x = d.data();
         if (repliedEmails.has(String(x.leadEmail || "").toLowerCase())) return false;
@@ -179,7 +181,7 @@ export default function BusinessValuePage() {
       const contentInfo = contentActionInfo(contentSnap.docs.map((d) => d.data()), localDateStr());
       const next = {
         inbox: { hotWithEmail }, content: contentInfo,
-        deals, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
+        deals, timeEntries, invoices: invSnap.docs.map((d) => ({ _id: d.id, ...d.data() })), emailRows, unconverted: [...unconvertedMap.values()], dueFollowUps, outreach: { sent, replied },
         settings: settingsSnap?.exists?.() ? settingsSnap.data() : {},
         autopilot: autopilotSnap?.exists?.() ? autopilotSnap.data() : null,
         team: teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [],
@@ -228,7 +230,7 @@ export default function BusinessValuePage() {
   const stock = useMemo(() => computeStock({ items: raw.stock, capitalBudget: raw.settings?.capitalBudget }), [raw]);
   const partnerState = useMemo(() => computePartners({ partners: raw.partners, deals: m.deals, paidInvoices: billing.rows.filter((r) => r.state === "paid"), payouts: raw.partnerPayouts }), [raw, m, billing]);
   const cycle = useMemo(() => computeCashCycle({ avgDaysToPay: billing.avgDaysToPay, avgDaysToSell: stock.sold.avgDaysToSell, avgDaysToPaySuppliers: supplierDays(raw.bills).avg }), [billing, stock, raw]);
-  const profit = useMemo(() => computeProfit({ deals: raw.deals, settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock), payrollMonthly, loanInterestMonthly: loanSummary.totals.interestMonthly, partnerPayouts90: partnerState.totals.payouts90, otherIncomeMonthly: loanSummary.totals.otherIncomeMonthly }), [raw, payrollMonthly, loanSummary, partnerState]);
+  const profit = useMemo(() => computeProfit({ deals: raw.deals, loggedHoursByEmail: loggedByEmail(raw.timeEntries || []), settings: raw.settings, aiCostUsd: raw.ai.cost90, stockSales: stockSalesSince(raw.stock), payrollMonthly, loanInterestMonthly: loanSummary.totals.interestMonthly, partnerPayouts90: partnerState.totals.payouts90, otherIncomeMonthly: loanSummary.totals.otherIncomeMonthly }), [raw, payrollMonthly, loanSummary, partnerState]);
   const unitEco = useMemo(() => computeUnitEconomics({ roi: m.roi, recurring: rec, marginPct: profit.marginPct }), [m, rec, profit]);
   const profitNext30 = useMemo(() => forecastProfit({ profit, expectedRevenue: outlook.horizons?.[0]?.total, days: 30 }), [profit, outlook]);
   const customers = useMemo(() => computeCustomers({ deals: raw.deals, invoices: raw.invoices, avgDealValue: m.settings.avgDealValue }), [raw, m]);

@@ -16,15 +16,15 @@ t('the effective rate is the total over the estimated hours, flagged below the o
   const e = quoteEconomics({ total: 600, estimatedHours: 8, hourlyRate: 100 });
   assert.equal(e.effectiveRate, 75);
   assert.equal(e.belowRate, true);
-  assert.match(quoteEconomicsLine(e), /About 75\.00 an hour over 8 estimated hours: under your 100\.00 an hour/);
+  assert.match(quoteEconomicsLine(e), /Estimate: about 75\.00 an hour over 8 hours, under your 100\.00 an hour/);
   const ok = quoteEconomics({ total: 600, estimatedHours: 4, hourlyRate: 100 });
   assert.equal(ok.belowRate, false);
-  assert.match(quoteEconomicsLine(ok), /at or above your 100\.00/);
+  assert.match(quoteEconomicsLine(ok), /Estimate: about 150\.00 an hour over 4 hours, at or above your 100\.00/);
 });
 
 t('without an hourly rate the line states the rate only', () => {
   assert.equal(quoteEconomics({ total: 600, estimatedHours: 6 }).targetRate, null);
-  assert.equal(quoteEconomicsLine(quoteEconomics({ total: 600, estimatedHours: 6 })), 'About 100.00 an hour over 6 estimated hours.');
+  assert.equal(quoteEconomicsLine(quoteEconomics({ total: 600, estimatedHours: 6 })), 'Estimate: about 100.00 an hour over 6 hours.');
 });
 
 t('the quote keeps optional estimated hours and refuses nonsense', () => {

@@ -2,7 +2,8 @@
 // Quotes: write a quote, send it from your own mail app, follow up when there is no answer, and see what was accepted.
 // Accepting a quote moves its deal to Won, and the nightly routine invoices it (see lib/quote-core.js and lib/billing-automation.js).
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, doc, getDocs, limit, query, updateDoc, where } from "../../lib/client-firestore.js";
+import { addDoc, collection, doc, getDocs, limit, query, updateDoc, where } from "../../lib/client-firestore.js";
+import { sanitizeTimeEntry, loggedHoursFor } from "../../lib/time-log.js";
 import { offeredCurrencies } from "../../lib/currency.js";
 import { quoteEconomics, quoteEconomicsLine } from "../../lib/quote-economics.js";
 import { db } from "../../lib/firebase-client.js";
@@ -23,6 +24,9 @@ export default function QuotesPage() {
   const { user, ready } = useAuthUser();
   const [items, setItems] = useState([]);
   const [currencyOptions, setCurrencyOptions] = useState([]);
+  const [timeEntries, setTimeEntries] = useState([]);
+  const [logInput, setLogInput] = useState({});
+  const [logMsg, setLogMsg] = useState("");
   const [form, setForm] = useState(blankForm());
   const [created, setCreated] = useState(null); // the last quote created: its email is ready to send
   const [busy, setBusy] = useState(false);
@@ -41,6 +45,8 @@ export default function QuotesPage() {
       const bizData = bizDocs?.docs?.find((d) => d.id === "business")?.data?.() || {};
       setCurrencyOptions(offeredCurrencies(bizData));
       const snap = await getDocs(query(collection(db, "users", user.uid, "quotes"), limit(300)));
+      const teSnap = await getDocs(query(collection(db, "users", user.uid, "time_entries"), limit(2000))).catch(() => null);
+      setTimeEntries(teSnap ? teSnap.docs.map((d) => ({ id: d.id, ...d.data() })) : []);
       setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       const inv = await getDocs(query(collection(db, "invoices"), where("userId", "==", user.uid), limit(500)));
       setInvoices(inv.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -170,7 +176,9 @@ export default function QuotesPage() {
         <p className="text-sm font-semibold text-gray-900 dark:text-white">{money(q.total, q.currency)}</p>
       </div>
       {q.validUntil && <p className="text-xs text-gray-500 dark:text-gray-400">Valid until {q.validUntil}</p>}
-      {q.estimatedHours ? <p className="text-xs text-gray-600 dark:text-gray-300">{quoteEconomicsLine(quoteEconomics({ total: q.total, estimatedHours: q.estimatedHours }))}</p> : null}
+      <div className="flex flex-wrap items-center gap-2 mt-1"><input type="number" min="0.05" max="24" step="0.05" placeholder="hours worked" value={logInput[q.id] || ""} onChange={(e) => setLogInput({ ...logInput, [q.id]: e.target.value })} className="w-28 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700" /><button type="button" onClick={async () => { const r = sanitizeTimeEntry({ dealEmail: q.customerEmail, hours: logInput[q.id] }); if (r.error) { setLogMsg(r.error); return; } try { const ref = await addDoc(collection(db, "users", user.uid, "time_entries"), { ...r.entry, createdAt: new Date().toISOString() }); setTimeEntries((prev) => [...prev, { id: ref.id, ...r.entry }]); setLogInput({ ...logInput, [q.id]: "" }); setLogMsg(""); } catch (e) { setLogMsg("Could not save those hours. Try again."); } }} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm">Log hours</button></div>
+      {logMsg ? <p className="text-xs text-red-600 dark:text-red-400">{logMsg}</p> : null}
+      {(q.estimatedHours || loggedHoursFor(timeEntries, q.customerEmail) > 0) ? <p className="text-xs text-gray-600 dark:text-gray-300">{quoteEconomicsLine(quoteEconomics({ total: q.total, estimatedHours: q.estimatedHours, loggedHours: loggedHoursFor(timeEntries, q.customerEmail) }))}</p> : null}
       <div className="flex flex-wrap gap-2 mt-2">{children}</div>
     </li>
   );

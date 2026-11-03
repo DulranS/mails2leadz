@@ -180,3 +180,15 @@ Turn each on in Account, under "Switches for optional features". It runs only wh
 
 Before switching on Apollo or TikTok, check their current API documentation: the endpoints and payloads here follow them as they were when this was written.
 
+## Typeform and Tally lead forms
+
+- **Typeform:** set `TYPEFORM_WEBHOOK_SECRET` (a secret you choose) and `FORMS_OWNER_UID` (the owner's Firebase user id). In Typeform's webhook settings, point the URL at `https://YOUR-APP/api/integrations/typeform` and use the same secret.
+- **Tally:** set `TALLY_SIGNING_SECRET` (a secret you choose) and `FORMS_OWNER_UID`. In the form's Integrations tab, connect Webhooks to `https://YOUR-APP/api/integrations/tally` and use the same signing secret.
+- Redeploy after setting the variables.
+
+\n\n## TikTok lead forms\n\n- Set `TIKTOK_LEAD_KEY` (a secret you choose) and `FORMS_OWNER_UID`. In TikTok's lead webhook settings, point the URL at `https://YOUR-APP/api/integrations/tiktok-leads?key=YOUR-KEY`. Check the payload fields against TikTok's current docs first.\n- Autosend: after approving the first batch, list the campaign angles you want sent in Account. Drafts with other angles are not sent.\n\n
+
+## LinkedIn lead-gen forms
+
+- Set `LINKEDIN_LEAD_KEY` (a secret you choose) and `FORMS_OWNER_UID`. In the lead-gen form's webhook settings, point the URL at `https://YOUR-APP/api/integrations/linkedin-leads?key=YOUR-KEY`. Check the payload against LinkedIn's current docs first.
+

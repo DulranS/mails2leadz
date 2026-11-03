@@ -58,7 +58,7 @@ export async function GET(request) {
   const taxRow = quote.tax ? `<tr><td>Tax (${esc(quote.taxPercent)}%)</td><td class="n">${money(disp.conv(quote.tax), cur)}</td></tr>` : '';
   const answer = {
     open: `<form method="post" action="/api/quote?t=${encodeURIComponent(t)}">`
-      + '<label>Your name (optional)<input name="name" maxlength="120" autocomplete="name"></label>'
+      + '<label>To accept, type your full name<input name="name" maxlength="120" autocomplete="name"></label>'
       + '<div><button class="yes" name="action" value="accept" type="submit">Accept this quote</button>'
       + '<button class="no" name="action" value="decline" type="submit">Decline</button></div></form>',
     accepted: '<p><strong>You accepted this quote.</strong></p>',

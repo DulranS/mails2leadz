@@ -59,6 +59,7 @@ export default function AccountPage() {
   const [dataShare, setDataShare] = useState(false);
   const [switches, setSwitches] = useState({ enrichDeals: false, tiktokSync: false, holdClaimRisk: true });
   const [approvalMsg, setApprovalMsg] = useState("");
+  const [angleText, setAngleText] = useState("");
   const [fxLoaded, setFxLoaded] = useState({ json: "[]", asOf: "" });
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
   const [ap, setAp] = useState({ loading: true, available: true, cronConfigured: true, settings: { ...AUTOSEND_DEFAULTS, enabled: false, includeWarm: false, firstPerRun: 10, followUpsPerRun: 10, autoDeals: true, senderName: "" }, busy: "", msg: "" });
@@ -101,6 +102,7 @@ export default function AccountPage() {
         if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
         if (typeof d.dataSharingConfirmed === "boolean") setDataShare(d.dataSharingConfirmed);
         if (d.switches && typeof d.switches === "object") setSwitches((prev) => ({ ...prev, ...sanitizeSwitches(d.switches) }));
+        if (Array.isArray(d.autoSendApprovedAngles)) setAngleText(d.autoSendApprovedAngles.join(", "));
         if (d.stallDays && typeof d.stallDays === "object") setStallText(Object.entries(sanitizeStallDays(d.stallDays)).map(([k, v]) => `${k} ${v}`).join(", "));
         if (Array.isArray(d.fxDisplay)) { setFxText(d.fxDisplay.map((x) => `${x.code} ${x.rate}`).join(", ")); setFxLoaded({ json: JSON.stringify(sanitizeFxDisplay(d.fxDisplay, d.currency || "USD")), asOf: d.fxDisplayUpdatedAt || "" }); }
         if (d.paymentTermsDays) setTermsDays(String(d.paymentTermsDays));
@@ -500,9 +502,12 @@ export default function AccountPage() {
             <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
               <p className={label}>Autosend: first-batch approval</p>
               <p className="text-xs text-gray-500 mt-1">Autosend sends nothing until you approve the first batch. Review the drafts in the queue first, then approve here.</p>
+              <label className="block text-xs text-gray-700 dark:text-gray-200 mt-2">Campaign angles to send (comma-separated, for example: referral, follow-up)<input type="text" value={angleText} onChange={(e) => setAngleText(e.target.value)} className="mt-1 w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-sm" /></label>
+              <p className="text-xs text-gray-500 mt-1">Only drafts whose angle is listed here are sent. A draft with no angle is "general".</p>
               <button type="button" onClick={async () => {
                 try {
-                  await setDoc(doc(db, "users", user.uid, "settings", "autopilot"), { autoSendApprovedAt: new Date().toISOString() }, { merge: true });
+                  const angles = angleText.split(/[,;\n]+/).map((a) => a.trim().toLowerCase()).filter(Boolean).slice(0, 30);
+                  await setDoc(doc(db, "users", user.uid, "settings", "autopilot"), { autoSendApprovedAt: new Date().toISOString(), autoSendApprovedAngles: angles }, { merge: true });
                   setApprovalMsg("Approved. Autosend can now send within your rules.");
                 } catch (e) { setApprovalMsg("Could not save the approval. Try again."); }
               }} className="mt-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm">I reviewed the first batch: approve</button>

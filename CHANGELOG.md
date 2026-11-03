@@ -1,3 +1,59 @@
+## Pass 153 - setup status and a .env template\n\n- `npm run setup:status` lists every optional feature as on, partly set or off, with the keys each one still needs.\n- `npm run setup:env` writes .env.example with each key once, grouped by feature.\n- The AI agents already in the app are recorded in GAP_STATUS.md. No new agent that sends without review is added.\n- Tests run here: the setup-status tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0).\n\n## Pass 152 - LinkedIn lead-gen forms
+
+- LinkedIn lead-gen submissions are stored in the inbox as new, checked against a key in the webhook URL before anything is read.
+- Name, email, phone and company are mapped by question text.
+- Tests run here: the closing-pass tests now include the LinkedIn intake (6 checks), the contract test, the full npm test chain (exit 0, 662 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- The LinkedIn payload shape follows LinkedIn's lead-gen format as known at writing; verify before switching on.
+- Nothing has been run live.
+
+## Pass 151 - closing pass for marketing and sales
+
+- A quote is accepted only with the customer's full name typed in; the name and time are stored as the signature.
+- Hours logged against a customer feed the profit view when that customer's deal has no hours typed.
+- Apollo enrichment covers inbox leads as well as deals, within the same per-run cap.
+- TikTok lead-form submissions are stored in the inbox as new, checked against a key in the webhook URL.
+- Autosend sends only drafts whose campaign angle the owner has approved in Account. Behaviour change: until angles are approved, autosend sends nothing.
+- Tests run here: the closing-pass tests (5 checks), the full npm test chain (exit 0, 661 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Google Customer Match and real-time voice are not built, and are excluded from this pass.
+- The TikTok lead payload follows TikTok's format as known at writing; verify before switching on.
+- Nothing has been run live.
+
+## Pass 150 - lead-score negatives and a deep gap check
+
+- A bounced, unsubscribed or complained-about lead scores zero. A lead with no touch for 60 days loses 15 points; for 120 days, 30.
+- The register now records a deep check against sales and marketing research. Covered items and the remaining open items are listed there.
+- Tests run here: the lead-score tests (3 checks), the full npm test chain (exit 0, 656 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Not run here against a live lead list.
+
+## Pass 149 - Typeform and Tally lead forms
+
+- Typeform and Tally submissions are stored in the inbox as new. The signature is checked against the owner's secret before anything is read; a missing or wrong signature is refused.
+- Email, name, company and phone are mapped from the answers by their type and label. A submission without an email is not stored.
+- The integration status page lists both connectors with their settings.
+- Tests run here: the form connector tests (5 checks), the contract test, the full npm test chain (exit 0, 653 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- The mapping depends on answer types and labels; unusual labels may need relabelling.
+- One owner per deployment.
+- Not run here against live Typeform or Tally.
+
+## Pass 148 - time-entry log per customer
+
+- Hours can be logged against a customer's quote on the Quotes page: 0.05 to 24 hours for one day, not in the future, stored under the owner's time entries.
+- Each quote shows its estimate and its logged actual rate, and flags a rate under the owner's hourly rate.
+- Tests run here: the time-log tests (5 checks), the quote economics tests (4 checks), the full npm test chain (exit 0, 648 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Hours feed the quote rows only. The profit view still reads one hours figure per customer.
+- No per-task or per-project log.
+- Not run here in a browser.
+
 ## Pass 147 - quote economics (estimated hours and the rate a quote pays)
 
 - A quote can carry optional estimated hours (0 to 10,000). The quote list shows the rate it pays per hour, and flags it when it is below the owner's hourly rate.

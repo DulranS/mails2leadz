@@ -60,10 +60,14 @@ app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
 app/api/integrations/google-ads-leads/route.js
+app/api/integrations/linkedin-leads/route.js
 app/api/integrations/meta-leads/route.js
 app/api/integrations/route.js
 app/api/integrations/secrets/route.js
+app/api/integrations/tally/route.js
 app/api/integrations/test/route.js
+app/api/integrations/tiktok-leads/route.js
+app/api/integrations/typeform/route.js
 app/api/invoices/cancel/route.js
 app/api/invoices/create/route.js
 app/api/invoices/refund-card/route.js
@@ -287,6 +291,7 @@ lib/firebase-client.js
 lib/firebase-operations.js
 lib/firebase.js
 lib/first-email-batch.js
+lib/form-webhooks.js
 lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js
@@ -305,6 +310,7 @@ lib/lead-name.js
 lib/lead-scoring-engine.js
 lib/lifecycle.js
 lib/lines.js
+lib/linkedin-leads.js
 lib/logger.js
 lib/mailbox-verify.js
 lib/manual-stock.js
@@ -463,6 +469,7 @@ lib/server/worker-queue-store.js
 lib/server/workspace.js
 lib/service-account.js
 lib/service-health.js
+lib/setup-status.js
 lib/shipping.js
 lib/shop-basket.js
 lib/shop.js
@@ -484,7 +491,9 @@ lib/system-emails.js
 lib/tax-rates.js
 lib/team.js
 lib/tenant.js
+lib/tiktok-leads.js
 lib/tiktok-sync.js
+lib/time-log.js
 lib/trends.js
 lib/validation.js
 lib/weekly-kpi.js
