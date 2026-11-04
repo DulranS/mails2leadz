@@ -1,3 +1,15 @@
+## Pass 163 - multi-touch attribution and click-to-call
+
+- Multi-touch attribution (lib/multi-touch.js): each won deal's revenue is split across the channels that touched the customer, under linear, U-shaped, first-touch or last-touch rules. The first-of-month digest shows the top channels for the last 12 months.
+- An existing attribution module (lib/attribution.js, used by the attribution views) was briefly overwritten during this work. It has been restored from the previous release, and the new code lives in its own module. Nothing that used the original module has changed.
+- Click-to-call: the owner's phone rings first; when they answer, the lead is dialled and joined, using the owner's own Twilio account. Phone numbers are checked before anything is dialled.
+- Tests run here: the multi-touch tests (4 checks), the click-to-call tests (2 checks), the full npm test chain (exit 0, 702 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Click-to-call needs the owner's Twilio keys and the owner's lawful basis to call each lead.
+- Attribution uses the recorded deal source and emails sent; channels without records show as unrecorded.
+- Nothing has run against live Twilio or live data.
+
 ## Pass 162 - weekly action list and call summaries
 
 - Monday digest: this week's actions from the owner's records (overdue follow-ups and invoices, stalled deals, quotes with no answer).

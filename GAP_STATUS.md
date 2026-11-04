@@ -1,4 +1,4 @@
-# Business gap status (after Pass 162)
+# Business gap status (after Pass 163)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -117,6 +117,8 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 | Weekly action list (Pass 162) | On Mondays the digest lists up to 8 actions from the owner's own records: overdue follow-ups, overdue invoices, stalled deals, and quotes with no answer after 7 days. Each shows its reason. | Built from the records as they are; the list is a prompt, not a queue, and nothing is sent. Reads quotes, invoices and follow-ups once a week per owner. Not run here against live data. |
 | Call and meeting summaries (Pass 162) | Paste a transcript in the CRM; the AI returns a short summary, the next step, an optional due date, objections and sentiment, kept on the customer's record in call notes. Nothing is sent to the customer. Rate limited to 20 an hour per owner. | Uses the configured AI provider and its cost; the transcript is sent to that provider. The reply is checked (length, date format, allowed values) before it is kept. Not run here against a live AI provider. |
 | Drafted replies to inbound messages | Already in the app: reply triage and draft preparation, held for approval under the first-batch rule. | Existing feature, recorded here for completeness. |
+| Multi-touch attribution (Pass 163) | Revenue from each won deal is split across the channels that touched the customer: the deal's source and the emails sent to them before the win. Linear, U-shaped, first-touch and last-touch models. The first-of-month digest shows the top channels for the last 12 months (linear). | Built in its own module (lib/multi-touch.js); the existing attribution views are unchanged. Channels are as recorded: a deal with no source is unrecorded. Reads sent emails once a month per owner. Not run here against live data. |
+| Click-to-call (Pass 163) | From the CRM, the owner enters their phone and the lead's. Their phone rings first; when they answer, the lead is dialled and the two are joined, using the owner's own Twilio account. | Needs the owner's Twilio keys, and the owner must only call people they may lawfully contact. A national number needs its country code to dial. Not run here against Twilio. |
 
 ## Not built
 
@@ -250,3 +252,8 @@ Not closable in the app, left out for compliance or external reasons: Google and
 ## Closing check (Pass 161)
 
 All closable sales and marketing gaps from the Pass 157 and 158 lists are now built: quota attainment, pipeline velocity, customer lifetime value, quantity prices, team quota, loyalty points and product bundles. Items that cannot be closed in the app, for compliance or external reasons, are listed as left out in the register above.
+
+## Deep research check (Pass 163)
+
+The latest sweep of sales engagement and CRM feature lists turned up two items, both now built: multi-touch attribution and click-to-call. Cycle length, win rate by source, forecasting, sequences, call recording and transcription through the AI summaries, and call tracking through the owner's Twilio numbers were already in place.
+

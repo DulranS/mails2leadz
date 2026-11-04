@@ -27,6 +27,7 @@ app/api/cache-stats/route.js
 app/api/calendar-offline/callback/route.js
 app/api/calendar-offline/route.js
 app/api/call-webhook/route.js
+app/api/calls/click/route.js
 app/api/calls/summarise/route.js
 app/api/check-replies/route.js
 app/api/contacts/erase/route.js
@@ -162,6 +163,7 @@ app/components/BillsPanel.js
 app/components/CRM.js
 app/components/CalendarConnect.js
 app/components/CallSummary.js
+app/components/ClickToCall.js
 app/components/ClientLayout.js
 app/components/CohortPanel.js
 app/components/ConnectionBanner.js
@@ -266,6 +268,7 @@ lib/cash-cycle.js
 lib/cashflow.js
 lib/channel-drafts.js
 lib/claim-risk.js
+lib/click-to-call.js
 lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js
@@ -329,6 +332,7 @@ lib/marketing.js
 lib/meta-capi.js
 lib/meta-leads.js
 lib/money.js
+lib/multi-touch.js
 lib/next-actions.js
 lib/niche.js
 lib/nps.js
