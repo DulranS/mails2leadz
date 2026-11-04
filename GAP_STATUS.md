@@ -1,4 +1,4 @@
-# Business gap status (after Pass 161)
+# Business gap status (after Pass 162)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -114,6 +114,9 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 | Paid to date per customer (Pass 158) | The customers list shows what each customer has paid to date, from their invoices (voided invoices excluded). | Shown on the list line only; no sorting or filtering by it yet. Not run here. |
 | Loyalty points (Pass 160) | The owner sets a points rate per unit paid in Account. Each paid invoice (through the payment webhook) earns points, held per customer under a hash of their address. An owner can take points off a new invoice (100 points = 1 unit), checked before the invoice is written and taken off only after it is saved. The balance is readable through an owner-only route. | Earn happens on card payments through the webhook; a payment marked paid by hand does not earn points yet. Redemption and the balance are available through the invoice and balance routes, not yet on the invoice form or the customers list. Points are not refunded if an invoice is later voided. Not run here. |
 | Product bundles (Pass 161) | A product can be a bundle of other products, listed by SKU with quantities (for example MUG x2, COASTER), up to 10 products. The bundle is sold at its own price. A sale takes stock from each component through the same stock check as any other order; a bundle the stock cannot cover is refused, never oversold. Set on the Products page on create and edit. | Components must be stock-tracked or unlimited, and must exist and not be archived. Bundles cannot contain bundles. Bundle prices are fixed; a bundle does not apply quantity prices. Not run here in a browser. |
+| Weekly action list (Pass 162) | On Mondays the digest lists up to 8 actions from the owner's own records: overdue follow-ups, overdue invoices, stalled deals, and quotes with no answer after 7 days. Each shows its reason. | Built from the records as they are; the list is a prompt, not a queue, and nothing is sent. Reads quotes, invoices and follow-ups once a week per owner. Not run here against live data. |
+| Call and meeting summaries (Pass 162) | Paste a transcript in the CRM; the AI returns a short summary, the next step, an optional due date, objections and sentiment, kept on the customer's record in call notes. Nothing is sent to the customer. Rate limited to 20 an hour per owner. | Uses the configured AI provider and its cost; the transcript is sent to that provider. The reply is checked (length, date format, allowed values) before it is kept. Not run here against a live AI provider. |
+| Drafted replies to inbound messages | Already in the app: reply triage and draft preparation, held for approval under the first-batch rule. | Existing feature, recorded here for completeness. |
 
 ## Not built
 

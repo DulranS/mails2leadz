@@ -1,3 +1,14 @@
+## Pass 162 - weekly action list and call summaries
+
+- Monday digest: this week's actions from the owner's records (overdue follow-ups and invoices, stalled deals, quotes with no answer).
+- Call and meeting summaries: paste a transcript in the CRM; the AI returns a checked summary, next step, due date, objections and sentiment, kept in call notes.
+- Tests run here: the ai-automation tests (6 checks), the full npm test chain (exit 0, 696 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Summaries send the transcript to the configured AI provider; the owner should only paste transcripts they may process.
+- The action list is read once a week per owner, to keep reads and cost down.
+- Nothing has run against a live AI provider or live data.
+
 ## Pass 161 - product bundles
 
 - A product can be a bundle of up to 10 other products, listed by SKU with quantities. It is sold at its own price.

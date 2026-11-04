@@ -32,11 +32,11 @@ export async function GET(request) {
       if (!featureAllowed(await getEntitlement(db, uid), 'autopilot')) continue;
       const cfg = await loadAutopilot(db, uid);
       const bs = (await getDoc(doc(db, 'users', uid, 'settings', 'business')).catch(() => null))?.data?.() || {};
-      const { dateKey, hour } = localParts(now, cfg.tzOffsetMin);
+      const { dateKey, hour, dow } = localParts(now, cfg.tzOffsetMin);
       const fromName = cfg.senderName || bs?.profile?.businessName || '';
       let box;
       const mailbox = async () => { if (box === undefined) box = await openMailbox(db, uid); return box; };
-      const out = await runPipelineForUser(db, uid, { cfg, bs, now, deadline, mailbox, fromName, dateKey, hour });
+      const out = await runPipelineForUser(db, uid, { cfg, bs, now, deadline, mailbox, fromName, dateKey, hour, dow });
       const hasAdSync = !!(process.env.META_DATASET_ID || process.env.TIKTOK_PIXEL_CODE || process.env.GOOGLE_ADS_CUSTOMER_ID);
       const prepared = hasAdSync ? { contacts: await loadList(db, uid), suppressed: await suppressedEmails(db, uid) } : null;
       const meta = await syncConfirmedToMeta(db, uid, { now, prepared });
