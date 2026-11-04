@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, doc } from '../../../../lib/server-firestore.js';
 import { verifyPaymentsWebhook, paymentPatchFromSession, paymentsReady } from '../../../../lib/server/payments.js';
+import { earnLoyalty } from '../../../../lib/server/loyalty.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 import { emitWebhook } from '../../../../lib/server/webhooks.js';
 
@@ -46,6 +47,7 @@ export async function POST(request) {
       return reply({ received: true, review: true });
     }
     await updateDoc(ref, r.patch);
+    await earnLoyalty(db, uid, invoice, Number(r.baseAmount ?? Number(s.amount_total) / 100));
     await emitWebhook(db, uid, 'payment.received', { invoiceId: invoice.id, number: invoice.number || '', customerEmail: invoice.email, amount: Number(r.baseAmount ?? Number(s.amount_total) / 100), status: r.patch.status });
     if (invoice.bookingId && r.patch.status === 'paid') {
       const { confirmPaidBooking } = await import('../../../../lib/server/booking-confirm.js');

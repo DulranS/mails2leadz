@@ -6,6 +6,8 @@ import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { doc, getDoc } from '../../../../lib/server-firestore.js';
 import { buildInvoiceWrite } from '../../../../lib/billing.js';
+import { redeemPoints } from '../../../../lib/loyalty.js';
+import { balanceFor, spendPoints } from '../../../../lib/server/loyalty.js';
 import { normalizeCurrency, sanitizeFxDisplay } from '../../../../lib/currency.js';
 import { addInvoiceWithCredit } from '../../../../lib/server/credit-apply.js';
 import { nextInvoiceNumber } from '../../../../lib/server/invoice-number.js';
@@ -39,8 +41,17 @@ export async function POST(request) {
     chargeCurrency = hit.code;
     fxRate = hit.rate;
   }
+  // Loyalty points: checked first, taken off only after the invoice is saved (see below).
+  const redeemPts = Number(body?.redeemPoints) || 0;
+  let loyaltyAmount = body?.amount;
+  let loyaltyUse = null;
+  if (redeemPts > 0) {
+    loyaltyUse = redeemPoints({ balance: await balanceFor(db, uid, body?.email), points: redeemPts, amount: Number(body?.amount) });
+    if (!loyaltyUse.ok) return json({ error: loyaltyUse.error }, 400);
+    loyaltyAmount = loyaltyUse.amount;
+  }
   const r = buildInvoiceWrite({
-    uid, email: body?.email, businessName: body?.businessName, amount: body?.amount, number: body?.number, note: body?.note,
+    uid, email: body?.email, businessName: body?.businessName, amount: loyaltyAmount, number: body?.number, note: body?.note,
     issuedAt: body?.issuedAt || undefined, termsDays: body?.termsDays !== '' && body?.termsDays !== undefined ? body.termsDays : undefined, taxRate,
     chargeCurrency, fxRate,
   });
@@ -83,6 +94,7 @@ export async function POST(request) {
     if (!r.write.number) r.write.number = await nextInvoiceNumber(db, uid);
     r.write.manualStockTaken = taken.filter((h) => h.tracked).map((h) => ({ productId: h.productId, variantId: h.variantId || '', quantity: h.quantity, tracked: true }));
     const ref = await addInvoiceWithCredit(db, uid, r.write);
+    if (loyaltyUse?.ok) await spendPoints(db, uid, body?.email, loyaltyUse.pointsUsed).catch(() => ({}));
     return json({ ok: true, id: ref.id, number: r.write.number, dueAt: r.write.dueAt, stockTaken: taken.filter((h) => h.tracked).length });
   } catch (e) {
     await releaseStock(db, uid, taken).catch(() => ({})); // the invoice was not saved, so the stock it took goes back

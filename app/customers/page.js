@@ -305,7 +305,7 @@ export default function CustomersPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${h.cls}`}>{h.label}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{STAGE_LABELS[c.stage]}</span>
                       </div>
-                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.estimated ? " (estimate)" : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
+                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.lifetimeValue > 0 ? ` · paid to date ${money(c.lifetimeValue)}` : ""}{c.estimated ? " (estimate)" : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
                       {c.reasons.length > 0 && <ul className="mt-1 text-xs text-gray-700 dark:text-gray-200 list-disc pl-4">{c.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                       <div className="mt-2 flex items-center gap-2">
                         <div className="h-2 w-32 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(c.onboarding.pct * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Onboarding progress"><div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.onboarding.pct * 100}%` }} /></div>

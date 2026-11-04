@@ -1,4 +1,4 @@
-# Business gap status (after Pass 155)
+# Business gap status (after Pass 161)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -106,6 +106,14 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 | Google Ads Customer Match (Pass 154) | Each run adds the sign-ups confirmed since the last run to a Google Ads Customer Match list, as hashed emails, through an offline user data job. Only double opt-in sign-ups count as consent. Off unless the owner turns on Google Ads Customer Match in Account, the server has the Google Ads keys, and the owner ticked the data-sharing box. | The Google Ads payloads and OAuth refresh follow Google's API as known at writing; verify against Google's current docs before switching on. Each sign-up is added once; the list is created once and reused. |
 | Live voice from the browser (Pass 154) | The CRM page has a Start live voice control. The server issues a short-lived voice key only when Live voice is on in Account and the server key is set; the browser then talks to the voice service directly. The assistant answers questions and offers a call, and does not quote prices, promise results or take payments. | Owner's browser only, for now: a visitor on the public site, or a phone call, needs its own session route. The voice service's realtime endpoints follow its documentation as known at writing; verify before switching on. Latency depends on the connection. |
 | Commission on won deals (Pass 155) | The owner sets a commission percentage in Account. The monthly digest, on the first of each month, lists each salesperson's deals won last month, their value and their commission. Deals with no owner are shown as Unassigned. | Percentage on value only; no tiers, splits or clawbacks. Ownership comes from the deal's owner field. Not run here against live deals. |
+| Sales quota attainment (Pass 157) | Team members can carry a monthly won-value target (quota). The first-of-month digest shows each person's won value for last month against the target, as a percentage. | The target is read from the team settings data; the Team page has no quota field yet, so it is set in the data for now. Not run here. |
+| Pipeline velocity (Pass 157) | The first-of-month digest shows the average days from a deal's creation to its win, over the last 12 months. | Needs deal creation dates; deals made before those were recorded are skipped. Not run here. |
+| Customer lifetime value (Pass 157) | Paid totals per customer address, from invoices (voided invoices excluded). | A helper only: the Customers page does not show it yet. |
+| Quantity prices on products (Pass 158) | A product can have quantity prices, such as 10:90 (10 or more at 90 each). The basket charges the best quantity price the buyer qualifies for. Set on the Products page when a product is added. | Set when a product is added; editing an existing product's quantity prices is not in the edit form yet. Base price only: option prices do not take quantity prices. Each must be for 2 or more and below the normal price. Not run here. |
+| Team quota (Pass 158) | Each team member has a monthly won-value target, set on the Account page next to their commission. The first-of-month digest shows attainment against it. | Monthly won value only. Not run here. |
+| Paid to date per customer (Pass 158) | The customers list shows what each customer has paid to date, from their invoices (voided invoices excluded). | Shown on the list line only; no sorting or filtering by it yet. Not run here. |
+| Loyalty points (Pass 160) | The owner sets a points rate per unit paid in Account. Each paid invoice (through the payment webhook) earns points, held per customer under a hash of their address. An owner can take points off a new invoice (100 points = 1 unit), checked before the invoice is written and taken off only after it is saved. The balance is readable through an owner-only route. | Earn happens on card payments through the webhook; a payment marked paid by hand does not earn points yet. Redemption and the balance are available through the invoice and balance routes, not yet on the invoice form or the customers list. Points are not refunded if an invoice is later voided. Not run here. |
+| Product bundles (Pass 161) | A product can be a bundle of other products, listed by SKU with quantities (for example MUG x2, COASTER), up to 10 products. The bundle is sold at its own price. A sale takes stock from each component through the same stock check as any other order; a bundle the stock cannot cover is refused, never oversold. Set on the Products page on create and edit. | Components must be stock-tracked or unlimited, and must exist and not be archived. Bundles cannot contain bundles. Bundle prices are fixed; a bundle does not apply quantity prices. Not run here in a browser. |
 
 ## Not built
 
@@ -225,3 +233,17 @@ Mapped against the framework's 35 activity areas and its routes to market. Statu
 | E | Routes to market: wholesale, channel, B2B2C | Partly built | Partners, buy links and trade pricing by quantity are not built. |
 | E | Routes to market: B2G (government tenders) | Not built | Tender notices are watched; bid writing is not built. |
 | E | Routes to market: marketplaces (C2C, B2B), franchise, licensing | Consciously left out | Platform businesses need their own product. |
+
+## Closing check (Pass 157)
+
+Closable items still open, which I have not built yet:
+- Quota field on the Team page, and a customer lifetime value column on the Customers page.
+- Quantity price breaks (trade pricing for wholesale) on products.
+- Product bundles on the storefront.
+- Loyalty points: earn on paid orders, redeem against the next order.
+
+Not closable in the app, left out for compliance or external reasons: Google and TikTok conversion sync with hashed customer data beyond the consented sign-up sync; marketplace listings on third-party platforms (their APIs and approval); SEO tooling and market-share data; PR, events and brand design production; government tenders as bid writing; real-time voice for phone calls and visitors (needs a persistent connection and a separate service).
+
+## Closing check (Pass 161)
+
+All closable sales and marketing gaps from the Pass 157 and 158 lists are now built: quota attainment, pipeline velocity, customer lifetime value, quantity prices, team quota, loyalty points and product bundles. Items that cannot be closed in the app, for compliance or external reasons, are listed as left out in the register above.

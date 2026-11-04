@@ -7,6 +7,7 @@ import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js'
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { collection, doc, getDocs, limit, query, setDoc } from '../../../lib/server-firestore.js';
 import { sanitizeProduct } from '../../../lib/products.js';
+import { resolveBundleText } from '../../../lib/server/bundles.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 
@@ -34,9 +35,15 @@ export async function POST(request) {
   const db = getDb();
   const gate = await guardTenant(db, who.uid);
   if (gate.response) return gate.response;
+  let bundleItems;
+  if (body?.bundleText !== undefined) {
+    const rb = await resolveBundleText(db, who.uid, body.bundleText, '');
+    if (rb.error) return json({ error: rb.error }, 400);
+    bundleItems = rb.bundleItems;
+  }
   const id = randomUUID();
   try {
-    await setDoc(doc(db, 'users', who.uid, 'products', id), { ...made.product, createdAt: new Date().toISOString() });
+    await setDoc(doc(db, 'users', who.uid, 'products', id), { ...made.product, ...(bundleItems ? { bundleItems } : {}), createdAt: new Date().toISOString() });
     return json({ ok: true, id });
   } catch (e) {
     console.error('[products] save failed:', e.message);

@@ -57,6 +57,7 @@ export default function AccountPage() {
   const [pushMsg, setPushMsg] = useState("");
   const [slackUrl, setSlackUrl] = useState("");
   const [commissionPct, setCommissionPct] = useState(0);
+  const [loyaltyRate, setLoyaltyRate] = useState(0);
   const [dataShare, setDataShare] = useState(false);
   const [switches, setSwitches] = useState({ enrichDeals: false, tiktokSync: false, holdClaimRisk: true });
   const [approvalMsg, setApprovalMsg] = useState("");
@@ -102,6 +103,7 @@ export default function AccountPage() {
         if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
         if (Number(d.commissionPct) > 0) setCommissionPct(Number(d.commissionPct));
+        if (Number(d.loyaltyRate) > 0) setLoyaltyRate(Number(d.loyaltyRate));
         if (typeof d.dataSharingConfirmed === "boolean") setDataShare(d.dataSharingConfirmed);
         if (d.switches && typeof d.switches === "object") setSwitches((prev) => ({ ...prev, ...sanitizeSwitches(d.switches) }));
         if (Array.isArray(d.autoSendApprovedAngles)) setAngleText(d.autoSendApprovedAngles.join(", "));
@@ -331,6 +333,7 @@ export default function AccountPage() {
         stallDays: sanitizeStallDays(stallText),
         slackWebhookUrl: isSlackWebhook(slackUrl) ? slackUrl.trim() : "",
         commissionPct: Math.min(100, Math.max(0, Number(commissionPct) || 0)),
+        loyaltyRate: Math.min(100, Math.max(0, Number(loyaltyRate) || 0)),
         dataSharingConfirmed: !!dataShare,
         switches: sanitizeSwitches(switches),
         fxDisplayUpdatedAt: fxAsOf,
@@ -489,6 +492,7 @@ export default function AccountPage() {
           <div className="grid sm:grid-cols-2 gap-3 mt-3">
             <div className="sm:col-span-2"><label className={label} htmlFor="cur">Your currency</label><select id="cur" className={field} value={currency} onChange={(e) => setCurrency(e.target.value)}>{CURRENCIES.map(([c, n]) => <option key={c} value={c}>{c} · {n}</option>)}</select><p className="text-xs text-gray-500 mt-1">Every amount you type here and every figure on your dashboards uses this currency.</p></div>
             <div className="sm:col-span-2"><label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200"><input type="checkbox" className="mt-1" checked={dataShare} onChange={(e) => setDataShare(e.target.checked)} /><span>Send new confirmed sign-ups to Meta as hashed Lead events, to improve your ads. Only people who confirmed their address are sent. I confirm I may share these contacts with Meta under my privacy notice and Meta's terms. Requires the Meta keys on the server.</span></label></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="loyalty">Loyalty points per 1 unit paid (optional)</label><input id="loyalty" type="number" min="0" max="100" step="0.5" className={field} value={loyaltyRate} onChange={(e) => setLoyaltyRate(e.target.value)} /><p className="text-xs text-gray-500 mt-1">Customers earn these on each paid invoice. 100 points take 1 unit off a new invoice. Blank or 0 turns points off.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="commission">Commission on won deals, percent (optional)</label><input id="commission" type="number" min="0" max="100" step="0.5" className={field} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} /><p className="text-xs text-gray-500 mt-1">Shown in the monthly digest per salesperson, from deals won in the month. Blank or 0 turns it off.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="slack">Slack alerts (optional)</label><input id="slack" type="text" className={field} value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." /><p className="text-xs text-gray-500 mt-1">Paste a Slack incoming-webhook URL. Hot replies, new enquiries, bookings, payments and accepted quotes are posted there. Leave blank to turn it off.</p></div>
             <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
@@ -593,6 +597,7 @@ export default function AccountPage() {
                 <div><label className={label} htmlFor={`tm-n-${i}`}>Name</label><input id={`tm-n-${i}`} className={field} value={m.name} maxLength={40} onChange={(e) => editMember(i, { name: e.target.value })} /></div>
                 <div><label className={label} htmlFor={`tm-r-${i}`}>Role</label><select id={`tm-r-${i}`} className={field} value={m.role} onChange={(e) => editMember(i, { role: e.target.value })}>{TEAM_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
                 <div><label className={label} htmlFor={`tm-c-${i}`}>Commission %</label><input id={`tm-c-${i}`} type="number" min="0" max={MAX_COMMISSION_PCT} step="0.5" inputMode="decimal" className={field} value={m.commissionPct} onChange={(e) => editMember(i, { commissionPct: e.target.value })} /></div>
+                <div><label className={label} htmlFor={`tm-q-${i}`}>Monthly quota, won value (optional)</label><input id={`tm-q-${i}`} type="number" min="0" step="any" inputMode="decimal" className={field} value={m.quota || ""} onChange={(e) => editMember(i, { quota: e.target.value })} /></div>
                 <button type="button" onClick={() => setTeam((t) => ({ ...t, msg: "", members: t.members.filter((_, k) => k !== i) }))} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200" aria-label={`Remove ${m.name || "this person"}`}>Remove</button>
               </div>
             ))}

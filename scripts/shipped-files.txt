@@ -80,6 +80,7 @@ app/api/lead-inbox/jobs/route.js
 app/api/lead-inbox/key/route.js
 app/api/list-sent-leads/route.js
 app/api/list-whatsapp-contacts/route.js
+app/api/loyalty/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js
 app/api/notices/route.js
@@ -252,6 +253,7 @@ lib/billing.js
 lib/booking.js
 lib/brand.js
 lib/broadcast.js
+lib/bundles.js
 lib/business-metrics.js
 lib/calendar-events.js
 lib/calendar-links.js
@@ -316,6 +318,7 @@ lib/lifecycle.js
 lib/lines.js
 lib/linkedin-leads.js
 lib/logger.js
+lib/loyalty.js
 lib/mailbox-verify.js
 lib/manual-stock.js
 lib/marketing.js
@@ -371,6 +374,7 @@ lib/risk.js
 lib/runway.js
 lib/saas-metrics.js
 lib/sales-kit.js
+lib/sales-metrics.js
 lib/seasonality.js
 lib/send-ramp.js
 lib/send-timing.js
@@ -393,6 +397,7 @@ lib/server/booking-manage.js
 lib/server/booking-reminder.js
 lib/server/bounces.js
 lib/server/broadcast.js
+lib/server/bundles.js
 lib/server/calendar-read.js
 lib/server/calendar-write.js
 lib/server/connection-test.js
@@ -428,6 +433,7 @@ lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
 lib/server/live-voice.js
+lib/server/loyalty.js
 lib/server/mailbox-verify.js
 lib/server/meta-capi-sync.js
 lib/server/milestones.js

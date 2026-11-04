@@ -271,9 +271,10 @@ const LOW_STOCK = 3;
 
 export default function ProductsPage() {
   const { user, ready } = useAuthUser();
+  const [currencies, setCurrencies] = useState([]);
   const [items, setItems] = useState([]);
   const [reorder, setReorder] = useState([]);
-  const [form, setForm] = useState({ name: "", sku: "", price: "", description: "", weightKg: "", variantsText: "", stockOnHand: "", holdBack: "", maxPerOrder: "" });
+  const [form, setForm] = useState({ name: "", sku: "", price: "", description: "", weightKg: "", variantsText: "", stockOnHand: "", holdBack: "", maxPerOrder: "", priceBreaksText: "", bundleText: "" });
   const [buy, setBuy] = useState({});
   const [links, setLinks] = useState({});
   const [editId, setEditId] = useState("");
@@ -314,7 +315,7 @@ export default function ProductsPage() {
   const startEdit = (p) => {
     setEditId(p.id);
     setEditForm({
-      giftCard: !!p.giftCard, name: p.name || "", sku: p.sku || "", price: String(p.price ?? ""), description: p.description || "",
+      giftCard: !!p.giftCard, bundleText: (Array.isArray(p.bundleItems) ? p.bundleItems : []).map((c) => { const it = items.find((x) => x.id === c.productId); return it ? `${it.sku} x${c.qty}` : ""; }).filter(Boolean).join(", "), name: p.name || "", sku: p.sku || "", price: String(p.price ?? ""), description: p.description || "",
       weightKg: p.weightKg ?? "", holdBack: String(p.holdBack ?? ""), maxPerOrder: p.maxPerOrder ?? "",
       stockOnHand: p.stockOnHand ?? "", variantsText: variantsToText(p.variants),
       hadOptions: Array.isArray(p.variants) && p.variants.length > 0,
@@ -366,6 +367,8 @@ export default function ProductsPage() {
             <label className="text-sm text-gray-700 dark:text-gray-200">Kept back from the website (safety buffer)<input className={field} type="number" min="0" step="1" value={form.holdBack} onChange={(e) => setForm({ ...form, holdBack: e.target.value })} /></label>
             <label className="text-sm text-gray-700 dark:text-gray-200">Most per order (blank = no limit)<input className={field} type="number" min="1" step="1" value={form.maxPerOrder} onChange={(e) => setForm({ ...form, maxPerOrder: e.target.value })} /></label>
             <label className="text-sm text-gray-700 dark:text-gray-200">Price<input className={field} inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Quantity prices (optional): 10:90 means 10 or more at 90 each<input className={field} value={form.priceBreaksText} onChange={(e) => setForm({ ...form, priceBreaksText: e.target.value })} placeholder="10:90, 50:80" /></label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Bundle contents (optional): SKU and quantity, for example "MUG x2, COASTER"<input className={field} value={form.bundleText} onChange={(e) => setForm({ ...form, bundleText: e.target.value })} placeholder="MUG x2, COASTER" /></label>
             <label className="text-sm text-gray-700 dark:text-gray-200">SKU (optional)<input className={field} value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2 sm:col-span-2"><input type="checkbox" checked={!!form.giftCard} onChange={(e) => setForm({ ...form, giftCard: e.target.checked })} /> A gift card: its value is held as store credit for the buyer (not a physical item)</label>
           </div>
@@ -394,6 +397,7 @@ export default function ProductsPage() {
               <label className="text-sm text-gray-700 dark:text-gray-200 sm:col-span-3">Description<input className={field} maxLength={300} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Kept back from the website (safety buffer)<input className={field} type="number" min="0" step="1" value={editForm.holdBack} onChange={(e) => setEditForm({ ...editForm, holdBack: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200">Most per order (blank = no limit)<input className={field} type="number" min="1" step="1" value={editForm.maxPerOrder} onChange={(e) => setEditForm({ ...editForm, maxPerOrder: e.target.value })} /></label>
+              <label className="text-sm text-gray-700 dark:text-gray-200 sm:col-span-4">Bundle contents (leave blank for a normal product): SKU and quantity, for example "MUG x2, COASTER"<input className={field} value={editForm.bundleText ?? ""} onChange={(e) => setEditForm({ ...editForm, bundleText: e.target.value })} /></label>
               <label className="text-sm text-gray-700 dark:text-gray-200 sm:col-span-4">Options, one per line: name, stock, price, weight in kg, id. Keep the id column when you rename an option, so orders still match it. Stock for an option you already have is changed in the stock panel, not here.<textarea className={field} rows={4} value={editForm.variantsText} onChange={(e) => setEditForm({ ...editForm, variantsText: e.target.value })} /></label>
               <p className="sm:col-span-4 text-xs text-gray-600 dark:text-gray-300">{editForm.hadOptions ? "This product has options, and each one has its own stock." : `Stock on hand: ${editForm.stockOnHand === "" ? "not tracked" : editForm.stockOnHand}. Change it in the stock panel.`}</p>
             </div>

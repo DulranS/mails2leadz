@@ -1,3 +1,75 @@
+## Pass 161 - product bundles
+
+- A product can be a bundle of up to 10 other products, listed by SKU with quantities. It is sold at its own price.
+- A sale takes stock from each component through the same stock check as any other order. A bundle the stock cannot cover is refused.
+- Bundles are set on the Products page, on create and edit. An edit keeps a bundle's contents unless they are changed.
+- Code audit on the changed files found no undefined names or correctness issues.
+- Tests run here: the bundle tests (5 checks), the full npm test chain (exit 0, 690 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Components must be stock-tracked or unlimited, and must exist and not be archived.
+- Bundles cannot contain bundles, and bundle prices are fixed (quantity prices do not apply).
+- Nothing has run in a browser.
+
+## Pass 160 - loyalty points
+
+- Owners set a points rate per unit paid (Account). Card payments earn points through the payment webhook, held per customer under a hash of their address, with an atomic increment.
+- An invoice can take points off (100 points = 1 unit), checked before the invoice is written and taken off only after it is saved. A redemption that would leave nothing to charge is refused.
+- The owner can read a customer's balance through an owner-only route.
+- Tests run here: the loyalty rules (3 checks), the full npm test chain (exit 0, 685 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Points are earned on card payments through the webhook only; a payment marked paid by hand does not earn yet.
+- Points are not returned if an invoice is voided later.
+- Redemption and balances are not on the invoice form or the customers list yet.
+- Product bundles are still open.
+- Nothing has run in a browser.
+
+## Pass 159 - code audit fixes and fewer reads per owner
+
+- A static check for undefined names, over every page, component and library file, found two real bugs on the Products page: the buy-link currency state was never declared. Both are fixed.
+- The pipeline job reads each owner's consent list and suppression list once, and shares them with the Meta, TikTok and Google syncs, instead of reading them three times per owner per run.
+- The same check also covers unreachable code, duplicate keys, duplicate declarations, invalid typeof comparisons and assignments to constants. It reports no findings.
+- Tests run here: the full npm test chain (exit 0, 682 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- The audit tool is not part of the shipped build; it was run once and removed. The page-imports test keeps the most common class of error covered.
+- Loyalty points and product bundles are still open.
+- Nothing has run in a browser.
+
+## Pass 158 - quantity prices, team quota, paid to date per customer
+
+- Products can have quantity prices (10:90 means 10 or more at 90 each). The basket charges the best one the buyer qualifies for. Set when a product is added.
+- Each team member can have a monthly won-value target, set beside their commission in Account. The first-of-month digest shows attainment.
+- The customers list shows paid to date for each customer.
+- Tests run here: the closing-sales tests (6 checks), the full npm test chain (exit 0, 682 checks), and a production Next.js build (exit 0; its warnings are the missing Firebase variables in this environment).
+
+Limits, plainly:
+- Quantity prices are set when a product is added, not edited yet.
+- Loyalty points and product bundles are still open.
+- Nothing has been run in a browser.
+
+## Pass 157 - sales metrics in the monthly digest
+
+- Quota attainment per salesperson, from a monthly target held in the team settings; shown on the first of the month.
+- Pipeline velocity: average days from creation to a win over the last year, shown on the first of the month.
+- Customer lifetime value: a helper that totals paid invoices per customer address.
+- Tests run here: the sales-metrics tests (3 checks), the full npm test chain, and a production Next.js build (see result).
+
+Limits, plainly:
+- No quota field on the Team page yet; no lifetime value column on the Customers page yet.
+- Nothing has run live.
+
+## Pass 156 - fix: business page crash (loggedByEmail not defined)
+
+- The business page called loggedByEmail without importing it, so the page failed to load with "ReferenceError: loggedByEmail is not defined". The import is added.
+- A new test (tests/page-imports.test.mjs) fails if a page or component calls a camel-case library helper it has not imported. It covers the class of error that caused this.
+- Tests run here: the new import check, the full npm test chain (exit 0, 673 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- The import check looks at camel-case helper names only, so it does not catch a missing import of a single generic word such as limit or load.
+- Nothing has been run in a browser.
+
 ## Pass 155 - commission on won deals and the cross-industry framework mapping
 
 - Commission: set a percentage in Account. The monthly digest, on the first of the month, lists each salesperson's deals won last month with their value and commission. Deals with no owner are shown as Unassigned.

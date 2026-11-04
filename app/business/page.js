@@ -21,6 +21,7 @@ import { computeWhyChosen, computeAwayCheck } from "../../lib/independence.js";
 import { sanitizeSops, computeSopCoverage } from "../../lib/sops.js";
 import { computeLineComparison } from "../../lib/lines.js";
 import { computeStock, stockSalesSince } from "../../lib/stock.js";
+import { loggedByEmail } from "../../lib/time-log.js";
 import { computeRisks } from "../../lib/risk.js";
 import { computeValidation } from "../../lib/validation.js";
 import { computeExperiments } from "../../lib/experiments.js";

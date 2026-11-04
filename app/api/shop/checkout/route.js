@@ -12,6 +12,7 @@ import { planStockHold, weightOf } from '../../../../lib/products.js';
 import { sanitizePostage, quotePostage } from '../../../../lib/postage.js';
 import { sanitizeTaxRates, rateForCountry } from '../../../../lib/tax-rates.js';
 import { releaseStock } from '../../../../lib/server/stock-hold.js';
+import { bundleComponentIds, expandForStock } from '../../../../lib/bundles.js';
 import { runTx } from '../../../../lib/server/tx.js';
 import { buildInvoiceWrite, DEFAULT_PAYMENT_TERMS_DAYS } from '../../../../lib/billing.js';
 import { addInvoiceWithCredit } from '../../../../lib/server/credit-apply.js';
@@ -72,7 +73,15 @@ export async function POST(request) {
         const snap = await tx.get(doc(db, 'users', uid, 'products', it.productId));
         lines.push({ productId: it.productId, variantId: it.variantId || '', quantity: it.quantity, product: snap.exists() && !snap.data().archived ? snap.data() : null });
       }
-      const plan = planStockHold(lines);
+      // A bundle takes stock from each of its products, never from the bundle itself. Component reads are inside this transaction.
+      const compProducts = {};
+      for (const cid of bundleComponentIds(lines)) {
+        const cs = await tx.get(doc(db, 'users', uid, 'products', cid));
+        compProducts[cid] = cs.exists() ? cs.data() : null;
+      }
+      const expanded = expandForStock(lines, compProducts);
+      if (expanded.error) return { ok: false, error: expanded.error };
+      const plan = planStockHold(expanded.lines);
       if (!plan.ok) return plan;
       // The new counts: per option for a product with options (every option is written, so none is lost), otherwise the one count.
       const byProduct = new Map();
