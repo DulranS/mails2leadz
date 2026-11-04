@@ -1,3 +1,16 @@
+## Pass 164 - speed to lead, discount-code results, owners and due dates
+
+- New inbound leads with no first reply after an hour get one alert in the pipeline job.
+- The first-of-month digest lists each discount code's uses, revenue and discount for last month.
+- Each item in the weekly action list names an owner and a due date.
+- The pipeline job now reads the inbox each run, to find waiting leads; that is one read per owner per run.
+- Tests run here: the sales-signals tests (3 checks), the action-list tests (updated for the owner and due date), the full npm test chain (exit 0, 705 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Speed-to-lead alerts run on the pipeline timetable: daily on Hobby, hourly on Pro.
+- Discount results show revenue and discount, not margin, because cost of goods is not recorded.
+- Nothing has run against live data.
+
 ## Pass 163 - multi-touch attribution and click-to-call
 
 - Multi-touch attribution (lib/multi-touch.js): each won deal's revenue is split across the channels that touched the customer, under linear, U-shaped, first-touch or last-touch rules. The first-of-month digest shows the top channels for the last 12 months.

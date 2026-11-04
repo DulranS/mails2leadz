@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { collection, doc, limit, onSnapshot, query, updateDoc, where } from "../../lib/client-firestore.js";
 
-const KIND_LABEL = { stall_alert: "Stalled", lost_revival: "Lost, worth a look", renewal_due: "Renewing soon" };
+const KIND_LABEL = { stall_alert: "Stalled", lost_revival: "Lost, worth a look", renewal_due: "Renewing soon", speed_to_lead: "New lead waiting for a reply" };
 
 // Open pipeline alerts. Nothing shown here is sent to anyone: the owner acts in the CRM, then marks the alert done.
 export default function PipelineAlerts({ db, uid }) {

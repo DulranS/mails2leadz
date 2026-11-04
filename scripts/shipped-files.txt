@@ -351,6 +351,7 @@ lib/postage.js
 lib/preflight.js
 lib/products.js
 lib/profit.js
+lib/promo-results.js
 lib/promo-tx.js
 lib/promo.js
 lib/push.js
@@ -502,6 +503,7 @@ lib/site.js
 lib/slack.js
 lib/smart-followup-engine.js
 lib/sops.js
+lib/speed-to-lead.js
 lib/statement-html.js
 lib/statement-token.js
 lib/statement.js

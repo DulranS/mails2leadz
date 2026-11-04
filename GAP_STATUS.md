@@ -1,4 +1,4 @@
-# Business gap status (after Pass 163)
+# Business gap status (after Pass 164)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -119,6 +119,9 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 | Drafted replies to inbound messages | Already in the app: reply triage and draft preparation, held for approval under the first-batch rule. | Existing feature, recorded here for completeness. |
 | Multi-touch attribution (Pass 163) | Revenue from each won deal is split across the channels that touched the customer: the deal's source and the emails sent to them before the win. Linear, U-shaped, first-touch and last-touch models. The first-of-month digest shows the top channels for the last 12 months (linear). | Built in its own module (lib/multi-touch.js); the existing attribution views are unchanged. Channels are as recorded: a deal with no source is unrecorded. Reads sent emails once a month per owner. Not run here against live data. |
 | Click-to-call (Pass 163) | From the CRM, the owner enters their phone and the lead's. Their phone rings first; when they answer, the lead is dialled and the two are joined, using the owner's own Twilio account. | Needs the owner's Twilio keys, and the owner must only call people they may lawfully contact. A national number needs its country code to dial. Not run here against Twilio. |
+| Speed to lead (Pass 164) | A new inbound lead with no first reply after an hour gets one alert in the pipeline job, shown in the alert list and the digest. | Alerts run on the pipeline timetable: daily on Hobby, hourly on Pro. The alert clears when the owner marks it done, not automatically when a reply is sent. Not run here. |
+| Discount-code results (Pass 164) | On the first of each month the digest lists each discount code's uses, revenue and discount given for last month. | Revenue and discount only; the cost of goods is not known to the app, so margin per campaign is not calculated. Not run here. |
+| Owner and due date on actions (Pass 164) | Each item in the weekly action list names an owner (from the deal's owner, or Unassigned) and a due date. | Owners come from the team list and deal owners; invoices and quotes are Unassigned unless their record names someone. Not run here. |
 
 ## Not built
 
@@ -256,4 +259,10 @@ All closable sales and marketing gaps from the Pass 157 and 158 lists are now bu
 ## Deep research check (Pass 163)
 
 The latest sweep of sales engagement and CRM feature lists turned up two items, both now built: multi-touch attribution and click-to-call. Cycle length, win rate by source, forecasting, sequences, call recording and transcription through the AI summaries, and call tracking through the owner's Twilio numbers were already in place.
+
+## Final sales and marketing check (Pass 164)
+
+Checked against the images and video in the latest brief, for the sales and marketing side only. Covered: customer acquisition cost and lifetime value, the repeatable sales process (sales kit and SOPs), pipeline ghosts (stalled-deal and follow-up alerts), speed to lead, KPIs for each salesperson (quota attainment), decisions with an owner and a due date (action list), channel comparison (attribution and acquisition cost), discount-code results, and exceptions such as price-floor approvals.
+
+Left out on purpose, because they are operations, finance, hiring or culture rather than sales and marketing: cash categorisation, weekly cash rhythm, cost-based margin per campaign, hiring and culture, operational fulfilment, and tool consolidation.
 

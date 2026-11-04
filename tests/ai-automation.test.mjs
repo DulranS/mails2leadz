@@ -17,7 +17,7 @@ t('the action list puts overdue follow-ups and invoices first, then stalled deal
     quotes: [{ status: 'sent', sentAt: daysAgo(10), title: 'Website' }],
   });
   assert.deepEqual(list.map((a) => a.kind), ['overdue_followup', 'overdue_invoice', 'stalled_deal', 'quote_no_reply']);
-  assert.match(actionText(list)[1], /Collect INV-1 from Bob Ltd \(5 days overdue\)/);
+  assert.match(actionText(list)[1], /Collect INV-1 from Bob Ltd \(5 days overdue; owner Unassigned, by \d{4}-\d{2}-\d{2}\)/);
 });
 
 t('paid, closed and recent items do not appear in the list', () => {
