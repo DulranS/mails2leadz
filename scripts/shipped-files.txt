@@ -234,6 +234,7 @@ components/RepliesPanel.js
 hooks/useContactTracking.js
 hooks/useDailyQuotas.js
 hooks/useLeadScoring.js
+lib/ab-winner.js
 lib/abandoned-basket.js
 lib/access.js
 lib/account-data.js
@@ -357,6 +358,7 @@ lib/promo.js
 lib/push.js
 lib/quote-core.js
 lib/quote-economics.js
+lib/quote-followup.js
 lib/quotes.js
 lib/rate-limit.js
 lib/raw-email.js
@@ -518,6 +520,7 @@ lib/tiktok-leads.js
 lib/tiktok-sync.js
 lib/time-log.js
 lib/trends.js
+lib/utm.js
 lib/validation.js
 lib/weekly-kpi.js
 lib/whatsapp-log.js

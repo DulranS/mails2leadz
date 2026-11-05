@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, doc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
 import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
@@ -182,6 +182,12 @@ export async function POST(request) {
     const who = identify(request, claimedUserId);
     if (who.response) return who.response;
     const userId = who.uid;
+    // A/B test with a decided winner (see lib/ab-winner.js): the winner goes to everyone, and the send is no longer a test.
+    const abSnap = abTestMode ? await getDoc(doc(db, 'users', userId, 'settings', 'autopilot')).catch(() => null) : null;
+    const abWin = abSnap?.exists?.() && abSnap.data()?.abWinner?.template ? abSnap.data().abWinner.template : null;
+    const effAbMode = abWin ? false : !!abTestMode;
+    const effTemplateA = abWin === 'B' ? templateB : templateA;
+    const effTemplateB = abWin ? null : templateB;
     const angle = isAngleId(angleInput) ? angleInput : ''; // which message angle this email tested (see lib/angles.js)
 
     // CSV-based email sending
@@ -287,7 +293,7 @@ export async function POST(request) {
       const firstName = recipient[fieldMappings?.first_name || fieldMappings?.firstName || ''];
       const lastName = recipient[fieldMappings?.last_name || fieldMappings?.lastName || ''];
       
-      let template = abTestMode && templateA && templateB ? (templateToSend === 'A' ? templateA : templateB) : templateA || templateB || '';
+      let template = effAbMode && effTemplateA && effTemplateB ? (templateToSend === 'A' ? effTemplateA : effTemplateB) : effTemplateA || effTemplateB || '';
       
       let subject = template.subject || '';
       let body = template.body || '';
@@ -316,8 +322,8 @@ export async function POST(request) {
           businessName,
           subject,
           body,
-          template: abTestMode ? templateToSend : 'A',
-          abTest: !!abTestMode, // lets the A/B report count only emails that were really part of a test
+          template: effAbMode ? templateToSend : (abWin || 'A'),
+          abTest: effAbMode, // lets the A/B report count only emails that were really part of a test
           sentAt: new Date().toISOString(),
           opened: false,
           openedCount: 0,

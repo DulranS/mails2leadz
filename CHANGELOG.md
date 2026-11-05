@@ -1,3 +1,36 @@
+## Pass 167 - follow-up on quotes opened but not answered
+
+- A quote the customer opened, that is still open and has been quiet for three days, raises one alert in the pipeline job.
+- The weekly action list includes the same quotes.
+- The pipeline job reads only quotes that have been viewed, so the extra read stays small.
+- Tests run here: the quote follow-up tests (2 checks), the action list tests, the full npm test chain (exit 0, 714 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The alert is for you; nothing is sent to the customer.
+- Not run here against live quotes.
+
+## Pass 166 - automatic A/B winner
+
+- A/B email tests choose their winner automatically once there are at least 100 test sends per version and the reply-rate difference is statistically clear (two-proportion z-test, 95%).
+- The weekly job stores the winner, stops reading the sent-email history once a winner is stored, and the digest says which version won and why.
+- The send screen sends the winner to everyone after that, and records those sends as non-test sends.
+- Tests run here: the winner tests (4 checks), the full npm test chain (exit 0, 712 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Reply rate is the only measure.
+- Winners are per account, not per campaign.
+- Nothing has run against live sends.
+
+## Pass 165 - UTM tagging of outbound links
+
+- Every external link in an outbound email gets utm_source, utm_medium and, where given, utm_campaign, so a click can be traced to the email that sent it.
+- Our own domain, unsubscribe, manage, pay and similar links, and links already tagged, are left exactly as they were. Nothing changes until the public base URL is set.
+- Tests run here: the UTM tests (3 checks), the full npm test chain (exit 0, 708 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Email links only, through the single email builder.
+- Not run here in an analytics tool.
+
 ## Pass 164 - speed to lead, discount-code results, owners and due dates
 
 - New inbound leads with no first reply after an hour get one alert in the pipeline job.

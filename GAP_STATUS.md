@@ -1,4 +1,4 @@
-# Business gap status (after Pass 164)
+# Business gap status (after Pass 167)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -122,6 +122,9 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 | Speed to lead (Pass 164) | A new inbound lead with no first reply after an hour gets one alert in the pipeline job, shown in the alert list and the digest. | Alerts run on the pipeline timetable: daily on Hobby, hourly on Pro. The alert clears when the owner marks it done, not automatically when a reply is sent. Not run here. |
 | Discount-code results (Pass 164) | On the first of each month the digest lists each discount code's uses, revenue and discount given for last month. | Revenue and discount only; the cost of goods is not known to the app, so margin per campaign is not calculated. Not run here. |
 | Owner and due date on actions (Pass 164) | Each item in the weekly action list names an owner (from the deal's owner, or Unassigned) and a due date. | Owners come from the team list and deal owners; invoices and quotes are Unassigned unless their record names someone. Not run here. |
+| UTM tagging of outbound links (Pass 165) | Every external link in an outbound email gets utm_source, utm_medium (email) and, where given, utm_campaign. Links to the business's own domain, opt-out, manage, pay and similar paths, and links already tagged, are left alone. Nothing changes until the public base URL is set. | Email links only, through the one builder every send uses. Tagging does not decide the campaign name; the campaign is only set where a caller gives one. Not run here in an analytics tool. |
+| Automatic A/B winner (Pass 166) | A/B email tests pick their winner automatically once the evidence is clear: each version needs 100 test sends, and the reply-rate difference must be statistically clear (95%). The check runs weekly and stops once a winner is stored. From then on the send screen sends the winner to everyone, and the digest says which version won and why. | Reply rate is the only measure. Test sends only count when the owner ran them as a test. Winners are per account, not per campaign. Not run here against live sends. |
+| Follow-up on quotes opened but not answered (Pass 167) | A quote the customer has opened, that is still open (not accepted, declined or withdrawn, and not expired), and has been quiet for three days, raises one alert in the pipeline job, and appears in the weekly action list. Nothing is sent to the customer. | The alert clears when you mark it done, not when the quote changes. Reads only quotes that have been viewed. Not run here against live quotes. |
 
 ## Not built
 
@@ -265,4 +268,16 @@ The latest sweep of sales engagement and CRM feature lists turned up two items, 
 Checked against the images and video in the latest brief, for the sales and marketing side only. Covered: customer acquisition cost and lifetime value, the repeatable sales process (sales kit and SOPs), pipeline ghosts (stalled-deal and follow-up alerts), speed to lead, KPIs for each salesperson (quota attainment), decisions with an owner and a due date (action list), channel comparison (attribution and acquisition cost), discount-code results, and exceptions such as price-floor approvals.
 
 Left out on purpose, because they are operations, finance, hiring or culture rather than sales and marketing: cash categorisation, weekly cash rhythm, cost-based margin per campaign, hiring and culture, operational fulfilment, and tool consolidation.
+
+## Research sweep (Pass 165)
+
+The final search for sales and marketing gaps turned up one item not yet built: UTM tagging of outbound links. Built in Pass 165. Everything else the sweep covered was already in the app or is consciously left out (see the lists above).
+
+## Research check (Pass 166)
+
+The sweep of email automation platforms turned up automatic A/B winner selection. It is built in Pass 166 with a statistical threshold, not a fixed timer. The remaining items from that sweep were already in the app or are consciously left out.
+
+## Research check (Pass 167)
+
+The sweep found one gap not yet covered: quotes the customer opened but never answered. Built in Pass 167 as an owner alert, with nothing sent to the customer.
 
