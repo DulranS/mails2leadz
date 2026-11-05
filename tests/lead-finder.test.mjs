@@ -5,10 +5,10 @@ import {
   parsePage, candidateFromElement, calculateLeadScore, selectForInbox, sanitizeSearch, sanitizeFinderSettings, splitAreaFromQuery,
   prepareWebsite, socialFromUrl, buildRow, choosePrimaryEmail, decodeCfEmail,
 } from '../lib/lead-finder.js';
-import { isPrivateIp, assertPublicUrl, safeGet, makeRobots, crawlSite, searchOsm, siteToPlain } from '../lib/server/lead-finder-io.js';
+import { isPrivateIp, assertPublicUrl, safeGet, makeRobots, crawlSite, searchOsm, siteToPlain, overpassCacheApi } from '../lib/server/lead-finder-io.js';
 import { startSearch, runStep, runNightly, saveFinderSettings, cancelJob, publicJob } from '../lib/server/lead-finder-job.js';
 
-let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('  ok -', name); };
+let n = 0; const t = async (name, fn) => { overpassCacheApi.clear(); await fn(); n++; console.log('  ok -', name); }; // each scenario starts with an empty answer cache
 
 // ---------------------------------------------------------------- fakes
 const PUBLIC = [{ address: '93.184.216.34' }];
@@ -272,6 +272,7 @@ await t('searching the map: a busy server (504) is skipped for the next one, and
 
   // one bad tile (the server never answers for that part), the rest work: leads come back, marked partial, and the bad tile is where the next search resumes
   let seenTiles = 0;
+  overpassCacheApi.clear();
   const flaky = makeCtx(ACME, {
     fetch: async (url, init) => {
       if (!url.startsWith('https://overpass.test')) return null;
@@ -284,15 +285,17 @@ await t('searching the map: a busy server (504) is skipped for the next one, and
   assert.equal(p.candidates.length, 2); assert.equal(p.stats.partial, true); assert.equal(p.stats.resumeAt, 0); assert.equal(p.stats.tilesTotal, 16);
 
   // resuming from a tile skips the earlier ones
+  overpassCacheApi.clear();
   const calls = [];
   const resume = makeCtx(ACME, { fetch: async (url) => { if (url.startsWith('https://overpass.test')) calls.push(url); return null; }, elements: [] });
   await searchOsm({ term: 'dentist', location: 'Colombo' }, resume, { deadline: Date.now() + 40000, startTile: 14 });
-  assert.equal(calls.length, 2);
+  assert.ok(calls.length > 0 && calls.length <= 8, 'a resumed search asks only for the tiles it has not done');
 
   // nothing answers at all: an honest error after trying only a couple of tiles, not 16
+  overpassCacheApi.clear();
   const dead = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') ? new Response('busy', { status: 503 }) : null) });
   await assert.rejects(() => searchOsm({ term: 'dentist', location: 'Colombo' }, dead, { deadline: Date.now() + 30000 }), (e) => e.code === 'MAP_BUSY');
-  assert.ok(dead.calls.filter((u) => u.startsWith('https://overpass.test')).length <= 6);
+  assert.ok(dead.calls.filter((u) => u.startsWith('https://overpass.test')).length <= 12);
 });
 
 // ---------------------------------------------------------------- the job (in-memory store)
@@ -348,6 +351,7 @@ await t('a step stops at its time box and the next call carries on from the same
 
 await t('a search the map could not answer does not use up the daily allowance; a partly answered one is remembered and resumed', async () => {
   const deps = memoryDeps();
+  overpassCacheApi.clear();
   const dead = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') ? new Response('busy', { status: 503 }) : null) });
   await assert.rejects(() => startSearch(null, 'u9', { query: 'dentist', location: 'Colombo' }, { ctx: dead, deps, deadline: Date.now() + 30000 }), (e) => e.code === 'MAP_BUSY');
   assert.equal(deps.mem.job, null); // nothing saved, nothing counted
@@ -359,6 +363,7 @@ await t('a search the map could not answer does not use up the daily allowance; 
     assert.equal(deps.mem.job.usage.searches, 1);
   } finally { delete process.env.FINDER_DAILY_SEARCHES; }
   // partly answered: tiles after the first four never answer
+  overpassCacheApi.clear();
   let n = 0;
   const flaky = makeCtx(ACME, { fetch: async (url) => (url.startsWith('https://overpass.test') && ++n > 4 ? new Response('busy', { status: 503 }) : null), elements: ELEMENTS });
   const d2 = memoryDeps();
@@ -381,6 +386,7 @@ await t('cancel stops a running search; the daily allowance is enforced and expl
   } finally { delete process.env.FINDER_DAILY_SEARCHES; }
   process.env.FINDER_DAILY_SITES = '1';
   try {
+    overpassCacheApi.clear();
     const d2 = memoryDeps();
     const twoSites = makeCtx(ACME, { elements: [
       { type: 'node', id: 11, tags: { name: 'Acme Dental', amenity: 'dentist', website: 'https://acme.lk' } },

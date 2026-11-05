@@ -1,4 +1,4 @@
-# Business gap status (after Pass 167)
+# Business gap status (after Pass 168)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -280,4 +280,12 @@ The sweep of email automation platforms turned up automatic A/B winner selection
 ## Research check (Pass 167)
 
 The sweep found one gap not yet covered: quotes the customer opened but never answered. Built in Pass 167 as an owner alert, with nothing sent to the customer.
+
+## Lead finder reliability (Pass 168)
+
+The lead finder kept timing out on the free map servers. Cause: each tile waited up to 14 seconds on one server before trying the next, so a 40-second budget covered only one or two tiles on a busy day, and the search then reported that the servers were busy.
+
+Changes: each try asks two map servers at once and keeps the first good answer; each try waits up to 9 seconds; answers to identical tile queries are kept in memory for six hours, so a resumed or repeated search does not ask the public servers again. The map-server load per tile is at most two requests, one tile at a time.
+
+Limits, plainly: the answer cache lives in memory, so it helps while a server instance stays warm, not across cold starts. The search still runs within one request's time limit, so very large areas still finish over several searches (the search resumes where it stopped). Not run here against the live map servers.
 

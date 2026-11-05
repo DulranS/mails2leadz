@@ -1,3 +1,16 @@
+## Pass 168 - lead finder: fewer timeouts on the free map servers
+
+- Each map-server try now asks two public servers at once and keeps the first good answer, so one slow server no longer costs the whole try.
+- Each try waits up to 9 seconds, down from 14 to 18, so a dead server is dropped sooner.
+- Answers to identical tile queries are kept in memory for six hours. A resumed or repeated search does not ask the public servers again.
+- The lead-finder tests now clear the answer cache between scenarios, and their request-count expectations match the new behaviour.
+- Tests run here: the new speed tests (3 checks), the lead-finder suite (23 checks), the full npm test chain (exit 0, 714 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The cache is in memory: it helps while a server instance stays warm, not across cold starts.
+- Very large areas still finish over several searches; the search resumes where it stopped.
+- Not run here against the live map servers.
+
 ## Pass 167 - follow-up on quotes opened but not answered
 
 - A quote the customer opened, that is still open and has been quiet for three days, raises one alert in the pipeline job.
