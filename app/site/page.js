@@ -2,6 +2,7 @@
 // The public page for a business: what it is, what it offers, how to get in touch or book, what customers say, an order form
 // for public products (collect or post), a way to email yourself a saved basket or a link to your orders. Public details only.
 import React, { useEffect, useState } from "react";
+import VisitorVoice from "../components/VisitorVoice.js";
 
 const card = { border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12 };
 const cta = { display: "inline-block", minHeight: 44, lineHeight: "44px", padding: "0 18px", borderRadius: 8, background: "#0d9488", color: "#fff", textDecoration: "none", marginRight: 8, border: 0, cursor: "pointer", fontSize: 16 };
@@ -195,7 +196,8 @@ export default function SitePage() {
               )}
               <form onSubmit={order} style={{ marginTop: 16 }} aria-label="Order online">
                 <h3 style={{ fontSize: 18, marginBottom: 8 }}>Order online</h3>
-                <p style={{ color: "#4b5563", fontSize: 14, marginTop: 0 }}>Choose how many of each. Your invoice shows the final total, including any tax.</p>
+                <VisitorVoice siteKey={key} />
+      <p style={{ color: "#4b5563", fontSize: 14, marginTop: 0 }}>Choose how many of each. Your invoice shows the final total, including any tax.</p>
               {(data?.currencies || []).length > 1 && <label style={{ display: "block", fontSize: 14, marginBottom: 8 }}>Pay in{" "}<select value={chargeCur} onChange={(e) => setChargeCur(e.target.value)} style={{ marginLeft: 6 }}>{data.currencies.map((c, i) => <option key={c.code} value={i === 0 ? "" : c.code}>{i === 0 ? `${c.code} (your currency)` : c.code}</option>)}</select>{chargeCur && chargeCur !== data.currencies[0].code ? <span style={{ color: "#4b5563", marginLeft: 8 }}>About {chargeCur} {(estimate * (data.currencies.find((c) => c.code === chargeCur)?.rate || 0)).toFixed(2)}, fixed when you order</span> : null}</label>}
                 {entries.map((e) => (
                   <label key={e.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>

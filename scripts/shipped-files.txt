@@ -13,6 +13,7 @@ app/api/ai-smart-outreach/route.js
 app/api/ai-targets/route.js
 app/api/auth/callback/route.js
 app/api/autopilot/route.js
+app/api/bids/draft/route.js
 app/api/book/manage/route.js
 app/api/book/request/route.js
 app/api/book/slots/route.js
@@ -143,6 +144,7 @@ app/api/voice/live-session/route.js
 app/api/voice/recording-audio/route.js
 app/api/voice/recording/route.js
 app/api/voice/turn/route.js
+app/api/voice/visitor-session/route.js
 app/api/webhooks/route.js
 app/api/whatsapp/consent/route.js
 app/api/whatsapp/log/route.js
@@ -159,6 +161,7 @@ app/components/AppShell.js
 app/components/AuthFetch.js
 app/components/AuthProvider.js
 app/components/AutoBatchModal.js
+app/components/BidDraft.js
 app/components/BillsPanel.js
 app/components/CRM.js
 app/components/CalendarConnect.js
@@ -186,6 +189,7 @@ app/components/SignalsCard.js
 app/components/StockAdjust.js
 app/components/StorefrontOrders.js
 app/components/TeamAccess.js
+app/components/VisitorVoice.js
 app/components/WorkerQueue.js
 app/components/ui/Button.js
 app/components/ui/Card.js
@@ -250,9 +254,11 @@ lib/apollo.js
 lib/app-routes.js
 lib/assignment.js
 lib/attribution.js
+lib/automation-mode.js
 lib/autosend.js
 lib/back-in-stock.js
 lib/balance.js
+lib/bid-draft.js
 lib/billing-automation.js
 lib/billing-saas.js
 lib/billing.js
@@ -283,6 +289,7 @@ lib/contracts.js
 lib/conversations.js
 lib/credit-apply.js
 lib/credit-notes.js
+lib/cross-sell.js
 lib/currency.js
 lib/customers.js
 lib/dashboard-config.js
@@ -316,6 +323,7 @@ lib/inbound.js
 lib/independence.js
 lib/integrations.js
 lib/invoice-numbering.js
+lib/kpi-scorecard.js
 lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
@@ -332,6 +340,7 @@ lib/manual-stock.js
 lib/marketing.js
 lib/meta-capi.js
 lib/meta-leads.js
+lib/meta-purchases.js
 lib/money.js
 lib/multi-touch.js
 lib/next-actions.js
@@ -343,6 +352,7 @@ lib/outlook.js
 lib/owner-report.js
 lib/partners.js
 lib/payroll.js
+lib/pdl.js
 lib/phone.js
 lib/pipeline-alerts.js
 lib/plan.js
@@ -363,6 +373,7 @@ lib/quotes.js
 lib/rate-limit.js
 lib/raw-email.js
 lib/realtime-voice.js
+lib/recommended-setup.js
 lib/recovery.js
 lib/recurring.js
 lib/redis.js
@@ -447,6 +458,7 @@ lib/server/live-voice.js
 lib/server/loyalty.js
 lib/server/mailbox-verify.js
 lib/server/meta-capi-sync.js
+lib/server/meta-purchases.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
 lib/server/open-track.js
@@ -522,6 +534,7 @@ lib/time-log.js
 lib/trends.js
 lib/utm.js
 lib/validation.js
+lib/visitor-voice.js
 lib/weekly-kpi.js
 lib/whatsapp-log.js
 lib/worker-categories.js

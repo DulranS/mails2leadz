@@ -6,6 +6,7 @@ import PipelineAlerts from "../components/PipelineAlerts.js";
 import LiveVoice from "../components/LiveVoice.js";
 import CallSummary from "../components/CallSummary.js";
 import ClickToCall from "../components/ClickToCall.js";
+import BidDraft from "../components/BidDraft.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -444,6 +445,7 @@ export default function CRMPage() {
       <LiveVoice />
       <CallSummary />
       <ClickToCall />
+      <BidDraft />
       <PipelineAlerts db={db} uid={user.uid} />
       <CRM
         leads={data.leads}

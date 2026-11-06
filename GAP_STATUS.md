@@ -1,4 +1,4 @@
-# Business gap status (after Pass 168)
+# Business gap status (after Pass 174)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -288,4 +288,56 @@ The lead finder kept timing out on the free map servers. Cause: each tile waited
 Changes: each try asks two map servers at once and keeps the first good answer; each try waits up to 9 seconds; answers to identical tile queries are kept in memory for six hours, so a resumed or repeated search does not ask the public servers again. The map-server load per tile is at most two requests, one tile at a time.
 
 Limits, plainly: the answer cache lives in memory, so it helps while a server instance stays warm, not across cold starts. The search still runs within one request's time limit, so very large areas still finish over several searches (the search resumes where it stopped). Not run here against the live map servers.
+
+## Lead enrichment from the uploaded worker and enrich.py (Pass 169)
+
+The uploaded Python tools (autoleads_worker.py, enrich.py, run.bat) were compared with the app's own JavaScript. Most of what they do was already in the app: the map search, website reading (home, contact, about, team and sitemap pages), email and phone extraction, decision makers, company size, tech stack, JSON-LD, lead scores and confidence, CSV import with enrichment, the daily run, and resume after a break.
+
+Closed in Pass 169: Crawl-delay from robots.txt is honoured (capped at ten seconds); a website host that answers 429 or 503 is left alone for its Retry-After (capped at a minute), instead of being asked again at once; and several leads on the same website reuse one crawl in a run.
+
+Not carried over: the Python command-line menu and run.bat. The same steps are the app's own screens and daily run, so no separate program is needed.
+
+Limits, plainly: these are checked by tests, not against live websites or the live map servers.
+
+## Cross-sell suggestions (Pass 170)
+
+Storefront orders record the products bought. The weekly action list now suggests, for each customer, the product that customers who bought one of their products most often also bought, if they don't have it yet. At least two customers must have bought the pair together. Up to three suggestions a week. Nothing is sent to the customer; the owner decides.
+
+Upsell was already covered by the Day-30 check-in template. Not covered: suggestions for service customers, whose orders do not list products, and suggestions in the daily digest (weekly only).
+
+Limits: built from storefront and buy-link orders only, and the suggestion is a pattern in past purchases, not a guarantee of a sale. Checked by tests, not against live orders.
+
+## Less setup, one click (Pass 171)
+
+Account has an "Apply recommended setup" button. It switches on the safe defaults that cost nothing and send nothing: the claim hold on drafts, and the morning brief. It never turns on sending, data sharing or paid credits, and it never changes a choice you have already made.
+
+Limits: it covers only those two defaults. Sending, data sharing, paid enrichment and the Slack, Twilio and provider keys remain your decisions.
+
+## Automation mode (Pass 172)
+
+Account has a "Turn on automation" step with one confirmation. Once confirmed, it turns on: sending (autosend), with every campaign angle approved so the per-campaign approval no longer holds sends back; sign-up sharing with the ad platforms; and paid enrichment for deals. The claim hold stays on, and opt-outs, the suppression list and daily caps still apply.
+
+The app cannot check that you have the right to contact the people on your lists. That confirmation is yours, and the step records that you gave it.
+
+## KPI scorecard (Pass 173)
+
+On the first of each month the digest now opens with a scorecard for last month, computed from the owner's own records: leads in, deals opened, lead-to-deal conversion, won and lost counts, win rate, average won value, and average time to win. A month with nothing shows n/a rather than a misleading zero.
+
+The rest of the sales and marketing KPIs (acquisition cost, lifetime value, quota attainment, pipeline velocity, revenue by channel, discount results, cross-sell) were already reported, in the monthly digest or on the business screen.
+
+Limits: the scorecard reads the lead inbox up to 1,000 records and the deals already loaded, once a month. It is computed from recorded dates, so a deal with no creation date is left out of the cycle time.
+
+
+| Tender response drafts (Pass 174) | Paste a tender in the CRM; the AI returns a first draft: summary, understanding, approach, experience, pricing notes, a compliance checklist and questions for the buyer. Prices, certificates and references are left as placeholders. Nothing is submitted. Rate limited to 10 an hour per owner. | Drafts only; the owner reviews and submits. The draft is as good as the tender text pasted and the profile saved. Not run here against a live AI provider. |
+| Purchase events for consented customers (Pass 174) | Each run sends a Purchase event to Meta for each paid invoice whose buyer is a consented sign-up, with the amount and currency; hashed emails only. Off without the Meta keys and the data-sharing confirmation. | Meta only, not yet Google or TikTok. Sign-up consent is the only consent recognised. Not run here against Meta. |
+| Voice chat for visitors on the public site (Pass 174) | Visitors can talk to the business's assistant from the public site. Switched on by the owner (visitorVoice), rate limited, keyed by the site key, no tools, no prices, no payments. | Browser voice only. Phone calls need a separate always-on voice service and are not built. Not run here against a live voice provider. |
+| Waterfall enrichment (Pass 174) | Deals and inbox leads are enriched with Apollo first (when its key is set), then People Data Labs (when its key is set and Apollo found nothing). Job title, company, size and industry are stored. | Needs at least one of the two keys. Field names follow each provider's documented reply; check them before relying on them. Not run here against either provider. |
+
+## Items previously left out, now built where the code can do it (Pass 174)
+
+- Purchase conversions beyond sign-ups: built for Meta, for consented customers only.
+- Tender responses: built as drafts for the owner to review and submit.
+- Live voice for visitors: built in the browser on the public site. Phone-call voice remains unbuilt because it needs an always-on voice service.
+- Marketplace listings (Etsy, eBay, Amazon and similar): not built. Each needs a seller account and an API approval from the platform. That is an external permission, not a code gap.
+- Server-side conversion sync for Google and TikTok beyond sign-ups: not built here; the same pattern as Meta can be added once each platform's conversion API is confirmed for this account.
 

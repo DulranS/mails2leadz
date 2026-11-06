@@ -1,3 +1,57 @@
+## Pass 174 - tender drafts, Purchase events, visitor voice, waterfall enrichment
+
+- Tender response drafts: paste a tender, get a first draft with placeholders. Nothing is submitted.
+- Purchase events to Meta for paid invoices of consented customers (sign-up consent only).
+- Voice chat for visitors on the public site, switched on by the owner, rate limited, keyed by the site key.
+- Enrichment is a waterfall: Apollo first, then People Data Labs. Either key is enough. The enrichDeals switch no longer requires a specific key.
+- Tests run here: the new sales feature tests (5 checks), the updated switch tests, the full npm test chain (exit 0, 768 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Phone-call voice, marketplace listings and tender submission are not built here.
+- Google and TikTok purchase conversions are not built yet.
+- Nothing has run against live providers.
+
+## Pass 173 - KPI scorecard
+
+- The first-of-month digest opens with a scorecard for last month: leads in, deals opened, lead-to-deal conversion, won and lost, win rate, average won value, and average time to win.
+- Months with no data show n/a, not zero.
+- Tests run here: the scorecard tests (2 checks), the full npm test chain (exit 0, 763 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+## Pass 172 - one-step automation mode
+
+- Account has a 'Turn on automation' step. One confirmation turns on sending, approves every campaign angle, shares sign-ups with the ad platforms, and enables paid deal enrichment.
+- Opt-outs, the suppression list, daily caps and the claim hold still apply. The app cannot verify the owner's right to contact people; the confirmation records that the owner accepts that.
+- The campaign-angle check accepts every angle when all angles are approved.
+- Tests run here: the automation-mode tests (3 checks), the full npm test chain, and a production Next.js build. The code audit found no undefined names or correctness issues.
+
+## Pass 171 - one-click recommended setup
+
+- Account has an 'Apply recommended setup' button. It switches on the claim hold on drafts and the morning brief, and never changes a choice already made.
+- It never turns on sending, data sharing, or paid credits.
+- Tests run here: the recommended-setup tests (2 checks), the full npm test chain (exit 0, 758 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+## Pass 170 - cross-sell suggestions
+
+- The weekly action list suggests, for up to three customers, the product that customers who bought one of their products most often also bought (at least two customers must have bought the pair together). Nothing is sent to the customer.
+- The Monday review loads product names so the suggestion reads properly.
+- Tests run here: the cross-sell tests (2 checks), the action-list tests, the full npm test chain (exit 0, 756 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Built from storefront and buy-link orders only; service customers are not covered.
+- A suggestion is a pattern in past purchases, not a forecast.
+- Checked by tests, not against live orders.
+
+## Pass 169 - lead enrichment from the uploaded worker, checked against the app
+
+- Compared the uploaded Python worker and enrichment tools with the app. Most of their features already existed in the app.
+- Added: Crawl-delay from robots.txt is honoured (capped at ten seconds). A website host that answers 429 or 503 is left alone for its Retry-After (capped at a minute). Several leads on one website reuse one crawl in a run.
+- Test chain fixed: three test files had not been running in the npm test chain (crawl politeness, lead-finder speed, and the pass-115 growth tests). All are now included. One stale expectation in the pass-115 test was updated for the chargeCents field added in the foreign-currency work.
+- Tests run here: the full npm test chain (exit 0, 754 checks), and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Checked by tests, not against live websites or the live map servers.
+- The Python command-line menu and run.bat were not carried over; the app's screens and daily run do the same steps.
+
 ## Pass 168 - lead finder: fewer timeouts on the free map servers
 
 - Each map-server try now asks two public servers at once and keeps the first good answer, so one slow server no longer costs the whole try.

@@ -12,6 +12,7 @@ import { loadList, suppressedEmails } from '../../../../lib/server/signup.js';
 import { syncConfirmedToTiktok } from '../../../../lib/server/tiktok-sync.js';
 import { enrichDealsForUser } from '../../../../lib/server/enrich-deals.js';
 import { syncConfirmedToGoogle } from '../../../../lib/server/google-customer-match.js';
+import { syncPurchasesToMeta } from '../../../../lib/server/meta-purchases.js';
 import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
@@ -41,6 +42,8 @@ export async function GET(request) {
       const prepared = hasAdSync ? { contacts: await loadList(db, uid), suppressed: await suppressedEmails(db, uid) } : null;
       const meta = await syncConfirmedToMeta(db, uid, { now, prepared });
       if (meta.sent) summary.metaSent = (summary.metaSent || 0) + meta.sent;
+      const mp = await syncPurchasesToMeta(db, uid, { now });
+      if (mp.sent) summary.metaPurchases = (summary.metaPurchases || 0) + mp.sent;
       const tt = await syncConfirmedToTiktok(db, uid, { now, prepared });
       if (tt.sent) summary.tiktokSent = (summary.tiktokSent || 0) + tt.sent;
       const gg = await syncConfirmedToGoogle(db, uid, { now, prepared });

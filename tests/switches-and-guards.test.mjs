@@ -9,11 +9,11 @@ import { hashEmail } from '../lib/consent-guard.js';
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 
 t('a switch runs only when the owner turned it on AND the server has its keys', () => {
-  assert.equal(switchState('enrichDeals', {}, {}).status, 'off');
-  assert.equal(switchState('enrichDeals', { switches: { enrichDeals: true } }, {}).status, 'needs_keys');
-  assert.deepEqual(switchState('enrichDeals', { switches: { enrichDeals: true } }, {}).missing, ['APOLLO_API_KEY']);
-  assert.equal(switchState('enrichDeals', { switches: { enrichDeals: true } }, { APOLLO_API_KEY: 'k' }).on, true);
-  assert.equal(switchState('enrichDeals', { switches: { enrichDeals: false } }, { APOLLO_API_KEY: 'k' }).on, false);
+  assert.equal(switchState('googleSync', {}, {}).status, 'off');
+  assert.equal(switchState('googleSync', { switches: { googleSync: true } }, {}).status, 'needs_keys');
+  assert.ok(switchState('googleSync', { switches: { googleSync: true } }, {}).missing.includes('GOOGLE_ADS_DEVELOPER_TOKEN'));
+  assert.equal(switchState('liveVoice', { switches: { liveVoice: true } }, { OPENAI_API_KEY: 'k' }).on, true);
+  assert.equal(switchState('liveVoice', { switches: { liveVoice: false } }, { OPENAI_API_KEY: 'k' }).on, false);
 });
 
 t('the claim hold is on by default and the owner can turn it off', () => {
@@ -23,7 +23,7 @@ t('the claim hold is on by default and the owner can turn it off', () => {
 
 t('only known switches with boolean values are kept', () => {
   assert.deepEqual(sanitizeSwitches({ enrichDeals: true, tiktokSync: 'yes', bogus: true }), { enrichDeals: true });
-  assert.deepEqual(Object.keys(SWITCHES).sort(), ['enrichDeals', 'googleSync', 'holdClaimRisk', 'liveVoice', 'tiktokSync']);
+  assert.deepEqual(Object.keys(SWITCHES).sort(), ['enrichDeals', 'googleSync', 'holdClaimRisk', 'liveVoice', 'tiktokSync', 'visitorVoice']);
 });
 
 t('the claim check flags price, result, guarantee, urgency and superlative wording, and passes plain wording', () => {

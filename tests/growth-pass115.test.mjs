@@ -245,7 +245,7 @@ t('tax rates by country: the owner enters them; an unlisted country uses the def
 
 t('a card refund is planned only against a stored payment with enough left, and never beyond what is owed', () => {
   const inv = { returnRefundDue: 21.6, onlinePaymentIntents: [{ intent: 'pi_1', amount: 60, refunded: 0 }] };
-  assert.deepEqual(planCardRefund({ invoice: inv }), { ok: true, intent: 'pi_1', cents: 2160, index: 0 });
+  assert.deepEqual(planCardRefund({ invoice: inv }), { ok: true, intent: 'pi_1', cents: 2160, chargeCents: 2160, index: 0 }); // a domestic refund is the same in the charge currency
   assert.equal(planCardRefund({ invoice: inv, amount: 30 }).ok, false);
   assert.equal(planCardRefund({ invoice: { returnRefundDue: 5, onlinePaymentIntents: [] } }).ok, false);
   assert.match(planCardRefund({ invoice: { returnRefundDue: 5, onlinePaymentIntents: [] } }).error, /before card references/);

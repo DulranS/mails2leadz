@@ -3,10 +3,12 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut, deleteUser } from "firebase/auth";
-import { arrayUnion, doc, setDoc } from "../../lib/client-firestore.js";
+import { arrayUnion, doc, getDoc, setDoc } from "../../lib/client-firestore.js";
 import { urlBase64ToUint8Array } from "../../lib/push.js";
 import { isSlackWebhook } from "../../lib/slack.js";
 import { SWITCHES, sanitizeSwitches } from "../../lib/switches.js";
+import { recommendedPatch } from "../../lib/recommended-setup.js";
+import { automationPatch, AUTOMATION_CONFIRMATION } from "../../lib/automation-mode.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
@@ -61,6 +63,7 @@ export default function AccountPage() {
   const [dataShare, setDataShare] = useState(false);
   const [switches, setSwitches] = useState({ enrichDeals: false, tiktokSync: false, holdClaimRisk: true });
   const [approvalMsg, setApprovalMsg] = useState("");
+  const [automationOk, setAutomationOk] = useState(false);
   const [angleText, setAngleText] = useState("");
   const [fxLoaded, setFxLoaded] = useState({ json: "[]", asOf: "" });
   const [inboxKey, setInboxKey] = useState({ loading: true, exists: false, adminMode: true, last4: "", fresh: "", error: "", busy: false });
@@ -496,7 +499,28 @@ export default function AccountPage() {
             <div className="sm:col-span-2"><label className={label} htmlFor="commission">Commission on won deals, percent (optional)</label><input id="commission" type="number" min="0" max="100" step="0.5" className={field} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} /><p className="text-xs text-gray-500 mt-1">Shown in the monthly digest per salesperson, from deals won in the month. Blank or 0 turns it off.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="slack">Slack alerts (optional)</label><input id="slack" type="text" className={field} value={slackUrl} onChange={(e) => setSlackUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." /><p className="text-xs text-gray-500 mt-1">Paste a Slack incoming-webhook URL. Hot replies, new enquiries, bookings, payments and accepted quotes are posted there. Leave blank to turn it off.</p></div>
             <div className="sm:col-span-2 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-              <p className={label}>Switches for optional features</p>
+              <p className={label}>Turn on automation</p>
+              <p className="text-xs text-gray-500 mt-1">One step: sending, sign-up sharing, paid enrichment and all campaign angles go on, with opt-outs, the suppression list, daily caps and the claim hold still applied.</p>
+              <label className="mt-2 flex items-start gap-2 text-xs text-gray-700 dark:text-gray-200"><input type="checkbox" className="mt-0.5" checked={automationOk} onChange={(e) => setAutomationOk(e.target.checked)} /><span>{AUTOMATION_CONFIRMATION}</span></label>
+              <button type="button" disabled={!automationOk} onClick={async () => {
+                try {
+                  const p = automationPatch({ confirmed: automationOk });
+                  if (p.error) { setPushMsg(p.error); return; }
+                  await setDoc(doc(db, "users", user.uid, "settings", "business"), p.business, { merge: true });
+                  await setDoc(doc(db, "users", user.uid, "settings", "autopilot"), p.autopilot, { merge: true });
+                  setPushMsg("Automation is on. Sending runs within your daily caps and opt-outs.");
+                } catch (e) { setPushMsg("Could not turn automation on. Try again."); }
+              }} className="mt-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Turn on automation</button>
+              <p className="text-xs text-gray-500 mt-3">Switches for optional features</p>
+              <button type="button" onClick={async () => {
+                try {
+                  const [bizSnap, apSnap] = await Promise.all([getDoc(doc(db, "users", user.uid, "settings", "business")), getDoc(doc(db, "users", user.uid, "settings", "autopilot"))]);
+                  const p = recommendedPatch(bizSnap.data() || {}, apSnap.data() || {});
+                  if (p.business) await setDoc(doc(db, "users", user.uid, "settings", "business"), p.business, { merge: true });
+                  if (p.autopilot) await setDoc(doc(db, "users", user.uid, "settings", "autopilot"), p.autopilot, { merge: true });
+                  setPushMsg(p.business || p.autopilot ? "Recommended setup applied. Your own choices were kept." : "Everything recommended is already set.");
+                } catch (e) { setPushMsg("Could not apply the recommended setup. Try again."); }
+              }} className="mt-2 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-sm">Apply recommended setup</button>
               <p className="text-xs text-gray-500 mt-1">Each one runs only when you turn it on here and the server has its keys (DEPLOYMENT_GUIDE.md). Nothing runs by default.</p>
               <div className="mt-2 space-y-2">
                 {Object.entries(SWITCHES).map(([id, def]) => (
