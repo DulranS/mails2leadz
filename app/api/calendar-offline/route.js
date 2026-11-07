@@ -15,7 +15,7 @@ export async function GET(request) {
   if (!uid) return reply(401, { error: 'Please sign in again.' });
   const available = isAdminMode() && offlineConfigured();
   const c = available ? await loadCalendarConnection(getDb(), uid) : null;
-  return reply(200, { available, connected: !!c && c.status === 'ok', email: c?.email || null, connectedAt: c?.connectedAt || null });
+  return reply(200, { available, connected: !!c && c.status === 'ok', email: c?.email || null, connectedAt: c?.connectedAt || null, redirectUri: calendarRedirectUriFor(request) });
 }
 
 export async function POST(request) {

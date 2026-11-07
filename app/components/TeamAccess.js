@@ -16,6 +16,15 @@ async function call(method, body) {
 }
 
 export default function TeamAccess({ ownerName = "" }) {
+  // A person invited by email joins automatically when they sign in with that address (no link needed).
+  useEffect(() => {
+    let live = true;
+    fetch("/api/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "accept_pending" }) })
+      .then((r) => r.json().catch(() => ({})))
+      .then((j) => { if (live && j && j.accepted) window.location.reload(); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
   const [data, setData] = useState(null);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("manager");

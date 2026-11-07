@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { identify, getDb, actorFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { getEntitlement } from '../../../lib/server/tenant.js';
-import { acceptInvite, createInvite, leaveWorkspace, loadRoster, removeMember, revokeInvite, setMemberRole } from '../../../lib/server/team-store.js';
+import {acceptInvite, createInvite, leaveWorkspace, loadRoster, removeMember, revokeInvite, setMemberRole, acceptPendingInvites } from '../../../lib/server/team-store.js';
 import { sendSystemMail, mailProvider } from '../../../lib/server/system-mail.js';
 import { teamInviteEmail } from '../../../lib/system-emails.js';
 import { seatLimit } from '../../../lib/workspace-access.js';
@@ -44,6 +44,10 @@ export async function POST(request) {
     const action = String(body?.action || '');
     const db = getDb();
 
+    if (action === 'accept_pending') {
+      const r = await acceptPendingInvites(db, { uid: actor.uid, email: actor.email || '' });
+      return ok(r);
+    }
     if (action === 'accept') {
       if (!actor.email) return fail(400, 'Your account has no email address, so the invite cannot be matched.', 'NO_EMAIL');
       const r = await acceptInvite(db, String(body?.token || ''), { uid: actor.uid, email: actor.email });

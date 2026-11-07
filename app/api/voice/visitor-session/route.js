@@ -7,6 +7,7 @@ import { doc, getDoc } from '../../../../lib/server-firestore.js';
 import { switchState } from '../../../../lib/switches.js';
 import { visitorInstructions } from '../../../../lib/visitor-voice.js';
 import { createLiveSession } from '../../../../lib/server/live-voice.js';
+import { secretsFor } from '../../../../lib/server/integration-secrets.js';
 
 const limiter = makeLimiter({ limit: 60, windowMs: 60000 });
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -20,8 +21,9 @@ export async function POST(request) {
   const gate = limiter.hit(uid);
   if (!gate.ok) return json({ error: 'Too many conversations right now. Try again in a minute.' }, 429);
   const biz = (await getDoc(doc(db, 'users', uid, 'settings', 'business')).catch(() => null))?.data?.() || {};
-  if (switchState('visitorVoice', biz, process.env).status !== 'on') return json({ error: 'Voice chat is not available on this page.' }, 409);
-  const s = await createLiveSession({ apiKey: process.env.OPENAI_API_KEY, instructions: visitorInstructions({ businessName: biz?.profile?.businessName || biz.businessName || '', offer: biz.offer || '' }) });
+  const sec = await secretsFor(db, uid, ['OPENAI_API_KEY']);
+  if (switchState('visitorVoice', biz, { ...process.env, ...sec }).status !== 'on') return json({ error: 'Voice chat is not available on this page.' }, 409);
+  const s = await createLiveSession({ apiKey: sec.OPENAI_API_KEY, instructions: visitorInstructions({ businessName: biz?.profile?.businessName || biz.businessName || '', offer: biz.offer || '' }) });
   if (!s.ok) return json({ error: 'Voice chat could not start right now.' }, 502);
   return json({ clientSecret: s.clientSecret, expiresAt: s.expiresAt, model: s.model });
 }

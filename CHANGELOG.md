@@ -1,3 +1,68 @@
+## Pass 180 - TikTok Connect, final scope check
+
+- TikTok Events can be connected by approval: the app finds the first pixel and stores its code and access. No key is pasted.
+- Tests run here: the Connect tests (5 checks), the full npm test chain (exit 0, 786 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- LinkedIn Connect and lead forms need LinkedIn partner approval; not built here.
+- Not run against live platforms.
+
+## Pass 179 - Connect buttons
+
+- Google Ads and Meta Lead Ads can be connected by approval on the platform's page. No key is pasted.
+- The app stores the result for the owner: Google Ads refresh token and account; Meta Page, its token, the app check and a generated verify token.
+- The approval state is signed, short-lived, and tied to the owner and the platform.
+- Tests run here: the Connect tests (4 checks), the full npm test chain (exit 0, 785 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- TikTok, LinkedIn and Twilio are not Connect-ready here (app approval, or no owner-approval flow).
+- Meta Lead Ads needs Meta's app review for accounts other than the app's admins.
+- Not run against the live platforms.
+
+## Pass 178 - TikTok and Google purchase conversions
+
+- TikTok CompletePayment events for consented buyers' paid invoices (hashed).
+- Google Ads enhanced conversions for consented buyers' paid invoices, sent to the owner's conversion action (GOOGLE_ADS_CONVERSION_ACTION, set under Integrations).
+- Each sender runs in the pipeline job, sends each invoice once, and is off without the owner's keys and data-sharing confirmation.
+- Tests run here: the TikTok and Google purchase tests (2 checks), the full npm test chain (exit 0, 781 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live ad platforms. The Google conversion action must be created in Google Ads first.
+
+## Pass 177 - team members join by email on sign-in
+
+- A person invited by email (Account, Team) joins automatically when they open Account signed in with that email. No link needed.
+- Matching uses the verified sign-in email only; seat limits and roles are enforced on the server.
+- The invite link still works.
+- Tests run here: the team sign-in tests (2 checks), the existing team tests, the full npm test chain (exit 0, 779 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Real-time, low-latency phone conversations are not built; AI phone calls are turn-based.
+- Not run against live Google sign-in.
+
+## Pass 176 - per-owner lead-form intake
+
+- Each account has its own lead-form address on Integrations. Typeform, Tally, LinkedIn, TikTok, Google Ads and Meta Lead Ads post there.
+- Every check uses that owner's keys; server keys are not used, so one owner's keys cannot open another owner's forms.
+- A new address stops the old one at once.
+- The operator-level receivers still work for existing setups.
+- Tests run here: the intake tests (7 checks), the full npm test chain (exit 0, 777 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- LinkedIn and TikTok still take the owner's key in the address.
+- Not run against the live form tools.
+
+## Pass 175 - owner keys, and the Google calendar return address
+
+- Newer integrations read the owner's own keys first (saved under Integrations), with the server's keys only as a fallback: Meta sign-up sync and Purchase events, TikTok, Google Ads Customer Match, GA4, Apollo, People Data Labs, and both voice routes.
+- The Integrations calendar card shows the exact return address to add in Google Cloud, with a Copy button.
+- A Google redirect-address mismatch is named on return, instead of a generic error.
+- Tests run here: the calendar redirect tests (2 checks), the updated enrichment-name test, the full npm test chain, and a production Next.js build. The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Lead-form webhook receivers still use the operator's server keys (see GAP_STATUS).
+- The calendar connection works only when the return address in Google Cloud matches the one shown exactly.
+
 ## Pass 174 - tender drafts, Purchase events, visitor voice, waterfall enrichment
 
 - Tender response drafts: paste a tender, get a first draft with placeholders. Nothing is submitted.

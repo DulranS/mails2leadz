@@ -1,4 +1,4 @@
-# Business gap status (after Pass 174)
+# Business gap status (after Pass 180)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -340,4 +340,70 @@ Limits: the scorecard reads the lead inbox up to 1,000 records and the deals alr
 - Live voice for visitors: built in the browser on the public site. Phone-call voice remains unbuilt because it needs an always-on voice service.
 - Marketplace listings (Etsy, eBay, Amazon and similar): not built. Each needs a seller account and an API approval from the platform. That is an external permission, not a code gap.
 - Server-side conversion sync for Google and TikTok beyond sign-ups: not built here; the same pattern as Meta can be added once each platform's conversion API is confirmed for this account.
+
+## Owner keys and the Google calendar return address (Pass 175)
+
+- Owner keys: the newer integrations (Meta sign-up sync and Purchase events, TikTok events, Google Ads Customer Match, GA4 conversions, Apollo and People Data Labs enrichment, and the live and visitor voice) now read the owner's own keys first, saved under Integrations, and use the server's keys only as a fallback. Apollo, People Data Labs, the Meta, TikTok and GA4 keys were added to the list the Integrations page shows.
+- Google calendar connection: the Integrations card now shows the exact return address the app sends to Google, with a Copy button, and names a redirect-address mismatch when Google reports one. The address must match the Authorised redirect URI in Google Cloud character for character.
+- Not changed by this pass: the lead-form webhook receivers (Typeform, Tally, LinkedIn, TikTok leads, Google and Meta lead forms) still read the operator's server keys, because a webhook must be routed to an owner before its signature can be checked. Making them owner-scoped needs a per-owner address or index.
+- The browser message about accounts.google.com and favicon.ico is Google's own sign-in page, not this app; it is not from the app's code.
+
+## Per-owner lead-form intake (Pass 176)
+
+Scope: sales and marketing lead capture only.
+
+Built: each account has its own lead-form address (shown on Integrations, with copy and a new-address button). Typeform, Tally, LinkedIn, TikTok, Google Ads and Meta Lead Ads post to that address. The owner's own keys are used for every check; no server keys are used, so one owner's keys cannot open another owner's forms. A new address stops the old one at once.
+
+Partial, flagged:
+- LinkedIn and TikTok: the owner's key goes in the address as &key=, as before.
+- Meta: the subscription check and the app secret use the owner's keys; lead details are fetched with the owner's page token.
+- The earlier operator-level receivers still work for existing setups. They can be removed once the owner addresses are in use.
+- Not run here against the live form tools.
+
+Consciously left out: any form tool not in the list above.
+
+## Team access and AI follow-ups (Pass 177)
+
+Team access: already built before this pass, by invite. The owner enters a team member's email on Account and chooses a role (manager or viewer). The person signs in with Google using that email and works inside the owner's account. The new step: a pending invite now joins automatically when the invited person opens Account while signed in with that email. Matching uses the verified sign-in email only. Seat limits and roles are enforced on the server.
+
+AI follow-ups and messages: already built (AI follow-up drafts, autosend within your rules, sequences that stop on reply).
+
+AI phone calls: already built as turn-based conversations (the AI speaks, listens and replies on a Twilio call, keyed by your Twilio account).
+
+Not built: real-time, low-latency phone conversations. That needs a voice service that stays connected during the call, which cannot run on this hosting. Live voice in the browser and on the public site is built.
+
+Not run here against live Google sign-in, Twilio or the AI provider.
+
+## Purchase conversions: Meta, TikTok, Google (Pass 178)
+
+- Meta: Purchase events for consented buyers' paid invoices (Pass 174).
+- TikTok: CompletePayment events for consented buyers' paid invoices, hashed, with amount and currency.
+- Google Ads: enhanced conversions for consented buyers' paid invoices, hashed, sent to the owner's conversion action (GOOGLE_ADS_CONVERSION_ACTION, set once under Integrations). GA4 also reports every payment as a purchase, without customer data.
+
+Each sender runs once per pipeline run, sends each invoice once, and is off without the owner's keys and data-sharing confirmation.
+
+Not run here against the live ad platforms. The conversion action must be created in Google Ads first.
+
+## Connect buttons (Pass 179)
+
+Where a platform can hand over access by approval, the owner clicks Connect and approves on the platform's page. Nothing is pasted.
+
+- Google Ads: approve in Google. The app stores the refresh token and the first Google Ads account on the login.
+- Meta Lead Ads: approve in Facebook and pick the Page. The app stores the Page and its token, and generates the Lead Ads verify token and app check itself.
+
+The operator sets these once, on the server: CONNECT_STATE_SECRET, META_APP_ID, META_OAUTH_SECRET, GOOGLE_ADS_DEVELOPER_TOKEN, and the Google OAuth client (already used for Gmail and calendar).
+
+Not built here: Connect for TikTok, LinkedIn and Twilio. TikTok and LinkedIn need their own app approval from the platform; Twilio has no owner-approval flow, so its account keys are pasted. Meta's Lead Ads permission needs Meta's app review before it works for accounts other than the app's own admins.
+
+Not run here against the live platforms.
+
+## TikTok Connect and final scope check (Pass 180)
+
+TikTok Events can be connected by approval: the owner approves in TikTok for Business; the app finds the advertiser's first pixel and stores its code and access. The operator sets TIKTOK_APP_ID and TIKTOK_APP_SECRET once.
+
+Final scope check, sales and marketing only:
+- Built: lead capture from every form and ad channel, enrichment, scoring, routing, follow-ups, outbound with review and automation, quotes, storefront, bookings, invoices and payments, loyalty, bundles, cross-sell, attribution, KPIs and the monthly scorecard, purchase conversions to Meta, TikTok and Google, Connect for Google Ads, Meta and TikTok, per-owner lead-form addresses, team access by email, AI follow-ups, turn-based AI calls, tender drafts.
+- Consciously left out: marketplace listings on third-party platforms (each needs a seller account and approval from the platform); bid submission for government tenders (drafts only, by design); operations, finance and hiring (outside this scope).
+- Blocked by an outside party: LinkedIn lead forms and Connect (LinkedIn partner approval); Meta Lead Ads for accounts other than the app's admins (Meta app review); real-time, low-latency phone calls (needs a voice service that stays connected, which this hosting cannot run).
+- Not run here: any live platform, Google sign-in, Twilio, the AI provider, the lead finder against the live map servers.
 

@@ -7,6 +7,8 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { useAuthUser } from "../components/AuthProvider";
 import SignalsCard from "../components/SignalsCard";
 import CalendarConnect from "../components/CalendarConnect";
+import IntakeUrls from "../components/IntakeUrls";
+import ConnectButtons from "../components/ConnectButtons";
 import OutlookConnect from "../components/OutlookConnect";
 import SignalFeedsCard from "../components/SignalFeedsCard";
 
@@ -438,6 +440,8 @@ export default function IntegrationsPage() {
       </div>
       <div className="mt-4"><SignalsCard /></div>
       <div className="mt-4"><CalendarConnect /></div>
+      <div className="mt-4"><IntakeUrls /></div>
+      <div className="mt-4"><ConnectButtons /></div>
       <div className="mt-4"><OutlookConnect /></div>
       <div className="mt-4"><SignalFeedsCard /></div>
     </DashboardLayout>

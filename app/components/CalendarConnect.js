@@ -15,6 +15,7 @@ const NOTES = {
   no_refresh: "Google did not give a lasting permission. Connect again and allow access.",
   scope: "Google gave a permission for something other than the calendar. Connect again and allow calendar access.",
   unavailable: "Calendar connection is not set up on the server yet.",
+  redirect_mismatch: "Google rejected the return address. Add exactly the address shown below to the Authorised redirect URIs of your Google OAuth client, save, then connect again.",
   error: "The calendar could not be connected. Try again.",
 };
 
@@ -64,6 +65,7 @@ export default function CalendarConnect() {
         ? <div className="flex flex-wrap items-center gap-3"><span className="text-sm text-gray-900 dark:text-white">Connected{state.email ? ` (${state.email})` : ""}</span><button type="button" disabled={busy} onClick={disconnect} className={ghost}>Disconnect</button></div>
         : <button type="button" disabled={busy || !state.available} onClick={connect} className={solid}>Connect Google Calendar</button>}
       {!state.available && !state.connected && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Not available on this server yet.</p>}
+      {state.redirectUri && !state.connected && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 break-all">Authorised redirect URI to add in Google Cloud (exactly this): <code>{state.redirectUri}</code> <button type="button" className="underline ml-1" onClick={() => navigator.clipboard?.writeText(state.redirectUri)}>Copy</button></p>}
       {msg && <p role="status" className="text-sm text-gray-700 dark:text-gray-200 mt-2">{msg}</p>}
     </section>
   );

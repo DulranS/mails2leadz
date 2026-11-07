@@ -26,7 +26,7 @@ t('Hunter contacts are cleaned, sorted by confidence, and any line without a val
 });
 
 t('the contact lookup key is a per-account secret', () => {
-  assert.deepEqual(ENRICH_NAMES, ['HUNTER_API_KEY']);
+  assert.deepEqual(ENRICH_NAMES, ['HUNTER_API_KEY', 'APOLLO_API_KEY', 'PDL_API_KEY']);
   assert.ok(SECRET_NAMES.includes('HUNTER_API_KEY'));
 });
 

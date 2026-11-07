@@ -6,7 +6,7 @@ import { isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb } from '../../../../lib/server/route-helpers.js';
 import { verifyState } from '../../../../lib/server/token-vault.js';
 import { oauthClient, offlineConfigured } from '../../../../lib/server/gmail-offline.js';
-import { CALENDAR_SCOPE, calendarRedirectUriFor, saveCalendarConnection, primaryCalendarEmail } from '../../../../lib/server/calendar-write.js';
+import { CALENDAR_SCOPE, calendarRedirectUriFor, saveCalendarConnection, primaryCalendarEmail, callbackStatusFor } from '../../../../lib/server/calendar-write.js';
 
 const back = (request, status) => NextResponse.redirect(new URL(`/integrations?calendar=${status}`, request.nextUrl.origin));
 
@@ -29,6 +29,6 @@ export async function GET(request) {
     return back(request, 'connected');
   } catch (e) {
     console.error('[calendar-offline callback]', e?.message); // never log tokens or the code
-    return back(request, 'error');
+    return back(request, callbackStatusFor(e));
   }
 }

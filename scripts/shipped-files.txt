@@ -31,6 +31,8 @@ app/api/call-webhook/route.js
 app/api/calls/click/route.js
 app/api/calls/summarise/route.js
 app/api/check-replies/route.js
+app/api/connect/callback/route.js
+app/api/connect/start/route.js
 app/api/contacts/erase/route.js
 app/api/contacts/inbox/route.js
 app/api/contacts/lookup/route.js
@@ -62,7 +64,9 @@ app/api/inbound/attach/route.js
 app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
+app/api/intake/route.js
 app/api/integrations/google-ads-leads/route.js
+app/api/integrations/intake/route.js
 app/api/integrations/linkedin-leads/route.js
 app/api/integrations/meta-leads/route.js
 app/api/integrations/route.js
@@ -169,6 +173,7 @@ app/components/CallSummary.js
 app/components/ClickToCall.js
 app/components/ClientLayout.js
 app/components/CohortPanel.js
+app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
 app/components/DealScreen.js
 app/components/DealWatch.js
@@ -176,6 +181,7 @@ app/components/DraftModal.js
 app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
 app/components/FindLeads.js
+app/components/IntakeUrls.js
 app/components/LegalPage.js
 app/components/LiveVoice.js
 app/components/MarketingSpendPanel.js
@@ -281,6 +287,7 @@ lib/client-firestore.js
 lib/cohorts.js
 lib/commissions.js
 lib/config.js
+lib/connect.js
 lib/connection-status.js
 lib/consent-guard.js
 lib/consent-rules.js
@@ -317,10 +324,12 @@ lib/gift-cards.js
 lib/gmail-text.js
 lib/google-customer-match.js
 lib/google-leads.js
+lib/google-purchases.js
 lib/graceful-degradation.js
 lib/httpClient.js
 lib/inbound.js
 lib/independence.js
+lib/intake.js
 lib/integrations.js
 lib/invoice-numbering.js
 lib/kpi-scorecard.js
@@ -422,6 +431,7 @@ lib/server/broadcast.js
 lib/server/bundles.js
 lib/server/calendar-read.js
 lib/server/calendar-write.js
+lib/server/connect.js
 lib/server/connection-test.js
 lib/server/contact-recovery.js
 lib/server/content-plan.js
@@ -443,12 +453,14 @@ lib/server/ga4.js
 lib/server/gift-card-job.js
 lib/server/gmail-offline.js
 lib/server/google-customer-match.js
+lib/server/google-purchases.js
 lib/server/googleGmailClient.js
 lib/server/ids.js
 lib/server/inbound-messages.js
 lib/server/inbound-stop.js
 lib/server/inbox-store.js
 lib/server/ingest-key.js
+lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
 lib/server/lead-finder-io.js
@@ -493,6 +505,7 @@ lib/server/team-store.js
 lib/server/template-vars.js
 lib/server/tenant-guard.js
 lib/server/tenant.js
+lib/server/tiktok-purchases.js
 lib/server/tiktok-sync.js
 lib/server/token-vault.js
 lib/server/twilio-account.js
@@ -529,6 +542,7 @@ lib/tax-rates.js
 lib/team.js
 lib/tenant.js
 lib/tiktok-leads.js
+lib/tiktok-purchases.js
 lib/tiktok-sync.js
 lib/time-log.js
 lib/trends.js
