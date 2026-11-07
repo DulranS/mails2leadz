@@ -1,4 +1,4 @@
-# Business gap status (after Pass 180)
+# Business gap status (after Pass 182)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -406,4 +406,18 @@ Final scope check, sales and marketing only:
 - Consciously left out: marketplace listings on third-party platforms (each needs a seller account and approval from the platform); bid submission for government tenders (drafts only, by design); operations, finance and hiring (outside this scope).
 - Blocked by an outside party: LinkedIn lead forms and Connect (LinkedIn partner approval); Meta Lead Ads for accounts other than the app's admins (Meta app review); real-time, low-latency phone calls (needs a voice service that stays connected, which this hosting cannot run).
 - Not run here: any live platform, Google sign-in, Twilio, the AI provider, the lead finder against the live map servers.
+
+## Start of day, on open (Pass 181)
+
+The owner's working day starts once, however it starts: the nightly job, or the first time the app is opened that day. The same work runs in both cases (pipeline, alerts, the morning digest), and the day is marked started so it is never repeated. Opening the app also shows a "Today: N to call" list built from open deals and new leads that have a phone number. Each call is one tap; nothing is dialled automatically.
+
+Limits: a day that is never opened and whose nightly job did not run has no start-of-day work until the next open or run. The call list reads up to 500 deals and 300 leads per open, filtered by owner in the query. Not run here against live data.
+
+## Meeting briefs (Pass 182)
+
+Before each confirmed meeting in the next day, the start-of-day routine builds a short brief from your own records: the deal and its value, an open quote and whether it has been opened, unpaid invoices, the last call summary and the agreed next step. A person with no earlier records is marked as a first meeting. The briefs appear when you open the app, with the call list. Nothing is sent.
+
+Also already in the app and covered by the monthly digest: win/loss reasons, the KPI scorecard, and the discount-code results. Price and discount approval is the quote floor (a quote below it needs your approval).
+
+Limits: the brief is built from the records as they are; a call that was never summarised does not appear. Reads up to 200 meetings, 500 invoices, 300 quotes and 300 call notes per open. Not run here against live data.
 

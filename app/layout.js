@@ -12,6 +12,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './components/AuthProvider';
 import AppShell from './components/AppShell';
 import { APP_NAME, APP_DESCRIPTION } from '../lib/brand.js';
+import DayStart from "./components/DayStart.js";
 
 // A malformed NEXT_PUBLIC_BASE_URL must never take the whole site down.
 const SITE_URL = (() => { try { return new URL(String(process.env.NEXT_PUBLIC_BASE_URL || '').trim()).origin; } catch { return ''; } })();
@@ -46,7 +47,7 @@ export default function RootLayout({ children }) {
                   <AuthFetch />
                   <AccessNotice />
                   <ConnectionBanner />
-                  <PwaRegister /><AppShell>{children}</AppShell>
+                  <PwaRegister /><AppShell><DayStart />{children}</AppShell>
                 </AuthProvider>
               </NotificationProvider>
             </ThemeProvider>

@@ -44,6 +44,7 @@ app/api/cron/daily-ops/route.js
 app/api/cron/pipeline/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
+app/api/day/open/route.js
 app/api/deal-screen/route.js
 app/api/deal-watch/route.js
 app/api/deals/assign/route.js
@@ -175,6 +176,7 @@ app/components/ClientLayout.js
 app/components/CohortPanel.js
 app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
+app/components/DayStart.js
 app/components/DealScreen.js
 app/components/DealWatch.js
 app/components/DraftModal.js
@@ -301,6 +303,7 @@ lib/currency.js
 lib/customers.js
 lib/dashboard-config.js
 lib/dashboard-utils.js
+lib/day-start.js
 lib/deal-client.js
 lib/deal-extras.js
 lib/deal-screen.js
@@ -347,6 +350,7 @@ lib/loyalty.js
 lib/mailbox-verify.js
 lib/manual-stock.js
 lib/marketing.js
+lib/meeting-brief.js
 lib/meta-capi.js
 lib/meta-leads.js
 lib/meta-purchases.js
@@ -441,6 +445,7 @@ lib/server/cron-auth.js
 lib/server/customer-mail.js
 lib/server/daily-count.js
 lib/server/daily-ops.js
+lib/server/day-start.js
 lib/server/deal-watch-job.js
 lib/server/domain-mx.js
 lib/server/draft-core.js

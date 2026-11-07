@@ -1,3 +1,25 @@
+## Pass 182 - meeting briefs
+
+- Before each confirmed meeting in the next day, a brief from the owner's records: deal and value, open quote and views, unpaid invoices, last call summary and agreed next step.
+- Shown with the start-of-day block when the app opens. Nothing is sent.
+- Quote records are matched by their customer address.
+- Tests run here: the brief tests (2 checks), the full npm test chain (exit 0, 791 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- A brief only knows what is recorded; unsummarised calls do not appear.
+- Not run against live data.
+
+## Pass 181 - start of day on open
+
+- The day starts once, by whichever comes first: the nightly job or the first app open that day. The same work runs (pipeline, alerts, digest), and the day is marked started.
+- Opening the app shows today's call list (open deals first, then new leads with a number). Each call is one tap; nothing is dialled automatically.
+- The call list is filtered by owner in the query, so another owner's records cannot use up the limit.
+- Tests run here: the start-of-day tests (3 checks), the full npm test chain (exit 0, 789 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- A day with no open and no nightly run gets its work at the next open or run.
+- Not run against live data.
+
 ## Pass 180 - TikTok Connect, final scope check
 
 - TikTok Events can be connected by approval: the app finds the first pixel and stores its code and access. No key is pasted.

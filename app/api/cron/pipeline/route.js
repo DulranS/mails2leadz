@@ -1,7 +1,7 @@
 // app/api/cron/pipeline/route.js - the pipeline check for every autopilot owner: alerts, pushes and the daily digest.
 // Daily on Vercel Hobby (vercel.daily.json); hourly on Pro (vercel.hourly.json) so new alerts reach the owner within the hour.
 import { NextResponse } from 'next/server';
-import { isAdminMode, doc, getDoc } from '../../../../lib/server-firestore.js';
+import { isAdminMode, doc, getDoc, setDoc } from '../../../../lib/server-firestore.js';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { listAutopilotUsers, loadAutopilot } from '../../../../lib/server/prepare-drafts.js';
 import { openMailbox } from '../../../../lib/server/autosend.js';
@@ -40,6 +40,7 @@ export async function GET(request) {
       let box;
       const mailbox = async () => { if (box === undefined) box = await openMailbox(db, uid); return box; };
       const out = await runPipelineForUser(db, uid, { cfg, bs, now, deadline, mailbox, fromName, dateKey, hour, dow });
+      await setDoc(doc(db, 'users', uid, 'settings', 'autopilot'), { lastDayStarted: dateKey, lastDayStartedAt: new Date(now).toISOString() }, { merge: true }).catch(() => null);
       const hasAdSync = !!(process.env.META_DATASET_ID || process.env.TIKTOK_PIXEL_CODE || process.env.GOOGLE_ADS_CUSTOMER_ID);
       const prepared = hasAdSync ? { contacts: await loadList(db, uid), suppressed: await suppressedEmails(db, uid) } : null;
       const meta = await syncConfirmedToMeta(db, uid, { now, prepared });
