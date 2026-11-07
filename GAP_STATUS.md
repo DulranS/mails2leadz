@@ -1,4 +1,4 @@
-# Business gap status (after Pass 187)
+# Business gap status (after Pass 189)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -485,4 +485,32 @@ Limits, plainly:
 - The multiples and cost of capital are your assumptions, not market data.
 - Companies House response fields follow its public API as known at writing; verify them against the current reference.
 - Not run against live Companies House data.
+
+## Buy and resell any asset (Pass 188)
+
+Scope: finding undervalued assets to buy and resell (vehicles, land or property, goods or stock, businesses), alongside selling and marketing. Not investment advice; every result says what it is based on.
+
+Built:
+- Listings for any asset class, each with the fields that matter for it (vehicle: make, model, year, mileage, condition; land or property: address, postcode, area, tenure, title checked; goods; business).
+- Comparables: you paste sold prices (one per line). The app gives the middle price and range, and places the asking price against them.
+- Resale margin after every cost: price, fees, transport, repairs, holding cost per month, and tax. It says whether the margin meets your minimum.
+- Weekly reminder: a listing left for two weeks with no move is flagged to re-price or drop it.
+
+Consciously left out: scraping marketplaces (vehicle, property or goods sites). Their terms forbid it, and the app will not do it. Enter listings and sold prices from your own research or from sources you are allowed to use.
+
+Not built: automatic UK Land Registry comparables. The free Price Paid data can be pasted as the comparables above; a direct feed is not built because its query endpoint is not verified here.
+
+Limits: comparables are only as good as the prices entered; the margin excludes any cost not entered; title, liens, mileage, roadworthiness and tax must be checked by the relevant professionals before buying.
+
+## Land Registry comparables, support queue, sales measures (Pass 189)
+
+Land Registry: a UK postcode fetches sold prices from the official Price Paid data (no key), cached for six hours, and places a listing's asking price against them. If the service does not answer, the owner pastes prices instead. The query predicates follow the Price Paid linked-data model as known at writing; they are not verified against the live endpoint.
+
+Support queue: every new complaint or support alert opens a ticket with a two-hour target, a complaint is high priority, and the owner moves it to in progress or resolved in one tap. The support measures are: open, past target, complaints open, resolved this week, median time to resolve, and the share of tickets meeting the target.
+
+Sales measures, one screen: open pipeline value, won in twelve months, win rate, new leads waiting for a first reply, buy-side tracked and in offer, buy-side realised margin from closed purchases and sales, and open support tickets.
+
+Automation: tickets, alerts, the weekly action list, the monthly scorecard and the Monday company check all run without input. The measures screen reads once when opened.
+
+Not verified here: the Land Registry query endpoint and field names; the Companies House field names; the voice-service endpoints. Each needs one live check before relying on it. Not run against live data.
 

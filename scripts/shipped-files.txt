@@ -84,6 +84,7 @@ app/api/invoices/refund-manual/route.js
 app/api/invoices/return/route.js
 app/api/invoices/send/route.js
 app/api/invoices/ship/route.js
+app/api/kpis/route.js
 app/api/lead-inbox/ingest/route.js
 app/api/lead-inbox/jobs/route.js
 app/api/lead-inbox/key/route.js
@@ -135,6 +136,7 @@ app/api/site/settings/route.js
 app/api/statement/link/route.js
 app/api/statement/route.js
 app/api/stripe/webhook/route.js
+app/api/support/route.js
 app/api/system-check/route.js
 app/api/team/route.js
 app/api/tenant/route.js
@@ -201,6 +203,7 @@ app/components/SignalFeedsCard.js
 app/components/SignalsCard.js
 app/components/StockAdjust.js
 app/components/StorefrontOrders.js
+app/components/SupportAndKpis.js
 app/components/TeamAccess.js
 app/components/VisitorVoice.js
 app/components/WorkerQueue.js
@@ -316,6 +319,7 @@ lib/deal-utils.js
 lib/deal-watch.js
 lib/deals/companies.js
 lib/deals/pipeline.js
+lib/deals/resale.js
 lib/deals/valuation.js
 lib/default-templates.js
 lib/draft-queue.js
@@ -344,6 +348,7 @@ lib/intake.js
 lib/integrations.js
 lib/invoice-numbering.js
 lib/kpi-scorecard.js
+lib/landregistry.js
 lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
@@ -417,6 +422,7 @@ lib/risk.js
 lib/runway.js
 lib/saas-metrics.js
 lib/sales-kit.js
+lib/sales-kpis.js
 lib/sales-metrics.js
 lib/seasonality.js
 lib/send-ramp.js
@@ -477,6 +483,7 @@ lib/server/ingest-key.js
 lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
+lib/server/landregistry.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
 lib/server/lifecycle.js
@@ -513,6 +520,7 @@ lib/server/signup.js
 lib/server/statement.js
 lib/server/stock-hold.js
 lib/server/stripe.js
+lib/server/support-queue.js
 lib/server/suppress.js
 lib/server/system-mail.js
 lib/server/team-store.js
@@ -551,6 +559,7 @@ lib/statement-token.js
 lib/statement.js
 lib/stock.js
 lib/support-alerts.js
+lib/support.js
 lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js

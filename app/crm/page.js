@@ -8,6 +8,7 @@ import CallSummary from "../components/CallSummary.js";
 import ClickToCall from "../components/ClickToCall.js";
 import BidDraft from "../components/BidDraft.js";
 import DealSourcing from "../components/DealSourcing.js";
+import SupportAndKpis from "../components/SupportAndKpis.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -448,6 +449,7 @@ export default function CRMPage() {
       <ClickToCall />
       <BidDraft />
       <DealSourcing />
+      <SupportAndKpis />
       <PipelineAlerts db={db} uid={user.uid} />
       <CRM
         leads={data.leads}

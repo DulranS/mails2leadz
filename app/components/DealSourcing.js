@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 // Buy side and sell side in one place. Public company records and your own numbers only. Not investment advice; nothing is traded or sent.
 const post = (body) => fetch("/api/deals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json().catch(() => ({})));
 const STAGES = ["sourced", "contacted", "nda", "diligence", "offer", "closed_won", "closed_lost"];
+const CLASSES = [["vehicle", "Vehicle"], ["property", "Land or property"], ["goods", "Goods or stock"], ["business", "Business"]];
 
 export default function DealSourcing() {
   const [q, setQ] = useState("");
@@ -14,6 +15,12 @@ export default function DealSourcing() {
   const [check, setCheck] = useState({ price: "", profit: "", revenue: "" });
   const [checkOut, setCheckOut] = useState(null);
   const [ready, setReady] = useState(null);
+  const [asset, setAsset] = useState({ assetClass: "vehicle", name: "", askingPrice: "", details: "" });
+  const [compsFor, setCompsFor] = useState("");
+  const [compsText, setCompsText] = useState("");
+  const [compsOut, setCompsOut] = useState(null);
+  const [mg, setMg] = useState({ buyPrice: "", expectedSale: "", fees: "", transport: "", repairs: "", holdingPerMonth: "", months: "", taxRatePct: "", minMarginPct: "15" });
+  const [mgOut, setMgOut] = useState(null);
 
   const load = () => fetch("/api/deals").then((r) => r.json()).then((j) => setTargets(j.targets || [])).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -60,6 +67,27 @@ export default function DealSourcing() {
           {["name", "askingPrice", "profit", "revenue"].map((k) => (<input key={k} className="border rounded px-2 py-1 bg-white dark:bg-gray-700" placeholder={k} value={listing[k]} onChange={(e) => setListing({ ...listing, [k]: e.target.value })} />))}
         </div>
         <button type="button" onClick={addListingNow} className="mt-1 px-3 py-1 border rounded">Add listing</button>
+      </div>
+
+      <div>
+        <p className="font-medium">Resell anything: add a listing (vehicle, land, goods, business)</p>
+        <div className="grid sm:grid-cols-3 gap-2 mt-1">
+          <select className="border rounded px-2 py-1 bg-white dark:bg-gray-700" value={asset.assetClass} onChange={(e) => setAsset({ ...asset, assetClass: e.target.value })}>{CLASSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <input className="border rounded px-2 py-1 bg-white dark:bg-gray-700" placeholder="Name, e.g. 2015 Corolla" value={asset.name} onChange={(e) => setAsset({ ...asset, name: e.target.value })} />
+          <input className="border rounded px-2 py-1 bg-white dark:bg-gray-700" placeholder="Asking price" value={asset.askingPrice} onChange={(e) => setAsset({ ...asset, askingPrice: e.target.value })} />
+        </div>
+        <button type="button" onClick={async () => { const j = await post({ action: "asset", ...asset }); setMsg(j.error || "Listing added."); if (j.ok) { setAsset({ assetClass: "vehicle", name: "", askingPrice: "", details: "" }); load(); } }} className="mt-1 px-3 py-1 border rounded">Add listing</button>
+        <p className="text-xs mt-2">Sold prices for comparison (one per line: price, date, description). Paste from your own research or a free register you hold.</p>
+        <select className="border rounded px-2 py-1 bg-white dark:bg-gray-700 mt-1" value={compsFor} onChange={(e) => setCompsFor(e.target.value)}><option value="">Choose a listing</option>{targets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+        <textarea className="w-full border rounded px-2 py-1 bg-white dark:bg-gray-700 mt-1" rows={3} value={compsText} onChange={(e) => setCompsText(e.target.value)} placeholder={"12000, 2026-01-03, Corolla 2015\n14500, 2026-02-10, Corolla 2015 low miles"} />
+        <button type="button" disabled={!compsFor} onClick={async () => { const t = targets.find((x) => x.id === compsFor); setCompsOut(await post({ action: "comps", id: compsFor, text: compsText, askingPrice: t?.askingPrice })); }} className="mt-1 px-3 py-1 border rounded">Compare with these sold prices</button>
+        {compsOut?.summary?.ok ? <p className="text-xs mt-1">{compsOut.summary.count} sold prices: middle {compsOut.summary.median}, range {compsOut.summary.low} to {compsOut.summary.high}.{compsOut.summary.verdict ? ` Asking price is ${compsOut.summary.askingVsMedianPct}% against the middle (${compsOut.summary.verdict.replace(/_/g, " ")}).` : ""} {compsOut.skipped ? `${compsOut.skipped} line(s) skipped.` : ""}</p> : compsOut?.error ? <p className="text-xs text-red-600">{compsOut.error}</p> : null}
+        <p className="font-medium mt-3">Resale margin after every cost</p>
+        <div className="grid sm:grid-cols-4 gap-2 mt-1">
+          {["buyPrice", "expectedSale", "fees", "transport", "repairs", "holdingPerMonth", "months", "taxRatePct", "minMarginPct"].map((k) => (<input key={k} className="border rounded px-2 py-1 bg-white dark:bg-gray-700" placeholder={k} value={mg[k]} onChange={(e) => setMg({ ...mg, [k]: e.target.value })} />))}
+        </div>
+        <button type="button" onClick={async () => setMgOut(await post({ action: "margin", ...mg }))} className="mt-1 px-3 py-1 border rounded">Work out the margin</button>
+        {mgOut?.ok ? <p className="text-xs mt-1">Costs {mgOut.costs}, tax {mgOut.tax}, net profit {mgOut.netProfit}, margin {mgOut.marginPct}%. {mgOut.meetsYourRule ? "Meets your minimum margin." : "Below your minimum margin."} {mgOut.note}</p> : mgOut?.error ? <p className="text-xs text-red-600">{mgOut.error}</p> : null}
       </div>
 
       <div>

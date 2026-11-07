@@ -1,3 +1,29 @@
+## Pass 189 - Land Registry comparables, support queue, sales measures
+
+- UK sold prices for a postcode from the official Price Paid data (no key), cached six hours; pasting prices remains the fallback.
+- Support queue: each new complaint or support alert opens a ticket with a two-hour target; one-tap status changes.
+- Support measures: open, past target, complaints open, resolved this week, median time to resolve, share meeting target.
+- Sales measures on one screen: pipeline, twelve-month wins, win rate, waiting leads, buy-side tracked and realised margin, open support.
+- Tests run here: the measures tests (5 checks), the full npm test chain (exit 0, 816 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Land Registry, Companies House and voice-service field names are unverified against live endpoints.
+- Not run against live data.
+
+## Pass 188 - buy and resell any asset
+
+- Listings for vehicles, land or property, goods and businesses, each with its own fields.
+- Comparables from sold prices the owner pastes; the middle price and range; the asking price placed against them.
+- Resale margin after the price, fees, transport, repairs, holding cost and tax, checked against the owner's minimum.
+- A listing left undecided for two weeks is flagged on the weekly list.
+- Price parsing keeps thousands separators (12,000 reads as 12,000).
+- Tests run here: the resale tests (5 checks), the full npm test chain (exit 0, 811 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Marketplace scraping is not built and will not be built.
+- Automatic UK Land Registry feed not built; paste the free data instead.
+- Not run against live data.
+
 ## Pass 187 - deals: buy side and sell side
 
 - Buy side: find UK companies through Companies House (one key), track them, and see transparent signals and red flags. Owner listings can be added. Prices are checked against the owner's benchmarks. Tracked companies are rechecked weekly; only new red flags are reported.

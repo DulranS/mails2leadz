@@ -5,6 +5,9 @@ import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { searchCompanies, trackCompany, addListing, setStage, listTargets } from '../../../lib/server/deals.js';
 import { dealCheck, valueRange, readiness } from '../../../lib/deals/valuation.js';
+import { parseComps, compsSummary, resaleMargin, ASSET_CLASSES } from '../../../lib/deals/resale.js';
+import { addAssetListing, setComps } from '../../../lib/server/deals.js';
+import { soldPricesFor } from '../../../lib/server/landregistry.js';
 
 const limiter = makeLimiter({ limit: 120, windowMs: 3600000 });
 const json = (b, s = 200) => NextResponse.json(b, { status: s, headers: NO_STORE });
@@ -38,6 +41,30 @@ export async function POST(request) {
   if (a === 'track') { const r = await trackCompany(db, who.uid, body.companyNumber, { sicFit: Array.isArray(body.sicFit) ? body.sicFit.map(String).slice(0, 20) : [] }); return json(r, r.ok ? 200 : 400); }
   if (a === 'listing') { const r = await addListing(db, who.uid, body); return json(r, r.ok ? 200 : 400); }
   if (a === 'stage') { const r = await setStage(db, who.uid, body.id, String(body.to || '')); return json(r, r.ok ? 200 : 400); }
+  if (a === 'asset') {
+    const cls = String(body.assetClass || '');
+    if (!ASSET_CLASSES[cls]) return json({ error: 'Choose an asset class: vehicle, property, goods or business.' }, 400);
+    const r = await addAssetListing(db, who.uid, { ...body, assetClass: cls });
+    return json(r, r.ok ? 200 : 400);
+  }
+  if (a === 'comps') {
+    const { comps, skipped } = parseComps(body.text);
+    const r = await setComps(db, who.uid, body.id, comps);
+    const summary = compsSummary(comps, num(body.askingPrice, 0, 1e12));
+    return json({ ...r, skipped, summary }, r.ok ? 200 : 400);
+  }
+  if (a === 'landregistry') {
+    // UK sold prices for a postcode, kept on the listing when an id is given; the owner can always paste prices instead
+    const r = await soldPricesFor(body.postcode);
+    if (!r.ok) return json(r, 502);
+    const summary = compsSummary(r.comps, num(body.askingPrice, 0, 1e12));
+    if (body.id) await setComps(db, who.uid, body.id, r.comps.slice(0, 50));
+    return json({ ok: true, count: r.comps.length, cached: r.cached, summary, comps: r.comps.slice(0, 10) });
+  }
+  if (a === 'margin') {
+    const m = resaleMargin({ buyPrice: num(body.buyPrice, 0, 1e12), expectedSale: num(body.expectedSale, 0, 1e12), fees: num(body.fees, 0, 1e12) ?? 0, transport: num(body.transport, 0, 1e12) ?? 0, repairs: num(body.repairs, 0, 1e12) ?? 0, holdingPerMonth: num(body.holdingPerMonth, 0, 1e12) ?? 0, months: num(body.months, 0, 120) ?? 0, taxRatePct: num(body.taxRatePct, 0, 100) ?? 0, minMarginPct: num(body.minMarginPct, -100, 1000) ?? 15 });
+    return json(m ? { ok: true, ...m } : { error: 'Enter a buy price and an expected sale price above zero.' }, m ? 200 : 400);
+  }
   if (a === 'check') {
     // buy side: is this asking price reasonable against the owner's own benchmark?
     const r = dealCheck({ price: num(body.price, 0, 1e12), profit: num(body.profit, 0, 1e12), revenue: num(body.revenue, 0, 1e12), benchmarkLow: num(body.benchmarkLow, 0, 100) ?? 2.5, benchmarkHigh: num(body.benchmarkHigh, 0, 100) ?? 4, costOfCapital: num(body.costOfCapital, 0, 1) ?? 0.1 });
