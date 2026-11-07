@@ -32,6 +32,8 @@ for (const f of [...walk('app')]) {
   }
   const declared = new Set([...src.matchAll(/(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]));
   for (const m of src.matchAll(/(?:const|let|var)\s*\{([^}]*)\}\s*=/g)) for (const name of m[1].match(/[A-Za-z_$][\w$]*/g) || []) declared.add(name);
+  // array destructuring from a hook, e.g. const [value, setValue] = useState(...)
+  for (const m of src.matchAll(/(?:const|let|var)\s*\[([^\]]*)\]\s*=/g)) for (const name of m[1].match(/[A-Za-z_$][\w$]*/g) || []) declared.add(name);
   for (const name of helpers) {
     if (imported.has(name) || declared.has(name)) continue;
     if (new RegExp(`(?<![\\w$.])${name}\\s*\\(`).test(src)) problems.push(`${f}: ${name}()`);

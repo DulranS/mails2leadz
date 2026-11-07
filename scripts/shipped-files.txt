@@ -51,6 +51,7 @@ app/api/deals/assign/route.js
 app/api/deals/assignees/route.js
 app/api/deals/auto-assign/route.js
 app/api/deals/owner-settings/route.js
+app/api/deals/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
 app/api/exports/accounting/route.js
@@ -141,6 +142,9 @@ app/api/track-company/route.js
 app/api/track/click/route.js
 app/api/track/open/route.js
 app/api/unsubscribe/route.js
+app/api/voice-agent/call/route.js
+app/api/voice-agent/setup/route.js
+app/api/voice-agent/webhook/route.js
 app/api/voice/call/route.js
 app/api/voice/calls/route.js
 app/api/voice/consent/route.js
@@ -178,6 +182,7 @@ app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
 app/components/DayStart.js
 app/components/DealScreen.js
+app/components/DealSourcing.js
 app/components/DealWatch.js
 app/components/DraftModal.js
 app/components/ErrorBoundary.js
@@ -309,6 +314,9 @@ lib/deal-extras.js
 lib/deal-screen.js
 lib/deal-utils.js
 lib/deal-watch.js
+lib/deals/companies.js
+lib/deals/pipeline.js
+lib/deals/valuation.js
 lib/default-templates.js
 lib/draft-queue.js
 lib/enrich-extract.js
@@ -447,6 +455,7 @@ lib/server/daily-count.js
 lib/server/daily-ops.js
 lib/server/day-start.js
 lib/server/deal-watch-job.js
+lib/server/deals.js
 lib/server/domain-mx.js
 lib/server/draft-core.js
 lib/server/easypost.js
@@ -516,6 +525,7 @@ lib/server/token-vault.js
 lib/server/twilio-account.js
 lib/server/tx.js
 lib/server/unsubscribe.js
+lib/server/voice-agent-service.js
 lib/server/voice-agent.js
 lib/server/webhooks.js
 lib/server/whatsapp.js
@@ -540,6 +550,7 @@ lib/statement-html.js
 lib/statement-token.js
 lib/statement.js
 lib/stock.js
+lib/support-alerts.js
 lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js
@@ -554,6 +565,7 @@ lib/trends.js
 lib/utm.js
 lib/validation.js
 lib/visitor-voice.js
+lib/voice-agent.js
 lib/weekly-kpi.js
 lib/whatsapp-log.js
 lib/worker-categories.js

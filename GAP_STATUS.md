@@ -1,4 +1,4 @@
-# Business gap status (after Pass 184)
+# Business gap status (after Pass 187)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -439,4 +439,50 @@ Known costs still open: the daily pipeline reads all open and won deals each run
 - Screens: a scan of every component found no effect without a dependency list, and none depending on a function rebuilt on every render. Two listeners, both cleaned up. This is a static check; it has not been run in a browser.
 
 Not closed here: running the screens in a browser to measure renders; and live cost figures, which need real data.
+
+## Real-time phone conversations, through a voice service (Pass 185)
+
+The gap that the hosting could not close is closed by a voice-agent service the owner connects by key (Vapi, as the reference). The service keeps the call live; the app does the rest:
+
+- Setup (one tap, from the owner's key and phone number): the app creates the owner's assistant with a sales brief, the no-prices and no-payments rules, and a webhook secret the app generates.
+- Calls: one tap per person on the day's call list starts an AI call with the owner's number. Nothing is dialled automatically.
+- Summaries: when a call ends, the service reports it to the owner's address; the summary and agreed next step are kept on the customer's record, so the next brief and call list see them.
+
+Not verified here, by design: the service's exact field names and endpoints follow its documented API as known at writing. Check them against the service's current reference before switching on. Call cost, phone-number purchase and the owner's lawful basis for calling each person are the owner's responsibility.
+
+## Support and valuable quiet customers (Pass 186)
+
+Scope read as: anything that touches selling and marketing, including the customer side of a sale (support for paying customers) and sourcing accounts worth more attention. Buy-side deal sourcing (buying businesses, investing) is outside selling and marketing and is not built.
+
+Built:
+- Complaints and support requests are recognised in replies (a complaint is caught by plain wording and never by a quoted old message; support requests come from the AI triage).
+- A complaint or support request with no answer after two hours raises one alert, shown with the other alerts.
+- Valuable customers (top fifth by value, at most two) with no activity for 120 days get a re-engagement action on the weekly list.
+
+Not built: a full helpdesk (ticket queue, SLA dashboard, knowledge base). That is closer to operations than to selling, so it is consciously left out of this build; the alerts above cover the selling-side risk.
+
+The complaint and support queries need an index on sent emails by owner and reply intent; it is declared in firestore.indexes.json and must be deployed.
+
+## Deals: buy side and sell side (Pass 187)
+
+Scope: finding, checking, buying, selling and investing in businesses, alongside sales and marketing. Not investment advice: every figure says what it is based on, and nothing is traded, offered or sent.
+
+Buy side:
+- Find companies (UK) by name through Companies House, with one key (COMPANIES_HOUSE_API_KEY, set under Integrations). Track a company to see its profile, charges and recent officer changes.
+- Each tracked company gets a signal score from transparent reasons (overdue accounts, insolvency history, unsatisfied charges, leadership turnover, age, sector fit, filing). Red flags are listed on their own.
+- Businesses for sale that you hold a list of can be added with asking price, profit and revenue.
+- A price is checked against your own benchmark multiples, with the implied multiple, payback time and present value of profits at your cost of capital.
+- Every Monday, tracked companies are checked again (at most 20 a run); only red flags that are new are reported, in the week's actions.
+- Deal stages: sourced, contacted, NDA, diligence, offer, won or lost. Stages move one at a time; won is only from the offer stage.
+
+Sell side:
+- A value range from your profit and your own multiples.
+- A sale-readiness check: accounts up to date, customer concentration, recurring revenue, owner dependence, growth, and unsatisfied charges, with what to fix.
+
+Limits, plainly:
+- UK companies only (Companies House). Other countries need their own company register and key.
+- Listings are added by hand or from a list you hold; marketplace listings are not scraped.
+- The multiples and cost of capital are your assumptions, not market data.
+- Companies House response fields follow its public API as known at writing; verify them against the current reference.
+- Not run against live Companies House data.
 

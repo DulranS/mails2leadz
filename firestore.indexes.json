@@ -27,6 +27,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "sent_emails",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "replyIntent",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

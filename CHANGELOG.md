@@ -1,3 +1,43 @@
+## Pass 187 - deals: buy side and sell side
+
+- Buy side: find UK companies through Companies House (one key), track them, and see transparent signals and red flags. Owner listings can be added. Prices are checked against the owner's benchmarks. Tracked companies are rechecked weekly; only new red flags are reported.
+- Deal stages move one at a time; won only from the offer stage.
+- Sell side: a value range from the owner's multiples and a sale-readiness check with what to fix.
+- Import check now understands hook array destructuring (a false positive had been reported for a state setter).
+- Tests run here: the deals tests (6 checks), the full npm test chain (exit 0, 806 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- UK only; other countries need their own company register.
+- Multiples and cost of capital are the owner's assumptions.
+- Companies House field names to be verified; not run live.
+
+## Pass 186 - complaints, support waiting, valuable quiet customers
+
+- Complaints and support requests are reply intents. A complaint is recognised from plain wording; quoted old messages do not count.
+- A complaint or support request with no answer after two hours raises one alert, shown in the alert list.
+- Valuable customers (top fifth by value, at most two) with no activity for 120 days get a re-engagement action on the weekly list.
+- An index for the reply-intent query is declared; it must be deployed.
+- Tests run here: the support and value tests (3 checks), the full npm test chain (exit 0, 800 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- A full helpdesk is not built; it is treated as operations.
+- Buy-side deal sourcing is outside selling and marketing and is not built.
+- Not run against live replies.
+
+## Pass 185 - real-time AI phone calls through a voice service
+
+- The gap the hosting could not close is closed by a voice-agent service connected by key (Vapi as the reference). The service keeps calls connected in real time.
+- Setup creates the owner's assistant (sales brief, no-prices and no-payments rules) from the owner's key and phone number, with a generated webhook secret.
+- Each AI call starts on one tap from the day's call list. Nothing is dialled automatically.
+- Finished calls return to the owner's address; the summary and next step are kept on the customer's record.
+- The original turn-based voice agent is unchanged (lib/server/voice-agent.js).
+- Tests run here: the voice-service tests (4 checks), the full npm test chain (exit 0, 797 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The service's field names and endpoints follow its documented API as known at writing; verify them before switching on.
+- Call costs, phone numbers and the owner's lawful basis for each call are the owner's responsibility.
+- Not run against a live service.
+
 ## Pass 184 - daily reads narrowed, indexes declared, screens scanned
 
 - The daily pipeline reads open, won and recently lost deals in bounded groups, not every deal. The monthly run still reads all deals on the first of the month.

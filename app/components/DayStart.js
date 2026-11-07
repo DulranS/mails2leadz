@@ -7,6 +7,19 @@ let started = false;
 
 export default function DayStart() {
   const [day, setDay] = useState(null);
+  const [callState, setCallState] = useState({});
+
+  // one tap starts one AI call; the assistant talks to the person, the summary comes back to their record
+  const aiCall = async (c) => {
+    setCallState((x) => ({ ...x, [c.phone]: "Starting..." }));
+    try {
+      const res = await fetch("/api/voice-agent/call", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone: c.phone, name: c.name, email: c.email }) });
+      const j = await res.json().catch(() => ({}));
+      setCallState((x) => ({ ...x, [c.phone]: res.ok ? "Calling" : (j.error || "Could not start") }));
+    } catch (e) {
+      setCallState((x) => ({ ...x, [c.phone]: "Could not reach the server" }));
+    }
+  };
 
   useEffect(() => {
     if (started) return;
@@ -41,7 +54,11 @@ export default function DayStart() {
           <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Prepared when you opened the app. Tap a number to call; nothing is dialled for you.</p>
           <ul className="mt-2 space-y-1 text-xs">
             {calls.map((c) => (
-              <li key={c.phone}><a className="underline" href={`tel:${c.phone}`}>{c.name}</a> <span className="text-gray-500">{c.phone} · {c.why}</span></li>
+              <li key={c.phone} className="flex flex-wrap items-center gap-2">
+                <a className="underline" href={`tel:${c.phone}`}>{c.name}</a>
+                <span className="text-gray-500">{c.phone} · {c.why}</span>
+                <button type="button" className="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600" onClick={() => aiCall(c)}>{callState[c.phone] || "AI call"}</button>
+              </li>
             ))}
           </ul>
         </section>
