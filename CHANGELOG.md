@@ -1,3 +1,24 @@
+## Pass 184 - daily reads narrowed, indexes declared, screens scanned
+
+- The daily pipeline reads open, won and recently lost deals in bounded groups, not every deal. The monthly run still reads all deals on the first of the month.
+- firestore.indexes.json and firebase.json declare the composite indexes the narrowed queries need. They must be deployed.
+- Static scan of every component: no effect without a dependency list, and no effect depending on a function rebuilt each render.
+- Tests run here: the index test (1 check), the full npm test chain (exit 0, 793 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The indexes must be deployed before the narrowed daily query runs, or Firestore will reject it.
+- Screens were checked statically, not in a browser.
+
+## Pass 183 - efficiency
+
+- The daily pipeline checks duplicates against the last 90 days of alerts (1,500 at most), not every alert ever written. Every alert carries a creation date, so nothing recent is missed.
+- The start-of-day plan is kept on the owner's settings for 30 minutes. Reopening the app within that time is one read.
+- Tests run here: the day-start tests (4 checks), the full npm test chain (exit 0, 792 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The daily pipeline still reads all open and won deals each run; narrowing that is the next step.
+- Screen effect dependencies were not audited line by line.
+
 ## Pass 182 - meeting briefs
 
 - Before each confirmed meeting in the next day, a brief from the owner's records: deal and value, open quote and views, unpaid invoices, last call summary and agreed next step.

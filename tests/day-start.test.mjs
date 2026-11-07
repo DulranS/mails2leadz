@@ -1,6 +1,6 @@
 // Start of day (Pass 181): the call list is prepared (never dialled), and the day is started once.
 import assert from 'node:assert/strict';
-import { callToday, dayAlreadyStarted } from '../lib/day-start.js';
+import { callToday, dayAlreadyStarted, planIsFresh } from '../lib/day-start.js';
 
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 
@@ -31,6 +31,14 @@ t('the day is started once: the same date key is not started again', () => {
   assert.equal(dayAlreadyStarted('2026-11-05', '2026-11-05'), true);
   assert.equal(dayAlreadyStarted('2026-11-04', '2026-11-05'), false);
   assert.equal(dayAlreadyStarted(undefined, '2026-11-05'), false);
+});
+
+t('a built day plan is shown for 30 minutes on the same day, then rebuilt; another day is never shown', () => {
+  const built = '2026-11-05T08:00:00Z';
+  assert.equal(planIsFresh({ dateKey: '2026-11-05', builtAt: built }, '2026-11-05', Date.parse('2026-11-05T08:20:00Z')), true);
+  assert.equal(planIsFresh({ dateKey: '2026-11-05', builtAt: built }, '2026-11-05', Date.parse('2026-11-05T08:45:00Z')), false);
+  assert.equal(planIsFresh({ dateKey: '2026-11-04', builtAt: built }, '2026-11-05', Date.parse('2026-11-05T08:10:00Z')), false);
+  assert.equal(planIsFresh(null, '2026-11-05'), false);
 });
 
 console.log(`\n${n} passed`);

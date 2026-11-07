@@ -1,4 +1,4 @@
-# Business gap status (after Pass 182)
+# Business gap status (after Pass 184)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -420,4 +420,23 @@ Before each confirmed meeting in the next day, the start-of-day routine builds a
 Also already in the app and covered by the monthly digest: win/loss reasons, the KPI scorecard, and the discount-code results. Price and discount approval is the quote floor (a quote below it needs your approval).
 
 Limits: the brief is built from the records as they are; a call that was never summarised does not appear. Reads up to 200 meetings, 500 invoices, 300 quotes and 300 call notes per open. Not run here against live data.
+
+## Efficiency review (Pass 183)
+
+Screens: two live listeners exist, both clean up when they unmount. The day block loads once per page load (a module flag), and moving between screens does not repeat it. No screen re-fetches on every render. Not yet audited line by line: every screen's effect dependencies, which needs a browser profile.
+
+Server, per owner:
+- Daily pipeline: reads up to 2,000 deals, up to 1,500 alerts from the last 90 days (was 3,000 from all time), and up to 300 leads and 300 viewed quotes. Monthly and weekly extras run only on their day, and the A/B history stops being read once a winner is decided.
+- Start of day: the first open builds the plan (about 1,600 records at most); reopening within 30 minutes costs one read, and the plan is kept on the owner's settings.
+- Ad-platform sends: each sends only new consented records since its last run, and each shares one contact read per run.
+
+Known costs still open: the daily pipeline reads all open and won deals each run, which grows with the owner's deal count. Narrowing that to open deals plus recent wins is the next step.
+
+## Efficiency, closed (Pass 184)
+
+- Daily pipeline reads: open deals (up to 1,500), won deals (up to 400) and recent losses (up to 300), instead of every deal. The first of the month still reads every deal, because the monthly figures need them all.
+- Index file added: firestore.indexes.json (deals by owner and stage; sent emails by owner and test flag), with firebase.json pointing to it. These indexes must be deployed before the narrowed queries run.
+- Screens: a scan of every component found no effect without a dependency list, and none depending on a function rebuilt on every render. Two listeners, both cleaned up. This is a static check; it has not been run in a browser.
+
+Not closed here: running the screens in a browser to measure renders; and live cost figures, which need real data.
 
