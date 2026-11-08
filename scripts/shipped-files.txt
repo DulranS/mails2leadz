@@ -90,6 +90,7 @@ app/api/lead-inbox/jobs/route.js
 app/api/lead-inbox/key/route.js
 app/api/list-sent-leads/route.js
 app/api/list-whatsapp-contacts/route.js
+app/api/listings/shopify/sync/route.js
 app/api/loyalty/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js
@@ -323,6 +324,7 @@ lib/deals/resale.js
 lib/deals/valuation.js
 lib/default-templates.js
 lib/draft-queue.js
+lib/ebay.js
 lib/enrich-extract.js
 lib/erase-contact.js
 lib/error-handler.js
@@ -465,6 +467,7 @@ lib/server/deals.js
 lib/server/domain-mx.js
 lib/server/draft-core.js
 lib/server/easypost.js
+lib/server/ebay-sync.js
 lib/server/enrich-deals.js
 lib/server/enrich.js
 lib/server/erase-contact.js
@@ -513,6 +516,7 @@ lib/server/route-helpers.js
 lib/server/send-ramp.js
 lib/server/sender-auth.js
 lib/server/shared-cache.js
+lib/server/shopify-sync.js
 lib/server/signal-feeds-job.js
 lib/server/signal-job.js
 lib/server/signals-io.js
@@ -545,6 +549,7 @@ lib/setup-status.js
 lib/shipping.js
 lib/shop-basket.js
 lib/shop.js
+lib/shopify.js
 lib/signal-alerts.js
 lib/signals.js
 lib/signup-html.js

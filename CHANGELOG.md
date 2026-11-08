@@ -1,3 +1,45 @@
+## Pass 193 - Shopify and eBay by approval
+
+- Shopify Connect: owner enters the store domain, approves in their own Shopify admin; the store and its token are stored. No pasted token.
+- eBay Connect: owner approves in eBay; a refresh token is stored and renewed on each sync. The pasted token remains a fallback.
+- Tests run here: the Connect tests (5 checks), the new store Connect tests (4 checks), the full npm test chain (exit 0, 826 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Shopify or eBay accounts; token endpoints need one check each.
+
+## Pass 192 - eBay publishing behind a switch
+
+- With the 'Publish changed products on eBay' switch on and a category set, changed products are published as offers using the owner's own shipping, payment and return policies.
+- Policies are read once a day; each product is published once and its ids are kept.
+- The switch is off by default: a published offer is a live listing.
+- Tests run here: the eBay publishing tests (2 checks), the switch list test (updated), the full npm test chain (exit 0, 822 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against a live eBay account; the offer and policy endpoints need one check.
+
+## Pass 191 - eBay inventory sync
+
+- Changed products go to the owner's eBay seller account as inventory items (official Sell Inventory API, owner's own user token).
+- Quantity is the stock on hand, never negative; SKUs are validated; archived products are skipped.
+- Publishing an offer needs the owner's own policies in eBay; that step is left to the owner.
+- Tests run here: the eBay tests (2 checks), the full npm test chain (exit 0, 820 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Items are inventory only; the owner publishes offers in eBay.
+- Not run against a live eBay account.
+
+## Pass 190 - Shopify listings
+
+- Changed products are sent to the owner's own Shopify store through Shopify's official Admin API, with the owner's own access token. Each product is sent once per change, and its store id is kept.
+- The store must be a Shopify store domain, so the token is only ever sent to Shopify.
+- Runs in the daily pipeline; does nothing when no store is connected or nothing changed.
+- Boundary kept: no unsolicited messaging, no removal of opt-out or consent checks, no marketplace scraping.
+- Tests run here: the Shopify tests (2 checks), the full npm test chain (exit 0, 818 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against a live Shopify store.
+- Other marketplaces need per-platform developer approval.
+
 ## Pass 189 - Land Registry comparables, support queue, sales measures
 
 - UK sold prices for a postcode from the official Price Paid data (no key), cached six hours; pasting prices remains the fallback.

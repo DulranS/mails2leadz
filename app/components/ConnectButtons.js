@@ -3,6 +3,8 @@ import React, { useState } from "react";
 // "Connect" buttons: the owner approves on the platform's own page; no key is pasted. The app keeps the access.
 const OPTIONS = [
   { id: "google_ads", label: "Connect Google Ads", note: "Approve in your Google account. The Google Ads account is chosen automatically (the first one on the login)." },
+  { id: "shopify", label: "Connect Shopify store", note: "Approve in your Shopify admin. You will be asked for your store domain first.", needsShop: true },
+  { id: "ebay", label: "Connect eBay seller account", note: "Approve in eBay. The link renews itself, so you do not paste a token." },
   { id: "tiktok_events", label: "Connect TikTok Events", note: "Approve in TikTok for Business. Your pixel is found and connected for you." },
   { id: "meta_leads", label: "Connect Meta Lead Ads", note: "Approve in Facebook and pick your Page. The Lead Ads check is set up for you." },
 ];
@@ -16,7 +18,10 @@ export default function ConnectButtons() {
   const start = async (id) => {
     setBusy(id); setMsg("");
     try {
-      const res = await fetch(`/api/connect/start?p=${encodeURIComponent(id)}`);
+      const opt = OPTIONS.find((o) => o.id === id);
+      let shop = "";
+      if (opt && opt.needsShop) { shop = window.prompt("Your Shopify store domain, for example my-shop.myshopify.com", "") || ""; if (!shop) { setBusy(""); return; } }
+      const res = await fetch(`/api/connect/start?p=${encodeURIComponent(id)}${shop ? `&shop=${encodeURIComponent(shop)}` : ""}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) { setMsg(data.error || "This connection could not start."); setBusy(""); return; }
       window.location.href = data.url;

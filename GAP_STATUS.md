@@ -1,4 +1,4 @@
-# Business gap status (after Pass 189)
+# Business gap status (after Pass 193)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -513,4 +513,38 @@ Sales measures, one screen: open pipeline value, won in twelve months, win rate,
 Automation: tickets, alerts, the weekly action list, the monthly scorecard and the Monday company check all run without input. The measures screen reads once when opened.
 
 Not verified here: the Land Registry query endpoint and field names; the Companies House field names; the voice-service endpoints. Each needs one live check before relying on it. Not run against live data.
+
+## Listings on the owner's own store, and the compliance boundary (Pass 190)
+
+Permission was given to go further on compliance. The boundary that stays, and why:
+- Not built: sending to people who have not agreed to it, removing opt-out or consent checks, calling or texting without consent, or scraping a marketplace against its terms. These harm the people contacted and get the sending domain blocked; the owner's permission does not change that.
+
+Built: product listings to the owner's own Shopify store through Shopify's official Admin API. The owner pastes their store domain and an access token from their own custom app. Only changed products are sent, each once, and the store's product id is kept so later changes update the same listing. The app only sends to a Shopify store domain.
+
+Not built: other marketplaces (eBay, Etsy, Amazon) need the owner's own developer approval per platform; the same pattern applies once that approval exists.
+
+Not run here against a live Shopify store.
+
+## eBay inventory (Pass 191)
+
+Changed products are sent to the owner's own eBay seller account as inventory items, through eBay's official Sell Inventory API, with the owner's own user token (EBAY_USER_TOKEN, set under Integrations). Quantity is the stock on hand, never negative.
+
+Partial, flagged: publishing a listing needs an offer that uses the owner's shipping, return and payment policies and category in their eBay account. That step is not automated; items appear in the eBay inventory, and the owner publishes them in eBay.
+
+Not run here against a live eBay account. The inventory endpoint and its body follow eBay's documented API as known at writing; verify before relying on it.
+
+## eBay publishing, behind an owner switch (Pass 192)
+
+With the owner's switch on (Publish changed products on eBay, under Account), changed products are published as live eBay offers using the owner's own category (set once) and the first shipping, payment and return policies in their eBay account. The owner's policies are read once a day, not for each product. A product is published once; its offer and listing ids are kept on the product.
+
+The switch is off by default, because a published offer is a live listing on the owner's account. Nothing is published without the owner turning it on and setting the category.
+
+Not run here against a live eBay account. The offer and policy endpoints follow eBay's documented API as known at writing; verify them before relying on them.
+
+## Shopify and eBay by approval (Pass 193)
+
+- Shopify: the owner enters their store domain, approves on their own Shopify admin, and the app stores the store and its access token. No token is pasted. The operator registers one Shopify app once (SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET).
+- eBay: the owner approves on eBay; the app stores a long-term refresh token and renews the short-lived access on every sync. No token is pasted. The operator registers one eBay app once (EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_RUNAME). The older pasted token still works as a fallback.
+
+Not run here against live Shopify or eBay accounts. The token endpoints follow each platform's documented OAuth as known at writing; verify them before relying on them.
 

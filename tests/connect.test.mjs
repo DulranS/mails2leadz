@@ -9,7 +9,7 @@ const NOW = Date.parse('2026-11-05T10:00:00Z');
 
 t('a state round-trips for the owner and platform it was made for', () => {
   const st = signState({ uid: 'owner1', provider: 'google_ads', now: NOW }, SECRET);
-  assert.deepEqual(readState(st, SECRET, { provider: 'google_ads', now: NOW + 60000 }), { uid: 'owner1', provider: 'google_ads' });
+  assert.deepEqual(readState(st, SECRET, { provider: 'google_ads', now: NOW + 60000 }), { uid: 'owner1', provider: 'google_ads', extra: {} });
 });
 
 t('a forged, tampered, expired or other-platform state is refused', () => {
