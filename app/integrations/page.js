@@ -11,6 +11,7 @@ import IntakeUrls from "../components/IntakeUrls";
 import ConnectButtons from "../components/ConnectButtons";
 import OutlookConnect from "../components/OutlookConnect";
 import SignalFeedsCard from "../components/SignalFeedsCard";
+import { CATALOG_GROUPS as KEY_GROUPS } from "../../lib/integration-catalog.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -22,37 +23,6 @@ const BADGE = {
   needs_keys: ["Needs keys", "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"],
   not_built: ["Not built yet", "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200"],
 };
-const KEY_GROUPS = [
-  { title: "Ad spend", items: [
-    ["META_ACCESS_TOKEN", "Meta access token", true], ["META_AD_ACCOUNT_ID", "Meta ad account id", false],
-    ["GOOGLE_ADS_DEVELOPER_TOKEN", "Google Ads developer token", true], ["GOOGLE_ADS_CLIENT_ID", "Google Ads client id", false],
-    ["GOOGLE_ADS_CLIENT_SECRET", "Google Ads client secret", true], ["GOOGLE_ADS_REFRESH_TOKEN", "Google Ads refresh token", true],
-    ["GOOGLE_ADS_CUSTOMER_ID", "Google Ads customer id", false], ["GOOGLE_ADS_LOGIN_CUSTOMER_ID", "Google Ads manager id (optional)", false],
-  ] },
-  { title: "AI writing (DeepSeek, OpenAI or Anthropic: one is enough)", items: [
-    ["DEEPSEEK_API_KEY", "DeepSeek API key", true], ["OPENAI_API_KEY", "OpenAI API key", true], ["ANTHROPIC_API_KEY", "Anthropic API key", true],
-  ] },
-  { title: "Company contact lookup (Hunter)", items: [
-    ["HUNTER_API_KEY", "Hunter API key", true],
-  ] },
-  { title: "Shipping labels and tracking (EasyPost)", items: [
-    ["EASYPOST_API_KEY", "EasyPost API key (your own EasyPost account)", true],
-  ] },
-  { title: "Newly registered companies (UK Companies House)", items: [
-    ["COMPANIES_HOUSE_KEY", "Companies House API key (free, from the Companies House developer hub)", true],
-  ] },
-  { title: "Card payments on invoices (your own Stripe account)", items: [
-    ["STRIPE_PAYMENTS_SECRET_KEY", "Stripe secret key", true], ["STRIPE_PAYMENTS_WEBHOOK_SECRET", "Stripe webhook secret", true],
-  ] },
-  { title: "Twilio (SMS, calls, WhatsApp and AI calls)", items: [
-    ["TWILIO_ACCOUNT_SID", "Twilio account SID", false], ["TWILIO_AUTH_TOKEN", "Twilio auth token", true],
-    ["TWILIO_PHONE_NUMBER", "Phone number for SMS and calls", false],
-    ["TWILIO_WHATSAPP_FROM", "WhatsApp sender number", false],
-    ["TWILIO_WA_TEMPLATE_QUOTE", "Approved template id: quote", false],
-    ["TWILIO_WA_TEMPLATE_FOLLOWUP", "Approved template id: follow-up", false],
-    ["TWILIO_WA_TEMPLATE_INVOICE", "Approved template id: invoice", false],
-  ] },
-];
 
 async function post(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

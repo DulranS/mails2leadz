@@ -1,4 +1,4 @@
-# Business gap status (after Pass 195)
+# Business gap status (after Pass 201)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -570,4 +570,79 @@ Still open, by design or by platform rules:
 - LinkedIn Connect and lead forms; Meta Lead Ads beyond the app's own admins.
 - Government tender submission (by choice); marketplace scraping and unsolicited contact (not built).
 - eBay publishing and automation mode stay off until the owner turns them on.
+
+## Automatic customer support on WhatsApp and SMS (Pass 196)
+
+Yes, it is possible, and built within the rules: a customer's own question on WhatsApp or SMS is answered only from the owner's written answer library ("question | answer" lines, on the support screen). The app does not generate free-text answers.
+
+- Answered automatically: a question that matches a library entry clearly (at least two key words and half of the question's words), with the owner's answer and a note that it is automatic.
+- Handed to a person (opens a ticket in the support queue, with the message): complaints, refunds, payment or charge problems, legal or fraud words, requests for a person, anything not covered by the library, and automatic replies from other systems.
+- Never answered: STOP and its variants (the opt-out is handled as before), and empty messages.
+- Limits: at most five automatic replies to one customer per day; replies go from the number the customer wrote to.
+- Off by default: turn on "Answer customers' WhatsApp and SMS questions" under Account, with Twilio set up.
+- Measures: automatically answered tickets are counted in the support measures.
+
+Not built, on purpose: free-text AI answers to customers, and any reply to a complaint, refund or payment matter without a person.
+
+Not run here against live Twilio messages.
+
+## Smart support desk (Pass 197)
+
+Routing: a new ticket goes to the least-loaded team member; complaints and high-priority tickets go to an owner or manager first; viewers never take tickets. Assignment can be changed in one tap.
+
+Targets: every ticket has a two-hour target. Tickets are shown as on track, due soon (three quarters of the target used), past target, or done.
+
+Escalation: a ticket past target raises one alert to the owner, once. Two hours past target, the alert says it should be reassigned.
+
+Answers: the queue offers a ready answer from the owner's library for WhatsApp and SMS questions, and an agent can send their own reply from the queue, from the number the customer wrote to.
+
+Customer history: each ticket shows whether the customer has written before and whether they have another open ticket.
+
+Measures: target missed (of answered tickets), answered automatically, unassigned work, open and done per agent, past-target count per agent, complaint and question counts, and repeat customers.
+
+Limits: routing uses load and role only, not skills or time zones. Email replies are not part of the queue; they stay in the inbox. Not run here against live messages.
+
+## Deals panel layout (Pass 198)
+
+The deals panel is now seven numbered sections, each opening with one tap: find companies, your pipeline, add a listing, compare with sold prices (with the UK postcode lookup), the resale margin, the price check, and the sale-readiness check. Inputs are labelled, sized for touch, and laid out in one column on phones and two on wider screens. Results appear as clear cards with a status line. The same actions run on the server as before.
+
+Not checked in a browser; check the panel on a phone and a desktop.
+
+## Deal finding and undervalued resale listings (Pass 199)
+
+Built:
+- Deal finder on eBay's official Browse API. The owner saves up to five search words; each week, and on "Look now", the app searches eBay with the operator's eBay app key and keeps listings at least 20% below the middle of that search's results as candidates in the deals pipeline. Each candidate shows its price, its discount to the middle, its condition, and a link.
+- Undervalued means below the middle of today's listings for the same search. It is not a sold price or a valuation. The screen says so.
+- Owner-entered listings and UK sold-price comparables (Pass 188 and 189) remain for everything else.
+
+Not built, and not going to be:
+- Scraping marketplaces or classified sites (for example Facebook Marketplace, Craigslist, car or property portals). Their terms forbid it.
+
+Not available from an official source, so not built: sold-price data for eBay (requires eBay's restricted Marketplace Insights access); a property listings feed; a car listings feed outside eBay Motors. Owners can add these by hand, and the comparables screen handles sold prices they enter.
+
+Not run here against the live eBay API.
+
+## One key wherever possible (Pass 200)
+
+Where a feature used to need several values pasted in, the owner now connects once and the rest is found from their account:
+- Google (one approval): the Google Ads account, the refresh token, the GA4 measurement id and secret (from the owner's first web data stream), and the purchase conversion action. Owners who connected Google before must reconnect once, to approve the analytics permission.
+- Voice agent: the voice key alone; the phone number on the account is found from it.
+- Shopify and eBay: one approval each (already).
+- TikTok and Meta Lead Ads: one approval each (already); TikTok's pixel is found automatically. Meta's pixel for purchase events is not found automatically yet: it needs the ads-read permission, which goes through Meta's app review.
+
+Still more than one value: Stripe (secret and webhook secret, unless Stripe Connect is added); Twilio (account SID, token and number, which Twilio does not let an approval supply); Slack (one webhook address); lead-form tools that sign their messages (one secret each, as the form tool shows it).
+
+Not run here against the live Google, GA4 or Vapi APIs; the endpoint shapes follow each documented API as known at writing.
+
+## Every key has a place to enter it (Pass 201)
+
+A check found that the Integrations screen showed 23 of the 50 owner keys the app stores. The other 27, including Companies House, Shopify, eBay, TikTok, GA4, Apollo, People Data Labs, the voice service and the form-tool secrets, could not be entered on the screen at all.
+
+Fixed:
+- One catalog (lib/integration-catalog.js) lists every key in 16 groups. The screen is built from it.
+- A test fails if the screen and the server's list of keys ever differ, so a key cannot be stored without a place to enter it.
+- Cards added for Companies House, Shopify, eBay, TikTok Events and the Vapi voice service, each with what it unlocks, how it runs, and its consent limits.
+- Connection checks added for Companies House, Shopify (the domain is checked before any request) and the voice service.
+
+Multi-field connections stay as they are: each field is shown and saved on its own. Not run here against the live services.
 

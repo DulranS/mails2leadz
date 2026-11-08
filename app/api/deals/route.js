@@ -1,6 +1,7 @@
 // app/api/deals/route.js - buy-side sourcing and sell-side readiness for the signed-in owner. Nothing here sends anything or trades.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { doc, setDoc } from '../../../lib/server-firestore.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { searchCompanies, trackCompany, addListing, setStage, listTargets } from '../../../lib/server/deals.js';
@@ -8,6 +9,7 @@ import { dealCheck, valueRange, readiness } from '../../../lib/deals/valuation.j
 import { parseComps, compsSummary, resaleMargin, ASSET_CLASSES } from '../../../lib/deals/resale.js';
 import { addAssetListing, setComps } from '../../../lib/server/deals.js';
 import { soldPricesFor } from '../../../lib/server/landregistry.js';
+import { searchUndervalued } from '../../../lib/server/ebay-discovery.js';
 
 const limiter = makeLimiter({ limit: 120, windowMs: 3600000 });
 const json = (b, s = 200) => NextResponse.json(b, { status: s, headers: NO_STORE });
@@ -60,6 +62,15 @@ export async function POST(request) {
     const summary = compsSummary(r.comps, num(body.askingPrice, 0, 1e12));
     if (body.id) await setComps(db, who.uid, body.id, r.comps.slice(0, 50));
     return json({ ok: true, count: r.comps.length, cached: r.cached, summary, comps: r.comps.slice(0, 10) });
+  }
+  if (a === 'searches') {
+    const terms = (Array.isArray(body.terms) ? body.terms : String(body.terms || '').split(/[,\n]/)).map((t) => String(t).trim().slice(0, 80)).filter((t) => t.length >= 2).slice(0, 5);
+    await setDoc(doc(db, 'users', who.uid, 'settings', 'business'), { dealSearches: terms }, { merge: true });
+    return json({ ok: true, saved: terms.length });
+  }
+  if (a === 'discover') {
+    const r = await searchUndervalued(db, who.uid);
+    return json({ ok: true, ...r });
   }
   if (a === 'margin') {
     const m = resaleMargin({ buyPrice: num(body.buyPrice, 0, 1e12), expectedSale: num(body.expectedSale, 0, 1e12), fees: num(body.fees, 0, 1e12) ?? 0, transport: num(body.transport, 0, 1e12) ?? 0, repairs: num(body.repairs, 0, 1e12) ?? 0, holdingPerMonth: num(body.holdingPerMonth, 0, 1e12) ?? 0, months: num(body.months, 0, 120) ?? 0, taxRatePct: num(body.taxRatePct, 0, 100) ?? 0, minMarginPct: num(body.minMarginPct, -100, 1000) ?? 15 });

@@ -1,3 +1,73 @@
+## Pass 201 - every key has a place on the Integrations screen
+
+- The screen showed 23 of the 50 stored keys; now one catalog (16 groups) shows all of them, and a test keeps the screen and the server in step.
+- Cards for Companies House, Shopify, eBay, TikTok Events and the Vapi voice service, with their limits.
+- Connection checks for Companies House, Shopify (domain checked first) and the voice service.
+- Tests run here: the catalog tests (2 checks), the full npm test chain (exit 0, 845 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser; the new cards and fields need a look.
+- Connection checks exist only for the services listed; the rest are saved, not tested.
+
+## Pass 200 - one key wherever possible
+
+- The Google connection also sets up the GA4 measurement id and secret from the owner's first web stream, and creates the purchase conversion action in Google Ads. Owners must reconnect once to approve analytics access.
+- The voice agent needs only its key; the phone number is found from the account.
+- Still more than one value: Stripe, Twilio, Slack, and signed lead-form tools (listed in GAP_STATUS). Meta's pixel needs the ads-read permission, which needs Meta's review.
+- Tests run here: the one-key tests (4 checks), the full npm test chain (exit 0, 843 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against the live Google, GA4 or Vapi APIs.
+- Owners who connected Google before must reconnect once.
+
+## Pass 199 - deal finder on eBay's official API
+
+- Owners save up to five search words. Each week (and on 'Look now'), eBay's official Browse API is searched with the operator's app key.
+- Listings at least 20% below the middle of that search's results are kept as candidates in the deals pipeline, with price, discount, condition and link.
+- Labelled honestly: compared with today's listings, not sold prices.
+- Scraping of other marketplaces is not built.
+- Tests run here: the deal-finder tests (2 checks), the full npm test chain (exit 0, 839 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against the live eBay API.
+- eBay sold-price data is restricted; not available here.
+
+## Pass 198 - deals panel layout
+
+- The deals panel is rebuilt as seven numbered sections, each opening with one tap, with labelled inputs and touch-sized buttons.
+- Results show as clear cards. The UK sold-price lookup by postcode is now on the screen.
+- Tests run here: the full npm test chain (exit 0, 837 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser.
+
+## Pass 197 - smart support desk
+
+- New tickets are routed to the least-loaded team member; complaints and high-priority tickets go to owners and managers first; viewers never take tickets.
+- Each ticket shows on track, due soon, past target, or done against its two-hour target.
+- A ticket past target raises one owner alert; two hours past target, the alert says to reassign.
+- The queue shows a ready answer from the library, customer history, and lets agents assign and reply to WhatsApp and SMS questions.
+- Measures per agent and overall: target missed, answered automatically, unassigned, open and done, past target, reasons, repeat customers.
+- Tests run here: the smart-support tests (6 checks), the full npm test chain (exit 0, 837 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Routing uses load and role only; no skills or time zones.
+- Email replies stay in the inbox.
+- Not run against live messages.
+
+## Pass 196 - automatic WhatsApp and SMS support
+
+- A customer's WhatsApp or SMS question is answered only from the owner's answer library, when the auto-reply switch is on.
+- Complaints, refunds, payment or legal matters, requests for a person, uncovered questions and automatic replies from other systems go to the support queue with the message.
+- STOP is never answered; empty messages are never answered; at most five automatic replies per customer per day.
+- The answer library is set on the support screen ('question | answer' lines). Automatically answered tickets are counted in the support measures.
+- The switch is off by default.
+- Tests run here: the support-bot tests (5 checks), the switch list test (updated), the full npm test chain (exit 0, 831 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Twilio messages.
+- Free-text AI answers to customers are not built, by design.
+
 ## Pass 195 - gap check
 
 - Five composite-index queries were missing their indexes; declared.

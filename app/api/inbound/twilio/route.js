@@ -10,6 +10,7 @@ import { suppressContact } from '../../../../lib/server/suppress.js';
 import { secretsFor, accountForNumber } from '../../../../lib/server/integration-secrets.js';
 import { verifyTwilioSignature, parseInbound, isStopKeyword } from '../../../../lib/server/inbound-messages.js';
 import { getDoc, doc, updateDoc } from '../../../../lib/server-firestore.js';
+import { handleSupportMessage } from '../../../../lib/server/support-bot.js';
 
 const xml = (body = '<Response/>', status = 200) => new NextResponse(body, { status, headers: { 'Content-Type': 'text/xml; charset=utf-8', ...NO_STORE } });
 
@@ -58,6 +59,9 @@ export async function POST(request) {
       await updateDoc(m.ref, { consent: false, withdrawnAt: new Date().toISOString(), withdrawnBy: `${msg.channel}-stop` }).catch(() => {});
       if (m.email) await suppressContact(db, { uid, email: m.email, reason: 'unsubscribed', source: `${msg.channel}_stop` }).catch(() => {});
     }
+  } else {
+    // a question: answered from the owner's library when on, otherwise queued for a person
+    await handleSupportMessage(db, uid, { channel: msg.channel, from: phone, to: msg.to, body: msg.body });
   }
   return xml();
 }
