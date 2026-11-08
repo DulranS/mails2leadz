@@ -1,4 +1,4 @@
-# Business gap status (after Pass 193)
+# Business gap status (after Pass 195)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -547,4 +547,27 @@ Not run here against a live eBay account. The offer and policy endpoints follow 
 - eBay: the owner approves on eBay; the app stores a long-term refresh token and renews the short-lived access on every sync. No token is pasted. The operator registers one eBay app once (EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, EBAY_RUNAME). The older pasted token still works as a fallback.
 
 Not run here against live Shopify or eBay accounts. The token endpoints follow each platform's documented OAuth as known at writing; verify them before relying on them.
+
+## Easier to use (Pass 194)
+
+- The CRM screen opens with what needs you today (the start-of-day list, meetings, support and alerts), then your leads and deals.
+- Voice, call summaries, click-to-call, tender drafts, deal sourcing and resale sit under one "More tools" section, opened with one tap. Each section is a native disclosure: works with keyboard, screen readers and touch, with no script.
+- A short line on the CRM screen says where things are.
+
+Not verified visually: this pass changes structure and order; it has not been looked at in a browser. Check the screen on a phone and a desktop before relying on the new order.
+
+## Gap check (Pass 195)
+
+Checked by reading the code, not by running it against live services.
+
+Found and fixed:
+- Five queries that filter on a range or list alongside an equality had no declared index. Declared now (sent emails by owner and send time; by owner, recipient and send time; by owner and phone; SMS by owner, recipient and send time; follow-up tasks by status and completion). Without them these queries would be rejected in production.
+- The regenerated setup template had dropped 43 settings the earlier hand-written template had, including the admin and allowed emails, the cron and webhook secrets, the Firebase service account, the public Firebase settings, Stripe and Twilio. They are restored as a core group, and the operator settings added in later passes are listed too.
+
+Still open, by design or by platform rules:
+- Live checks of Companies House, Land Registry, the voice service, Shopify, eBay and the token endpoints.
+- Visual check of the CRM screen in a browser.
+- LinkedIn Connect and lead forms; Meta Lead Ads beyond the app's own admins.
+- Government tender submission (by choice); marketplace scraping and unsolicited contact (not built).
+- eBay publishing and automation mode stay off until the owner turns them on.
 

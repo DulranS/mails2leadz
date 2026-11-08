@@ -181,6 +181,7 @@ app/components/CallSummary.js
 app/components/ClickToCall.js
 app/components/ClientLayout.js
 app/components/CohortPanel.js
+app/components/Collapsible.js
 app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
 app/components/DayStart.js

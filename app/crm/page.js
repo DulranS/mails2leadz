@@ -37,6 +37,7 @@ import {
   setDoc,
 } from "../../lib/client-firestore.js";
 import { getAuth, browserLocalPersistence } from "firebase/auth";
+import Collapsible from "../components/Collapsible.js";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -444,11 +445,7 @@ export default function CRMPage() {
       title="CRM & Deals"
       subtitle="Manage leads, deals, and customer interactions"
     >
-      <LiveVoice />
-      <CallSummary />
-      <ClickToCall />
-      <BidDraft />
-      <DealSourcing />
+      <p className="mx-4 mt-3 text-sm text-gray-600 dark:text-gray-300">Start here: what needs you today is at the top. Your leads and deals are below. Everything else is under More tools.</p>
       <SupportAndKpis />
       <PipelineAlerts db={db} uid={user.uid} />
       <CRM
@@ -471,6 +468,13 @@ export default function CRMPage() {
         onAddLead={handleAddLead}
         onRename={handleRename}
       />
+      <Collapsible title="More tools" hint="Voice, call summaries, click-to-call, tender drafts, deal sourcing and resale">
+      <LiveVoice />
+      <CallSummary />
+      <ClickToCall />
+      <BidDraft />
+      <DealSourcing />
+      </Collapsible>
       <LostReasonModal
         target={lostPrompt}
         onCancel={() => setLostPrompt(null)}

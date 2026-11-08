@@ -1,3 +1,19 @@
+## Pass 195 - gap check
+
+- Five composite-index queries were missing their indexes; declared.
+- The regenerated setup template had dropped 43 core settings; restored as a core group, with later operator settings listed.
+- Tests run here: the full npm test chain (exit 0, 826 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+## Pass 194 - easier to use
+
+- The CRM screen opens with today's work (start-of-day list, meetings, support, alerts), then leads and deals.
+- Voice, call summaries, click-to-call, tender drafts, deal sourcing and resale are under one 'More tools' section, opened with one tap.
+- The sections are native disclosures: keyboard, screen-reader and touch friendly, no script.
+- Tests run here: the full npm test chain (exit 0, 826 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked visually in a browser; check the new order on a phone and a desktop.
+
 ## Pass 193 - Shopify and eBay by approval
 
 - Shopify Connect: owner enters the store domain, approves in their own Shopify admin; the store and its token are stored. No pasted token.
