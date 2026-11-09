@@ -6,6 +6,7 @@ import { collection, getDocs, query, where, limit } from '../../../lib/server-fi
 import { listTargets } from '../../../lib/server/deals.js';
 import { ticketsFor } from '../../../lib/server/support-queue.js';
 import { salesKpis } from '../../../lib/sales-kpis.js';
+import { economicsFor, saveBusinessProfile } from '../../../lib/server/economics.js';
 
 export async function GET(request) {
   const who = identify(request);
@@ -19,5 +20,17 @@ export async function GET(request) {
     listTargets(db, who.uid).catch(() => []),
     ticketsFor(db, who.uid).catch(() => ({ tickets: [], kpis: null })),
   ]);
-  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis }, { headers: NO_STORE });
+  const money = await economicsFor(db, who.uid).catch(() => null);
+  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money }, { headers: NO_STORE });
+}
+
+export async function POST(request) {
+  const who = identify(request);
+  if (who.response) return who.response;
+  const db = getDb();
+  const g = await guardTenant(db, who.uid);
+  if (g.response) return g.response;
+  let body;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: 'Send JSON.' }, { status: 400, headers: NO_STORE }); }
+  return NextResponse.json(await saveBusinessProfile(db, who.uid, body || {}), { headers: NO_STORE });
 }

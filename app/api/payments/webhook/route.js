@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, updateDoc, doc } from '../../../../lib/server-firestore.js';
-import { verifyPaymentsWebhook, paymentPatchFromSession, paymentsReady } from '../../../../lib/server/payments.js';
+import { verifyPaymentsWebhook, paymentPatchFromSession, paymentsReady, stripeFor } from '../../../../lib/server/payments.js';
 import { earnLoyalty } from '../../../../lib/server/loyalty.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 import { emitWebhook } from '../../../../lib/server/webhooks.js';
@@ -18,19 +18,24 @@ export async function POST(request) {
   try { unverified = JSON.parse(raw); } catch { return reply({ error: 'Bad payload.' }, 400); }
   const s0 = unverified?.data?.object;
   const uid = String(s0?.metadata?.uid || '');
+  const connectAcct = String(unverified?.account || '');
   if (unverified?.type !== 'checkout.session.completed' || s0?.metadata?.kind !== 'invoice' || !uid) return reply({ received: true, ignored: true });
 
   const db = getDb();
   let secrets;
   try { secrets = await secretsFor(db, uid, PAYMENT_NAMES); }
   catch { return reply({ error: 'Could not read the account.' }, 500); }
-  if (!paymentsReady(secrets)) return reply({ error: 'Not configured for this account.' }, 503);
+  // A connected account's event carries its account id; it counts only if it is this owner's account, and the platform's secret checks it.
+  const viaConnect = !!connectAcct && secrets.STRIPE_CONNECTED_ACCOUNT_ID === connectAcct && !!process.env.STRIPE_PLATFORM_WEBHOOK_SECRET && !!process.env.STRIPE_PLATFORM_SECRET_KEY;
+  if (!viaConnect && !paymentsReady(secrets)) return reply({ error: 'Not configured for this account.' }, 503);
 
   let event;
   try {
-    event = verifyPaymentsWebhook(raw, request.headers.get('stripe-signature') || '', {
-      secretKey: secrets.STRIPE_PAYMENTS_SECRET_KEY, webhookSecret: secrets.STRIPE_PAYMENTS_WEBHOOK_SECRET,
-    });
+    event = viaConnect
+      ? stripeFor(process.env.STRIPE_PLATFORM_SECRET_KEY).webhooks.constructEvent(raw, request.headers.get('stripe-signature') || '', process.env.STRIPE_PLATFORM_WEBHOOK_SECRET)
+      : verifyPaymentsWebhook(raw, request.headers.get('stripe-signature') || '', {
+        secretKey: secrets.STRIPE_PAYMENTS_SECRET_KEY, webhookSecret: secrets.STRIPE_PAYMENTS_WEBHOOK_SECRET,
+      });
   } catch { return reply({ error: 'Bad signature.' }, 400); }
 
   const s = event.data.object;

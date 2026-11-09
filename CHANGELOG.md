@@ -1,3 +1,36 @@
+## Pass 204 - Stripe Connect behind a switch
+
+- 'Connect Stripe' button: the owner approves on Stripe; the connected account id is stored. No keys pasted.
+- Off by default. When the owner switches on Stripe Connect, invoice payments go to their connected account; otherwise nothing changes.
+- The webhook accepts a connected account's payment only if it belongs to this owner, verified with the platform's secret.
+- STRIPE_CONNECT_CHECKLIST.md: test mode first, then one small live payment and refund, and how to roll back.
+- Tests run here: the Stripe Connect tests (4 checks), the full npm test chain (exit 0, 857 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Stripe. Test mode first, as the checklist says.
+
+## Pass 203 - key and button connections
+
+- Typeform connects with one personal access token: the app sets the form webhooks and the signing secret.
+- Slack connects with an approval; the alerts channel address is stored on the business settings.
+- Typeform token field and Slack button added to Integrations.
+- Still more than one value: Stripe (needs a live test before moving to Connect), Twilio, Tally, and Meta's pixel (app review).
+- Tests run here: the key-and-button tests (4 checks), the full npm test chain (exit 0, 853 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Typeform, Slack or Stripe.
+
+## Pass 202 - business model, money measures, feedback loop
+
+- Business model (B2B, B2C/D2C, rentals) with its own focus list; ideal customer stored.
+- Average order value, price point, average contract value, lifetime value, acquisition cost, lifetime value to acquisition cost, paid versus organic wins, new customers.
+- Repeated support questions become weekly actions; wins about three months old get an account review.
+- Tests run here: the money and feedback tests (4 checks), the full npm test chain (exit 0, 849 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not built: Google Business Profile (needs Google approval), creative production, personalised video tools, Meta lookalike audiences (needs app review), rental check-out texts, wallet settings.
+- Not checked in a browser.
+
 ## Pass 201 - every key has a place on the Integrations screen
 
 - The screen showed 23 of the 50 stored keys; now one catalog (16 groups) shows all of them, and a test keeps the screen and the server in step.

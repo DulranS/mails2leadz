@@ -76,6 +76,7 @@ app/api/integrations/secrets/route.js
 app/api/integrations/tally/route.js
 app/api/integrations/test/route.js
 app/api/integrations/tiktok-leads/route.js
+app/api/integrations/typeform/connect/route.js
 app/api/integrations/typeform/route.js
 app/api/invoices/cancel/route.js
 app/api/invoices/create/route.js
@@ -333,6 +334,7 @@ lib/erase-contact.js
 lib/error-handler.js
 lib/errors.js
 lib/experiments.js
+lib/feedback-loop.js
 lib/firebase-cache.js
 lib/firebase-client.js
 lib/firebase-operations.js
@@ -354,6 +356,7 @@ lib/intake.js
 lib/integration-catalog.js
 lib/integrations.js
 lib/invoice-numbering.js
+lib/kpi-economics.js
 lib/kpi-scorecard.js
 lib/landregistry.js
 lib/lead-finder-categories.js
@@ -474,6 +477,7 @@ lib/server/draft-core.js
 lib/server/easypost.js
 lib/server/ebay-discovery.js
 lib/server/ebay-sync.js
+lib/server/economics.js
 lib/server/enrich-deals.js
 lib/server/enrich.js
 lib/server/erase-contact.js
@@ -527,6 +531,7 @@ lib/server/signal-feeds-job.js
 lib/server/signal-job.js
 lib/server/signals-io.js
 lib/server/signup.js
+lib/server/slack-connect.js
 lib/server/statement.js
 lib/server/stock-hold.js
 lib/server/stripe.js
@@ -586,6 +591,7 @@ lib/tiktok-purchases.js
 lib/tiktok-sync.js
 lib/time-log.js
 lib/trends.js
+lib/typeform-connect.js
 lib/utm.js
 lib/validation.js
 lib/visitor-voice.js

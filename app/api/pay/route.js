@@ -7,6 +7,7 @@ import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode, getDoc, getDocs, doc, collection, query, where, limit, updateDoc, increment } from '../../../lib/server-firestore.js';
 import { verifyPayToken, paymentsReady, amountOwedOnline, createInvoiceCheckout, stripeFor } from '../../../lib/server/payments.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../lib/server/integration-secrets.js';
+import { switchState } from '../../../lib/switches.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { normalizeCode, discountInvoice } from '../../../lib/promo.js';
 import { countPromoUses } from '../../../lib/server/promo.js';
@@ -61,7 +62,10 @@ async function payFlow(token, rawCode, method) {
   try {
     const db = getDb();
     const secrets = await secretsFor(db, who.uid, PAYMENT_NAMES);
-    if (!paymentsReady(secrets)) return page(UNAVAILABLE, 503);
+    const bizForPay = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).catch(() => null))?.data?.() || {};
+    const connectAcct = String(secrets.STRIPE_CONNECTED_ACCOUNT_ID || '');
+    const useConnect = !!connectAcct && !!process.env.STRIPE_PLATFORM_SECRET_KEY && switchState('stripeConnect', bizForPay, { ...process.env }).status === 'on';
+    if (!useConnect && !paymentsReady(secrets)) return page(UNAVAILABLE, 503);
     const invRef = doc(db, 'invoices', who.id);
     const snap = await getDoc(invRef);
     if (!snap.exists() || snap.data().userId !== who.uid) return page('This invoice could not be found. Please reply to the email.', 404);
@@ -98,7 +102,8 @@ async function payFlow(token, rawCode, method) {
     }
 
     const session = await createInvoiceCheckout({
-      stripe: stripeFor(secrets.STRIPE_PAYMENTS_SECRET_KEY), uid: who.uid, invoiceId: who.id, invoice, currency, origin: new URL(base).origin,
+      stripe: stripeFor(useConnect ? process.env.STRIPE_PLATFORM_SECRET_KEY : secrets.STRIPE_PAYMENTS_SECRET_KEY), uid: who.uid, invoiceId: who.id, invoice, currency, origin: new URL(base).origin,
+      stripeAccount: useConnect ? connectAcct : null,
     });
     const redirect = NextResponse.redirect(session.url, 303);
     redirect.headers.set('Cache-Control', 'no-store');

@@ -1,4 +1,4 @@
-# Business gap status (after Pass 201)
+# Business gap status (after Pass 204)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -645,4 +645,54 @@ Fixed:
 - Connection checks added for Companies House, Shopify (the domain is checked before any request) and the voice service.
 
 Multi-field connections stay as they are: each field is shown and saved on its own. Not run here against the live services.
+
+## Business model, the money measures, and the feedback loop (Pass 202)
+
+Checked against the framework in the attached notes (inbound, system, outbound, support and follow-ups by business model).
+
+Built:
+- Business model (B2B, B2C/D2C, rentals), set on the measures screen. Each model shows its own focus list (general guidance, labelled as such).
+- Money measures from your records: average order value, price point (median), average contract value, lifetime value per paying customer, customer acquisition cost (from the monthly spend you enter), lifetime value to acquisition cost, paid versus organic wins, and new customers in 12 months.
+- Ideal customer: one sentence, stored and shown.
+- Feedback loop: words customers repeat in support questions become a weekly action (answer it in your library, or make it the subject of the next campaign).
+- Account review for B2B wins about three months old, on the weekly list.
+
+Already in place from earlier passes: abandoned-cart reminders, instant bookings with availability, checkout links, lookalike-style reach through lead and audience sync (Meta, TikTok, Google), and outbound to named accounts with review.
+
+Not built, and why:
+- Local search and map listings (Google Business Profile): needs Google's approval for the Business Profile API. Blocked outside the code.
+- Short-form video, creators and UGC production: creative work done outside the app. The app plans content and drafts captions.
+- Personalised video outreach (Vidyard, Loom) and a full account-based marketing platform: separate tools; not built here.
+- Lookalike audience creation on Meta: needs Meta's audience permissions, which go through app review. Not built.
+- Rental check-out and extension texts: possible, but needs templates and consent checks for each message; not built in this pass.
+- One-tap wallets (Apple Pay, Shopify Pay): depend on the payment provider's settings for the store; not verified here.
+
+Not run here against live data.
+
+## One key and a button, where the platform allows (Pass 203)
+
+- Typeform: paste one personal access token, press Connect. The app lists the owner's forms (up to five), sets each form's webhook to the owner's intake address, and creates the signing secret itself.
+- Slack: a Connect button. Approving in Slack gives the alerts channel; the address is stored on the business settings.
+- Already one approval or one key: Google (including GA4 and the conversion action), Meta Lead Ads, TikTok, Shopify, eBay, Companies House, the voice service, and the AI and enrichment keys.
+
+Still more than one value, and why:
+- Stripe: a secret key and a webhook secret. Stripe Connect would make this one approval, but it changes how card payments are processed. That needs a live test before it ships, so it is not built here.
+- Twilio: account ID, token and number. Twilio has no approval flow for this.
+- Tally: its webhook signing secret is copied from Tally. Its API for creating webhooks was not verified here, so it is not automated.
+- Meta purchase events: the pixel needs Meta's ads-read permission (app review).
+
+Automatic by choice: sending messages, publishing listings and automatic replies stay as on/off switches, so the owner decides each one. Those switches are the "button" for them.
+
+Not run here against live Typeform, Slack or Stripe.
+
+## Stripe Connect, behind a switch (Pass 204)
+
+- "Connect Stripe" is a button. The owner approves on Stripe; the app stores their connected account id. No keys are pasted.
+- Off by default. While off, card payments use the owner's own Stripe keys exactly as before.
+- When the owner turns "Take card payments through Stripe Connect" on in Account, invoice payments are taken on the connected account. The webhook accepts that account's payments only when they belong to this owner, checked with the platform's webhook secret.
+- Before switching it on, follow STRIPE_CONNECT_CHECKLIST.md (test mode first, then one small live payment and refund).
+
+Operator settings, set once: STRIPE_CONNECT_CLIENT_ID, STRIPE_PLATFORM_SECRET_KEY, STRIPE_PLATFORM_WEBHOOK_SECRET.
+
+Not run here against live Stripe. The Connect flow and the connected-account webhook follow Stripe's documented behaviour as known at writing; the checklist is the test.
 

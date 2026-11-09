@@ -13,9 +13,12 @@ export default function SupportAndKpis() {
   const [libMsg, setLibMsg] = useState("");
   const [drafts, setDrafts] = useState({});
   const [msg, setMsg] = useState("");
+  const [money, setMoney] = useState(null);
+  const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
+  const [profileMsg, setProfileMsg] = useState("");
 
   const load = () => {
-    fetch("/api/kpis").then((r) => r.json()).then((j) => { if (j.kpis) setKpi(j.kpis); }).catch(() => {});
+    fetch("/api/kpis").then((r) => r.json()).then((j) => { if (j.kpis) setKpi(j.kpis); if (j.money) { setMoney(j.money); setProfile({ businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "", marketingSpendMonthly: "" }); } }).catch(() => {});
     fetch("/api/support").then((r) => r.json()).then((j) => { if (j.tickets) setSup(j); }).catch(() => {});
   };
   useEffect(() => {
@@ -52,6 +55,51 @@ export default function SupportAndKpis() {
           {sup.smart.agents.length ? <ul className="mt-1 flex flex-wrap gap-3">{sup.smart.agents.map((a) => <li key={a.id}>{a.name}: {a.open} open, {a.resolved} done{a.breached ? `, ${a.breached} past target` : ""}</li>)}</ul> : null}
         </div>
       ) : null}
+
+      <details className="text-xs">
+        <summary className="cursor-pointer font-medium text-sm">Money and your business model</summary>
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">Business model
+            <select className="w-full border rounded px-2 py-1 bg-white dark:bg-gray-700 mt-1" value={profile.businessModel} onChange={(e) => setProfile({ ...profile, businessModel: e.target.value })}>
+              <option value="b2b">B2B (sales-led)</option>
+              <option value="b2c">B2C / D2C (online shop)</option>
+              <option value="rental">Rentals (bookings)</option>
+            </select>
+          </label>
+          <label className="block">Monthly marketing spend (optional)
+            <input className="w-full border rounded px-2 py-1 bg-white dark:bg-gray-700 mt-1" inputMode="decimal" value={profile.marketingSpendMonthly} onChange={(e) => setProfile({ ...profile, marketingSpendMonthly: e.target.value })} placeholder="For customer acquisition cost" />
+          </label>
+          <label className="block sm:col-span-2">Your ideal customer, in a sentence
+            <input className="w-full border rounded px-2 py-1 bg-white dark:bg-gray-700 mt-1" value={profile.idealCustomer} onChange={(e) => setProfile({ ...profile, idealCustomer: e.target.value })} placeholder="Small clinics in Colombo with 2 to 10 staff" />
+          </label>
+        </div>
+        <button type="button" className="mt-2 px-3 py-1 border rounded" onClick={async () => {
+          const body = { businessModel: profile.businessModel, idealCustomer: profile.idealCustomer };
+          if (profile.marketingSpendMonthly !== "") body.marketingSpendMonthly = profile.marketingSpendMonthly;
+          await fetch("/api/kpis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          setProfileMsg("Saved."); load();
+        }}>Save</button>
+        {profileMsg ? <span className="ml-2">{profileMsg}</span> : null}
+        {money ? (
+          <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1">
+            <li>Average order value: {money.averageOrderValue ?? "n/a"}</li>
+            <li>Typical price point (median): {money.pricePoint ?? "n/a"}</li>
+            <li>Average contract value (won deals): {money.averageContractValue ?? "n/a"}</li>
+            <li>Lifetime value per paying customer: {money.ltv ?? "n/a"}</li>
+            <li>Customer acquisition cost: {money.cac ?? "n/a (enter your monthly spend)"}</li>
+            <li>Lifetime value to acquisition cost: {money.ltvToCac ?? "n/a"}</li>
+            <li>Paid versus organic wins: {money.channelMix.paidSharePct === null ? "n/a" : `${money.channelMix.paidSharePct}% paid`}</li>
+            <li>New customers in 12 months: {money.newCustomersLast12Months}</li>
+          </ul>
+        ) : null}
+        {money ? (
+          <div className="mt-3">
+            <p className="font-medium">Focus for {money.focus ? (profile.businessModel === "b2b" ? "B2B" : profile.businessModel === "rental" ? "rentals" : "B2C and D2C") : ""}</p>
+            <ul className="list-disc ml-5">{money.focus.map((f) => <li key={f}>{f}</li>)}</ul>
+          </div>
+        ) : null}
+        {money ? <p className="mt-2 text-gray-600 dark:text-gray-300">{money.note}</p> : null}
+      </details>
 
       <details className="text-xs">
         <summary className="cursor-pointer font-medium text-sm">Automatic answers (question | answer, one per line)</summary>

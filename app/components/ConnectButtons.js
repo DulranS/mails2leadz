@@ -4,6 +4,8 @@ import React, { useState } from "react";
 const OPTIONS = [
   { id: "google_ads", label: "Connect Google Ads", note: "Approve in your Google account. The Google Ads account is chosen automatically (the first one on the login)." },
   { id: "shopify", label: "Connect Shopify store", note: "Approve in your Shopify admin. You will be asked for your store domain first.", needsShop: true },
+  { id: "stripe_connect", label: "Connect Stripe (card payments)", note: "Approve in Stripe. Card payments then go through your Stripe account once you switch on Stripe Connect in Account." },
+  { id: "slack", label: "Connect Slack alerts", note: "Approve in Slack and pick a channel. Alerts will be posted there." },
   { id: "ebay", label: "Connect eBay seller account", note: "Approve in eBay. The link renews itself, so you do not paste a token." },
   { id: "tiktok_events", label: "Connect TikTok Events", note: "Approve in TikTok for Business. Your pixel is found and connected for you." },
   { id: "meta_leads", label: "Connect Meta Lead Ads", note: "Approve in Facebook and pick your Page. The Lead Ads check is set up for you." },
@@ -12,6 +14,8 @@ const OPTIONS = [
 export default function ConnectButtons() {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
+  const [tfToken, setTfToken] = useState("");
+  const [tfMsg, setTfMsg] = useState("");
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const result = params ? params.get("connect") : null;
 
@@ -49,6 +53,23 @@ export default function ConnectButtons() {
         ))}
       </div>
       {doneText ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2">{doneText}</p> : null}
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">Connect Typeform (one token)</p>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Create a personal access token in Typeform (Settings, then Personal tokens), paste it here, and press Connect. AutoLeads sets up the webhooks for your forms and the signing secret itself.</p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <input className="w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800" type="password" autoComplete="off" value={tfToken} onChange={(e) => setTfToken(e.target.value)} placeholder="Typeform personal access token" aria-label="Typeform personal access token" />
+          <button type="button" disabled={!tfToken} onClick={async () => {
+            setTfMsg("Connecting...");
+            try {
+              const res = await fetch("/api/integrations/typeform/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: tfToken }) });
+              const j = await res.json().catch(() => ({}));
+              setTfMsg(res.ok ? `Connected. Webhooks set on ${j.forms} form${j.forms === 1 ? "" : "s"}.` : (j.error || "Could not connect."));
+              if (res.ok) setTfToken("");
+            } catch (e) { setTfMsg("Could not reach the server. Try again."); }
+          }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Typeform</button>
+        </div>
+        {tfMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{tfMsg}</p> : null}
+      </div>
       {msg ? <p className="text-xs text-red-600 dark:text-red-400 mt-2">{msg}</p> : null}
     </section>
   );
