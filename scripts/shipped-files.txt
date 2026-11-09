@@ -30,6 +30,7 @@ app/api/calendar-offline/route.js
 app/api/call-webhook/route.js
 app/api/calls/click/route.js
 app/api/calls/summarise/route.js
+app/api/case-studies/route.js
 app/api/check-replies/route.js
 app/api/connect/callback/route.js
 app/api/connect/start/route.js
@@ -181,6 +182,7 @@ app/components/BillsPanel.js
 app/components/CRM.js
 app/components/CalendarConnect.js
 app/components/CallSummary.js
+app/components/CaseStudyDrafts.js
 app/components/ClickToCall.js
 app/components/ClientLayout.js
 app/components/CohortPanel.js
@@ -292,6 +294,7 @@ lib/calendar-events.js
 lib/calendar-links.js
 lib/call-summary.js
 lib/capacity.js
+lib/case-study.js
 lib/cash-cycle.js
 lib/cashflow.js
 lib/channel-drafts.js
@@ -324,6 +327,7 @@ lib/deal-utils.js
 lib/deal-watch.js
 lib/deals/companies.js
 lib/deals/discover.js
+lib/deals/link.js
 lib/deals/pipeline.js
 lib/deals/resale.js
 lib/deals/valuation.js
@@ -439,6 +443,7 @@ lib/seasonality.js
 lib/send-ramp.js
 lib/send-timing.js
 lib/sender-auth.js
+lib/seo-insights.js
 lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
@@ -524,6 +529,7 @@ lib/server/relationship-asks.js
 lib/server/reply-triage.js
 lib/server/reroute.js
 lib/server/route-helpers.js
+lib/server/search-console.js
 lib/server/send-ramp.js
 lib/server/sender-auth.js
 lib/server/shared-cache.js

@@ -44,6 +44,7 @@ export default function DealSourcing() {
   const [checkOut, setCheckOut] = useState(null);
   const [ready, setReady] = useState(null);
   const [searches, setSearches] = useState("");
+  const [link, setLink] = useState("");
 
   const load = () => fetch("/api/deals").then((r) => r.json()).then((j) => setTargets(j.targets || [])).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -77,6 +78,14 @@ export default function DealSourcing() {
     <div className="space-y-2 px-2">
       <p className={note}>Built from public company records and your own numbers. Not investment advice: check figures with a qualified adviser before you act.</p>
       {msg ? <p role="status" className="text-sm text-gray-800 dark:text-gray-100 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2">{msg}</p> : null}
+
+      <Collapsible title="0. Paste a link" hint="An eBay search link, or a Companies House company link" defaultOpen>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input id="deal-link" className={field} value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://www.ebay.co.uk/sch/i.html?_nkw=road+bike" aria-label="Paste a link" />
+          <button type="button" onClick={async () => { const j = await post({ action: "link", url: link }); setMsg(j.error || j.message || ""); if (j.ok) { setLink(""); load(); } }} className={primary}>Use this link</button>
+        </div>
+        <p className={`mt-2 ${note}`}>Other sites are not read. Add those listings by hand in section 3.</p>
+      </Collapsible>
 
       <Collapsible title="1. Find companies (UK)" hint="Search Companies House, then track the ones worth a closer look" defaultOpen>
         <div className="flex flex-col sm:flex-row gap-2">

@@ -11,7 +11,7 @@ export async function GET(request) {
   if (p.get('error')) return back(request, 'denied');
   const secret = process.env.CONNECT_STATE_SECRET || '';
   // the provider is named in the signed state itself: try each platform the state might belong to
-  for (const candidate of ['google_ads', 'meta_leads', 'tiktok_events', 'shopify', 'ebay', 'slack', 'stripe_connect']) {
+  for (const candidate of ['google_ads', 'meta_leads', 'tiktok_events', 'shopify', 'ebay', 'slack', 'stripe_connect', 'google_search_console']) {
     const st = readState(p.get('state') || '', secret, { provider: candidate });
     if (!st) continue;
     const envBase = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();

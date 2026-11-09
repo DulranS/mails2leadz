@@ -1,7 +1,7 @@
 // app/api/deals/route.js - buy-side sourcing and sell-side readiness for the signed-in owner. Nothing here sends anything or trades.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
-import { doc, setDoc } from '../../../lib/server-firestore.js';
+import { doc, getDoc, setDoc } from '../../../lib/server-firestore.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { searchCompanies, trackCompany, addListing, setStage, listTargets } from '../../../lib/server/deals.js';
@@ -10,6 +10,7 @@ import { parseComps, compsSummary, resaleMargin, ASSET_CLASSES } from '../../../
 import { addAssetListing, setComps } from '../../../lib/server/deals.js';
 import { soldPricesFor } from '../../../lib/server/landregistry.js';
 import { searchUndervalued } from '../../../lib/server/ebay-discovery.js';
+import { classifyLink } from '../../../lib/deals/link.js';
 
 const limiter = makeLimiter({ limit: 120, windowMs: 3600000 });
 const json = (b, s = 200) => NextResponse.json(b, { status: s, headers: NO_STORE });
@@ -62,6 +63,21 @@ export async function POST(request) {
     const summary = compsSummary(r.comps, num(body.askingPrice, 0, 1e12));
     if (body.id) await setComps(db, who.uid, body.id, r.comps.slice(0, 50));
     return json({ ok: true, count: r.comps.length, cached: r.cached, summary, comps: r.comps.slice(0, 10) });
+  }
+  if (a === 'link') {
+    const read = classifyLink(body.url);
+    if (read.kind === 'unsupported') return json({ ok: false, error: read.reason }, 400);
+    if (read.kind === 'companies_house') {
+      const r = await trackCompany(db, who.uid, read.companyNumber, {});
+      return json(r.ok ? { ok: true, message: `Tracking ${read.companyNumber}. Signal score ${r.score}.` } : r, r.ok ? 200 : 400);
+    }
+    // an eBay search: the words are added to the saved searches (up to five), then searched now
+    const snap = await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).catch(() => null);
+    const current = Array.isArray(snap?.data?.()?.dealSearches) ? snap.data().dealSearches : [];
+    const terms = [...new Set([...current, read.keyword])].slice(0, 5);
+    await setDoc(doc(db, 'users', who.uid, 'settings', 'business'), { dealSearches: terms }, { merge: true });
+    const found = await searchUndervalued(db, who.uid);
+    return json({ ok: true, message: `Searching eBay for "${read.keyword}". ${found.added || 0} new candidate${found.added === 1 ? '' : 's'}.` });
   }
   if (a === 'searches') {
     const terms = (Array.isArray(body.terms) ? body.terms : String(body.terms || '').split(/[,\n]/)).map((t) => String(t).trim().slice(0, 80)).filter((t) => t.length >= 2).slice(0, 5);

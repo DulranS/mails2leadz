@@ -1,3 +1,33 @@
+## Pass 208 - search insight and case studies
+
+- Google Search Console connects through the Google approval (read-only). Each Monday, up to three search opportunities go on the week's list.
+- Case-study drafts: only for customers the owner records as agreeing in writing. Drafts use only the owner's notes; a number not in the notes is refused. Nothing is published.
+- Tests run here: the search and case-study tests (5 checks), the full npm test chain (exit 0, 867 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Search Console data or the AI provider.
+- Site behaviour tracking is not built (it needs visitors' consent).
+- Owners who connect Search Console need the approval once.
+
+## Pass 207 - paste a link, sales targets
+
+- Paste an eBay search link or a Companies House company link in the deals panel: it is searched or tracked. Other links are refused with the reason.
+- Sales targets (revenue a month, new customers a month, win rate) with progress against the twelve-month average.
+- Tests run here: the link and target tests (3 checks), the full npm test chain (exit 0, 862 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Other sites are not read. Competitor analysis is not built.
+- Not run against live eBay or Companies House.
+
+## Pass 206 - measures and support screen layout
+
+- Money and the business model: collapsible, with stat cards and a labelled form (model, monthly spend, ideal customer), and a focus card for the chosen model.
+- Automatic answers and the support queue: collapsible sections, labelled inputs, and clear reply controls. Same behaviour and data calls.
+- Tests run here: the full npm test chain, and a production Next.js build. The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser.
+
 ## Pass 205 - Tally by one key, Twilio number found automatically
 
 - Tally: one API key and a Connect button set the form webhooks and the signing secret. Shape checked against Tally's public API docs.

@@ -1,4 +1,4 @@
-# Business gap status (after Pass 205)
+# Business gap status (after Pass 208)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -706,4 +706,41 @@ Checked against Tally's public API documentation: POST /webhooks with a bearer k
 Still more than one value: Twilio (account ID and token). Stripe Connect is an approval, but stays off until its checklist is run.
 
 Not run here against live Tally or Twilio.
+
+## Measures and support screen layout (Pass 206)
+
+The measures and support screen was rebuilt in the same style as the deals panel. Money and the business model is a collapsible section, with stat cards for each measure and a labelled form (model, monthly spend, ideal customer). Automatic answers and the support queue are also collapsible; each ticket has labelled controls and a clear reply box. Behaviour and the data calls are unchanged.
+
+Not checked in a browser; please look at it on a phone and a desktop.
+
+## Paste a link; sales targets; the SME picture (Pass 207)
+
+Paste a link (deals panel, section 0):
+- An eBay search link (one with "_nkw=" or an eBay category page): its words are added to the saved searches and searched now. Undervalued candidates appear in the pipeline.
+- A Companies House company link: the company is tracked, with its signal score.
+- Any other link is refused with the reason. The app does not read other sites; that would mean scraping them.
+
+Sales targets (measures screen): revenue a month, new customers a month, and win rate, each shown against your twelve-month average, with a progress bar.
+
+From the SME picture, what applies to this system:
+- Growth (sales and marketing): covered.
+- Customer experience (support, retention): covered by the support queue, targets and account reviews. Community is not built.
+- Operations: sales processes (SOPs and the sales kit) exist; supply, logistics and HR are outside this system.
+- Finance: money measures, quota attainment and targets exist. Forecasting, tax and audits are outside this system.
+- Strategy: targets exist. Competitor analysis is not built, because it needs reading competitor sites, which the app will not do. OKRs beyond targets are not built.
+- Tech and security, legal and compliance: outside this system.
+
+Not run here against live eBay or Companies House.
+
+## Data and demand from the picture (Pass 208)
+
+Relevant to this system, now covered:
+- Traffic and search: connect Google Search Console once (a Google approval, read-only). Each Monday the app reads the last 28 days of queries and adds up to three opportunities to the week's list: searches close to page one with real demand, and searches seen often but clicked rarely.
+- Case studies: a customer can be featured only after the owner records their written agreement on the customer. The app then drafts a case study from the owner's notes. A draft keeps a number only if it was already in those notes; anything else is refused, and placeholders stand in for quotes and figures. Nothing is published.
+- Cohort analysis: already built (cohort panel from paid invoices).
+- Lead capture, lead scoring, CRM enrichment, sales pipelines, marketing attribution, customer analytics and receivables: already built.
+
+Not covered, because they are outside sales and marketing or need a separate tool: payroll, payables, dividends, loans and funding, recruiting, offboarding, procurement, warehousing and reverse logistics. Behaviour tracking on the site is not built, because it needs visitors' consent first; GA4 receives the conversions.
+
+Not run here against live Search Console data.
 
