@@ -1,3 +1,13 @@
+## Pass 205 - Tally by one key, Twilio number found automatically
+
+- Tally: one API key and a Connect button set the form webhooks and the signing secret. Shape checked against Tally's public API docs.
+- Twilio: the sending number is read from the owner's account and kept, so it isn't typed.
+- Tests run here: the Tally tests (2 checks), the full npm test chain (exit 0, 859 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Tally or Twilio.
+- Twilio still needs its account ID and token.
+
 ## Pass 204 - Stripe Connect behind a switch
 
 - 'Connect Stripe' button: the owner approves on Stripe; the connected account id is stored. No keys pasted.

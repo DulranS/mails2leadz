@@ -16,6 +16,8 @@ export default function ConnectButtons() {
   const [msg, setMsg] = useState("");
   const [tfToken, setTfToken] = useState("");
   const [tfMsg, setTfMsg] = useState("");
+  const [tallyToken, setTallyToken] = useState("");
+  const [tallyMsg, setTallyMsg] = useState("");
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const result = params ? params.get("connect") : null;
 
@@ -69,6 +71,23 @@ export default function ConnectButtons() {
           }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Typeform</button>
         </div>
         {tfMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{tfMsg}</p> : null}
+      </div>
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">Connect Tally (one API key)</p>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Create an API key in Tally (Settings, then API), paste it here, and press Connect. AutoLeads sets the webhooks on your forms and the signing secret itself.</p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <input className="w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800" type="password" autoComplete="off" value={tallyToken} onChange={(e) => setTallyToken(e.target.value)} placeholder="Tally API key" aria-label="Tally API key" />
+          <button type="button" disabled={!tallyToken} onClick={async () => {
+            setTallyMsg("Connecting...");
+            try {
+              const res = await fetch("/api/integrations/tally/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: tallyToken }) });
+              const j = await res.json().catch(() => ({}));
+              setTallyMsg(res.ok ? `Connected. Webhooks set on ${j.forms} form${j.forms === 1 ? "" : "s"}.` : (j.error || "Could not connect."));
+              if (res.ok) setTallyToken("");
+            } catch (e) { setTallyMsg("Could not reach the server. Try again."); }
+          }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Tally</button>
+        </div>
+        {tallyMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{tallyMsg}</p> : null}
       </div>
       {msg ? <p className="text-xs text-red-600 dark:text-red-400 mt-2">{msg}</p> : null}
     </section>

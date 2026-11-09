@@ -1,4 +1,4 @@
-# Business gap status (after Pass 204)
+# Business gap status (after Pass 205)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -695,4 +695,15 @@ Not run here against live Typeform, Slack or Stripe.
 Operator settings, set once: STRIPE_CONNECT_CLIENT_ID, STRIPE_PLATFORM_SECRET_KEY, STRIPE_PLATFORM_WEBHOOK_SECRET.
 
 Not run here against live Stripe. The Connect flow and the connected-account webhook follow Stripe's documented behaviour as known at writing; the checklist is the test.
+
+## Tally by one API key, Twilio's number found automatically (Pass 205)
+
+Checked against Tally's public API documentation: POST /webhooks with a bearer key, a form id, the owner's address, a signing secret and FORM_RESPONSE, with each delivery signed as Tally-Signature (base64 HMAC-SHA256). Those are the shapes the app now uses.
+
+- Tally: paste one API key and press Connect. The app lists up to five forms, sets each form's webhook to the owner's intake address, and makes the signing secret itself.
+- Twilio: the sending number is read from the owner's Twilio account and kept, so it no longer has to be typed. Twilio still needs the account ID and the token (two values), since Twilio has no approval flow.
+
+Still more than one value: Twilio (account ID and token). Stripe Connect is an approval, but stays off until its checklist is run.
+
+Not run here against live Tally or Twilio.
 

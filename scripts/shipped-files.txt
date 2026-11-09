@@ -73,6 +73,7 @@ app/api/integrations/linkedin-leads/route.js
 app/api/integrations/meta-leads/route.js
 app/api/integrations/route.js
 app/api/integrations/secrets/route.js
+app/api/integrations/tally/connect/route.js
 app/api/integrations/tally/route.js
 app/api/integrations/test/route.js
 app/api/integrations/tiktok-leads/route.js
@@ -583,6 +584,7 @@ lib/support.js
 lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js
+lib/tally-connect.js
 lib/tax-rates.js
 lib/team.js
 lib/tenant.js
