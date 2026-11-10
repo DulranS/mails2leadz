@@ -1,3 +1,12 @@
+## Pass 220 - landing page and navigation
+
+- Landing page restructured: sticky jump links, one hero with three actions, four grouped feature blocks, shorter controls and exclusions, 44px targets and focus rings.
+- Top bar has a visible Search button that opens the command palette.
+- Tests run here: the full npm test chain (exit 0, 924 checks) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser on phones and desktops.
+
 ## Pass 219 - one click to every tool, command palette
 
 - Open your tools on the Integrations screen: every outside tool, grouped, one click.

@@ -1,4 +1,4 @@
-# Business gap status (after Pass 219)
+# Business gap status (after Pass 220)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -971,4 +971,13 @@ Checked in the build: every internal screen the palette links to exists; every o
 Still platform-gated (not buildable without approval): social media publishing; paid campaign creation on Meta and Google; Google Business Profile; LinkedIn lead forms and Connect; Meta Lead Ads beyond admins and Meta's pixel for purchase events.
 
 Not run here against live services.
+
+## Landing page and navigation made easier (Pass 220)
+
+- Landing page: a short sticky header with jump links (How it works, Features, You decide, Sign in); one hero with three clear actions; four grouped feature blocks instead of a long card list; the switched-off items in one list; exclusions in three short groups. Buttons are at least 44px tall, with a visible focus ring.
+- Top bar: a visible Search button (with Ctrl+K shown on wider screens) opens the same palette as the keyboard shortcut.
+
+Checked here: every landing-page claim maps to a feature in the build. Not checked in a browser: the layout on phones and desktops.
+
+Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 

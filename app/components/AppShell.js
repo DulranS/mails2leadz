@@ -46,6 +46,9 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
           </div>
         </div>
         <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="sm" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools (Ctrl+K)" title="Search screens and tools (Ctrl+K)" className="px-3 py-2 min-h-[40px]">
+            <span className="text-sm">Search</span> <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">Ctrl+K</span>
+          </Button>
           <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} className="p-2">
             {theme === 'light' ? '🌙' : '☀️'}
           </Button>

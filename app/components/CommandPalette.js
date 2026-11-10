@@ -11,12 +11,14 @@ export default function CommandPalette() {
   const items = useMemo(() => searchLinks(q, [...INTERNAL_LINKS, ...EXTERNAL_LINKS]), [q]);
 
   useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("autoleads:open-palette", onOpen);
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setOpen((o) => !o); }
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("autoleads:open-palette", onOpen); };
   }, []);
 
   useEffect(() => { if (open) { setQ(""); setI(0); setTimeout(() => inputRef.current?.focus(), 0); } }, [open]);
