@@ -1,3 +1,12 @@
+## Pass 221 - quick actions and skip link
+
+- Search palette lists the common actions (events, listings, pasted links, journeys, agreements, today's plan).
+- Skip-to-content link on every screen.
+- Tests run here: the quick-links tests, the full npm test chain (exit 0, 924 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser.
+
 ## Pass 220 - landing page and navigation
 
 - Landing page restructured: sticky jump links, one hero with three actions, four grouped feature blocks, shorter controls and exclusions, 44px targets and focus rings.

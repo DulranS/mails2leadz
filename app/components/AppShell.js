@@ -102,10 +102,11 @@ export default function AppShell({ children }) {
     <MetaSetter.Provider value={setMeta}>
       <MetaValue.Provider value={metaValue}>
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:shadow dark:focus:bg-gray-800">Skip to content</a>
           <Nav open={open} onToggle={toggle} />
           <div className="lg:pl-64">
             <TopBar onOpenMenu={openMenu} />
-            <main className="p-4 lg:p-8">{children}</main>
+            <main id="main-content" tabIndex={-1} className="p-4 lg:p-8">{children}</main>
           </div>
         </div>
       </MetaValue.Provider>

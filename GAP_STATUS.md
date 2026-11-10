@@ -1,4 +1,4 @@
-# Business gap status (after Pass 220)
+# Business gap status (after Pass 221)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -980,4 +980,11 @@ Not run here against live services.
 Checked here: every landing-page claim maps to a feature in the build. Not checked in a browser: the layout on phones and desktops.
 
 Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Whole-app convenience (Pass 221)
+
+- Quick actions in the search palette (Ctrl+K or Search): create an event, add a listing to resell, paste an eBay or Companies House link, start a journey, draft and send an agreement, and today's plan. Each opens the screen where it is done.
+- Skip-to-content link: keyboard users can jump past the navigation straight to the page.
+
+Not checked in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 
