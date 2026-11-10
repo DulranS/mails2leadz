@@ -10,6 +10,7 @@ import BidDraft from "../components/BidDraft.js";
 import DealSourcing from "../components/DealSourcing.js";
 import SupportAndKpis from "../components/SupportAndKpis.js";
 import CaseStudyDrafts from "../components/CaseStudyDrafts.js";
+import SalesTools from "../components/SalesTools.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -477,6 +478,9 @@ export default function CRMPage() {
       <DealSourcing />
       <Collapsible title="Case studies" hint="Drafts from customers who agreed in writing">
         <CaseStudyDrafts />
+      </Collapsible>
+      <Collapsible title="Pricing, pitch and agreements" hint="Quote maths, a pitch outline from your numbers, and contract or NDA drafts">
+        <SalesTools />
       </Collapsible>
       </Collapsible>
       <LostReasonModal

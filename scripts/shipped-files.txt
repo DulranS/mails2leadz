@@ -1,8 +1,11 @@
+app/accept/[token]/page.js
 app/account/page.js
 app/admin/page.js
 app/analytics/page.js
 app/api/ad-spend/sync/route.js
 app/api/admin/tenants/route.js
+app/api/agreements/accept/route.js
+app/api/agreements/invite/route.js
 app/api/ai-channel/route.js
 app/api/ai-content/route.js
 app/api/ai-deal-draft/route.js
@@ -55,6 +58,7 @@ app/api/deals/owner-settings/route.js
 app/api/deals/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
+app/api/esign/route.js
 app/api/exports/accounting/route.js
 app/api/find-leads/route.js
 app/api/get-daily-count/route.js
@@ -68,6 +72,7 @@ app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
 app/api/intake/route.js
+app/api/integrations/dropbox-sign/connect/route.js
 app/api/integrations/google-ads-leads/route.js
 app/api/integrations/intake/route.js
 app/api/integrations/linkedin-leads/route.js
@@ -118,6 +123,8 @@ app/api/reorder/route.js
 app/api/research-company/route.js
 app/api/saas/checkout/route.js
 app/api/saas/portal/route.js
+app/api/sales-tools/deck/route.js
+app/api/sales-tools/route.js
 app/api/send-email/route.js
 app/api/send-followup/route.js
 app/api/send-new-leads/route.js
@@ -179,6 +186,7 @@ app/components/AuthProvider.js
 app/components/AutoBatchModal.js
 app/components/BidDraft.js
 app/components/BillsPanel.js
+app/components/BusinessSalesSummary.js
 app/components/CRM.js
 app/components/CalendarConnect.js
 app/components/CallSummary.js
@@ -206,6 +214,7 @@ app/components/OpsStatusCard.js
 app/components/OutlookConnect.js
 app/components/PipelineAlerts.js
 app/components/PwaRegister.js
+app/components/SalesTools.js
 app/components/SignalFeedsCard.js
 app/components/SignalsCard.js
 app/components/StockAdjust.js
@@ -263,11 +272,13 @@ hooks/useDailyQuotas.js
 hooks/useLeadScoring.js
 lib/ab-winner.js
 lib/abandoned-basket.js
+lib/acceptance.js
 lib/access.js
 lib/account-data.js
 lib/accounting-export.js
 lib/action-list.js
 lib/admin-actions.js
+lib/agreement.js
 lib/ai-client.js
 lib/angles.js
 lib/api-retry.js
@@ -331,6 +342,7 @@ lib/deals/link.js
 lib/deals/pipeline.js
 lib/deals/resale.js
 lib/deals/valuation.js
+lib/deck.js
 lib/default-templates.js
 lib/draft-queue.js
 lib/ebay.js
@@ -338,6 +350,7 @@ lib/enrich-extract.js
 lib/erase-contact.js
 lib/error-handler.js
 lib/errors.js
+lib/esign.js
 lib/experiments.js
 lib/feedback-loop.js
 lib/firebase-cache.js
@@ -393,14 +406,17 @@ lib/outlook.js
 lib/owner-report.js
 lib/partners.js
 lib/payroll.js
+lib/pdf-text.js
 lib/pdl.js
 lib/phone.js
 lib/pipeline-alerts.js
+lib/pitch.js
 lib/plan.js
 lib/post-sale.js
 lib/post-webhook.js
 lib/postage.js
 lib/preflight.js
+lib/pricing.js
 lib/products.js
 lib/profit.js
 lib/promo-results.js
@@ -434,6 +450,7 @@ lib/retry-queue.js
 lib/returns.js
 lib/review-asks.js
 lib/risk.js
+lib/roi-loop.js
 lib/runway.js
 lib/saas-metrics.js
 lib/sales-kit.js
@@ -487,6 +504,7 @@ lib/server/economics.js
 lib/server/enrich-deals.js
 lib/server/enrich.js
 lib/server/erase-contact.js
+lib/server/esign.js
 lib/server/external-busy.js
 lib/server/ga4.js
 lib/server/gift-card-job.js

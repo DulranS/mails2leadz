@@ -37,6 +37,7 @@ export default function SupportAndKpis() {
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
+  const [spendText, setSpendText] = useState("");
   const [libText, setLibText] = useState("");
   const [libMsg, setLibMsg] = useState("");
   const [drafts, setDrafts] = useState({});
@@ -64,6 +65,7 @@ export default function SupportAndKpis() {
 
   const saveProfile = async () => {
     const body = { businessModel: profile.businessModel, idealCustomer: profile.idealCustomer, targets };
+    if (spendText.trim()) body.spendByChannel = spendText;
     if (profile.marketingSpendMonthly !== "") body.marketingSpendMonthly = profile.marketingSpendMonthly;
     await fetch("/api/kpis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setProfileMsg("Saved.");
@@ -107,6 +109,11 @@ export default function SupportAndKpis() {
           <Field id="spend" text="Monthly marketing spend (optional)">
             <input id="spend" className={field} inputMode="decimal" value={profile.marketingSpendMonthly} onChange={(e) => setProfile({ ...profile, marketingSpendMonthly: e.target.value })} placeholder="Used to work out acquisition cost" />
           </Field>
+          <div className="sm:col-span-2">
+            <Field id="spend-ch" text="Monthly spend by channel, one per line: channel: amount (for the budget suggestion)">
+              <textarea id="spend-ch" className={field} rows={3} value={spendText} onChange={(e) => setSpendText(e.target.value)} placeholder={"Meta: 300\nGoogle: 150"} />
+            </Field>
+          </div>
           <div className="sm:col-span-2">
             <Field id="ideal" text="Your ideal customer, in one sentence">
               <input id="ideal" className={field} value={profile.idealCustomer} onChange={(e) => setProfile({ ...profile, idealCustomer: e.target.value })} placeholder="Small clinics in Colombo with 2 to 10 staff" />

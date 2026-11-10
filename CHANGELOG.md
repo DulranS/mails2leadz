@@ -1,3 +1,37 @@
+## Pass 211 - electronic signature through Dropbox Sign
+
+- Provider chosen: Dropbox Sign, with the owner's API key (checked before saving).
+- Agreements become a PDF with signature and date fields placed by text tags, and are sent for signature with the signer's name and email. Test sends are available.
+- Requests are checked daily; signed ones appear in the week's actions.
+- Typed-name acceptance by link remains. The landing page does not claim a higher legal tier than the provider gives.
+- Tests run here: the PDF and signing tests (5 checks), the full npm test chain (exit 0, 887 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live Dropbox Sign.
+
+## Pass 210 - landing page, business pipeline, deck, agreement acceptance
+
+- Landing page rewritten: only what is built, what is off until switched on, and what is not included and why.
+- Business page: buying, selling and support summary above the pipeline.
+- Pitch deck: seven printable slides, from the owner's figures only.
+- Agreement acceptance by one-time link: typed name, time, fingerprint of the text, no raw IP kept. Not a qualified electronic signature.
+- Tests run here: the deck, acceptance and sales-tools tests, the full npm test chain (exit 0, 882 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Qualified electronic signature not built (needs a provider).
+- Not run against live services.
+
+## Pass 209 - RevOps, feedback loops, sales tools
+
+- ROI loop: channel revenue against entered spend, a budget suggestion, and customer value by source, in the monthly digest.
+- Pricing calculator, pitch outline built from saved figures, and contract or NDA drafts with legal terms left for a lawyer.
+- Spend by channel is entered on the measures screen.
+- Tests run here: the sales-tools tests (3 checks), the ROI tests (4 checks), the full npm test chain (exit 0, 874 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- No e-signature yet (needs a verified provider). No pitch deck file. No social selling. Cookie consent not verified.
+- Not run against live data or providers.
+
 ## Pass 208 - search insight and case studies
 
 - Google Search Console connects through the Google approval (read-only). Each Monday, up to three search opportunities go on the week's list.

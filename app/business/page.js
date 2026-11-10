@@ -51,6 +51,7 @@ import { computeCustomers, countQualificationGaps } from "../../lib/customers.js
 import { contentActionInfo, localDateStr } from "../../lib/content.js";
 import { computeTeam, sanitizeTeam } from "../../lib/team.js";
 import { computeWeeklyKpis, weeklyHeadline, weeklyReportText } from "../../lib/weekly-kpi.js";
+import BusinessSalesSummary from "../components/BusinessSalesSummary.js";
 
 const pct = (n) => (n === null || n === undefined ? "—" : `${Math.round(n * 100)}%`);
 const toMs = (v) => (!v ? null : typeof v?.toDate === "function" ? v.toDate().getTime() : new Date(v).getTime() || null);
@@ -956,6 +957,7 @@ export default function BusinessValuePage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <BusinessSalesSummary />
           <Card title="Pipeline by stage">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

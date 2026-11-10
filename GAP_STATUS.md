@@ -1,4 +1,4 @@
-# Business gap status (after Pass 208)
+# Business gap status (after Pass 211)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -743,4 +743,72 @@ Relevant to this system, now covered:
 Not covered, because they are outside sales and marketing or need a separate tool: payroll, payables, dividends, loans and funding, recruiting, offboarding, procurement, warehousing and reverse logistics. Behaviour tracking on the site is not built, because it needs visitors' consent first; GA4 receives the conversions.
 
 Not run here against live Search Console data.
+
+## RevOps and the feedback loops (Pass 209)
+
+Checked against the inbound, system and outbound diagram (demand and data, RevOps, closing and capture, feedback loops).
+
+Built:
+- ROI loop: revenue each channel earned (multi-touch attribution) against the monthly spend you enter per channel. The monthly digest says where a little spend could move, when two channels are funded.
+- LTV and churn loop: customer value by where customers came from, in the monthly digest; cohort analysis and account health existed already; support questions that repeat feed the weekly list.
+- Pricing calculator: total, discount, tax, deposit and balance for a quote.
+- Pitch outline: built only from your business name, offer, ideal customer and measured figures; anything else is a marked placeholder.
+- Contract and NDA drafts: parties, date and fee filled from the deal; the legal terms are placeholders for a lawyer; the draft says it is not legal advice.
+- Closing and capture: bookings (demo), storefront checkout, invoices, milestone and deposit payments, and card payments through Stripe were already in place.
+- Outbound and lead sources: cold email with review, the lead finder, and the search and deal feeds.
+
+Not built, and why:
+- E-signature for contracts. It needs a signing provider's key and API, which I have not verified here. Once verified it is a key-and-button job.
+- A pitch deck as a presentation file. The outline is built; a .pptx file needs the presentation tooling, which this app does not run.
+- Social selling on LinkedIn. It needs LinkedIn's partner approval.
+- Scraping for prospects. Not built: it breaks site terms.
+- Cookie consent for pixels. Not verified in this build; GA4 and the ad pixels need the visitor's consent where the law requires it. Check the public site's consent banner before you rely on pixel data.
+
+Not run here against live data or providers.
+
+## Landing page, business pipeline, deck and acceptance (Pass 210)
+
+Landing page: rewritten to describe only what is built. Three groups: what is built; what is off until you switch it on (automatic sending, automatic replies, eBay publishing, Stripe Connect); and what is not included, grouped as not built yet, needs platform approval, or left out on purpose. No statistics or testimonials.
+
+Business page: a buying, selling and support block sits above the pipeline section (tracked companies, listings waiting for a decision, open support questions and targets). Figures come from your records.
+
+Pitch deck: the pitch outline is now a printable deck of seven slides (print to PDF). Every figure comes from your records; anything else is a marked placeholder. Text is escaped.
+
+Agreement acceptance: you make a one-time link (14 days) for an agreement you have written. The customer reads it and types their full name. The app records the time, a fingerprint of the exact text, and a hash of their IP. It does not keep the raw IP. This is typed-name acceptance, not a qualified electronic signature.
+
+Not built yet:
+- Qualified electronic signature. It needs a signing provider chosen and its API verified. Typed-name acceptance is built.
+
+Needs platform approval (not built here):
+- LinkedIn lead forms and Connect.
+- Meta Lead Ads beyond the app's admins, and Meta's pixel for purchase events.
+
+Consciously left out:
+- Messaging or calling people who have not agreed; scraping marketplaces or other sites; social selling by scraping; sending government tenders.
+
+Not applicable to this app:
+- Cookie consent on the app's own pages. The app loads no browser tags; GA4 and ad events are sent from the server, and only for contacts who agreed. Any tags on an owner's own website are theirs to consent for.
+
+Off until you switch them on (not gaps): automatic sending, automatic replies, eBay publishing, Stripe Connect.
+
+Not run here against live services.
+
+## Electronic signature through Dropbox Sign (Pass 211)
+
+Decision: Dropbox Sign, with the owner's own API key (one key, checked before it is saved). Reasons: a documented API, a single key, no webhook setup (the app checks each request's status daily), and text tags that place the signature and date inside the document.
+
+Built:
+- The agreement is turned into a plain PDF (A4, Helvetica, correct cross-reference table) with a signature field and a date field placed for the signer.
+- Send for electronic signature from the agreement tool, with the signer's name and email. A test-send option is available; test sends are not legally binding.
+- Each request's status is checked daily; a signed request is reported in the week's actions.
+- Typed-name acceptance by link (Pass 210) remains as a second, lighter option.
+
+Not claimed: a higher legal tier than the signing service provides. Whether an agreement needs one is for a lawyer to say.
+
+Left out on purpose: none for this item.
+Not applicable: cookie consent on the app's own pages (no browser tags; events are sent from the server only for agreed contacts).
+Needs platform approval: LinkedIn lead forms and Connect; Meta Lead Ads beyond the app's admins, and Meta's pixel for purchase events.
+Off until switched on: automatic sending, automatic replies, eBay publishing, Stripe Connect.
+
+Not run here against live Dropbox Sign, Stripe, eBay or any other service.
 

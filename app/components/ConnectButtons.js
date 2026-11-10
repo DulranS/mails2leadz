@@ -18,6 +18,8 @@ export default function ConnectButtons() {
   const [tfMsg, setTfMsg] = useState("");
   const [tallyToken, setTallyToken] = useState("");
   const [tallyMsg, setTallyMsg] = useState("");
+  const [dsKey, setDsKey] = useState("");
+  const [dsMsg, setDsMsg] = useState("");
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const result = params ? params.get("connect") : null;
 
@@ -88,6 +90,23 @@ export default function ConnectButtons() {
           }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Tally</button>
         </div>
         {tallyMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{tallyMsg}</p> : null}
+      </div>
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">Connect Dropbox Sign (one API key)</p>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Copy your API key from Dropbox Sign (Settings, then API), paste it here, and press Connect. The key is checked before it is saved.</p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <input className="w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800" type="password" autoComplete="off" value={dsKey} onChange={(e) => setDsKey(e.target.value)} placeholder="Dropbox Sign API key" aria-label="Dropbox Sign API key" />
+          <button type="button" disabled={!dsKey} onClick={async () => {
+            setDsMsg("Checking the key...");
+            try {
+              const res = await fetch("/api/integrations/dropbox-sign/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: dsKey }) });
+              const j = await res.json().catch(() => ({}));
+              setDsMsg(res.ok ? "Connected. Agreements can now be sent for electronic signature." : (j.error || "Could not connect."));
+              if (res.ok) setDsKey("");
+            } catch (e) { setDsMsg("Could not reach the server. Try again."); }
+          }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Dropbox Sign</button>
+        </div>
+        {dsMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{dsMsg}</p> : null}
       </div>
       {msg ? <p className="text-xs text-red-600 dark:text-red-400 mt-2">{msg}</p> : null}
     </section>
