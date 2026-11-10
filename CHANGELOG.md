@@ -1,3 +1,24 @@
+## Pass 219 - one click to every tool, command palette
+
+- Open your tools on the Integrations screen: every outside tool, grouped, one click.
+- Ctrl+K / Cmd+K command palette on every screen: jump to any screen or outside tool.
+- Business pipeline and landing page updated for the one-click access.
+- Removed a palette link to a screen that does not exist.
+- Tests run here: the quick-links tests (3 checks), the full npm test chain (exit 0, 924 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Platform-gated items unchanged. Not run against live services.
+
+## Pass 218 - automatic journey email (off by default)
+
+- New switch: journey emails are sent automatically, only for email steps, only where the owner has recorded agreement, never to a do-not-contact address, each with an opt-out line.
+- Enrolment has an agreement tick; steps are marked done only after a successful send.
+- Tests run here: the automatic journey tests (4 checks), the switch list test (updated), the full npm test chain (exit 0, 921 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- SMS and WhatsApp journey steps stay manual.
+- Not run against live Gmail.
+
 ## Pass 217 - corrective action on missed targets
 
 - The weekly list adds one next step when revenue a month or new customers a month is below 80% of target. Figures come from paid invoices over the last twelve months.

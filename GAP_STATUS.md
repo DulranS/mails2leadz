@@ -1,4 +1,4 @@
-# Business gap status (after Pass 217)
+# Business gap status (after Pass 219)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -942,6 +942,33 @@ Framework check, sales and marketing parts only:
 Outside sales and marketing, not built: finance and accounting (beyond the sales money measures), people and HR, technology and data infrastructure, operations and delivery, procurement and logistics, administration and assets, business funding and investment.
 
 Platform-gated, not buildable without approval: social media publishing; paid campaign creation on Meta and Google; Google Business Profile; LinkedIn lead forms and Connect; Meta Lead Ads beyond admins and Meta's pixel for purchase events.
+
+Not run here against live services.
+
+## Automatic journey email, off by default (Pass 218)
+
+- Switch: "Send journey emails automatically" (Account). Off by default.
+- Email steps only. SMS steps always stay manual, because enrolments hold no phone numbers.
+- Only for people you have recorded as agreeing (the tick when enrolling). No agreement, no automatic send.
+- Never to an address on the do-not-contact list; checked at send time.
+- Every automatic email carries an opt-out line.
+- Sent from your connected Gmail, up to twenty per daily run. A step is marked done only after it is sent. A held step is listed for you.
+- Each send is recorded once per enrolment and step.
+
+Left as before: all other sends stay manual or are switched on by you. Platform-gated items are unchanged: social publishing, paid campaign creation on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel for purchase events.
+
+Not run here against live Gmail.
+
+## One click to every outside tool; command palette; landing and business pages (Pass 219)
+
+- Open your tools (Integrations screen): every outside tool the app works with, grouped, one click each, opening in a new tab, with a filter box.
+- Command palette: Ctrl+K (Cmd+K on Mac) on every screen opens a search of the app's screens and outside tools. Arrow keys move, Enter opens, Escape closes.
+- Business pipeline: links to the CRM and the tools screen above the buying, selling and support block.
+- Landing page: states that every outside tool is one click away and that Ctrl+K jumps anywhere.
+
+Checked in the build: every internal screen the palette links to exists; every outside link is a secure address.
+
+Still platform-gated (not buildable without approval): social media publishing; paid campaign creation on Meta and Google; Google Business Profile; LinkedIn lead forms and Connect; Meta Lead Ads beyond admins and Meta's pixel for purchase events.
 
 Not run here against live services.
 

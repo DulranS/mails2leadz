@@ -27,6 +27,7 @@ export default function SalesTools() {
   const [journeyName, setJourneyName] = useState("");
   const [journeyText, setJourneyText] = useState("");
   const [enrolEmails, setEnrolEmails] = useState("");
+  const [enrolAgreed, setEnrolAgreed] = useState(false);
   const [journeyMsg, setJourneyMsg] = useState("");
   const [placesText, setPlacesText] = useState("");
   const [pkText, setPkText] = useState("");
@@ -197,12 +198,13 @@ export default function SalesTools() {
           <Field id="j-name" text="Journey name"><input id="j-name" className={field} value={journeyName} onChange={(e) => setJourneyName(e.target.value)} /></Field>
           <Field id="j-enrol" text="Enrol these emails (comma or space separated)"><input id="j-enrol" className={field} value={enrolEmails} onChange={(e) => setEnrolEmails(e.target.value)} /></Field>
         </div>
+        <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={enrolAgreed} onChange={(e) => setEnrolAgreed(e.target.checked)} /><span>These people have agreed to hear from me by email. Tick only if that is true; automatic sending (when switched on in Account) needs it.</span></label>
         <div className="mt-3 flex flex-wrap gap-2">{Object.entries(JOURNEY_PRESETS).map(([id, p]) => (<button key={id} type="button" className={secondary} onClick={() => { setJourneyName(p.name); setJourneyText(p.text); }}>Start from {p.name.toLowerCase()}</button>))}</div>
         <textarea id="j-steps" className={`${field} mt-3`} rows={4} value={journeyText} onChange={(e) => setJourneyText(e.target.value)} placeholder={"0 | email | Thanks for getting in touch. Here is what we do.\n3 | email | Did you get a chance to look?"} />
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_journey", name: journeyName, text: journeyText }); setJourneyMsg(r.ok ? `Journey saved with ${r.steps} step${r.steps === 1 ? "" : "s"}.` : (r.error || "Could not save.")); loadManage(); }}>Save journey</button>
           {(manage?.journeys || []).map((j) => (
-            <button key={j.id} type="button" className={secondary} onClick={async () => { const r = await saveAction({ action: "enrol", journeyId: j.id, emails: enrolEmails }); setJourneyMsg(r.ok ? `Enrolled ${r.enrolled}.` : (r.error || "Could not enrol.")); loadManage(); }}>Enrol into {j.name}</button>
+            <button key={j.id} type="button" className={secondary} onClick={async () => { const r = await saveAction({ action: "enrol", journeyId: j.id, emails: enrolEmails, agreed: enrolAgreed }); setJourneyMsg(r.ok ? `Enrolled ${r.enrolled}.` : (r.error || "Could not enrol.")); loadManage(); }}>Enrol into {j.name}</button>
           ))}
         </div>
         {journeyMsg ? <p className={`mt-2 ${note}`} role="status">{journeyMsg}</p> : null}

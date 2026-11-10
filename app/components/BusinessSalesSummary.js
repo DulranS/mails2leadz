@@ -39,7 +39,13 @@ export default function BusinessSalesSummary() {
 
   return (
     <section aria-label="Buying, selling and support" className="mb-6 space-y-4">
-      <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Buying, selling and support</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Buying, selling and support</h2>
+        <nav aria-label="Quick links" className="flex flex-wrap gap-2 text-sm">
+          <a className="min-h-[40px] inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-gray-900 dark:text-gray-100" href="/crm">Open CRM</a>
+          <a className="min-h-[40px] inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-gray-900 dark:text-gray-100" href="/integrations">Open tools</a>
+        </nav>
+      </div>
       {forecast ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat name="Expected this quarter" value={forecast.expected} hint={forecast.target ? `${forecast.pctOfTarget}% of target` : "Set a monthly revenue target"} />

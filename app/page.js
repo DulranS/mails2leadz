@@ -18,6 +18,7 @@ const BUILT = [
   { title: 'Connects to the tools you use', text: 'Google (Ads, Analytics, Search Console), Meta, TikTok, Shopify, eBay, Stripe, Twilio, Typeform, Tally and Slack. Most need one approval or one key. Each connection is shown with what it does.' },
   { title: 'Case studies, pitch and agreements', text: 'Case studies are drafted only for customers who agreed in writing, and nothing is published for you. Pitch decks come from your own figures. Agreements can be signed electronically through Dropbox Sign or accepted by typed name through a link. Legal terms are left for a lawyer.' },
   { title: 'Growth, events and accounts', text: 'Objectives and key results measured from your own figures, a next step on your weekly list whenever a target is clearly missed, competitor prices you enter against your own, customer, partner and press accounts you are reminded to reach, journeys you send step by step, referral asks to happy customers, events with RSVPs, package comparisons, and a brief for short videos.' },
+  { title: 'Everything one step away', text: 'Every outside tool your business uses is one click away, and Ctrl+K (or Cmd+K) jumps to any screen or tool from anywhere in the app.' },
   { title: 'Your data stays yours', text: 'Download everything or delete your account and data yourself from the Account page. Every email carries a one-click opt-out.' },
 ];
 

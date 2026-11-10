@@ -12,6 +12,7 @@ import ConnectButtons from "../components/ConnectButtons";
 import OutlookConnect from "../components/OutlookConnect";
 import SignalFeedsCard from "../components/SignalFeedsCard";
 import { CATALOG_GROUPS as KEY_GROUPS } from "../../lib/integration-catalog.js";
+import OpenYourTools from "../components/OpenYourTools.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -411,7 +412,8 @@ export default function IntegrationsPage() {
       <div className="mt-4"><SignalsCard /></div>
       <div className="mt-4"><CalendarConnect /></div>
       <div className="mt-4"><IntakeUrls /></div>
-      <div className="mt-4"><ConnectButtons /></div>
+      <div className="mt-4"><section className="mx-4 my-4"><h2 className="text-sm font-semibold mb-2">Open your tools</h2><OpenYourTools /></section>
+      <ConnectButtons /></div>
       <div className="mt-4"><OutlookConnect /></div>
       <div className="mt-4"><SignalFeedsCard /></div>
     </DashboardLayout>

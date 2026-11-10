@@ -201,6 +201,7 @@ app/components/ClickToCall.js
 app/components/ClientLayout.js
 app/components/CohortPanel.js
 app/components/Collapsible.js
+app/components/CommandPalette.js
 app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
 app/components/DayStart.js
@@ -216,6 +217,7 @@ app/components/LegalPage.js
 app/components/LiveVoice.js
 app/components/MarketingSpendPanel.js
 app/components/MemberAccount.js
+app/components/OpenYourTools.js
 app/components/OpsStatusCard.js
 app/components/OutlookConnect.js
 app/components/PipelineAlerts.js
@@ -388,6 +390,7 @@ lib/integration-catalog.js
 lib/integrations.js
 lib/invoice-numbering.js
 lib/journey-presets.js
+lib/journey-send.js
 lib/journey.js
 lib/kpi-economics.js
 lib/kpi-scorecard.js
@@ -442,6 +445,7 @@ lib/promo-results.js
 lib/promo-tx.js
 lib/promo.js
 lib/push.js
+lib/quick-links.js
 lib/quote-core.js
 lib/quote-economics.js
 lib/quote-followup.js
@@ -543,6 +547,7 @@ lib/server/ingest-key.js
 lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
+lib/server/journey-send.js
 lib/server/journeys.js
 lib/server/landregistry.js
 lib/server/lead-finder-io.js
