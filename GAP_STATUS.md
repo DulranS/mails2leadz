@@ -1,4 +1,4 @@
-# Business gap status (after Pass 211)
+# Business gap status (after Pass 217)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -811,4 +811,137 @@ Needs platform approval: LinkedIn lead forms and Connect; Meta Lead Ads beyond t
 Off until switched on: automatic sending, automatic replies, eBay publishing, Stripe Connect.
 
 Not run here against live Dropbox Sign, Stripe, eBay or any other service.
+
+## Gaps closed in sales, marketing and deals (Pass 212)
+
+Decisions made:
+- Rental check-out and extension texts: built. Sent only to bookings whose customer agreed to texts, only near the end time, through Twilio, and only when you switch "Send check-out and extension texts" on. Off by default; while off, each due text is listed for you.
+- Objectives and key results: built. Measured from your own figures (revenue a month, new customers a month, win rate, paid share, lifetime value). A measure with no figure yet is shown as not measured, never as zero.
+- Competitor tracking: built from the competitor prices you enter, with your price's position against their middle. Competitor sites are not read.
+- Customer community: decided not to build a forum (a separate product with its own moderation). Built instead: referral asks to settled, happy customers, with a share code, not asked again for 90 days.
+- Account-based marketing: built as named accounts you are reminded to reach, and reminded again after two weeks with no contact. Not a full ABM platform.
+- Pitch deck as PowerPoint: built with a real .pptx file from the same slides as the printable deck.
+- Creator and UGC brief: built from your offer and audience, with a permissions reminder and no invented results.
+
+Still not built, and why:
+- Google Business Profile (local search and map listings): needs Google's approval for that API.
+- LinkedIn lead forms, Connect and social selling: need LinkedIn's partner approval.
+- Meta Lead Ads beyond your admins, and Meta's pixel for purchase events: need Meta's app review.
+- Twilio: still takes its account ID and token; it has no approval flow.
+
+Left out on purpose: scraping marketplaces or other sites; messaging or calling people who have not agreed; sending government tenders.
+
+Not claimed: a legal tier above what Dropbox Sign provides for electronic signature.
+Not applicable: cookie consent on the app's own pages; Apple Pay and Shopify Pay settings (they live in the payment provider).
+Off until switched on: automatic sending, automatic replies, eBay publishing, Stripe Connect, rental texts.
+
+Not run here against live services.
+
+## Final scope check against the market (Pass 213)
+
+Benchmarked against current RevOps tool and stack guides (2026): CRM, lead routing and scoring, enrichment, sequences, marketing automation, conversation intelligence, forecasting, deal health, data quality, attribution, proposals, customer success.
+
+Covered:
+- CRM, deal stages with probabilities, weighted pipeline, win and loss reasons, revive-lost checks.
+- Lead capture from forms, ads, storefront, inbox and messages; routing to the least busy person; lead scoring; enrichment from public sources.
+- Sequences with stop-on-reply, A/B testing, email, SMS, WhatsApp, calls with AI summaries, bookings.
+- Attribution (multi-touch), ROI loop, cohorts, lifetime value by source.
+- Forecast for the quarter against target, deal health, customer health, deals at risk (Pass 213).
+- Satisfaction score (NPS), referral asks, case studies with consent.
+- Proposals, quotes, invoices, card payments, electronic signature (Dropbox Sign).
+- Support desk with targets, routing and escalation.
+- Buying and reselling: company checks, price checks, sold-price comparables, resale margins, eBay deal search.
+
+Not built, and why:
+- Buyer intent data and website visitor identification: rely on third-party data and tracking that needs visitors' consent. Not built.
+- Call recording and conversation scoring: recording calls needs consent rules that vary by jurisdiction. Summaries from transcripts are built; recording is not.
+- Visual journey builder for multi-step campaigns: sequences exist; a drag-and-drop builder is a separate product. Not built.
+- Full account-based marketing and enterprise data orchestration: paid external platforms. Named-account reminders are built.
+- Paid data enrichment (large contact databases): an external subscription, not an app feature.
+
+So this is not literally everything in the market. It is what this app can build responsibly, plus every item in the current benchmark that can be built without consent gaps or paid platforms.
+
+Platform-gated: Google Business Profile; LinkedIn lead forms, Connect and social selling; Meta Lead Ads beyond admins and Meta's pixel. Twilio still takes two values.
+Left out on purpose: scraping marketplaces or other sites; messaging or calling people who have not agreed; sending government tenders.
+Off until switched on: automatic sending, automatic replies, eBay publishing, Stripe Connect, rental texts.
+
+Not run here against live services.
+
+## Journeys: the last buildable marketing gap (Pass 214)
+
+Built: a journey is an ordered list of up to eight steps (wait days, email or SMS, message). You enrol people by email. Each day the app lists the steps that are due, and you send each one yourself and mark it sent. A reply stops the journey for that person. Journeys are kept with your business settings.
+
+Boundary: nothing in a journey is sent automatically. This is semi-automatic by design: each message goes out under your name, so you send it. An automatic journey sender would reuse the consent-checked send paths and stay off by default; it is not built.
+
+Still not closable here:
+- Platform approval: Google Business Profile; LinkedIn lead forms, Connect and social selling; Meta Lead Ads beyond your admins, and Meta's pixel for purchase events.
+- Two values for Twilio (no approval flow).
+- Buyer intent data and visitor identification: third-party data and tracking that needs visitors' consent.
+- Call recording and conversation scoring: consent rules vary by jurisdiction.
+- Paid data subscriptions (large contact databases, full ABM platforms).
+
+Left out on purpose: scraping marketplaces or other sites; messaging or calling people who have not agreed; sending government tenders.
+Off until switched on: automatic sending, automatic replies, eBay publishing, Stripe Connect, rental texts.
+
+Not run here against live services.
+
+## Lead search on Google Places, events, presets, packages (Pass 215)
+
+Automatic discovery: the owner's saved searches (up to three) run each week on Google Places, an official API with a key the owner connects once. Found businesses are added to the lead finder's existing import, so they are de-duplicated and stored the same way as other leads. Nothing is scraped. A found business is contacted only under the owner's own consent and opt-out rules.
+
+Events: create an event with a name, date, place and capacity. Share its link; guests RSVP with their name and email, and may agree to hear from you again (optional, recorded per person). One RSVP per email. Capacity is enforced. A reminder is listed the day before the event.
+
+Presets: onboarding, renewal and win-back journeys, as editable templates. Nothing is sent by them.
+
+Packages: packages are compared with the same tax and deposit rules, cheapest first.
+
+Framework check (sales and marketing items from the uploaded list):
+- Built: goals and targets, pricing and packaging (price check and package comparison), lead generation (Places, eBay, Companies House, OpenStreetMap, lead lists), proposals and quotes, negotiation and closing (quotes, e-signature), account management (named accounts, account reviews), cross-sell, events and promotions, loyalty and referrals, satisfaction scores, renewals and win-back (journey presets), marketing analytics, consultations and demos (bookings).
+- Partial: partnerships (named accounts only, no partner pipeline), market positioning (pitch outline; no research), PR (no press database; a manual accounts list only), SEO and content (insight from Search Console; content creation is outside the app).
+- Platform-gated: social media publishing (Meta, TikTok, LinkedIn content posting needs platform review); Google Business Profile.
+- Outside sales and marketing: operations, finance, people, procurement, legal, technology and administration items in the list.
+
+Not run here against live services (Google Places included).
+
+## Partners, press, demand; landing and business pages; flow check (Pass 216)
+
+Built:
+- Accounts carry a type: customer, partner or press. Reminders say which kind of contact is due.
+- Demand trend: leads received in the last thirty days against the thirty before, with the direction and top sources. Read from leads you actually received.
+- Business pipeline summary: forecast, deals at risk, demand, and a real count of partner and press accounts.
+- Landing page: updated for weekly lead search, events, journeys, packages, forecast, partner and press accounts; lists the platform-gated items.
+
+Flow check (sales and marketing parts of the flow):
+- Market research: competitor prices (entered), demand trend (received leads), customer feedback (satisfaction, support topics).
+- Product development: pricing and packaging, A/B tests on email, improvement ideas from repeated customer questions.
+- Marketing: positioning (pitch outline), content and SEO (Search Console insight), campaigns (journeys, sequences), partnerships and press (typed accounts), paid spend (ROI loop).
+- Sales: prospecting and lead generation (lead search, lead lists, enrichment), qualification (scoring), CRM and pipeline, consultations (bookings), proposals and quotes, negotiation and closing (quotes, electronic signature), account management (account reviews, named accounts).
+- Customer management: onboarding and renewal (journey starts), communication, support and complaint resolution, satisfaction, retention (customer health), upselling and cross-selling, referrals.
+- Order and contract: order confirmation and payment (invoices, card payments), contracts (electronic signature), delivery scheduling (bookings).
+- Feedback to product and marketing: repeated support questions become actions.
+
+Platform-gated, not buildable without approval: social media publishing (Meta, TikTok, LinkedIn content posting); paid campaign creation on Meta and Google (their marketing and ads APIs need review); Google Business Profile; LinkedIn lead forms and Connect; Meta Lead Ads beyond the app's admins, and Meta's pixel for purchase events.
+
+Partial, by design: branding and brand design (creative work outside the app), a press database (none is provided; accounts are typed by hand), market research beyond the data the owner enters.
+
+Outside sales and marketing: operations, finance, people, procurement, legal and administration items in the flow.
+
+Not run here against live services.
+
+## Performance loop: corrective action (Pass 217)
+
+The KPI loop was missing its last step. Targets were shown, but a missed target produced nothing. Now the weekly list gets one next step whenever revenue a month is below 80% of its target, or new customers a month are below 80%. Both averages come from paid invoices over the last twelve months. Targets that are not set are never flagged.
+
+Framework check, sales and marketing parts only:
+- Customer flow (awareness, leads, sales, retention): covered.
+- Information flow (data, reporting, decisions, improvements): covered by the weekly list, the monthly digest, the scorecard and the corrective step.
+- Money flow for sales (revenue, collection, reinvestment of marketing spend): covered by invoices, receivables, the ROI loop and the budget suggestion.
+- Performance loop (objectives, department goals, KPIs, performance reports, underperformance, corrective action): covered for sales and marketing.
+- Business development and partnerships: partner accounts with reminders; no separate partner pipeline.
+
+Outside sales and marketing, not built: finance and accounting (beyond the sales money measures), people and HR, technology and data infrastructure, operations and delivery, procurement and logistics, administration and assets, business funding and investment.
+
+Platform-gated, not buildable without approval: social media publishing; paid campaign creation on Meta and Google; Google Business Profile; LinkedIn lead forms and Connect; Meta Lead Ads beyond admins and Meta's pixel for purchase events.
+
+Not run here against live services.
 

@@ -1,3 +1,73 @@
+## Pass 217 - corrective action on missed targets
+
+- The weekly list adds one next step when revenue a month or new customers a month is below 80% of target. Figures come from paid invoices over the last twelve months.
+- Landing page mentions the corrective step.
+- Tests run here: the corrective tests (4 checks), the full npm test chain, and a production Next.js build. The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Win rate is not used for corrective steps (it needs the full deal history in the weekly run).
+- Platform-gated items unchanged. Not run against live services.
+
+## Pass 216 - partners, press, demand; landing and business pages
+
+- Accounts typed as customer, partner or press; reminders name the type.
+- Demand trend from received leads (thirty days against the thirty before).
+- Business pipeline summary shows the forecast, deals at risk, demand, and the partner and press count.
+- Landing page updated to what is built, and the platform-gated items named.
+- Tests run here: the partners, press and demand tests (3 checks), the full npm test chain (exit 0, 913 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Platform-gated: social publishing, paid campaign creation, Google Business Profile, LinkedIn, Meta Lead Ads beyond admins.
+- Not run against live services.
+
+## Pass 215 - Google Places lead search, events, presets, packages
+
+- Automatic weekly lead search through Google Places (official API, owner's key, tested before saving), added to the lead finder's import.
+- Events with a public RSVP page: capacity, one RSVP per email, optional marketing tick, reminder the day before.
+- Onboarding, renewal and win-back journey starts; package comparison with tax and deposit.
+- Fixed: a result count of zero was read as twenty.
+- Tests run here: the Places, events, presets and packages tests, the full npm test chain (exit 0, 910 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Partial: partnerships, positioning, PR. Platform-gated: social publishing, Google Business Profile.
+- Not run against live Google Places or any other service.
+
+## Pass 214 - journeys
+
+- Journeys: up to eight ordered steps with waits, email or SMS. Enrol by email; the daily list shows each due step; you send it and mark it sent. A reply stops the journey for that person.
+- Nothing in a journey is sent automatically.
+- Tests run here: the journey tests (4 checks), the full npm test chain (exit 0, 901 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Semi-automatic by design. An automatic journey sender is not built.
+- Not run against live services.
+
+## Pass 213 - forecast, health, final scope check
+
+- Quarter forecast: won so far plus open deals weighted by your stage probabilities, against three months of target.
+- Deal health (idle time, missing value, missing next step) and customer health (no purchase, open complaint, low score), with the reasons named.
+- Deals at risk shown on the measures screen.
+- Final scope check against current RevOps benchmarks, with what is not built and why.
+- Tests run here: the health and forecast tests (3 checks), the full npm test chain (exit 0, 897 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not built: buyer intent and visitor identification, call recording, a visual journey builder, full ABM platform, paid data subscriptions.
+- Not run against live services.
+
+## Pass 212 - gaps closed in sales, marketing and deals
+
+- Rental check-out and extension texts (consent-checked, near the end time, switch off by default).
+- Objectives and key results measured from real figures.
+- Competitor prices entered and compared with your price.
+- Referral asks to settled, happy customers, with a share code.
+- Named accounts reminded when quiet for two weeks.
+- PowerPoint deck (.pptx) alongside the printable deck; creator brief.
+- Tests run here: the gap tests (7 checks), the full npm test chain (exit 0, 894 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live services. Google Business Profile, LinkedIn and Meta remain platform-gated.
+- A community forum was decided against; referrals are built instead.
+
 ## Pass 211 - electronic signature through Dropbox Sign
 
 - Provider chosen: Dropbox Sign, with the owner's API key (checked before saving).

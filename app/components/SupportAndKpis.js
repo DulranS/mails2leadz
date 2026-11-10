@@ -34,6 +34,8 @@ function Field({ id, text, children }) {
 export default function SupportAndKpis() {
   const [kpi, setKpi] = useState(null);
   const [money, setMoney] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [atRisk, setAtRisk] = useState([]);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -47,6 +49,8 @@ export default function SupportAndKpis() {
   const load = () => {
     fetch("/api/kpis").then((r) => r.json()).then((j) => {
       if (j.kpis) setKpi(j.kpis);
+      if (j.forecast) setForecast(j.forecast);
+      if (j.atRisk) setAtRisk(j.atRisk);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -88,6 +92,24 @@ export default function SupportAndKpis() {
       {kpi ? (
         <section aria-label="Sales measures" className="space-y-3">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white px-2">Sales right now</h3>
+          {forecast ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-2">
+              <Stat name="Expected this quarter" value={forecast.expected} hint={forecast.target ? `${forecast.pctOfTarget}% of your quarter target` : "Set a monthly revenue target"} />
+              <Stat name="Won this quarter" value={forecast.wonThisQuarter} />
+              <Stat name="Open, weighted by stage" value={forecast.weightedOpen} />
+              <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? "See below" : "None flagged"} />
+            </div>
+          ) : null}
+          {atRisk.length ? (
+            <ul className="px-2 space-y-2">
+              {atRisk.map((d) => (
+                <li key={d.name} className={card}>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{d.name}{d.value ? ` (${d.value})` : ""}</p>
+                  <p className={note}>{d.health.risks.join(", ")}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-2">
             <Stat name="Open pipeline" value={`${kpi.pipeline.open} deals`} hint={`Worth ${kpi.pipeline.value}`} />
             <Stat name="Won in 12 months" value={kpi.sales.wonLast12Months} hint={`Worth ${kpi.sales.wonValueLast12Months}`} />

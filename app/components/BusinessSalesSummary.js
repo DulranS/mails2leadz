@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { targetProgress } from "../../lib/deals/link.js";
 import { staleListings } from "../../lib/deals/resale.js";
+import { parseAccounts } from "../../lib/abm.js";
 
 // The sales side in one block: buying and selling, the support queue, and targets. Figures come from the owner's records only.
 const card = "rounded-md border border-gray-200 dark:border-gray-700 p-3";
@@ -15,14 +16,20 @@ export default function BusinessSalesSummary() {
   const [deals, setDeals] = useState({ targets: [] });
   const [support, setSupport] = useState(null);
   const [kpis, setKpis] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [atRisk, setAtRisk] = useState([]);
+  const [demand, setDemand] = useState(null);
+  const [accountsText, setAccountsText] = useState("");
 
   useEffect(() => {
     fetch("/api/deals").then((r) => r.json()).then((j) => setDeals(j)).catch(() => {});
     fetch("/api/support").then((r) => r.json()).then((j) => setSupport(j)).catch(() => {});
-    fetch("/api/kpis").then((r) => r.json()).then((j) => setKpis(j)).catch(() => {});
+    fetch("/api/sales-tools/manage").then((r) => r.json()).then((j) => setAccountsText(j.abmText || "")).catch(() => {});
+    fetch("/api/kpis").then((r) => r.json()).then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); }).catch(() => {});
   }, []);
 
   const targets = deals.targets || [];
+  const partnerPress = parseAccounts(accountsText).filter((a) => a.type === "partner" || a.type === "press").length;
   const buy = targets.filter((t) => t.side === "buy");
   const inOffer = buy.filter((t) => t.stage === "offer").length;
   const stale = staleListings(targets);
@@ -33,6 +40,14 @@ export default function BusinessSalesSummary() {
   return (
     <section aria-label="Buying, selling and support" className="mb-6 space-y-4">
       <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Buying, selling and support</h2>
+      {forecast ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat name="Expected this quarter" value={forecast.expected} hint={forecast.target ? `${forecast.pctOfTarget}% of target` : "Set a monthly revenue target"} />
+          <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? atRisk.map((d) => d.name).slice(0, 2).join(", ") : "None flagged"} />
+          <Stat name="Demand, last 30 days" value={demand ? `${demand.last30} leads` : "n/a"} hint={demand?.changePct !== null && demand?.changePct !== undefined ? `${demand.direction}, ${demand.changePct > 0 ? "+" : ""}${demand.changePct}% on the month before` : "Not enough history yet"} />
+          <Stat name="Partners and press to reach" value={partnerPress} hint="From your accounts list" />
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat name="Tracked to buy or resell" value={buy.length} hint={`${inOffer} at offer stage`} />
         <Stat name="Listings waiting for a decision" value={stale.length} hint="Open for two weeks or more" />

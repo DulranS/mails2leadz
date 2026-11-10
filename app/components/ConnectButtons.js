@@ -20,6 +20,8 @@ export default function ConnectButtons() {
   const [tallyMsg, setTallyMsg] = useState("");
   const [dsKey, setDsKey] = useState("");
   const [dsMsg, setDsMsg] = useState("");
+  const [plKey, setPlKey] = useState("");
+  const [plMsg, setPlMsg] = useState("");
   const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const result = params ? params.get("connect") : null;
 
@@ -107,6 +109,23 @@ export default function ConnectButtons() {
           }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Dropbox Sign</button>
         </div>
         {dsMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{dsMsg}</p> : null}
+      </div>
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">Connect Google Places (automatic lead search)</p>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Create an API key in Google Cloud, enable the Places API for it, paste it here, and press Connect. The key is tested before it is saved.</p>
+        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+          <input className="w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800" type="password" autoComplete="off" value={plKey} onChange={(e) => setPlKey(e.target.value)} placeholder="Google Places API key" aria-label="Google Places API key" />
+          <button type="button" disabled={!plKey} onClick={async () => {
+            setPlMsg("Testing the key...");
+            try {
+              const res = await fetch("/api/integrations/places/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: plKey }) });
+              const j = await res.json().catch(() => ({}));
+              setPlMsg(res.ok ? "Connected. Saved searches will run each week." : (j.error || "Could not connect."));
+              if (res.ok) setPlKey("");
+            } catch (e) { setPlMsg("Could not reach the server. Try again."); }
+          }} className="min-h-[40px] px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-sm disabled:opacity-50">Connect Google Places</button>
+        </div>
+        {plMsg ? <p className="text-xs text-gray-700 dark:text-gray-200 mt-2" role="status">{plMsg}</p> : null}
       </div>
       {msg ? <p className="text-xs text-red-600 dark:text-red-400 mt-2">{msg}</p> : null}
     </section>

@@ -144,7 +144,7 @@ const PUBLIC_OR_NO_TENANT = new Set(['auth/callback', 'health', 'unsubscribe', '
   // Pass 133: public by design, each finds its owner another way: signed OAuth state (callbacks), the cron secret (reassign),
   // the public storefront key (shop/*), a server-stored shipment link (shipping/webhook), a signed statement token (shop/orders-link).
   // Pass 211: the customer accepts an agreement with a one-time token; the owner is read from the stored record, never from the request.
-  'agreements/accept', 'calendar-offline/callback', 'outlook-calendar/callback', 'cron/reassign', 'cron/pipeline', 'integrations/meta-leads', 'integrations/google-ads-leads', 'integrations/linkedin-leads', 'integrations/tally', 'integrations/tiktok-leads', 'integrations/typeform', 'shipping/webhook', 'shop/basket', 'shop/basket-link', 'shop/checkout', 'shop/orders-link', 'shop/restock-wait', 'voice/visitor-session', 'intake', 'connect/callback', 'voice-agent/webhook']);
+  'agreements/accept', 'events/rsvp', 'events/public', 'calendar-offline/callback', 'outlook-calendar/callback', 'cron/reassign', 'cron/pipeline', 'integrations/meta-leads', 'integrations/google-ads-leads', 'integrations/linkedin-leads', 'integrations/tally', 'integrations/tiktok-leads', 'integrations/typeform', 'shipping/webhook', 'shop/basket', 'shop/basket-link', 'shop/checkout', 'shop/orders-link', 'shop/restock-wait', 'voice/visitor-session', 'intake', 'connect/callback', 'voice-agent/webhook']);
 
 await t('CONTRACT: every route that acts for a tenant derives it from the verified identity (identify / uidFromRequest / requireAdmin)', () => {
   const offenders = [];

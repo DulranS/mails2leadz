@@ -59,6 +59,9 @@ app/api/deals/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
 app/api/esign/route.js
+app/api/events/public/route.js
+app/api/events/route.js
+app/api/events/rsvp/route.js
 app/api/exports/accounting/route.js
 app/api/find-leads/route.js
 app/api/get-daily-count/route.js
@@ -77,6 +80,7 @@ app/api/integrations/google-ads-leads/route.js
 app/api/integrations/intake/route.js
 app/api/integrations/linkedin-leads/route.js
 app/api/integrations/meta-leads/route.js
+app/api/integrations/places/connect/route.js
 app/api/integrations/route.js
 app/api/integrations/secrets/route.js
 app/api/integrations/tally/connect/route.js
@@ -123,7 +127,9 @@ app/api/reorder/route.js
 app/api/research-company/route.js
 app/api/saas/checkout/route.js
 app/api/saas/portal/route.js
+app/api/sales-tools/deck.pptx/route.js
 app/api/sales-tools/deck/route.js
+app/api/sales-tools/manage/route.js
 app/api/sales-tools/route.js
 app/api/send-email/route.js
 app/api/send-followup/route.js
@@ -240,6 +246,7 @@ app/customers/page.js
 app/dashboard/layout.js
 app/dashboard/page.js
 app/enquire/page.js
+app/events/[token]/page.js
 app/hooks/useAuth.js
 app/inbox/page.js
 app/integrations/page.js
@@ -272,6 +279,7 @@ hooks/useDailyQuotas.js
 hooks/useLeadScoring.js
 lib/ab-winner.js
 lib/abandoned-basket.js
+lib/abm.js
 lib/acceptance.js
 lib/access.js
 lib/account-data.js
@@ -315,6 +323,7 @@ lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js
 lib/commissions.js
+lib/competitor.js
 lib/config.js
 lib/connect.js
 lib/connection-status.js
@@ -323,6 +332,7 @@ lib/consent-rules.js
 lib/content.js
 lib/contracts.js
 lib/conversations.js
+lib/corrective.js
 lib/credit-apply.js
 lib/credit-notes.js
 lib/cross-sell.js
@@ -344,6 +354,7 @@ lib/deals/resale.js
 lib/deals/valuation.js
 lib/deck.js
 lib/default-templates.js
+lib/demand.js
 lib/draft-queue.js
 lib/ebay.js
 lib/enrich-extract.js
@@ -351,6 +362,7 @@ lib/erase-contact.js
 lib/error-handler.js
 lib/errors.js
 lib/esign.js
+lib/events.js
 lib/experiments.js
 lib/feedback-loop.js
 lib/firebase-cache.js
@@ -367,6 +379,7 @@ lib/google-leads.js
 lib/google-purchases.js
 lib/google-setup.js
 lib/graceful-degradation.js
+lib/health.js
 lib/httpClient.js
 lib/inbound.js
 lib/independence.js
@@ -374,6 +387,8 @@ lib/intake.js
 lib/integration-catalog.js
 lib/integrations.js
 lib/invoice-numbering.js
+lib/journey-presets.js
+lib/journey.js
 lib/kpi-economics.js
 lib/kpi-scorecard.js
 lib/landregistry.js
@@ -400,10 +415,12 @@ lib/multi-touch.js
 lib/next-actions.js
 lib/niche.js
 lib/nps.js
+lib/okr.js
 lib/onboarding.js
 lib/ops-status.js
 lib/outlook.js
 lib/owner-report.js
+lib/packages.js
 lib/partners.js
 lib/payroll.js
 lib/pdf-text.js
@@ -411,10 +428,12 @@ lib/pdl.js
 lib/phone.js
 lib/pipeline-alerts.js
 lib/pitch.js
+lib/places.js
 lib/plan.js
 lib/post-sale.js
 lib/post-webhook.js
 lib/postage.js
+lib/pptx-deck.js
 lib/preflight.js
 lib/pricing.js
 lib/products.js
@@ -442,6 +461,8 @@ lib/redux/slices/sentLeadsSlice.js
 lib/redux/slices/settingsSlice.js
 lib/redux/slices/uiSlice.js
 lib/redux/store.js
+lib/referral.js
+lib/rental-texts.js
 lib/reply-intents.js
 lib/reply-notices.js
 lib/reply-sync.js
@@ -505,8 +526,10 @@ lib/server/enrich-deals.js
 lib/server/enrich.js
 lib/server/erase-contact.js
 lib/server/esign.js
+lib/server/events.js
 lib/server/external-busy.js
 lib/server/ga4.js
+lib/server/gap-tools.js
 lib/server/gift-card-job.js
 lib/server/gmail-offline.js
 lib/server/google-customer-match.js
@@ -520,6 +543,7 @@ lib/server/ingest-key.js
 lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
+lib/server/journeys.js
 lib/server/landregistry.js
 lib/server/lead-finder-io.js
 lib/server/lead-finder-job.js
@@ -538,6 +562,7 @@ lib/server/owner-report.js
 lib/server/owner-settings.js
 lib/server/payments.js
 lib/server/pipeline-run.js
+lib/server/places-leads.js
 lib/server/prepare-drafts.js
 lib/server/promo.js
 lib/server/push.js
@@ -618,6 +643,7 @@ lib/tiktok-sync.js
 lib/time-log.js
 lib/trends.js
 lib/typeform-connect.js
+lib/ugc.js
 lib/utm.js
 lib/validation.js
 lib/visitor-voice.js

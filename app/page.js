@@ -10,25 +10,28 @@ const STEPS = [
 ];
 
 const BUILT = [
-  { title: 'Lead inbox and enrichment', text: 'Leads from your forms, ads, storefront and inbox are scored and routed to the least busy person on your team. An optional helper finds local businesses on OpenStreetMap and reads their public sites.' },
+  { title: 'Lead inbox and lead search', text: 'Leads from your forms, ads, storefront and inbox are scored and routed to the least busy person on your team. Your saved searches run weekly on Google Places, and local businesses are added to your list for review. Nothing is scraped.' },
   { title: 'AI drafts you approve', text: 'Follow-ups and replies are drafted from what you sell. You read and edit each one. Call summaries are kept on the customer record.' },
   { title: 'Support desk', text: 'Customer questions and complaints go into one queue with a two-hour target, routing, a reminder before a target is missed, and a single alert when it is. Your own answer library gives ready replies.' },
   { title: 'Deals, buying and selling', text: 'Check a company through public UK records, price an asset against sold prices, work out a resale margin, and see whether your own business is ready to sell. Search eBay for listings priced below the usual level.' },
-  { title: 'Money and measures', text: 'Average order value, price point, average contract value, lifetime value, acquisition cost, and where your best customers come from. A monthly digest says where a little spend could move.' },
+  { title: 'Money, forecast and measures', text: 'Average order value, price point, average contract value, lifetime value, acquisition cost, and where your best customers come from. The quarter forecast, deals and customers at risk, demand over the last thirty days, and a monthly digest that says where a little spend could move.' },
   { title: 'Connects to the tools you use', text: 'Google (Ads, Analytics, Search Console), Meta, TikTok, Shopify, eBay, Stripe, Twilio, Typeform, Tally and Slack. Most need one approval or one key. Each connection is shown with what it does.' },
   { title: 'Case studies, pitch and agreements', text: 'Case studies are drafted only for customers who agreed in writing, and nothing is published for you. Pitch decks come from your own figures. Agreements can be signed electronically through Dropbox Sign or accepted by typed name through a link. Legal terms are left for a lawyer.' },
+  { title: 'Growth, events and accounts', text: 'Objectives and key results measured from your own figures, a next step on your weekly list whenever a target is clearly missed, competitor prices you enter against your own, customer, partner and press accounts you are reminded to reach, journeys you send step by step, referral asks to happy customers, events with RSVPs, package comparisons, and a brief for short videos.' },
   { title: 'Your data stays yours', text: 'Download everything or delete your account and data yourself from the Account page. Every email carries a one-click opt-out.' },
 ];
 
 const SWITCHED_OFF = [
   'Automatic sending of messages, which stays off until you switch it on.',
   'Automatic answers to customer questions, which need your answer library and your switch.',
+  'Check-out and extension texts to rental customers who agreed to texts, which need Twilio and your switch.',
   'Publishing listings to eBay, and Stripe Connect for card payments. Each is off until you turn it on.',
 ];
 
 const NOT_INCLUDED = [
   { label: 'Not claimed', text: 'Electronic signatures are sent through Dropbox Sign with your own key. They are not presented as a higher legal tier than the signing service provides; check with a lawyer what your agreements need.' },
   { label: 'Needs platform approval', text: 'LinkedIn lead forms and connection, and Meta Lead Ads beyond the app owner\'s own account. These need approval from LinkedIn or Meta, which the app cannot give itself.' },
+  { label: 'Platform-gated', text: 'Social media publishing (Meta, TikTok, LinkedIn content posting), Google Business Profile, and paid campaign creation on Meta or Google. Each needs the platform\'s own review or approval before an app can act for you.' },
   { label: 'Left out on purpose', text: 'Messaging or calling people who have not agreed to it, and scraping marketplaces or other sites against their terms. Government tender submission is yours to send.' },
 ];
 
