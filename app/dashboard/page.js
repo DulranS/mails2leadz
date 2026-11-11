@@ -7687,9 +7687,9 @@ function DashboardComponent() {
         )}
 
         {/* MAIN GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* LEFT COLUMN - UPLOAD & SETTINGS */}
-          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
             {/* CSV Upload */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">
@@ -7846,7 +7846,7 @@ function DashboardComponent() {
           </div>
 
           {/* MIDDLE COLUMN - TEMPLATES & SEND */}
-          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-6 space-y-4 sm:space-y-6">
             {/* Sender Info */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
@@ -8315,7 +8315,7 @@ function DashboardComponent() {
           </div>
 
           {/* RIGHT COLUMN - ANALYTICS & MULTI-CHANNEL */}
-          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
             {whatsappLinks.length > 0 && (
               <div className="space-y-4">
                 {/* Campaign Performance */}
