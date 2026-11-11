@@ -1,3 +1,12 @@
+## Pass 225 - dashboard gets the shared frame and search
+
+- The dashboard was missing from the shared-frame list, so it had no top bar, navigation or search button. Added.
+- The dashboard remains the first screen after sign-in.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked on a phone or desktop in a browser.
+
 ## Pass 224 - search on phones
 
 - Floating search button on phones, on every screen.

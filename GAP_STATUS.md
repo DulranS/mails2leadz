@@ -1,4 +1,4 @@
-# Business gap status (after Pass 224)
+# Business gap status (after Pass 225)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1016,6 +1016,13 @@ Not checked in a browser. Still platform-gated: social publishing, paid campaign
 - Floating search button in the bottom-right corner on phones, on every screen, opens the search.
 - The top-bar search button is now an icon, the same size on every screen, so a crowded top bar cannot push it out of view.
 - On phones the search opens as a sheet from the bottom, sized for the on-screen keyboard; on larger screens it stays at the top.
+
+Not checked on a phone in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Dashboard gets the shared frame and search (Pass 225)
+
+- The dashboard was not in the list of screens that get the shared frame, so it showed no top bar, no navigation and no search button. It is now in that list.
+- The dashboard stays the first screen after sign-in: it holds today's plan and calls, which is the daily start.
 
 Not checked on a phone in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 
