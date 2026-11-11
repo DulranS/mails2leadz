@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import Collapsible from "./Collapsible.js";
+import { groupNumber as g } from "../../lib/format.js";
 
 // Deals: find, check and sell. Built from public company records and your own numbers. Not investment advice; nothing is traded or sent.
 const post = (body) => fetch("/api/deals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json().catch(() => ({})));
@@ -166,7 +167,7 @@ export default function DealSourcing() {
           <div className="mt-2"><button type="button" disabled={!compsFor} onClick={compare} className={primary}>Compare with these prices</button></div>
         </div>
         {compsOut?.summary?.ok ? (
-          <Result ok>{compsOut.summary.count} sold prices. Middle {compsOut.summary.median}, range {compsOut.summary.low} to {compsOut.summary.high}.{compsOut.summary.verdict ? ` The asking price is ${compsOut.summary.askingVsMedianPct}% against the middle (${pretty(compsOut.summary.verdict)}).` : ""}{compsOut.skipped ? ` ${compsOut.skipped} line(s) skipped.` : ""}</Result>
+          <Result ok>{compsOut.summary.count} sold prices. Middle {g(compsOut.summary.median)}, range {g(compsOut.summary.low)} to {g(compsOut.summary.high)}.{compsOut.summary.verdict ? ` The asking price is ${compsOut.summary.askingVsMedianPct}% against the middle (${pretty(compsOut.summary.verdict)}).` : ""}{compsOut.skipped ? ` ${compsOut.skipped} line(s) skipped.` : ""}</Result>
         ) : compsOut?.error ? <Result ok={false}>{compsOut.error}</Result> : null}
         {ukOut?.ok ? <Result ok>UK sold prices for {postcode}: {ukOut.count} found{ukOut.cached ? " (from earlier today)" : ""}. Middle {ukOut.summary?.median ?? "n/a"}.</Result> : ukOut?.error ? <Result ok={false}>{ukOut.error}</Result> : null}
       </Collapsible>
@@ -180,7 +181,7 @@ export default function DealSourcing() {
           ))}
         </div>
         <div className="mt-3"><button type="button" onClick={margin} className={primary}>Work out the margin</button></div>
-        {mgOut?.ok ? <Result ok>Costs {mgOut.costs}, tax {mgOut.tax}, net profit {mgOut.netProfit}, margin {mgOut.marginPct}%. {mgOut.meetsYourRule ? "This meets your minimum margin." : "This is below your minimum margin."}<span className={`block mt-1 ${note}`}>{mgOut.note}</span></Result> : mgOut?.error ? <Result ok={false}>{mgOut.error}</Result> : null}
+        {mgOut?.ok ? <Result ok>Costs {g(mgOut.costs)}, tax {g(mgOut.tax)}, net profit {g(mgOut.netProfit)}, margin {mgOut.marginPct}%. {mgOut.meetsYourRule ? "This meets your minimum margin." : "This is below your minimum margin."}<span className={`block mt-1 ${note}`}>{mgOut.note}</span></Result> : mgOut?.error ? <Result ok={false}>{mgOut.error}</Result> : null}
       </Collapsible>
 
       <Collapsible title="6. Check an asking price (buy side)" hint="Compares a price with what the profits repay over time">
@@ -207,7 +208,7 @@ export default function DealSourcing() {
           {targets.filter((t) => t.source === "ebay-search").map((t) => (
             <li key={t.id} className={card}>
               <strong>{t.name}</strong>
-              <span className={`block ${note}`}>{t.askingPrice} {t.currency} · {t.discountPct}% below the middle ({t.medianPrice}) · {t.condition}</span>
+              <span className={`block ${note}`}>{g(t.askingPrice)} {t.currency} · {t.discountPct}% below the middle ({g(t.medianPrice)}) · {t.condition}</span>
               {t.url ? <a className="underline text-xs" href={t.url} target="_blank" rel="noopener noreferrer">View the listing</a> : null}
             </li>
           ))}

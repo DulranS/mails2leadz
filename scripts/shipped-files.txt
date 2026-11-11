@@ -373,6 +373,7 @@ lib/firebase-operations.js
 lib/firebase.js
 lib/first-email-batch.js
 lib/form-webhooks.js
+lib/format.js
 lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js

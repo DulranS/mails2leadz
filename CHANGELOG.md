@@ -1,3 +1,13 @@
+## Pass 222 - thousands separators
+
+- One formatter shows money and large numbers with commas (500,000 and 5,000,000); decimals only where present; n/a for missing values.
+- Applied across the forecast, pipeline, money, targets, pricing, packages, objectives, comparables, margins, deal listings, the pitch and deck, and the monthly customer-value note.
+- Tests run here: the number-format tests (3 checks), the full npm test chain (exit 0, 927 checks), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Input boxes keep what you type; weekly and monthly text notes beyond the customer-value line are not formatted.
+- Not checked in a browser.
+
 ## Pass 221 - quick actions and skip link
 
 - Search palette lists the common actions (events, listings, pasted links, journeys, agreements, today's plan).

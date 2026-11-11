@@ -1,4 +1,4 @@
-# Business gap status (after Pass 221)
+# Business gap status (after Pass 222)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -985,6 +985,16 @@ Still platform-gated: social publishing, paid campaigns on Meta and Google, Goog
 
 - Quick actions in the search palette (Ctrl+K or Search): create an event, add a listing to resell, paste an eBay or Companies House link, start a journey, draft and send an agreement, and today's plan. Each opens the screen where it is done.
 - Skip-to-content link: keyboard users can jump past the navigation straight to the page.
+
+Not checked in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Thousands separators on every money figure (Pass 222)
+
+One shared formatter (lib/format.js) shows numbers with commas: 500,000 and 5,000,000. Decimals appear only when there are some (up to two). A missing or non-numeric value shows n/a, never a broken number.
+
+Applied to: the quarter forecast and deals at risk; the pipeline, money and targets figures; the pricing check, packages and objectives; the sold-price comparables, resale margin and deal listings; the pitch outline and the pitch deck; the customer-value note in the monthly digest.
+
+Not yet applied: money inside the weekly and monthly text notes beyond the customer-value line, and the input boxes (inputs keep what you type).
 
 Not checked in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 

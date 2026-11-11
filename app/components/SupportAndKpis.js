@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import Collapsible from "./Collapsible.js";
 import { targetProgress } from "../../lib/deals/link.js";
+import { groupNumber as g } from "../../lib/format.js";
 
 // Sales measures, the money picture, automatic answers and the support queue. Same look as the deals panel.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -15,7 +16,7 @@ const SLA_LABEL = { breached: "Past target", due_soon: "Due soon", on_track: "On
 const SLA_STYLE = { breached: "text-red-700 dark:text-red-300 font-medium", due_soon: "text-amber-700 dark:text-amber-300", on_track: "text-gray-600 dark:text-gray-300", done: "text-gray-500" };
 const MODEL_NAME = { b2b: "B2B", b2c: "B2C and D2C", rental: "rentals" };
 const call = (body) => fetch("/api/support", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json().catch(() => ({})));
-const fmt = (v, suffix = "") => (v === null || v === undefined ? "n/a" : `${v}${suffix}`);
+const fmt = (v, suffix = "") => (v === null || v === undefined || v === "" ? "n/a" : `${g(v)}${suffix}`);
 
 function Stat({ name, value, hint }) {
   return (
@@ -94,9 +95,9 @@ export default function SupportAndKpis() {
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white px-2">Sales right now</h3>
           {forecast ? (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-2">
-              <Stat name="Expected this quarter" value={forecast.expected} hint={forecast.target ? `${forecast.pctOfTarget}% of your quarter target` : "Set a monthly revenue target"} />
-              <Stat name="Won this quarter" value={forecast.wonThisQuarter} />
-              <Stat name="Open, weighted by stage" value={forecast.weightedOpen} />
+              <Stat name="Expected this quarter" value={g(forecast.expected)} hint={forecast.target ? `${forecast.pctOfTarget}% of your quarter target` : "Set a monthly revenue target"} />
+              <Stat name="Won this quarter" value={g(forecast.wonThisQuarter)} />
+              <Stat name="Open, weighted by stage" value={g(forecast.weightedOpen)} />
               <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? "See below" : "None flagged"} />
             </div>
           ) : null}
@@ -104,15 +105,15 @@ export default function SupportAndKpis() {
             <ul className="px-2 space-y-2">
               {atRisk.map((d) => (
                 <li key={d.name} className={card}>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{d.name}{d.value ? ` (${d.value})` : ""}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{d.name}{d.value ? ` (${g(d.value)})` : ""}</p>
                   <p className={note}>{d.health.risks.join(", ")}</p>
                 </li>
               ))}
             </ul>
           ) : null}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-2">
-            <Stat name="Open pipeline" value={`${kpi.pipeline.open} deals`} hint={`Worth ${kpi.pipeline.value}`} />
-            <Stat name="Won in 12 months" value={kpi.sales.wonLast12Months} hint={`Worth ${kpi.sales.wonValueLast12Months}`} />
+            <Stat name="Open pipeline" value={`${kpi.pipeline.open} deals`} hint={`Worth ${g(kpi.pipeline.value)}`} />
+            <Stat name="Won in 12 months" value={kpi.sales.wonLast12Months} hint={`Worth ${g(kpi.sales.wonValueLast12Months)}`} />
             <Stat name="Win rate" value={fmt(kpi.sales.winRatePct, "%")} />
             <Stat name="New leads waiting" value={kpi.speed.newLeadsWaiting} hint="Waiting for a first reply" />
           </div>
@@ -154,10 +155,10 @@ export default function SupportAndKpis() {
               <Stat name="Typical price (median)" value={fmt(money.pricePoint)} />
               <Stat name="Average contract value" value={fmt(money.averageContractValue)} hint="From won deals" />
               <Stat name="Lifetime value per customer" value={fmt(money.ltv)} />
-              <Stat name="Acquisition cost" value={money.cac === null ? "n/a" : money.cac} hint={money.cac === null ? "Enter your monthly spend" : "Per new customer"} />
+              <Stat name="Acquisition cost" value={money.cac === null ? "n/a" : g(money.cac)} hint={money.cac === null ? "Enter your monthly spend" : "Per new customer"} />
               <Stat name="Lifetime value to cost" value={fmt(money.ltvToCac, "x")} />
               <Stat name="Paid share of wins" value={fmt(money.channelMix.paidSharePct, "%")} hint={`${money.channelMix.organicWon} organic`} />
-              <Stat name="New customers, 12 months" value={money.newCustomersLast12Months} />
+              <Stat name="New customers, 12 months" value={g(money.newCustomersLast12Months)} />
             </div>
             <div className={card}>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">Focus for {MODEL_NAME[money.model] || "your business"}</p>

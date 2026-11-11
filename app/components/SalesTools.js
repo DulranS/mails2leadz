@@ -4,6 +4,7 @@ import Collapsible from "./Collapsible.js";
 import { pitchOutline } from "../../lib/pitch.js";
 import { JOURNEY_PRESETS } from "../../lib/journey-presets.js";
 import { parsePackages, comparePackages } from "../../lib/packages.js";
+import { groupNumber as g } from "../../lib/format.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -88,13 +89,13 @@ export default function SalesTools() {
         <div className="mt-3"><button type="button" onClick={calc} className={primary}>Work it out</button></div>
         {out?.ok ? (
           <div className={`${card} mt-3 grid grid-cols-2 gap-2`} role="status">
-            <span>Subtotal</span><strong>{out.subtotal}</strong>
-            <span>Discount</span><strong>{out.discountAmount}</strong>
-            <span>Tax</span><strong>{out.tax}</strong>
-            <span>Total</span><strong>{out.total}</strong>
-            <span>Deposit now</span><strong>{out.deposit}</strong>
-            <span>Balance later</span><strong>{out.balance}</strong>
-            <span>Per item</span><strong>{out.perUnit}</strong>
+            <span>Subtotal</span><strong>{g(out.subtotal)}</strong>
+            <span>Discount</span><strong>{g(out.discountAmount)}</strong>
+            <span>Tax</span><strong>{g(out.tax)}</strong>
+            <span>Total</span><strong>{g(out.total)}</strong>
+            <span>Deposit now</span><strong>{g(out.deposit)}</strong>
+            <span>Balance later</span><strong>{g(out.balance)}</strong>
+            <span>Per item</span><strong>{g(out.perUnit)}</strong>
           </div>
         ) : out?.error ? <p className="text-sm text-red-600 mt-2">{out.error}</p> : null}
         {priceHint.typical ? <p className={`mt-2 ${note}`}>Your typical price is {priceHint.typical}.</p> : null}
@@ -107,7 +108,7 @@ export default function SalesTools() {
           <Field id="pk-dep" text="Deposit now, %"><input id="pk-dep" className={field} inputMode="decimal" value={pkDep} onChange={(e) => setPkDep(e.target.value)} /></Field>
         </div>
         {(() => { const c = comparePackages(parsePackages(pkText).packages, { taxPct: Number(pkTax) || 0, depositPct: Number(pkDep) || 0 }); return c.length ? (
-          <ul className="mt-3 space-y-2">{c.map((p) => (<li key={p.name} className={card}><strong>{p.name}</strong>: total {p.quote.total}, deposit {p.quote.deposit}, balance {p.quote.balance}{p.included ? ` · ${p.included}` : ""}</li>))}</ul>
+          <ul className="mt-3 space-y-2">{c.map((p) => (<li key={p.name} className={card}><strong>{p.name}</strong>: total {g(p.quote.total)}, deposit {g(p.quote.deposit)}, balance {g(p.quote.balance)}{p.included ? ` · ${p.included}` : ""}</li>))}</ul>
         ) : null; })()}
       </Collapsible>
 
@@ -130,7 +131,7 @@ export default function SalesTools() {
             <ul className="mt-2 space-y-2">
               {o.keyResults.map((k) => (
                 <li key={k.label + k.target} className="text-sm">
-                  {k.label}: {k.measured ? `${k.current} of ${k.target}` : "not measured yet"}
+                  {k.label}: {k.measured ? `${g(k.current)} of ${g(k.target)}` : "not measured yet"}
                   {k.measured && k.pct !== null ? <div className="mt-1 h-2 rounded bg-gray-200 dark:bg-gray-700"><div className="h-2 rounded bg-gray-900 dark:bg-white" style={{ width: `${k.pct}%` }} /></div> : null}
                 </li>
               ))}
@@ -148,7 +149,7 @@ export default function SalesTools() {
           </div>
         </div>
         {manage?.position ? (
-          <div className={`${card} mt-3 text-sm`} role="status">Your price is {manage.position.differencePct}% against the middle of {manage.position.competitorMedian} ({manage.position.verdict.replace(/_/g, " ")}). Range {manage.position.low} to {manage.position.high}.</div>
+          <div className={`${card} mt-3 text-sm`} role="status">Your price is {manage.position.differencePct}% against the middle of {g(manage.position.competitorMedian)} ({manage.position.verdict.replace(/_/g, " ")}). Range {g(manage.position.low)} to {g(manage.position.high)}.</div>
         ) : null}
         {manage?.competitors?.length ? <p className={`mt-2 ${note}`}>{manage.competitors.length} competitor prices on record.</p> : null}
       </Collapsible>

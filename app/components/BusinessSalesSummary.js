@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { targetProgress } from "../../lib/deals/link.js";
 import { staleListings } from "../../lib/deals/resale.js";
 import { parseAccounts } from "../../lib/abm.js";
+import { groupNumber as g } from "../../lib/format.js";
 
 // The sales side in one block: buying and selling, the support queue, and targets. Figures come from the owner's records only.
 const card = "rounded-md border border-gray-200 dark:border-gray-700 p-3";
@@ -48,7 +49,7 @@ export default function BusinessSalesSummary() {
       </div>
       {forecast ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat name="Expected this quarter" value={forecast.expected} hint={forecast.target ? `${forecast.pctOfTarget}% of target` : "Set a monthly revenue target"} />
+          <Stat name="Expected this quarter" value={g(forecast.expected)} hint={forecast.target ? `${forecast.pctOfTarget}% of target` : "Set a monthly revenue target"} />
           <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? atRisk.map((d) => d.name).slice(0, 2).join(", ") : "None flagged"} />
           <Stat name="Demand, last 30 days" value={demand ? `${demand.last30} leads` : "n/a"} hint={demand?.changePct !== null && demand?.changePct !== undefined ? `${demand.direction}, ${demand.changePct > 0 ? "+" : ""}${demand.changePct}% on the month before` : "Not enough history yet"} />
           <Stat name="Partners and press to reach" value={partnerPress} hint="From your accounts list" />
@@ -64,7 +65,7 @@ export default function BusinessSalesSummary() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {progress.map((p) => (
             <div key={p.name} className={card}>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{p.name}: {p.actual} of {p.target}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{p.name}: {g(p.actual)} of {g(p.target)}</p>
               <div className="mt-2 h-2 rounded bg-gray-200 dark:bg-gray-700"><div className="h-2 rounded bg-gray-900 dark:bg-white" style={{ width: `${Math.min(100, Math.max(0, p.pct))}%` }} /></div>
               <p className={`mt-1 ${note}`}>{p.pct}% of target, against your twelve-month average</p>
             </div>
