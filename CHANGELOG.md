@@ -1,3 +1,23 @@
+## Pass 228 - one header on the dashboard
+
+- Removed the dashboard's duplicate brand block; the shared frame carries it.
+- The dashboard header is a plain toolbar, not sticky, so headers no longer stack.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser.
+
+## Pass 227 - dashboard and sidebar tidy-up
+
+- Sidebar groups are contiguous, so 'Sell' is one block.
+- Dashboard section titles without skipped numbers.
+- Header buttons aligned right; Sign Out styled as a button.
+- Phone search button moved to the bottom-left to avoid the dashboard's own button.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked in a browser. The dashboard still draws its own header under the shared top bar; a further cleanup would remove one of them.
+
 ## Pass 226 - insights from the Claude video
 
 - Patterns in won and lost customers from call notes (facts only).

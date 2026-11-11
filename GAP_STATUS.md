@@ -1,4 +1,4 @@
-# Business gap status (after Pass 226)
+# Business gap status (after Pass 228)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1043,4 +1043,21 @@ Partial, and why:
 All AI reads use your own AI key and run only when you press the button.
 
 Not run against live AI or live ad accounts. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel.
+
+## Dashboard and sidebar tidy-up (Pass 227)
+
+- Sidebar: the nav items are grouped in order (Today, Sell, Money, Run the business, Account), so each group heading appears once. "Sell" was previously split in two.
+- Dashboard section titles: "Upload leads (CSV)", "Your info", "Email template", "Email preview". The skipped numbers are gone.
+- Dashboard header: the buttons align to the right; Sign Out is a bordered button, not a loose line of text.
+- Phone search button moved to the bottom-left, so it no longer overlaps the dashboard's own bottom-right button.
+
+Not checked in a browser. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## One header on the dashboard (Pass 228)
+
+- The dashboard's own brand block (logo, name and tagline) is removed. The shared sidebar and top bar carry the brand.
+- The dashboard's header is now a plain toolbar, no longer sticky, so it does not stack under the shared top bar.
+- Its buttons (call history, replies, analytics, business, CRM, follow-up queue, settings, sign out) are unchanged.
+
+Not checked in a browser. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 

@@ -7206,36 +7206,10 @@ function DashboardComponent() {
       </div>
 
       {/* HEADER */}
-      <header className="bg-gray-800/80 backdrop-blur-sm shadow-lg border-b border-gray-700 sticky top-0 z-40">
+      <header className="bg-gray-800/60 border-b border-gray-700">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
-                <svg
-                  className="w-6 h-6 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 10V3L4 14h7v7l9-11h-7z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-white">
-                  {APP_NAME}
-                </h1>
-                <p className="text-xs text-gray-400 hidden sm:block">
-                  {APP_TAGLINE}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap justify-end items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
               <button
                 onClick={() => {
                   loadCallHistory();
@@ -7339,7 +7313,7 @@ function DashboardComponent() {
 
               <button
                 onClick={() => signOut(auth)}
-                className="text-xs sm:text-sm text-gray-300 hover:text-white px-3 py-2 rounded-lg transition"
+                className="text-xs sm:text-sm border border-gray-600 text-gray-200 hover:text-white hover:bg-gray-700 px-3 py-2 rounded-lg transition"
               >
                 Sign Out
               </button>
@@ -7687,13 +7661,13 @@ function DashboardComponent() {
         )}
 
         {/* MAIN GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* LEFT COLUMN - UPLOAD & SETTINGS */}
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* CSV Upload */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <h2 className="text-lg sm:text-xl font-bold mb-4 text-white">
-                1. Upload Leads CSV
+                Upload leads (CSV)
               </h2>
               <input
                 type="file"
@@ -7846,11 +7820,11 @@ function DashboardComponent() {
           </div>
 
           {/* MIDDLE COLUMN - TEMPLATES & SEND */}
-          <div className="lg:col-span-6 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {/* Sender Info */}
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
-                3. Your Info
+                Your info
               </h2>
               <div className="space-y-3">
                 <input
@@ -7916,7 +7890,7 @@ function DashboardComponent() {
             <div className="bg-gray-800/80 backdrop-blur-sm p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-white">
-                  4. Email Template
+                  Email template
                 </h2>
                 <label className="flex items-center text-sm text-gray-200 cursor-pointer">
                   <input
@@ -8315,7 +8289,7 @@ function DashboardComponent() {
           </div>
 
           {/* RIGHT COLUMN - ANALYTICS & MULTI-CHANNEL */}
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
+          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
             {whatsappLinks.length > 0 && (
               <div className="space-y-4">
                 {/* Campaign Performance */}
@@ -8720,7 +8694,7 @@ function DashboardComponent() {
             {/* Email Preview */}
             <div className="bg-gray-800 p-4 sm:p-6 rounded-xl shadow border border-gray-700">
               <h2 className="text-lg sm:text-xl font-bold mb-3 text-white">
-                10. Email Preview
+                Email preview
               </h2>
               <div className="bg-gray-750 p-4 rounded border border-gray-600">
                 <div className="text-sm text-gray-400">

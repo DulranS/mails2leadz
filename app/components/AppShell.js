@@ -108,7 +108,7 @@ export default function AppShell({ children }) {
           <div className="lg:pl-64">
             <TopBar onOpenMenu={openMenu} />
             <main id="main-content" tabIndex={-1} className="p-4 lg:p-8">{children}</main>
-            <button type="button" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools" className="lg:hidden fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-white shadow-lg dark:bg-white dark:text-gray-900">
+            <button type="button" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools" className="lg:hidden fixed bottom-5 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-white shadow-lg dark:bg-white dark:text-gray-900">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" strokeWidth={2} /><path strokeLinecap="round" strokeWidth={2} d="M20 20l-3.5-3.5" /></svg>
             </button>
           </div>
