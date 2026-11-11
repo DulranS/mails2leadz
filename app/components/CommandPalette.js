@@ -38,10 +38,10 @@ export default function CommandPalette() {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-24" onClick={() => setOpen(false)}>
-      <div role="dialog" aria-modal="true" aria-label="Go to a screen or tool" className="w-full max-w-xl rounded-lg bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700" onClick={(e) => e.stopPropagation()}>
-        <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onInputKey} placeholder="Go to a screen or tool (Ctrl+K)" aria-label="Search screens and tools" className="w-full rounded-t-lg px-4 py-3 text-sm bg-transparent outline-none text-gray-900 dark:text-gray-100" />
-        <ul role="listbox" className="max-h-96 overflow-y-auto border-t border-gray-200 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-start sm:px-4 sm:pt-24" onClick={() => setOpen(false)}>
+      <div role="dialog" aria-modal="true" aria-label="Go to a screen or tool" className="w-full max-h-[85vh] sm:max-w-xl rounded-t-2xl sm:rounded-lg bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onInputKey} placeholder="Go to a screen or tool" aria-label="Search screens and tools" className="w-full rounded-t-2xl sm:rounded-t-lg px-4 py-4 text-base bg-transparent outline-none text-gray-900 dark:text-gray-100" />
+        <ul role="listbox" className="flex-1 min-h-0 max-h-[60vh] sm:max-h-96 overflow-y-auto border-t border-gray-200 dark:border-gray-700">
           {items.length === 0 ? <li className="px-4 py-3 text-sm text-gray-500">Nothing matches.</li> : null}
           {items.map((it, n) => (
             <li key={it.id} role="option" aria-selected={n === i}>

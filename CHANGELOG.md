@@ -1,3 +1,13 @@
+## Pass 224 - search on phones
+
+- Floating search button on phones, on every screen.
+- Top-bar search is an icon with a fixed size, so it cannot be pushed out of view.
+- Search opens as a bottom sheet on phones.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not checked on a phone in a browser.
+
 ## Pass 223 - shared read cache
 
 - Read-only data is shared between screens that open together: one request per address, reused for five seconds, concurrent requests merged.

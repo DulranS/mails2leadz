@@ -46,8 +46,9 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools (Ctrl+K)" title="Search screens and tools (Ctrl+K)" className="px-3 py-2 min-h-[40px]">
-            <span className="text-sm">Search</span> <span className="hidden sm:inline text-xs text-gray-500 dark:text-gray-400">Ctrl+K</span>
+          <Button variant="ghost" size="sm" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools (Ctrl+K)" title="Search screens and tools (Ctrl+K)" className="shrink-0 min-h-[44px] min-w-[44px] px-2 py-2 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" strokeWidth={2} /><path strokeLinecap="round" strokeWidth={2} d="M20 20l-3.5-3.5" /></svg>
+            <span className="hidden sm:inline text-sm ml-1">Search</span> <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400 ml-1">Ctrl+K</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} className="p-2">
             {theme === 'light' ? '🌙' : '☀️'}
@@ -107,6 +108,9 @@ export default function AppShell({ children }) {
           <div className="lg:pl-64">
             <TopBar onOpenMenu={openMenu} />
             <main id="main-content" tabIndex={-1} className="p-4 lg:p-8">{children}</main>
+            <button type="button" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools" className="lg:hidden fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-white shadow-lg dark:bg-white dark:text-gray-900">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" strokeWidth={2} /><path strokeLinecap="round" strokeWidth={2} d="M20 20l-3.5-3.5" /></svg>
+            </button>
           </div>
         </div>
       </MetaValue.Provider>
