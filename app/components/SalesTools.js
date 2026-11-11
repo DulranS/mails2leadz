@@ -6,6 +6,7 @@ import { JOURNEY_PRESETS } from "../../lib/journey-presets.js";
 import { parsePackages, comparePackages } from "../../lib/packages.js";
 import { groupNumber as g } from "../../lib/format.js";
 import { cachedJson } from "../../lib/client-cache.js";
+import { parseProof, approvedProof } from "../../lib/insights.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -20,6 +21,19 @@ function Field({ id, text, children }) { return <div><label htmlFor={id} classNa
 
 export default function SalesTools() {
   const [manage, setManage] = useState(null);
+  const [patternOut, setPatternOut] = useState(null);
+  const [patternBusy, setPatternBusy] = useState(false);
+  const [standardText, setStandardText] = useState("");
+  const [channel, setChannel] = useState("general");
+  const [standardsByChannel, setStandardsByChannel] = useState({});
+  const [auditOut, setAuditOut] = useState(null);
+  const [reactOut, setReactOut] = useState(null);
+  const [standardMsg, setStandardMsg] = useState("");
+  const [critiqueDraft, setCritiqueDraft] = useState("");
+  const [critiqueOut, setCritiqueOut] = useState(null);
+  const [critiqueBusy, setCritiqueBusy] = useState(false);
+  const [proofText, setProofText] = useState("");
+  const [proofMsg, setProofMsg] = useState("");
   const [okrText, setOkrText] = useState("");
   const [okrMsg, setOkrMsg] = useState("");
   const [compText, setCompText] = useState("");
@@ -40,7 +54,7 @@ export default function SalesTools() {
   const [evMsg, setEvMsg] = useState("");
   const [events, setEvents] = useState([]);
   const loadEvents = (fresh = true) => cachedJson("/api/events", { fresh }).then((j) => setEvents(j.events || [])).catch(() => {});
-  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); }).catch(() => {});
+  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setProofText(j.proofText || ""); }).catch(() => {});
   const saveAction = (body) => fetch("/api/sales-tools/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ error: "Could not reach the server." }));
   const [outline, setOutline] = useState("");
   const [priceHint, setPriceHint] = useState({});
@@ -192,6 +206,38 @@ export default function SalesTools() {
             </li>
           ))}
         </ul>
+      </Collapsible>
+
+      <Collapsible title="Patterns in your wins and losses" hint="What your buyers have in common, from your own call notes">
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" disabled={patternBusy} className={primary} onClick={async () => { setPatternBusy(true); const r = await fetch("/api/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "patterns" }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." })); setPatternOut(r); setPatternBusy(false); }}>{patternBusy ? "Reading your notes..." : "Find the patterns"}</button>
+        </div>
+        {patternOut?.ok ? <div className={`${card} mt-3`}><p className="text-xs text-gray-600 dark:text-gray-300 mb-2">Based on {patternOut.basis.won} note{patternOut.basis.won === 1 ? "" : "s"} from won deals and {patternOut.basis.lost} from lost deals.</p><pre className="whitespace-pre-wrap text-sm font-sans">{patternOut.text}</pre></div> : patternOut?.error ? <p className="text-sm text-red-600 mt-2">{patternOut.error}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Check a message against your standard" hint="Nothing is sent. You get five points at most.">
+        <Field id="std-text" text="Channel"><select id="std-text-channel" className={field} value={channel} onChange={(e) => { setChannel(e.target.value); setStandardText((manage?.standards || {})[e.target.value] || ""); }}><option value="general">General</option><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option><option value="web">Website copy</option><option value="video">Video scripts</option></select></Field>
+        <Field id="std-text" text="Your standard for this channel, in a few sentences"><textarea id="std-text" className={field} rows={3} value={standardText} onChange={(e) => setStandardText(e.target.value)} placeholder="Warm, brief, plain English. No hype. Never promise what we cannot deliver." /></Field>
+        <div className="mt-2 flex items-center gap-3"><button type="button" className={secondary} onClick={async () => { const r = await saveAction({ action: "save_standard", text: standardText, channel }); setStandardMsg(r.ok ? "Standard saved." : "Could not save."); loadManage(); }}>Save standard</button>{standardMsg ? <span className={note} role="status">{standardMsg}</span> : null}</div>
+        <div className="mt-4"><Field id="critique-draft" text="Paste the message to check"><textarea id="critique-draft" className={field} rows={4} value={critiqueDraft} onChange={(e) => setCritiqueDraft(e.target.value)} /></Field></div>
+        <div className="mt-2"><button type="button" disabled={critiqueBusy || critiqueDraft.trim().length < 10} className={primary} onClick={async () => { setCritiqueBusy(true); const r = await fetch("/api/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "critique", text: critiqueDraft, channel }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." })); setCritiqueOut(r); setCritiqueBusy(false); }}>{critiqueBusy ? "Checking..." : "Check it"}</button></div>
+        {critiqueOut?.ok ? <pre className={`${card} mt-3 whitespace-pre-wrap text-sm font-sans`}>{critiqueOut.text}</pre> : critiqueOut?.error ? <p className="text-sm text-red-600 mt-2">{critiqueOut.error}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Ad spend audit" hint="Reads your synced spend and won deals only. Points to waste and the best source.">
+        <button type="button" className={primary} onClick={async () => { const r = await fetch("/api/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "spend_audit" }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." })); setAuditOut(r); }}>Audit my ad spend</button>
+        {auditOut?.ok ? <pre className={`${card} mt-3 whitespace-pre-wrap text-sm font-sans`}>{auditOut.text}</pre> : auditOut?.error ? <p className="text-sm text-red-600 mt-2">{auditOut.error}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Reactivate lost deals" hint="Groups lost deals by what they were interested in. Drafts only; nothing is sent.">
+        <button type="button" className={primary} onClick={async () => { const r = await fetch("/api/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reactivation" }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." })); setReactOut(r); }}>Group and draft</button>
+        {reactOut?.ok ? <pre className={`${card} mt-3 whitespace-pre-wrap text-sm font-sans`}>{reactOut.text}</pre> : reactOut?.error ? <p className="text-sm text-red-600 mt-2">{reactOut.error}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Proof bank" hint="Testimonials. Only lines marked yes (you hold written consent) are usable.">
+        <Field id="proof-text" text="One per line: quote | customer | yes or no"><textarea id="proof-text" className={field} rows={4} value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder={"They fixed our booking problem in a week. | Ann Clinic | yes"} /></Field>
+        <div className="mt-2 flex items-center gap-3"><button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_proof", text: proofText }); setProofMsg(r.ok ? `Saved ${r.saved}. ${r.usable} usable.` : "Could not save."); loadManage(); }}>Save proof</button>{proofMsg ? <span className={note} role="status">{proofMsg}</span> : null}</div>
+        <p className={`mt-2 ${note}`}>{approvedProof(parseProof(proofText)).length} usable now.</p>
       </Collapsible>
 
       <Collapsible title="Journeys" hint="Steps you send, one at a time, from your list. Nothing is sent for you.">

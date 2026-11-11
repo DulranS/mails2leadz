@@ -74,6 +74,7 @@ app/api/inbound/attach/route.js
 app/api/inbound/messages/route.js
 app/api/inbound/route.js
 app/api/inbound/twilio/route.js
+app/api/insights/route.js
 app/api/intake/route.js
 app/api/integrations/dropbox-sign/connect/route.js
 app/api/integrations/google-ads-leads/route.js
@@ -387,6 +388,7 @@ lib/health.js
 lib/httpClient.js
 lib/inbound.js
 lib/independence.js
+lib/insights.js
 lib/intake.js
 lib/integration-catalog.js
 lib/integrations.js
@@ -546,6 +548,7 @@ lib/server/inbound-messages.js
 lib/server/inbound-stop.js
 lib/server/inbox-store.js
 lib/server/ingest-key.js
+lib/server/insights.js
 lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js

@@ -1,4 +1,4 @@
-# Business gap status (after Pass 225)
+# Business gap status (after Pass 226)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1025,4 +1025,22 @@ Not checked on a phone in a browser. Still platform-gated: social publishing, pa
 - The dashboard stays the first screen after sign-in: it holds today's plan and calls, which is the daily start.
 
 Not checked on a phone in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Ideas from the Claude video, applied to this app (Pass 226)
+
+Checked each hack against the app. Built:
+- Patterns in wins and losses: an AI read of your own call notes on won and lost deals, facts only, with a count of notes used. Needs at least three notes.
+- Rep record: each owner's wins, losses, win rate and won value over the last twelve months, on the measures screen.
+- Check a message against your standard: one standard per channel (general, email, SMS, WhatsApp, website copy, video scripts). Nothing is sent; five points at most.
+- Proof bank: testimonials kept with their consent. Only lines marked yes count as usable.
+- Ad spend audit: an AI read of your synced spend and won deals by source, facts only.
+- Reactivate lost deals: lost deals grouped by interest from your notes, with one draft per group. Nothing is sent.
+- Ad spend is synced every day, and the monthly ROI loop uses it when you have not typed spend in yourself.
+
+Partial, and why:
+- Meta ad audit: reading Meta ads needs Meta's review. Google Ads spend is synced; Meta spend comes in only when its connection is approved.
+
+All AI reads use your own AI key and run only when you press the button.
+
+Not run against live AI or live ad accounts. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel.
 

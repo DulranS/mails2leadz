@@ -38,6 +38,7 @@ export default function SupportAndKpis() {
   const [money, setMoney] = useState(null);
   const [forecast, setForecast] = useState(null);
   const [atRisk, setAtRisk] = useState([]);
+  const [reps, setReps] = useState([]);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -53,6 +54,7 @@ export default function SupportAndKpis() {
       if (j.kpis) setKpi(j.kpis);
       if (j.forecast) setForecast(j.forecast);
       if (j.atRisk) setAtRisk(j.atRisk);
+      if (j.reps) setReps(j.reps);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -100,6 +102,19 @@ export default function SupportAndKpis() {
               <Stat name="Won this quarter" value={g(forecast.wonThisQuarter)} />
               <Stat name="Open, weighted by stage" value={g(forecast.weightedOpen)} />
               <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? "See below" : "None flagged"} />
+            </div>
+          ) : null}
+          {reps.length ? (
+            <div className="px-2">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Team record, last 12 months</p>
+              <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {reps.map((r) => (
+                  <li key={r.owner} className={card}>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{r.name}</p>
+                    <p className={note}>{r.won} won, {r.lost} lost{r.winRatePct !== null ? `, ${r.winRatePct}% win rate` : ""}, worth {g(r.wonValue)}</p>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
           {atRisk.length ? (

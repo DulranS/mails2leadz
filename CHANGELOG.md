@@ -1,3 +1,18 @@
+## Pass 226 - insights from the Claude video
+
+- Patterns in won and lost customers from call notes (facts only).
+- Rep record over twelve months on the measures screen.
+- Message check against a standard per channel; nothing sent.
+- Proof bank with consent; only consented testimonials are usable.
+- Ad spend audit from synced figures; reactivation grouping of lost deals with drafts only.
+- Ad spend synced daily; the monthly ROI loop falls back to synced spend.
+- Fixed: missing document imports on the measures route, caught by the import test.
+- Tests run here: the insights tests, the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Meta ad audit waits on Meta's review.
+- Not run against live AI or ad accounts.
+
 ## Pass 225 - dashboard gets the shared frame and search
 
 - The dashboard was missing from the shared-frame list, so it had no top bar, navigation or search button. Added.
