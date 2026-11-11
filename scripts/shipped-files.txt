@@ -321,6 +321,7 @@ lib/cashflow.js
 lib/channel-drafts.js
 lib/claim-risk.js
 lib/click-to-call.js
+lib/client-cache.js
 lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js

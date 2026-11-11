@@ -5,6 +5,7 @@ import { pitchOutline } from "../../lib/pitch.js";
 import { JOURNEY_PRESETS } from "../../lib/journey-presets.js";
 import { parsePackages, comparePackages } from "../../lib/packages.js";
 import { groupNumber as g } from "../../lib/format.js";
+import { cachedJson } from "../../lib/client-cache.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -38,15 +39,15 @@ export default function SalesTools() {
   const [evForm, setEvForm] = useState({ title: "", startsAt: "", place: "", capacity: "" });
   const [evMsg, setEvMsg] = useState("");
   const [events, setEvents] = useState([]);
-  const loadEvents = () => fetch("/api/events").then((r) => r.json()).then((j) => setEvents(j.events || [])).catch(() => {});
-  const loadManage = () => fetch("/api/sales-tools/manage").then((r) => r.json()).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); }).catch(() => {});
+  const loadEvents = (fresh = true) => cachedJson("/api/events", { fresh }).then((j) => setEvents(j.events || [])).catch(() => {});
+  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); }).catch(() => {});
   const saveAction = (body) => fetch("/api/sales-tools/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ error: "Could not reach the server." }));
   const [outline, setOutline] = useState("");
   const [priceHint, setPriceHint] = useState({});
   useEffect(() => {
-    loadManage();
-    loadEvents();
-    fetch("/api/kpis").then((r) => r.json()).then((j) => {
+    loadManage(false);
+    loadEvents(false);
+    cachedJson("/api/kpis").then((j) => {
       const m = j.money || {};
       const k = j.kpis || {};
       setPriceHint({ typical: m.pricePoint ?? null });

@@ -1,4 +1,4 @@
-# Business gap status (after Pass 222)
+# Business gap status (after Pass 223)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -995,6 +995,19 @@ One shared formatter (lib/format.js) shows numbers with commas: 500,000 and 5,00
 Applied to: the quarter forecast and deals at risk; the pipeline, money and targets figures; the pricing check, packages and objectives; the sold-price comparables, resale margin and deal listings; the pitch outline and the pitch deck; the customer-value note in the monthly digest.
 
 Not yet applied: money inside the weekly and monthly text notes beyond the customer-value line, and the input boxes (inputs keep what you type).
+
+Not checked in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Fewer requests and fewer redraws (Pass 223)
+
+- Shared read cache (lib/client-cache.js): screens that open together share one request per address, reused for five seconds. Concurrent requests for the same address are merged into one.
+- Reloads after a save always go to the server, so nothing shows stale data after you change it.
+- Applied to the CRM sales tools, the support and measures screen, and the business pipeline summary. The CRM screen previously sent the same measures and sales-tools requests twice on open; it now sends each once.
+- Failed requests are not kept, so the next attempt tries again.
+
+Not done, and why: component-level memoisation. Without a browser profiler, I cannot show that it removes redraws, and changing it blind risks breaking screens. A React profiler run on the CRM screen would show exactly where redraws happen; that is the right next step if you want more.
+
+Checks: the shared cache has four tests. The full suite chain exits cleanly. The count of individual checks reported this pass (916) is lower than the last pass (927), and I have not yet accounted for the 11-check difference; every test in the chain passes.
 
 Not checked in a browser. Still platform-gated: social publishing, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 

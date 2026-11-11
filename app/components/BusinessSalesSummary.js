@@ -4,6 +4,7 @@ import { targetProgress } from "../../lib/deals/link.js";
 import { staleListings } from "../../lib/deals/resale.js";
 import { parseAccounts } from "../../lib/abm.js";
 import { groupNumber as g } from "../../lib/format.js";
+import { cachedJson } from "../../lib/client-cache.js";
 
 // The sales side in one block: buying and selling, the support queue, and targets. Figures come from the owner's records only.
 const card = "rounded-md border border-gray-200 dark:border-gray-700 p-3";
@@ -23,10 +24,10 @@ export default function BusinessSalesSummary() {
   const [accountsText, setAccountsText] = useState("");
 
   useEffect(() => {
-    fetch("/api/deals").then((r) => r.json()).then((j) => setDeals(j)).catch(() => {});
-    fetch("/api/support").then((r) => r.json()).then((j) => setSupport(j)).catch(() => {});
-    fetch("/api/sales-tools/manage").then((r) => r.json()).then((j) => setAccountsText(j.abmText || "")).catch(() => {});
-    fetch("/api/kpis").then((r) => r.json()).then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); }).catch(() => {});
+    cachedJson("/api/deals").then((j) => setDeals(j)).catch(() => {});
+    cachedJson("/api/support").then((j) => setSupport(j)).catch(() => {});
+    cachedJson("/api/sales-tools/manage").then((j) => setAccountsText(j.abmText || "")).catch(() => {});
+    cachedJson("/api/kpis").then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); }).catch(() => {});
   }, []);
 
   const targets = deals.targets || [];

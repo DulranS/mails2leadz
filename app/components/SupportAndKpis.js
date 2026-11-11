@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import Collapsible from "./Collapsible.js";
 import { targetProgress } from "../../lib/deals/link.js";
 import { groupNumber as g } from "../../lib/format.js";
+import { cachedJson } from "../../lib/client-cache.js";
 
 // Sales measures, the money picture, automatic answers and the support queue. Same look as the deals panel.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -47,8 +48,8 @@ export default function SupportAndKpis() {
   const [msg, setMsg] = useState("");
   const [targets, setTargets] = useState({ monthlyRevenue: "", newCustomersPerMonth: "", winRatePct: "" });
 
-  const load = () => {
-    fetch("/api/kpis").then((r) => r.json()).then((j) => {
+  const load = (fresh = true) => {
+    cachedJson("/api/kpis", { fresh }).then((j) => {
       if (j.kpis) setKpi(j.kpis);
       if (j.forecast) setForecast(j.forecast);
       if (j.atRisk) setAtRisk(j.atRisk);
@@ -58,11 +59,11 @@ export default function SupportAndKpis() {
         setTargets({ monthlyRevenue: j.money.targets?.monthlyRevenue || "", newCustomersPerMonth: j.money.targets?.newCustomersPerMonth || "", winRatePct: j.money.targets?.winRatePct || "" });
       }
     }).catch(() => {});
-    fetch("/api/support").then((r) => r.json()).then((j) => { if (j.tickets) setSup(j); }).catch(() => {});
+    cachedJson("/api/support", { fresh }).then((j) => { if (j.tickets) setSup(j); }).catch(() => {});
   };
   useEffect(() => {
-    load();
-    fetch("/api/support/library").then((r) => r.json()).then((j) => { if (j.library) setLibText(j.library.map((x) => `${x.q} | ${x.a}`).join("\n")); }).catch(() => {});
+    load(false);
+    cachedJson("/api/support/library").then((j) => { if (j.library) setLibText(j.library.map((x) => `${x.q} | ${x.a}`).join("\n")); }).catch(() => {});
   }, []);
 
   const open = sup.tickets.filter((t) => t.status !== "resolved");

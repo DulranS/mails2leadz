@@ -1,3 +1,15 @@
+## Pass 223 - shared read cache
+
+- Read-only data is shared between screens that open together: one request per address, reused for five seconds, concurrent requests merged.
+- Reloads after a save always fetch fresh.
+- Failed requests are not kept.
+- Tests run here: the cache tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- No component memoisation: needs a browser profiler to justify, not done blind.
+- The reported check count (916) is lower than last pass (927); not yet accounted for.
+- Not checked in a browser.
+
 ## Pass 222 - thousands separators
 
 - One formatter shows money and large numbers with commas (500,000 and 5,000,000); decimals only where present; n/a for missing values.
