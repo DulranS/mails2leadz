@@ -1,4 +1,4 @@
-# Business gap status (after Pass 234)
+# Business gap status (after Pass 235)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1140,4 +1140,14 @@ Not run here against live Meta, Instagram or Twilio.
 - The server-wide diagnostics keep their existing admin email list; they are unchanged.
 
 Not run here against live services.
+
+## Handwritten notes, checked against sales and marketing (Pass 235)
+
+Covered already: BANT qualification (budget, decision maker, need, timeline); the funnel by stage; the lifetime-value-to-acquisition-cost ratio; productised packages; value segments (low and high value); inbound and outbound with a data feedback loop; CRM and AI automation; partners and suppliers as accounts; lead sourcing through Places, OpenStreetMap, Companies House and eBay (no scraping).
+
+Added: the lifetime-value-to-acquisition-cost ratio shows its 3x target; SOPs are back in the menu as the sales playbook, since the notes treat repeatable process as what makes sales scale.
+
+Not in this app, by scope: payroll, employee pension, tax and VAT filing, loans and interest, investing, per-unit contribution margin, net-margin and cash planning, industry-specific operations (health, trades, supply chain, customs), personal strengths and working style.
+
+Not run against live services. Platform-gated items unchanged.
 

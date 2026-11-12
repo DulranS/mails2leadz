@@ -172,7 +172,7 @@ export default function SupportAndKpis() {
               <Stat name="Average contract value" value={fmt(money.averageContractValue)} hint="From won deals" />
               <Stat name="Lifetime value per customer" value={fmt(money.ltv)} />
               <Stat name="Acquisition cost" value={money.cac === null ? "n/a" : g(money.cac)} hint={money.cac === null ? "Enter your monthly spend" : "Per new customer"} />
-              <Stat name="Lifetime value to cost" value={fmt(money.ltvToCac, "x")} />
+              <Stat name="Lifetime value to cost" value={fmt(money.ltvToCac, "x")} hint="Aim for 3x or more" />
               <Stat name="Paid share of wins" value={fmt(money.channelMix.paidSharePct, "%")} hint={`${money.channelMix.organicWon} organic`} />
               <Stat name="New customers, 12 months" value={g(money.newCustomersLast12Months)} />
             </div>

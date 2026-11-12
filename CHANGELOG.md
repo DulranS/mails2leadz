@@ -1,3 +1,9 @@
+## Pass 235 - handwritten notes checked against sales and marketing
+
+- Lifetime-value-to-acquisition-cost ratio shows its 3x target.
+- SOPs restored to the menu as the sales playbook.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0).
+
 ## Pass 234 - app-keys owner is the first sign-in
 
 - The first signed-in person is recorded as the owner of app keys, once; later sign-ins cannot take it.
