@@ -1,4 +1,4 @@
-# Business gap status (after Pass 232)
+# Business gap status (after Pass 233)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1113,4 +1113,23 @@ Decided, not built:
 - SMS broadcasts. They need recorded phone-level consent, which the app does not keep yet. Email broadcasts are approved one batch at a time.
 
 Platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Your own Facebook Page, Instagram and ad account; SMS broadcasts (Pass 233)
+
+Correction to earlier notes: posting to, and reading the ads of, your own Facebook Page, Instagram account and ad account does not need Meta's app review. Meta's review is for serving other businesses. The app still has to be set up on your Meta developer account, with you as a role-holder.
+
+Built:
+- Facebook Page posts and Instagram posts (picture required). Every post is a draft first; it goes live only when you type POST.
+- The Meta connection asks for the publishing permissions, keeps a long-lived token, and records your ad account and linked Instagram account. The daily ad sync then reads your ad spend, and the ad audit uses it.
+- SMS broadcasts: texts go only to valid mobile numbers with text consent recorded per number, never to someone opted out, in approved batches, with the same daily cap and a STOP line.
+- Email and text consent are recorded separately.
+
+Action needed:
+- Reconnect Meta once, so the new permissions are granted.
+- Find your Instagram account ID automatically on connect; it is listed on Integrations.
+
+Still not built, by decision: pop-ups and a native form builder (see earlier notes).
+Platform-gated: Google Business Profile (you apply yourself: a Business Profile verified and active 60+ days, with a website, through Google's basic API access form), LinkedIn lead forms and Connect, Meta Lead Ads beyond your own admins.
+
+Not run here against live Meta, Instagram or Twilio.
 

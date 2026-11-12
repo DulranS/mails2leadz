@@ -1,3 +1,15 @@
+## Pass 233 - own Facebook Page, Instagram and ad data; SMS broadcasts
+
+- Facebook Page and Instagram drafts, published only after a typed POST.
+- Meta connection requests publishing and ad permissions, keeps a long-lived token, the ad account and the linked Instagram account.
+- SMS broadcasts with per-number text consent, valid mobile numbers, opt-out line, batch approval and the daily cap.
+- Email and text consent recorded separately.
+- Tests run here: the social and SMS tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Meta needs a reconnect for the new permissions.
+- Not run against live Meta, Instagram or Twilio.
+
 ## Pass 232 - lists, segments, broadcasts, results
 
 - Segments by tag, source, stage, city, value and activity; preview counts.

@@ -20,6 +20,8 @@ export default function Broadcasts() {
   const [confirmFor, setConfirmFor] = useState({});
   const [consentEmail, setConsentEmail] = useState("");
   const [consentOk, setConsentOk] = useState(false);
+  const [channel, setChannel] = useState("email");
+  const [consentChannel, setConsentChannel] = useState("email");
 
   const load = () => fetch("/api/broadcasts").then((r) => r.json()).then((j) => { if (j.broadcasts) setData(j); }).catch(() => {});
   useEffect(() => { load(); }, []);
@@ -47,10 +49,11 @@ export default function Broadcasts() {
 
       <div className="space-y-3">
         <p className="text-sm font-semibold text-gray-900 dark:text-white">Draft a broadcast</p>
+        <div><label htmlFor="bc-channel" className={label}>Send as</label><select id="bc-channel" className={field} value={channel} onChange={(e) => setChannel(e.target.value)}><option value="email">Email</option><option value="sms">Text message (SMS)</option></select></div>
         <div><label htmlFor="bc-name" className={label}>Name, for your records</label><input id="bc-name" className={field} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
         <div><label htmlFor="bc-subject" className={label}>Subject</label><input id="bc-subject" className={field} value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} /></div>
         <div><label htmlFor="bc-text" className={label}>Message</label><textarea id="bc-text" rows={5} className={field} value={draft.text} onChange={(e) => setDraft({ ...draft, text: e.target.value })} /></div>
-        <button type="button" className={primary} onClick={async () => { const r = await post({ action: "draft", name: draft.name, subject: draft.subject, text: draft.text, filter: segment() }); if (r.ok) { setMsg(`Draft saved for ${r.recipients} people. ${r.excluded} left out. Approve it below to send.`); setDraft({ name: "", subject: "", text: "" }); load(); } else setMsg(r.error || "Could not save the draft."); }}>Save draft</button>
+        <button type="button" className={primary} onClick={async () => { const r = await post({ action: "draft", name: draft.name, subject: draft.subject, text: draft.text, filter: segment(), channel }); if (r.ok) { setMsg(`Draft saved for ${r.recipients} people. ${r.excluded} left out. Approve it below to send.`); setDraft({ name: "", subject: "", text: "" }); load(); } else setMsg(r.error || "Could not save the draft."); }}>Save draft</button>
       </div>
 
       <div className="space-y-2">
@@ -71,10 +74,11 @@ export default function Broadcasts() {
 
       <div className="space-y-2">
         <p className="text-sm font-semibold text-gray-900 dark:text-white">Record that someone agreed</p>
+        <div><label htmlFor="cs-channel" className={label}>To receive</label><select id="cs-channel" className={field} value={consentChannel} onChange={(e) => setConsentChannel(e.target.value)}><option value="email">Emails from you</option><option value="sms">Texts from you</option></select></div>
         <p className={note}>Only add someone here after they have told you, in writing, that they want to hear from you.</p>
         <div className="flex flex-col sm:flex-row gap-2">
           <input aria-label="Contact email" className={field} placeholder="their@email.com" value={consentEmail} onChange={(e) => setConsentEmail(e.target.value)} />
-          <button type="button" className={secondary} onClick={async () => { const r = await post({ action: "consent", email: consentEmail, consented: true }); setConsentOk(r.ok === true); setMsg(r.ok ? "Recorded." : (r.error || "Could not record.")); if (r.ok) setConsentEmail(""); }}>Record agreement</button>
+          <button type="button" className={secondary} onClick={async () => { const r = await post({ action: "consent", email: consentEmail, consented: true, channel: consentChannel }); setConsentOk(r.ok === true); setMsg(r.ok ? "Recorded." : (r.error || "Could not record.")); if (r.ok) setConsentEmail(""); }}>Record agreement</button>
         </div>
       </div>
 

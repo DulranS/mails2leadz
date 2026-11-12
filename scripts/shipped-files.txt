@@ -152,6 +152,7 @@ app/api/signup/route.js
 app/api/signups/route.js
 app/api/site/route.js
 app/api/site/settings/route.js
+app/api/social/route.js
 app/api/statement/link/route.js
 app/api/statement/route.js
 app/api/stripe/webhook/route.js
@@ -229,6 +230,7 @@ app/components/PwaRegister.js
 app/components/SalesTools.js
 app/components/SignalFeedsCard.js
 app/components/SignalsCard.js
+app/components/SocialPosts.js
 app/components/StockAdjust.js
 app/components/StorefrontOrders.js
 app/components/SupportAndKpis.js
@@ -600,6 +602,7 @@ lib/server/signal-job.js
 lib/server/signals-io.js
 lib/server/signup.js
 lib/server/slack-connect.js
+lib/server/social.js
 lib/server/statement.js
 lib/server/stock-hold.js
 lib/server/stripe.js
@@ -638,6 +641,7 @@ lib/signup.js
 lib/site.js
 lib/slack.js
 lib/smart-followup-engine.js
+lib/social.js
 lib/sops.js
 lib/speed-to-lead.js
 lib/statement-html.js
