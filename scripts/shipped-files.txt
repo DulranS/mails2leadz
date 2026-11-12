@@ -431,6 +431,7 @@ lib/niche.js
 lib/nps.js
 lib/okr.js
 lib/onboarding.js
+lib/operator-owner.js
 lib/ops-status.js
 lib/outlook.js
 lib/owner-report.js
@@ -575,6 +576,7 @@ lib/server/meta-purchases.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
 lib/server/open-track.js
+lib/server/operator-owner.js
 lib/server/operator-settings.js
 lib/server/outlook-calendar.js
 lib/server/owner-key.js

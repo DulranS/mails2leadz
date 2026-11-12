@@ -28,7 +28,7 @@ export default function AppKeysPage() {
     if (r.ok) { setValues({}); setSettings(r.settings || []); setMsg("Saved."); } else setMsg(r.error || "Could not save.");
   };
 
-  if (forbidden) return <div className="p-4 text-sm">Operators only. Ask whoever runs the app to add you as an admin.</div>;
+  if (forbidden) return <div className="p-4 text-sm">Only the person who first signed in to this app can manage app keys.</div>;
   return (
     <div className="space-y-4 max-w-3xl">
       {!vaultReady ? <p className="rounded-md bg-amber-50 dark:bg-amber-900/30 p-3 text-sm">The server&apos;s encryption key is not set, so keys cannot be saved here yet.</p> : null}

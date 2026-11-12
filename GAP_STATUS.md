@@ -1,4 +1,4 @@
-# Business gap status (after Pass 233)
+# Business gap status (after Pass 234)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1132,4 +1132,12 @@ Still not built, by decision: pop-ups and a native form builder (see earlier not
 Platform-gated: Google Business Profile (you apply yourself: a Business Profile verified and active 60+ days, with a website, through Google's basic API access form), LinkedIn lead forms and Connect, Meta Lead Ads beyond your own admins.
 
 Not run here against live Meta, Instagram or Twilio.
+
+## App keys belong to the first person to sign in (Pass 234)
+
+- The first signed-in person is recorded as the app-keys owner, once. Later sign-ins cannot change it.
+- Only the owner can view or change app keys. Other people get a plain "only the person who first signed in can manage app keys" message.
+- The server-wide diagnostics keep their existing admin email list; they are unchanged.
+
+Not run here against live services.
 

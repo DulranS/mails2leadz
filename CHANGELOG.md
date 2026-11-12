@@ -1,3 +1,12 @@
+## Pass 234 - app-keys owner is the first sign-in
+
+- The first signed-in person is recorded as the owner of app keys, once; later sign-ins cannot take it.
+- Only the owner can view or change app keys.
+- Tests run here: the owner tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- If the owner needs to be reset, that is done in the database, not in the app.
+
 ## Pass 233 - own Facebook Page, Instagram and ad data; SMS broadcasts
 
 - Facebook Page and Instagram drafts, published only after a typed POST.
