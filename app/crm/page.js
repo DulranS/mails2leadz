@@ -40,6 +40,7 @@ import {
 } from "../../lib/client-firestore.js";
 import { getAuth, browserLocalPersistence } from "firebase/auth";
 import Collapsible from "../components/Collapsible.js";
+import Broadcasts from "../components/Broadcasts.js";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -479,7 +480,10 @@ export default function CRMPage() {
       <Collapsible title="Case studies" hint="Drafts from customers who agreed in writing">
         <CaseStudyDrafts />
       </Collapsible>
-      <Collapsible title="Pricing, pitch and agreements" hint="Quote maths, a pitch outline from your numbers, and contract or NDA drafts">
+      <Collapsible title="Lists, broadcasts and results" hint="Segments, email you approve before it is sent, and what each campaign earned">
+          <Broadcasts />
+        </Collapsible>
+        <Collapsible title="Pricing, pitch and agreements" hint="Quote maths, a pitch outline from your numbers, and contract or NDA drafts">
         <SalesTools />
       </Collapsible>
       </Collapsible>

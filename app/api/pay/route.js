@@ -12,6 +12,7 @@ import { makeLimiter } from '../../../lib/rate-limit.js';
 import { normalizeCode, discountInvoice } from '../../../lib/promo.js';
 import { countPromoUses } from '../../../lib/server/promo.js';
 import { claimPromoUse, releasePromoUse } from '../../../lib/promo-tx.js';
+import { warmOperatorSettings, operatorEnv } from '../../../lib/server/operator-settings.js';
 
 // Guesses at codes per invoice link: 10 every 10 minutes, so a code cannot be found by trying them one after another.
 const codeLimiter = makeLimiter({ limit: 10, windowMs: 600000 });
@@ -39,11 +40,15 @@ ${error ? `<p class="err" role="alert">${esc(error)}</p>` : ''}
 }
 
 export async function GET(request) {
+  await warmOperatorSettings(getDb());
+  const env = operatorEnv();
   const token = new URL(request.url).searchParams.get('t') || '';
   return payFlow(token, '', 'GET');
 }
 
 export async function POST(request) {
+  await warmOperatorSettings(getDb());
+  const env = operatorEnv();
   let token = '';
   let code = '';
   try {
@@ -57,14 +62,14 @@ export async function POST(request) {
 async function payFlow(token, rawCode, method) {
   const who = verifyPayToken(token);
   if (!who) return page('This payment link is not valid. Please reply to the email and ask for a new one.', 400);
-  const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim();
+  const base = String(env.NEXT_PUBLIC_BASE_URL || '').trim();
   if (!/^https:\/\//i.test(base) || !isAdminMode()) return page(UNAVAILABLE, 503);
   try {
     const db = getDb();
     const secrets = await secretsFor(db, who.uid, PAYMENT_NAMES);
     const bizForPay = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).catch(() => null))?.data?.() || {};
     const connectAcct = String(secrets.STRIPE_CONNECTED_ACCOUNT_ID || '');
-    const useConnect = !!connectAcct && !!process.env.STRIPE_PLATFORM_SECRET_KEY && switchState('stripeConnect', bizForPay, { ...process.env }).status === 'on';
+    const useConnect = !!connectAcct && !!env.STRIPE_PLATFORM_SECRET_KEY && switchState('stripeConnect', bizForPay, { ...env }).status === 'on';
     if (!useConnect && !paymentsReady(secrets)) return page(UNAVAILABLE, 503);
     const invRef = doc(db, 'invoices', who.id);
     const snap = await getDoc(invRef);
@@ -102,7 +107,7 @@ async function payFlow(token, rawCode, method) {
     }
 
     const session = await createInvoiceCheckout({
-      stripe: stripeFor(useConnect ? process.env.STRIPE_PLATFORM_SECRET_KEY : secrets.STRIPE_PAYMENTS_SECRET_KEY), uid: who.uid, invoiceId: who.id, invoice, currency, origin: new URL(base).origin,
+      stripe: stripeFor(useConnect ? env.STRIPE_PLATFORM_SECRET_KEY : secrets.STRIPE_PAYMENTS_SECRET_KEY), uid: who.uid, invoiceId: who.id, invoice, currency, origin: new URL(base).origin,
       stripeAccount: useConnect ? connectAcct : null,
     });
     const redirect = NextResponse.redirect(session.url, 303);

@@ -3,6 +3,7 @@ app/account/page.js
 app/admin/page.js
 app/analytics/page.js
 app/api/ad-spend/sync/route.js
+app/api/admin/operator-settings/route.js
 app/api/admin/tenants/route.js
 app/api/agreements/accept/route.js
 app/api/agreements/invite/route.js
@@ -180,6 +181,7 @@ app/api/whatsapp/consent/route.js
 app/api/whatsapp/log/route.js
 app/api/whatsapp/send/route.js
 app/api/worker-queue/route.js
+app/app-keys/page.js
 app/assets/page.js
 app/bets/page.js
 app/billing/page.js
@@ -193,6 +195,7 @@ app/components/AuthProvider.js
 app/components/AutoBatchModal.js
 app/components/BidDraft.js
 app/components/BillsPanel.js
+app/components/Broadcasts.js
 app/components/BusinessSalesSummary.js
 app/components/CRM.js
 app/components/CalendarConnect.js
@@ -241,6 +244,7 @@ app/components/ui/Modal.js
 app/components/ui/NotificationProvider.js
 app/components/ui/Sidebar.js
 app/components/ui/ThemeProvider.js
+app/components/useDraft.js
 app/content/page.js
 app/contracts/page.js
 app/conversations/page.js
@@ -312,6 +316,7 @@ lib/brand.js
 lib/broadcast.js
 lib/bundles.js
 lib/business-metrics.js
+lib/business-profile.js
 lib/calendar-events.js
 lib/calendar-links.js
 lib/call-summary.js
@@ -486,6 +491,7 @@ lib/sales-kit.js
 lib/sales-kpis.js
 lib/sales-metrics.js
 lib/seasonality.js
+lib/segments.js
 lib/send-ramp.js
 lib/send-timing.js
 lib/sender-auth.js
@@ -508,6 +514,7 @@ lib/server/booking-manage.js
 lib/server/booking-reminder.js
 lib/server/bounces.js
 lib/server/broadcast.js
+lib/server/broadcasts.js
 lib/server/bundles.js
 lib/server/calendar-read.js
 lib/server/calendar-write.js
@@ -566,6 +573,7 @@ lib/server/meta-purchases.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
 lib/server/open-track.js
+lib/server/operator-settings.js
 lib/server/outlook-calendar.js
 lib/server/owner-key.js
 lib/server/owner-report.js

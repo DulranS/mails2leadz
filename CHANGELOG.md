@@ -1,3 +1,46 @@
+## Pass 232 - lists, segments, broadcasts, results
+
+- Segments by tag, source, stage, city, value and activity; preview counts.
+- Email broadcasts: drafts with fixed recipients, approval by typing SEND, opt-out on every email, daily cap, opt-out re-check at send.
+- Consent recorded per contact; only agreed contacts are included.
+- Campaign results by tag.
+- Decided, not built: pop-ups, a native form builder, SMS broadcasts.
+- Tests run here: the segment tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live email.
+
+## Pass 231 - monthly digest catch-up
+
+- The monthly digest runs on the first open of a month whose digest has not run yet, as well as on the 1st.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live services.
+
+## Pass 230 - keys in the app, no cron, memory, scope
+
+- App keys page (operators only): encrypted in the database; values never shown back; app-set keys take precedence over server settings.
+- Connection, card payment, AI and sync readers use the same key source; the daily run warms it.
+- Weekly tasks catch up on the first open after six days without a weekly run.
+- Sales tools remember drafts on the device.
+- Navigation limited to sales, marketing and deals; no data deleted.
+- Tests run here: the app-keys tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Monthly digest catch-up on a later open is not built.
+- Bootstrap values stay on the server.
+- Not run against live services.
+
+## Pass 229 - business details reach the features
+
+- The Account page's business details are read through one shared reader, so the pitch, deck, creator brief, ideal customer and voice assistant pick them up.
+- Fixed: the offer and ideal customer were read from the wrong field.
+- Tests run here: the business-profile tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live services.
+
 ## Pass 228 - one header on the dashboard
 
 - Removed the dashboard's duplicate brand block; the shared frame carries it.

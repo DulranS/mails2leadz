@@ -1,77 +1,41 @@
-// app/api/broadcasts/route.js - the owner's newsletters to the confirmed list. Signed-in owner only.
-//   GET                           the broadcasts and their counts
-//   POST {action:'create',subject,body}  make a draft (nothing is sent)
-//   POST {action:'start',id}      take the recipient list (confirmed, not unsubscribed) and begin
-//   POST {action:'run',id}        send the next batch (10 at most, paced; the daily cap applies)
-//   POST {action:'cancel',id}     stop a draft or a sending broadcast
+// app/api/broadcasts/route.js - segments, draft broadcasts (approved by the owner before any send), consent records, and the campaign report. Signed-in owner only.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
-import { doc, getDoc } from '../../../lib/server-firestore.js';
-import { createBroadcast, startBroadcast, runBroadcastBatch, cancelBroadcast, loadBroadcasts, scheduleBroadcast, unscheduleBroadcast } from '../../../lib/server/broadcast.js';
+import { collection, getDocs, query, limit } from '../../../lib/server-firestore.js';
+import { previewSegment, createDraft, sendDraft, recordAgreement, reportFor } from '../../../lib/server/broadcasts.js';
 
-export const maxDuration = 60; // one batch of up to 10 paced sends
-
-const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
-const limiter = makeLimiter({ limit: 60, windowMs: 60000 });
-const publicBase = () => String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+const limiter = makeLimiter({ limit: 60, windowMs: 3600000 });
+const json = (b, s = 200) => NextResponse.json(b, { status: s, headers: NO_STORE });
 
 export async function GET(request) {
   const who = identify(request);
   if (who.response) return who.response;
-  try {
-    return json({ items: await loadBroadcasts(getDb(), who.uid) });
-  } catch (e) {
-    console.error('[broadcasts] load failed:', String(e?.message || '').slice(0, 120));
-    return json({ error: 'Could not load your broadcasts. Try again.' }, 500);
-  }
+  const db = getDb();
+  const g = await guardTenant(db, who.uid);
+  if (g.response) return g.response;
+  const broadcasts = (await getDocs(query(collection(db, 'users', who.uid, 'broadcasts'), limit(50)))).docs.map((d) => ({ id: d.id, ...d.data(), recipients: undefined, recipientCount: (d.data().recipients || []).length }));
+  return json({ broadcasts, report: await reportFor(db, who.uid) });
 }
 
 export async function POST(request) {
-  let body;
-  try { body = await request.json(); } catch { return json({ error: 'Send the request as JSON.' }, 400); }
-  const who = identify(request, body?.userId);
+  const who = identify(request);
   if (who.response) return who.response;
-  const uid = who.uid;
-  const gate0 = limiter.hit(uid);
-  if (!gate0.ok) return json({ error: `Too many requests. Try again in ${gate0.retryAfterSec} seconds.` }, 429);
+  if (!limiter.hit(who.uid).ok) return json({ error: 'Too many requests for now.' }, 429);
   const db = getDb();
-  const gate = await guardTenant(db, uid);
-  if (gate.response) return gate.response;
-  const action = String(body?.action || '');
-  const id = String(body?.id || '').slice(0, 80);
-  try {
-    if (action === 'create') {
-      const r = await createBroadcast(db, uid, body);
-      return r.error ? json({ error: r.error }, 400) : json({ ok: true, id: r.id });
-    }
-    if (!id) return json({ error: 'Choose a broadcast.' }, 400);
-    if (action === 'start') {
-      const r = await startBroadcast(db, uid, id);
-      return r.error ? json({ error: r.error }, 400) : json({ ok: true, total: r.total, capped: r.capped });
-    }
-    if (action === 'run') {
-      const bizSnap = await getDoc(doc(db, 'users', uid, 'settings', 'business'));
-      const businessName = bizSnap.exists() ? String((bizSnap.data().profile || {}).businessName || '') : '';
-      const r = await runBroadcastBatch(db, uid, id, { businessName, baseOk: /^https:\/\//i.test(publicBase()) });
-      return r.error ? json({ error: r.error, done: !!r.done }, 400) : json(r);
-    }
-    if (action === 'schedule') {
-      const r = await scheduleBroadcast(db, uid, id, String(body?.at || ''));
-      return r.error ? json({ error: r.error }, 400) : json({ ok: true, scheduledFor: r.scheduledFor });
-    }
-    if (action === 'unschedule') {
-      const r = await unscheduleBroadcast(db, uid, id);
-      return r.error ? json({ error: r.error }, 400) : json({ ok: true });
-    }
-    if (action === 'cancel') {
-      const r = await cancelBroadcast(db, uid, id);
-      return r.error ? json({ error: r.error }, 400) : json({ ok: true });
-    }
-    return json({ error: 'Unknown action.' }, 400);
-  } catch (e) {
-    console.error('[broadcasts] failed:', String(e?.message || '').slice(0, 120));
-    return json({ error: 'Something went wrong. Try again.' }, 500);
+  const g = await guardTenant(db, who.uid);
+  if (g.response) return g.response;
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Send JSON.' }, 400); }
+  const filter = body?.filter || {};
+  if (body?.action === 'preview') return json({ ok: true, ...(await previewSegment(db, who.uid, filter)) });
+  if (body?.action === 'draft') { const r = await createDraft(db, who.uid, { name: body.name, subject: body.subject, text: body.text, filter }); return json(r, r.ok ? 200 : 400); }
+  if (body?.action === 'send') {
+    if (body.confirm !== 'SEND') return json({ error: 'Type SEND to approve this batch.' }, 400);
+    const r = await sendDraft(db, who.uid, String(body.id || ''), { fromName: '' });
+    return json(r, r.ok ? 200 : 400);
   }
+  if (body?.action === 'consent') { const r = await recordAgreement(db, who.uid, String(body.email || ''), body.consented === true); return json(r, r.ok ? 200 : 400); }
+  return json({ error: 'Unknown action.' }, 400);
 }

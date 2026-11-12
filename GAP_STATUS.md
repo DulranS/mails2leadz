@@ -1,4 +1,4 @@
-# Business gap status (after Pass 228)
+# Business gap status (after Pass 232)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1060,4 +1060,57 @@ Not checked in a browser. Still platform-gated: social posting, paid campaigns o
 - Its buttons (call history, replies, analytics, business, CRM, follow-up queue, settings, sign out) are unchanged.
 
 Not checked in a browser. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Business details reach the features (Pass 229)
+
+- The Account page saves the business name, what you sell, the benefit, and who you help under settings/business.profile. The money, pitch, deck, creator brief and voice assistant read them from there through one shared reader (lib/business-profile.js).
+- Before this, the offer and the ideal customer were read from the wrong field, so the pitch, deck and creator brief could stay empty after the Account page was filled in. Fixed.
+
+What starts working once the business details and keys are in: the pitch outline, deck and creator brief; the money measures' ideal customer; the voice assistant's name and offer.
+
+Not run here against live services. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel.
+
+## Keys in the app, no cron, memory, and scope (Pass 230)
+
+Keys in the app:
+- The app keys (sign-in and connection apps, AI providers, payment platform keys) are set on the App keys page, under Account. Only operators can change them. Values are stored encrypted, and are never shown back: the page shows only whether each is set in the app, set on the server, or missing.
+- App-set keys take precedence; server settings still work, so nothing that is set today breaks.
+- Still on the server, by necessity: the database credentials, the encryption key, and the operator list (who counts as an operator). These cannot be set in the app.
+
+No cron:
+- The daily work (lead finding, ad spend sync, follow-ups, forecast, support checks) runs when you open the app once a day. The first open of the day runs it; later opens do not repeat it.
+- Weekly tasks run on Mondays, or on the first open after six days without a weekly run. A missed Monday is not lost.
+- Monthly digest: it runs on the 1st of the month, or on the first open that day. A month without an open on the 1st is not caught up yet.
+
+Memory:
+- The sales tools remember what you were typing on this device (pricing, agreements, journeys, message checks, lead searches, events). Drafts are never keys or secrets.
+
+Scope:
+- Navigation is limited to sales, marketing and deals. Assets and loans, stock, payroll and SOPs are removed from the menu. Their data is kept and nothing is deleted.
+
+Indexes: as deployed (unchanged).
+
+Not run here against live services. Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel.
+
+## Monthly digest catch-up (Pass 231)
+
+- The monthly digest now runs on the 1st, or on the first open of a month whose digest has not run yet. The month is recorded once it has run, so it runs once per month.
+- Nothing else changes: the 1st still works as before.
+
+Still platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
+
+## Lists, segments, broadcasts and results (Pass 232)
+
+Built:
+- Lists and segments: contacts filtered by tag, source, stage, city, value, and recent activity. Every filter must match. A preview shows how many match, how many agreed, and how many are left out.
+- Email broadcasts: a draft fixes its recipients. Only people who agreed and are not opted out are included. Each batch is sent only after you type SEND. Every email carries an opt-out line. Sends are capped at 200 a day, and opt-outs are re-checked at send time.
+- Consent: you record agreement per contact. Nobody is included without it.
+- Campaign results: sends and won revenue per campaign tag, with untagged results shown separately.
+
+Decided, not built:
+- Pop-ups. They need a banner on your own website, which the app does not control.
+- A native form builder. Forms come from the connected form tools and the enquiry page.
+- SMS broadcasts. They need recorded phone-level consent, which the app does not keep yet. Email broadcasts are approved one batch at a time.
+
+Platform-gated: social posting, paid campaigns on Meta and Google, Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond admins and Meta's pixel. Not run against live services.
 

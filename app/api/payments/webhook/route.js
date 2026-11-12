@@ -8,10 +8,13 @@ import { verifyPaymentsWebhook, paymentPatchFromSession, paymentsReady, stripeFo
 import { earnLoyalty } from '../../../../lib/server/loyalty.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 import { emitWebhook } from '../../../../lib/server/webhooks.js';
+import { warmOperatorSettings, operatorEnv } from '../../../../lib/server/operator-settings.js';
 
 const reply = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 
 export async function POST(request) {
+  await warmOperatorSettings(getDb());
+  const env = operatorEnv();
   if (!isAdminMode()) return reply({ error: 'Not configured.' }, 503);
   const raw = await request.text(); // the signature is over the exact bytes
   let unverified;
@@ -26,13 +29,13 @@ export async function POST(request) {
   try { secrets = await secretsFor(db, uid, PAYMENT_NAMES); }
   catch { return reply({ error: 'Could not read the account.' }, 500); }
   // A connected account's event carries its account id; it counts only if it is this owner's account, and the platform's secret checks it.
-  const viaConnect = !!connectAcct && secrets.STRIPE_CONNECTED_ACCOUNT_ID === connectAcct && !!process.env.STRIPE_PLATFORM_WEBHOOK_SECRET && !!process.env.STRIPE_PLATFORM_SECRET_KEY;
+  const viaConnect = !!connectAcct && secrets.STRIPE_CONNECTED_ACCOUNT_ID === connectAcct && !!env.STRIPE_PLATFORM_WEBHOOK_SECRET && !!env.STRIPE_PLATFORM_SECRET_KEY;
   if (!viaConnect && !paymentsReady(secrets)) return reply({ error: 'Not configured for this account.' }, 503);
 
   let event;
   try {
     event = viaConnect
-      ? stripeFor(process.env.STRIPE_PLATFORM_SECRET_KEY).webhooks.constructEvent(raw, request.headers.get('stripe-signature') || '', process.env.STRIPE_PLATFORM_WEBHOOK_SECRET)
+      ? stripeFor(env.STRIPE_PLATFORM_SECRET_KEY).webhooks.constructEvent(raw, request.headers.get('stripe-signature') || '', env.STRIPE_PLATFORM_WEBHOOK_SECRET)
       : verifyPaymentsWebhook(raw, request.headers.get('stripe-signature') || '', {
         secretKey: secrets.STRIPE_PAYMENTS_SECRET_KEY, webhookSecret: secrets.STRIPE_PAYMENTS_WEBHOOK_SECRET,
       });
