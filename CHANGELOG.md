@@ -1,3 +1,9 @@
+## Pass 236 - sidebar order
+
+- Sales and marketing items at the top; deals and money next; less relevant items in a More block at the bottom.
+- All 20 menu items kept.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0).
+
 ## Pass 235 - handwritten notes checked against sales and marketing
 
 - Lifetime-value-to-acquisition-cost ratio shows its 3x target.

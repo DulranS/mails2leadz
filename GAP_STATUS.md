@@ -1,4 +1,4 @@
-# Business gap status (after Pass 235)
+# Business gap status (after Pass 236)
 
 Status words, used exactly as defined:
 - **Built**: in the code, with its limits stated beside it.
@@ -1150,4 +1150,13 @@ Added: the lifetime-value-to-acquisition-cost ratio shows its 3x target; SOPs ar
 Not in this app, by scope: payroll, employee pension, tax and VAT filing, loans and interest, investing, per-unit contribution margin, net-margin and cash planning, industry-specific operations (health, trades, supply chain, customs), personal strengths and working style.
 
 Not run against live services. Platform-gated items unchanged.
+
+## Sidebar order (Pass 236)
+
+- Top: Dashboard, Lead Inbox, Conversations.
+- Sell: CRM & Deals, Customers, Quotes, Deal owners, Bookings, Partners, Products, Content, Landing page.
+- Money: Billing, Contracts.
+- More (bottom): Experiments, SOPs (sales playbook), Business Value, Integrations, Account, App keys (operators).
+
+All 20 items are kept; nothing was removed from the menu.
 
