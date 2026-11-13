@@ -1,3 +1,12 @@
+## Pass 240 - problem customers excluded; enricher columns
+
+- Broadcasts (email and text) leave out customers who owe money for over 30 days, with the reason.
+- Lead import reads the enricher's LinkedIn (reference only), rating and review columns; empty rating stays empty.
+- Tests run here: the enricher import tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Apollo and People Data Labs keys still need a live connection test.
+
 ## Pass 239 - offers, reliability, recommended package
 
 - Offers with real end dates and guarantees; ending offers on the Do now list.

@@ -1199,3 +1199,14 @@ Deliberately not built:
 
 Not run against live services. Platform-gated items unchanged; Google Business Profile still requires the owner to apply.
 
+## Problem customers excluded; enricher columns read (Pass 240)
+
+- Bad customers are worse than none: customers who owe money for over 30 days are now left out of broadcasts (email and text), shown with the reason.
+- The enricher's output is read by the lead import: business name, website, e-mail, WhatsApp number, address, category, LinkedIn (kept as a reference link only; LinkedIn pages are never crawled), rating and reviews. An empty rating stays empty.
+
+Covered from the notes: BANT filtering, the funnel and discovery calls, lifetime value, unit economics and contribution per sale, customer support, trust and reliability, productised packages, and B2B against B2C segments.
+
+Not applicable to this app (finance, not sales or marketing): EBITDA, EBIT, depreciation, share price, EPS, P/E, WACC, IPO and LBO funding, equity splits, tax planning, EMI and loans, and the Dead Stock and inventory accounting.
+
+Not run against live services. Enricher keys (Apollo, People Data Labs) still need a live connection test.
+
