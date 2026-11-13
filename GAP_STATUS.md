@@ -1160,3 +1160,42 @@ Not run against live services. Platform-gated items unchanged.
 
 All 20 items are kept; nothing was removed from the menu.
 
+## Simpler app: Do now, collapsible More, cash vs signed (Pass 237)
+
+- Do now: a short list at the top of every screen showing only what needs a person today, most urgent first, at most five, each with one link to the place it's done. It counts support questions past target, new leads waiting, open support, deals at risk, journey steps due, broadcasts and social posts waiting for approval, listings undecided for two weeks, and events within three days. It shows nothing when there is nothing to do.
+- Sidebar: the less relevant items sit in a More block that collapses; it opens itself when you are on one of its pages.
+- Measures: "Paid so far" (cash received from paid invoices in the last year) shown beside signed deals. A signed deal is not counted as money until it is paid.
+
+From your pictures, sales and marketing items already covered: lifetime value against acquisition cost (3x target), BANT qualification, the sales funnel, packaged services, value segments, inbound and outbound with a feedback loop, partners and suppliers, and sourcing without scraping. Partly covered: contribution margin per sale (resale and unit margins exist, not a per-sale contribution view); credit risk on buyers (overdue invoices exist; not yet fed into customer health). Outside sales and marketing, not built: finance terms and accounting (EBIT, NPV, depreciation, deferred revenue), tax and compliance filings, payroll, loans, investing, sourcing-heavy trades and manufacturing operations.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Gaps closed; enrichment and Google Maps one step away (Pass 238)
+
+- Credit risk: customers who owe for more than 30 days, grouped by customer, shown on the measures screen. Derived from unpaid invoices.
+- Contribution per sale: the pricing check takes an optional cost to deliver per item and shows what the sale keeps before tax. Shown only when a cost is entered.
+- Lead enrichment: a card on Integrations, one key (Apollo or People Data Labs), with a connection test. The enrichment flow already read these keys; now they are visible and testable.
+- Google Maps: the lead search card is named Google Maps (Places), with its one key and connection test.
+
+Connection tests for Apollo and People Data Labs use their documented public endpoints as known at writing; they are unverified here. Not run against live services.
+
+Platform-gated: Google Business Profile (owner applies), LinkedIn lead forms and Connect, Meta Lead Ads beyond admins. Decided not built: pop-ups, native form builder, SMS broadcasts without phone consent records.
+
+## Offers, trust and the recommended package (Pass 239)
+
+Correction to Pass 238: the credit-risk list and its measure were stated as shipped, but the screen change had not been saved. It is now on the measures screen.
+
+Built:
+- Offers: each needs a name, a sensible discount (0 to 90%), a real end date, and a stated guarantee. Ended offers are never shown as running. Offers ending within three days appear on the Do now list.
+- Reliability: a score from support answered on time, open complaints and customers owing over 30 days, shown with each part that lowers it.
+- Recommended package: with three packages the middle one is marked "Most chosen".
+- Partners and trust are covered by partner accounts, the support queue and the reliability score.
+
+Covered already from the notes: AIDA and BANT qualification, upsells and bundles, lifetime value against acquisition cost, outcome-led packages, the B2B deal flow, customer support, nurture and the CRM.
+
+Deliberately not built:
+- Messages targeted by gender. Personalise by what the customer says matters to them (speed, cost, risk, status) instead.
+- Fake scarcity. A countdown that resets or an offer that never ends misleads customers and breaks consumer rules. Offers only show real end dates.
+
+Not run against live services. Platform-gated items unchanged; Google Business Profile still requires the owner to apply.
+

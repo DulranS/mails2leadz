@@ -11,6 +11,7 @@ import { Button } from './ui/Button';
 import { useTheme } from './ui/ThemeProvider';
 import { useAuthUser } from './AuthProvider';
 import { isShellRoute, NAV_ITEMS } from '../../lib/app-routes.js';
+import TodayActions from "./TodayActions.js";
 
 const MetaValue = createContext({ title: '', subtitle: '' });
 const MetaSetter = createContext(() => {});
@@ -71,16 +72,30 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
 
 // Memoised: the sidebar never re-renders because a page did (its only changing input is the active link, read from the route).
 const Nav = React.memo(function Nav({ open, onToggle }) {
+  const pathname = usePathname();
+  const main = NAV_ITEMS.filter((i) => i.group !== 'More');
+  const more = NAV_ITEMS.filter((i) => i.group === 'More');
+  const moreHasCurrent = more.some((i) => i.href === pathname);
   return (
     <Sidebar isOpen={open} onToggle={onToggle}>
-      {NAV_ITEMS.map((item, i) => (
+      {main.map((item, i) => (
         <div key={item.href}>
-          {item.group && (i === 0 || NAV_ITEMS[i - 1].group !== item.group) && (
+          {item.group && (i === 0 || main[i - 1].group !== item.group) && (
             <div className="px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{item.group}</div>
           )}
           <SidebarItem href={item.href} icon={item.icon} label={item.label} />
         </div>
       ))}
+      {more.length > 0 && (
+        <details open={moreHasCurrent} className="mt-4 px-1">
+          <summary className="cursor-pointer select-none px-2 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 min-h-[44px] flex items-center">More</summary>
+          <div className="mt-1">
+            {more.map((item) => (
+              <SidebarItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
+            ))}
+          </div>
+        </details>
+      )}
     </Sidebar>
   );
 });
@@ -107,7 +122,7 @@ export default function AppShell({ children }) {
           <Nav open={open} onToggle={toggle} />
           <div className="lg:pl-64">
             <TopBar onOpenMenu={openMenu} />
-            <main id="main-content" tabIndex={-1} className="p-4 lg:p-8">{children}</main>
+            <main id="main-content" tabIndex={-1} className="p-4 lg:p-8"><TodayActions />{children}</main>
             <button type="button" onClick={() => window.dispatchEvent(new Event('autoleads:open-palette'))} aria-label="Search screens and tools" className="lg:hidden fixed bottom-5 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-white shadow-lg dark:bg-white dark:text-gray-900">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" strokeWidth={2} /><path strokeLinecap="round" strokeWidth={2} d="M20 20l-3.5-3.5" /></svg>
             </button>

@@ -161,6 +161,7 @@ app/api/support/route.js
 app/api/system-check/route.js
 app/api/team/route.js
 app/api/tenant/route.js
+app/api/today/route.js
 app/api/track-company/route.js
 app/api/track/click/route.js
 app/api/track/open/route.js
@@ -235,6 +236,7 @@ app/components/StockAdjust.js
 app/components/StorefrontOrders.js
 app/components/SupportAndKpis.js
 app/components/TeamAccess.js
+app/components/TodayActions.js
 app/components/VisitorVoice.js
 app/components/WorkerQueue.js
 app/components/ui/Button.js
@@ -346,6 +348,7 @@ lib/conversations.js
 lib/corrective.js
 lib/credit-apply.js
 lib/credit-notes.js
+lib/credit-risk.js
 lib/cross-sell.js
 lib/currency.js
 lib/customers.js
@@ -429,6 +432,7 @@ lib/multi-touch.js
 lib/next-actions.js
 lib/niche.js
 lib/nps.js
+lib/offers.js
 lib/okr.js
 lib/onboarding.js
 lib/operator-owner.js
@@ -619,6 +623,7 @@ lib/server/tenant-guard.js
 lib/server/tenant.js
 lib/server/tiktok-purchases.js
 lib/server/tiktok-sync.js
+lib/server/today-actions.js
 lib/server/token-vault.js
 lib/server/twilio-account.js
 lib/server/tx.js
@@ -665,7 +670,9 @@ lib/tiktok-leads.js
 lib/tiktok-purchases.js
 lib/tiktok-sync.js
 lib/time-log.js
+lib/today-actions.js
 lib/trends.js
+lib/trust.js
 lib/typeform-connect.js
 lib/ugc.js
 lib/utm.js

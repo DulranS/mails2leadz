@@ -4,7 +4,7 @@ import { useDraft } from "./useDraft.js";
 import Collapsible from "./Collapsible.js";
 import { pitchOutline } from "../../lib/pitch.js";
 import { JOURNEY_PRESETS } from "../../lib/journey-presets.js";
-import { parsePackages, comparePackages } from "../../lib/packages.js";
+import { parsePackages, comparePackages, recommendedIndex } from "../../lib/packages.js";
 import { groupNumber as g } from "../../lib/format.js";
 import { cachedJson } from "../../lib/client-cache.js";
 import { parseProof, approvedProof } from "../../lib/insights.js";
@@ -46,6 +46,8 @@ export default function SalesTools() {
   const [enrolEmails, setEnrolEmails] = useState("");
   const [enrolAgreed, setEnrolAgreed] = useState(false);
   const [journeyMsg, setJourneyMsg] = useState("");
+  const [offersText, setOffersText] = useState("");
+  const [offersMsg, setOffersMsg] = useState("");
   const [placesText, setPlacesText] = useDraft("sales:lead-searches", "");
   const [pkText, setPkText] = useState("");
   const [pkTax, setPkTax] = useState("0");
@@ -55,7 +57,7 @@ export default function SalesTools() {
   const [evMsg, setEvMsg] = useState("");
   const [events, setEvents] = useState([]);
   const loadEvents = (fresh = true) => cachedJson("/api/events", { fresh }).then((j) => setEvents(j.events || [])).catch(() => {});
-  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setProofText(j.proofText || ""); }).catch(() => {});
+  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setOffersText(j.offersText || ""); setProofText(j.proofText || ""); }).catch(() => {});
   const saveAction = (body) => fetch("/api/sales-tools/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ error: "Could not reach the server." }));
   const [outline, setOutline] = useState("");
   const [priceHint, setPriceHint] = useState({});
@@ -76,7 +78,7 @@ export default function SalesTools() {
       }));
     }).catch(() => {});
   }, []);
-  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0" });
+  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0", costPerUnit: "" });
   const [out, setOut] = useState(null);
   const [agr, setAgr] = useDraft("sales:agreement", { kind: "service", seller: "", buyer: "", date: "", value: "", scope: "" });
   const [draft, setDraft] = useState("");
@@ -101,6 +103,7 @@ export default function SalesTools() {
           <Field id="p-disc" text="Discount, %"><input id="p-disc" className={field} inputMode="decimal" value={price.discountPct} onChange={(e) => setPrice({ ...price, discountPct: e.target.value })} /></Field>
           <Field id="p-tax" text="Tax, %"><input id="p-tax" className={field} inputMode="decimal" value={price.taxPct} onChange={(e) => setPrice({ ...price, taxPct: e.target.value })} /></Field>
           <Field id="p-dep" text="Deposit now, %"><input id="p-dep" className={field} inputMode="decimal" value={price.depositPct} onChange={(e) => setPrice({ ...price, depositPct: e.target.value })} /></Field>
+          <Field id="p-cost" text="Cost to deliver, per item (optional)"><input id="p-cost" className={field} inputMode="decimal" value={price.costPerUnit} onChange={(e) => setPrice({ ...price, costPerUnit: e.target.value })} /></Field>
         </div>
         <div className="mt-3"><button type="button" onClick={calc} className={primary}>Work it out</button></div>
         {out?.ok ? (
@@ -112,6 +115,7 @@ export default function SalesTools() {
             <span>Deposit now</span><strong>{g(out.deposit)}</strong>
             <span>Balance later</span><strong>{g(out.balance)}</strong>
             <span>Per item</span><strong>{g(out.perUnit)}</strong>
+            {out.contribution !== undefined ? <><span>Contribution</span><strong>{g(out.contribution)} ({out.contributionPct}%)</strong></> : null}
           </div>
         ) : out?.error ? <p className="text-sm text-red-600 mt-2">{out.error}</p> : null}
         {priceHint.typical ? <p className={`mt-2 ${note}`}>Your typical price is {priceHint.typical}.</p> : null}
@@ -124,7 +128,7 @@ export default function SalesTools() {
           <Field id="pk-dep" text="Deposit now, %"><input id="pk-dep" className={field} inputMode="decimal" value={pkDep} onChange={(e) => setPkDep(e.target.value)} /></Field>
         </div>
         {(() => { const c = comparePackages(parsePackages(pkText).packages, { taxPct: Number(pkTax) || 0, depositPct: Number(pkDep) || 0 }); return c.length ? (
-          <ul className="mt-3 space-y-2">{c.map((p) => (<li key={p.name} className={card}><strong>{p.name}</strong>: total {g(p.quote.total)}, deposit {g(p.quote.deposit)}, balance {g(p.quote.balance)}{p.included ? ` · ${p.included}` : ""}</li>))}</ul>
+          <ul className="mt-3 space-y-2">{c.map((p, idx) => (<li key={p.name} className={card}><strong>{p.name}</strong>{idx === recommendedIndex(c.length) ? <span className={`ml-2 ${note}`}>Most chosen</span> : null}: total {g(p.quote.total)}, deposit {g(p.quote.deposit)}, balance {g(p.quote.balance)}{p.included ? ` · ${p.included}` : ""}</li>))}</ul>
         ) : null; })()}
       </Collapsible>
 
@@ -239,6 +243,15 @@ export default function SalesTools() {
         <Field id="proof-text" text="One per line: quote | customer | yes or no"><textarea id="proof-text" className={field} rows={4} value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder={"They fixed our booking problem in a week. | Ann Clinic | yes"} /></Field>
         <div className="mt-2 flex items-center gap-3"><button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_proof", text: proofText }); setProofMsg(r.ok ? `Saved ${r.saved}. ${r.usable} usable.` : "Could not save."); loadManage(); }}>Save proof</button>{proofMsg ? <span className={note} role="status">{proofMsg}</span> : null}</div>
         <p className={`mt-2 ${note}`}>{approvedProof(parseProof(proofText)).length} usable now.</p>
+      </Collapsible>
+
+      <Collapsible title="Offers" hint="Each offer needs a real end date and a stated guarantee. Ending offers are shown on your Do now list.">
+        <p className={note}>One per line: "name | discount % | ends YYYY-MM-DD | guarantee". Only offers that really end are allowed.</p>
+        <textarea id="offers-text" className={field} rows={4} value={offersText} onChange={(e) => setOffersText(e.target.value)} placeholder={"Spring fitting | 10 | 2026-12-15 | Money back in 30 days if not satisfied"} />
+        <div className="mt-3 flex items-center gap-3">
+          <button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_offers", text: offersText }); setOffersMsg(r.ok ? `Saved ${r.saved}.${r.skipped ? ` ${r.skipped} line(s) skipped.` : ""}` : "Could not save."); loadManage(); }}>Save offers</button>
+          {offersMsg ? <span className={note} role="status">{offersMsg}</span> : null}
+        </div>
       </Collapsible>
 
       <Collapsible title="Journeys" hint="Steps you send, one at a time, from your list. Nothing is sent for you.">

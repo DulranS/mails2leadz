@@ -10,6 +10,9 @@ import { economicsFor, saveBusinessProfile } from '../../../lib/server/economics
 import { quarterForecast, dealHealth } from '../../../lib/health.js';
 import { demandTrend } from '../../../lib/demand.js';
 import { repScorecard } from '../../../lib/insights.js';
+import { creditRisk } from '../../../lib/credit-risk.js';
+import { trustScore } from '../../../lib/trust.js';
+import { slaStatus } from '../../../lib/support-routing.js';
 
 export async function GET(request) {
   const who = identify(request);
@@ -30,8 +33,13 @@ export async function GET(request) {
   const demand = demandTrend(leads, now);
   const teamDoc = (await getDoc(doc(db, 'users', who.uid, 'settings', 'team')).catch(() => null))?.data?.() || {};
   const memberList = Array.isArray(teamDoc.members) ? teamDoc.members : [];
+  const invoiceRows = (await getDocs(query(collection(db, 'users', who.uid, 'invoices'), limit(1000))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
+  const credit = creditRisk(invoiceRows, now);
+  const ticketRows = (await getDocs(query(collection(db, 'users', who.uid, 'support_tickets'), limit(300))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
+  const answered = ticketRows.length ? Math.round((ticketRows.filter((t) => slaStatus(t, now) !== 'breached').length / ticketRows.length) * 100) : null;
+  const trust = trustScore({ supportTargetMetPct: answered, openComplaints: ticketRows.filter((t) => t.status !== 'resolved' && t.kind === 'complaint').length, creditRiskCount: credit.length });
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));
-  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps }, { headers: NO_STORE });
+  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps, creditRisk: credit, trust }, { headers: NO_STORE });
 }
 
 export async function POST(request) {

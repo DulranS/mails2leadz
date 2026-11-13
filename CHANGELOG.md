@@ -1,3 +1,37 @@
+## Pass 239 - offers, reliability, recommended package
+
+- Offers with real end dates and guarantees; ending offers on the Do now list.
+- Reliability score with its parts, on the measures screen.
+- Credit-risk list and measure saved to the measures screen (was missed in Pass 238).
+- Middle of three packages marked Most chosen.
+- Tests run here: the offers and trust tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Not run against live services or checked on a phone.
+
+## Pass 238 - credit risk, contribution, enrichment and Google Maps as one step
+
+- Credit risk list for customers owing over 30 days.
+- Optional cost to deliver in the pricing check, with the contribution per sale.
+- Lead enrichment card and connection test (Apollo or People Data Labs).
+- Lead search card named Google Maps (Places).
+- Tests run here: the credit and contribution tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Apollo and People Data Labs test endpoints are unverified.
+- Not run against live services.
+
+## Pass 237 - Do now list, collapsible More, cash vs signed
+
+- Do now list at the top of every screen: only what needs attention today, most urgent first, at most five, each with one link.
+- Sidebar More block collapses and opens itself on its pages.
+- Paid so far (cash from paid invoices, last 12 months) shown beside signed deals.
+- Tests run here: the Do now tests (4 checks), the paid-vs-signed test (1 check), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Credit risk on buyers is not yet part of customer health.
+- Not run against live services or checked on a phone.
+
 ## Pass 236 - sidebar order
 
 - Sales and marketing items at the top; deals and money next; less relevant items in a More block at the bottom.

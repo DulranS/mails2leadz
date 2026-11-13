@@ -39,6 +39,8 @@ export default function SupportAndKpis() {
   const [forecast, setForecast] = useState(null);
   const [atRisk, setAtRisk] = useState([]);
   const [reps, setReps] = useState([]);
+  const [credit, setCredit] = useState([]);
+  const [trust, setTrust] = useState(null);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -55,6 +57,8 @@ export default function SupportAndKpis() {
       if (j.forecast) setForecast(j.forecast);
       if (j.atRisk) setAtRisk(j.atRisk);
       if (j.reps) setReps(j.reps);
+      if (j.creditRisk) setCredit(j.creditRisk);
+      if (j.trust) setTrust(j.trust);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -112,6 +116,25 @@ export default function SupportAndKpis() {
                   <li key={r.owner} className={card}>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{r.name}</p>
                     <p className={note}>{r.won} won, {r.lost} lost{r.winRatePct !== null ? `, ${r.winRatePct}% win rate` : ""}, worth {g(r.wonValue)}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {trust ? (
+            <div className="px-2">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Reliability: {trust.score} ({trust.label})</p>
+              <p className={note}>{trust.parts.length ? trust.parts.map((p) => `${p.name}: ${p.value}`).join(" · ") : "Nothing is holding this score back."}</p>
+            </div>
+          ) : null}
+          {credit.length ? (
+            <div className="px-2">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Customers who owe you for over 30 days</p>
+              <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {credit.map((c) => (
+                  <li key={c.email} className={card}>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{c.email}</p>
+                    <p className={note}>{g(c.owed)} across {c.invoices} invoice{c.invoices === 1 ? "" : "s"}, oldest {c.oldestDays} days</p>
                   </li>
                 ))}
               </ul>
@@ -175,6 +198,7 @@ export default function SupportAndKpis() {
               <Stat name="Lifetime value to cost" value={fmt(money.ltvToCac, "x")} hint="Aim for 3x or more" />
               <Stat name="Paid share of wins" value={fmt(money.channelMix.paidSharePct, "%")} hint={`${money.channelMix.organicWon} organic`} />
               <Stat name="New customers, 12 months" value={g(money.newCustomersLast12Months)} />
+              <Stat name="Paid so far, 12 months" value={g(money.paidRevenueLast12Months)} hint="Cash received. A signed deal is not money until it is paid." />
             </div>
             <div className={card}>
               <p className="text-sm font-semibold text-gray-900 dark:text-white">Focus for {MODEL_NAME[money.model] || "your business"}</p>
