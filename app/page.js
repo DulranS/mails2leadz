@@ -3,20 +3,22 @@ import Link from 'next/link';
 import { APP_NAME, APP_DESCRIPTION, CONTACT_EMAIL } from '../lib/brand.js';
 
 const STEPS = [
-  { n: '1', title: 'Bring your leads together', text: 'Forms, ads, your storefront, WhatsApp, SMS, email replies and lead searches all land in one inbox. Duplicates are skipped.' },
-  { n: '2', title: 'Reach out on your terms', text: 'Drafts wait for your approval. Email goes from your own Gmail. SMS, WhatsApp and calls go only to people who agreed.' },
-  { n: '3', title: 'Follow up, then stop', text: 'Follow-ups stop the moment someone replies. A lost deal is never contacted again.' },
-  { n: '4', title: 'See what it earns', text: 'Deals, forecast, targets, customer value and where your best customers come from, all from your own records.' },
+  { n: '1', title: 'Bring your leads together', text: 'Forms, ads, your storefront, WhatsApp, SMS, e-mail replies, missed calls, lead searches and your accounting app all land in one inbox. Duplicates are skipped.' },
+  { n: '2', title: 'Reach out on your terms', text: 'Drafts wait for your approval, and every batch of broadcasts is approved by you. E-mail goes from your own Gmail. Texts and WhatsApp go only to people who agreed, and WhatsApp uses approved templates.' },
+  { n: '3', title: 'Follow up, then stop', text: 'Follow-ups stop the moment someone replies, and replies are checked each time you open the app. A lost deal is never contacted again.' },
+  { n: '4', title: 'See what it earns', text: 'Deals, forecast, cost per lead, lead-to-won, lifetime value to cost, churn, days to pay, click-through rate and website traffic, all from your own records and connections.' },
 ];
 
 const GROUPS = [
-  { title: 'Find and reach', points: ['Weekly lead searches on Google Places', 'Forms, ads, storefront and inbox in one place', 'Journeys you send one step at a time', 'Events with RSVPs and reminders'] },
-  { title: 'Sell and follow up', points: ['Pipeline, stages and a quarter forecast', 'Deals and customers at risk, with reasons', 'Proposals, quotes, electronic signature', 'Packages and a pricing check'] },
+  { title: 'Find and reach', points: ['Weekly lead searches on Google Places', 'Forms, ads, storefront, inbox and missed calls in one place', 'Journeys you send one step at a time', 'Events with RSVPs, waiting lists and reminders', 'Birthdays, for people who agreed to hear from you'] },
+  { title: 'Sell and follow up', points: ['Pipeline, stages and a quarter forecast', 'A battle card before each call, built from your catalogue', 'Deals and customers at risk, with early warnings', 'Proposals, quotes and electronic signature', 'Packages, a pricing check and a walk-away minimum', 'Booking no-shows flagged to rebook'] },
   { title: 'Buy and resell', points: ['UK company checks and undervalued eBay listings', 'Sold-price comparables and resale margins', 'Sale readiness for your own business', 'Watch-list reminders for listings left undecided'] },
-  { title: 'Support and grow', points: ['One support queue with two-hour targets', 'Ready answers from your own library', 'Objectives, targets and a corrective step', 'Referrals, case studies and pitch decks'] },
+  { title: 'Support, stock and grow', points: ['One support queue with two-hour targets and a reliability score', 'A catalogue of products, services, packages and offers, with stock and end dates', 'Waiting lists for sold-out items and full events', 'Your own Facebook Page and Instagram, published only when you approve', 'Balancr: the operations app, sharing leads, deal stages and invoice payments'] },
 ];
 
 const SWITCHED_OFF = [
+  'Automatic invoices on won deals',
+  'Automatic reminders for unpaid invoices',
   'Automatic sending of messages',
   'Automatic answers to customers',
   'Automatic journey emails',

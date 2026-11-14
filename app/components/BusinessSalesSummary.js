@@ -21,13 +21,14 @@ export default function BusinessSalesSummary() {
   const [forecast, setForecast] = useState(null);
   const [atRisk, setAtRisk] = useState([]);
   const [demand, setDemand] = useState(null);
+  const [health, setHealth] = useState(null);
   const [accountsText, setAccountsText] = useState("");
 
   useEffect(() => {
     cachedJson("/api/deals").then((j) => setDeals(j)).catch(() => {});
     cachedJson("/api/support").then((j) => setSupport(j)).catch(() => {});
     cachedJson("/api/sales-tools/manage").then((j) => setAccountsText(j.abmText || "")).catch(() => {});
-    cachedJson("/api/kpis").then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); }).catch(() => {});
+    cachedJson("/api/kpis").then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); setHealth({ funnel: j.funnel || null, trust: j.trust || null, dso: j.dso ?? null, web: j.web || null }); }).catch(() => {});
   }, []);
 
   const targets = deals.targets || [];
@@ -54,6 +55,18 @@ export default function BusinessSalesSummary() {
           <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? atRisk.map((d) => d.name).slice(0, 2).join(", ") : "None flagged"} />
           <Stat name="Demand, last 30 days" value={demand ? `${demand.last30} leads` : "n/a"} hint={demand?.changePct !== null && demand?.changePct !== undefined ? `${demand.direction}, ${demand.changePct > 0 ? "+" : ""}${demand.changePct}% on the month before` : "Not enough history yet"} />
           <Stat name="Partners and press to reach" value={partnerPress} hint="From your accounts list" />
+        </div>
+      ) : null}
+      {health ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat name="Cost per lead" value={health.funnel?.costPerLead ?? "n/a"} hint="Last 12 months, from the spend you entered" />
+          <Stat name="Lead to won" value={health.funnel?.leadToWon !== null && health.funnel?.leadToWon !== undefined ? `${Math.round(health.funnel.leadToWon * 100)}%` : "n/a"} hint="Share of leads that became won deals" />
+          <Stat name="Lifetime value to cost" value={health.funnel?.ltvToCac ?? "n/a"} hint="Aim for 3x or more" />
+          <Stat name="Churn" value={health.funnel?.churnRate !== null && health.funnel?.churnRate !== undefined ? `${Math.round(health.funnel.churnRate * 100)}%` : "n/a"} hint="Customers who have stopped paying" />
+          <Stat name="Reliability" value={health.trust ? `${health.trust.score} (${health.trust.label})` : "n/a"} hint="Support on time, complaints, money owed" />
+          <Stat name="Days to pay" value={health.dso ?? "n/a"} hint="Average, last 12 months" />
+          <Stat name="Click-through rate" value={health.web?.seo?.ok && health.web.seo.ctr !== null ? `${health.web.seo.ctr}%` : "n/a"} hint="Search results, last 28 days" />
+          <Stat name="Website visitors" value={health.web?.ga4?.ok ? health.web.ga4.users : "n/a"} hint={health.web?.ga4?.ok ? `Bounce rate ${health.web.ga4.bouncePct ?? "n/a"}%` : "Needs the analytics permission"} />
         </div>
       ) : null}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

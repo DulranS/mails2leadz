@@ -1,3 +1,9 @@
+## Pass 274 - landing page and business pipeline up to date
+
+- Landing page steps and features rewritten to the current app.
+- Business pipeline summary shows acquisition, reliability, days to pay and web figures.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
 ## Pass 273 - battle card from the respond-leads archive
 
 - Battle card before a call: lead snapshot, three points tied to the catalogue, two objections with scripts, one closer tip. Never invents stock.

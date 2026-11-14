@@ -1481,3 +1481,10 @@ Archive: a separate WhatsApp support product (Next.js and Supabase). Checked ite
 
 Not run against a live AI key. Platform-gated items unchanged.
 
+## Pass 274: landing page and business pipeline brought up to date
+
+- Landing page: the four steps and the feature groups now describe what the app does: Balancr link, battle card, catalogue and stock, waiting lists, offers with real end dates, reliability score, missed-call return, the automatic reply check, the routine-message choice, Page and Instagram posting, birthdays, and the personal data request. The exclusions (platform approvals, not claimed, left out) are unchanged.
+- Business pipeline summary: adds cost per lead, lead to won, lifetime value to cost, churn, reliability, days to pay, click-through rate and website visitors.
+
+Not run against live services. Platform-gated items unchanged.
+
