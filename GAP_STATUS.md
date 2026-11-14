@@ -1210,3 +1210,189 @@ Not applicable to this app (finance, not sales or marketing): EBITDA, EBIT, depr
 
 Not run against live services. Enricher keys (Apollo, People Data Labs) still need a live connection test.
 
+## Seven advantages, checked against the app (Pass 241)
+
+1. Audience you can reach: partly covered. Consented email and text broadcasts, your own Facebook and Instagram posts, events and referrals serve an audience you own. A public subscribe form or pop-up is not built, by decision.
+2. Sell on your own terms: covered. Your own landing page, quotes, invoices, and the option of your own store. Marketplaces are optional.
+3. A reputation for a specific job: covered. Ideal customer, named accounts, case studies, proof bank, the pitch outline, and packaged pricing.
+4. Something useful you own: covered. The app itself, SOPs as the sales playbook, and productised packages.
+5. Relationships that open doors: covered. Referral asks, partner accounts, and named accounts with reminders.
+6. People you can rely on: covered. Team roles, deal owners, support routing by load and role, and per-person measures.
+7. Room to refuse bad work: now covered. A walk-away minimum in the pricing check flags any sale that keeps less than the minimum you set. Customers who owe money for over 30 days are left out of marketing, and the trust score shows reliability.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Catalog and stock for any business (Pass 242)
+
+- One catalog for any business: products, services, packages, offers and bundles, each with a price, stock where it is tracked, details and, for offers, an end date.
+- The AI reply helper reads the catalog. It offers only what is listed and running; out-of-stock items are marked so it never promises them; ended offers are dropped.
+- The Do now list reminds you when items are low or out of stock.
+- Stock is set by hand on the sales tools screen. It is not reduced automatically when an invoice is paid; that would need a sales-to-stock link not yet built.
+
+Not built, by decision: the investment figures in the uploaded screenshots (share trading, margin loans, CSE fees, leverage) are personal investing, not sales, marketing or deals; they are outside this app. The supply-chain notes were used only for the catalog and stock design.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Five laws of price making, checked against the app (Pass 243)
+
+- Ignore the macro: the app shows your own pipeline, deals and customers, not economic indicators. Covered by design.
+- Demand-side tension: covered partly. Event capacity, limited stock ("only 2 left"), offers with real end dates, and the demand trend from leads. There is no waiting list yet.
+- Build your own market: positioning, not software. The ideal customer, named accounts, case studies, proof bank and packaged offers support it. The app cannot make a market ring-fenced by itself.
+- Make the offer here and now: covered. Offers need real end dates; fake scarcity is refused.
+- Sell utility, not effort: now built into the reply helper. The catalog tells the AI to sell the result each item gives the customer, not the work behind it.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Stock on payment and waiting lists (Pass 244)
+
+Built and tested here:
+- Stock is taken once per paid invoice, for tracked items only, never below zero. Shortfalls are reported. A second call changes nothing.
+- A full event takes the guest onto its waiting list instead of turning them away.
+- You can record a customer who asked to be told when an item is back in stock.
+- The Do now list reminds you when a waited-for item is back in stock.
+- When places open, the first people who asked are told first, as many as there are places (batch notify, from the research).
+
+Still not wired (honest, partial):
+- The billing screen does not yet call the stock step after a payment is recorded, and invoices cannot yet be given items from the invoice form. The server step exists and is idempotent.
+- The owner's waiting-list entry form and the guest's "you are on the waiting list" display are not yet on screen.
+- A public sign-up form on sold-out product pages is a form, which is a decided exclusion.
+
+Research applied: waitlist with "only X left", batched restock alerts, and waiting counts to guide reordering. Not applied: a waiting-count report per item (available later from the waiting list).
+
+Not run against live services. Platform-gated items unchanged.
+
+## Wiring finished; payment benchmarks from the research (Pass 245)
+
+Now on screen:
+- Billing: an "Items sold" field on new invoices (for example Mug x2, Home visit). When an invoice is marked paid, or a settling payment is recorded, stock is taken once for tracked items. Shortfalls are reported on screen.
+- Event guests at a full event see "you are on the waiting list" instead of an error.
+- Sales tools: a waiting-list form (add someone who asked) with counts per item, useful for reordering.
+- Measures: days sales outstanding (average days customers take to pay).
+- Do now: a won deal with no invoice yet.
+
+Research benchmarks checked against the app:
+- Automatic payment reminders at 3, 7 and 14 days overdue: the reminder steps exist and draft each reminder for approval. Automatic sending stays off by default (your switch).
+- Payment status visible in the pipeline: partly (invoice status is on the billing screen; not yet shown on each deal).
+- Invoice raised when a deal is won: a reminder is on the Do now list; invoices are not created automatically.
+- Days sales outstanding: built.
+- Tasks with due dates: covered by next actions.
+
+Still open, stated plainly:
+- Two stock systems: the existing product stock (taken when an invoice is created) and the catalog stock (taken when paid). They do not share counts. This needs one decision on which one you keep.
+- Public sign-up on sold-out items: a form, decided not built.
+- Two-way sync with accounting software (QuickBooks, Xero): not built; it needs a connector and an account from you.
+- Automatic reminder sending and automatic invoice creation on won deals: your switches, not turned on by default.
+
+Not run against live services or checked on a phone or desktop. Platform-gated items unchanged.
+
+## One stock system (Pass 246)
+
+Decision: the catalog is the only stock system. Stock is taken from it when an invoice is paid, once per invoice, for tracked items. The older product stock that was taken when an invoice was created is switched off (a single named switch set to off). Stored invoices and existing product stock counts are not changed.
+
+Known leftover: the product picker on the invoice form is still visible but does nothing now. Remove it in a later tidy-up; it cannot take stock.
+
+Still not built, and needs your choice: two-way sync with your accounting software (QuickBooks or Xero). It needs your software choice and an account.
+Decided not built: a public sign-up form on sold-out items.
+Switches left off by you: automatic reminder sending, automatic invoice creation on won deals.
+
+Not run against live services or checked on a phone or desktop. Platform-gated items unchanged.
+
+## Two-way sync with Balancr (Pass 247)
+
+Built:
+- Deals go to Balancr as leads, once (a repeat is safe). A deal past "new" also moves its stage in Balancr.
+- Balancr's new leads are pulled into the AutoLeads inbox each day, skipping the ones AutoLeads sent.
+- A lead's stage change in Balancr moves its matching deal in AutoLeads (Balancr's existing stage webhook, protected by a token you set in both places).
+- Invoice payment: an AutoLeads invoice is marked paid when its Balancr invoice (given once, by its key) is paid.
+- Keys: BALANCR_BASE_URL, BALANCR_BUSINESS_ID, BALANCR_API_KEY and BALANCR_WEBHOOK_TOKEN, one card on Integrations.
+
+Balancr changes (balancr-final-v262.zip): two read/write routes, one to set a lead's stage and one to read an invoice's status. See BALANCR-SYNC.md in that project.
+
+Limits, stated plainly:
+- Invoice matching is by the Balancr invoice key, pasted once per invoice; it is not automatic.
+- Stage changes from AutoLeads reach Balancr only when a deal is pushed; they are not pushed automatically on every change.
+- Neither side has been run against the other. Balancr's build and tests were not run here.
+
+Not run against live services or checked on screen. Platform-gated items unchanged.
+
+## Final wrap: research against the scope (Pass 248)
+
+Scope: sales, marketing and deals. Balancr is the operations and management software and is not in scope here.
+
+Research and what it changed:
+- Bulk sender rules (Gmail, Yahoo, Outlook): one-click unsubscribe headers (RFC 8058) are required on marketing mail. The app's own sends carried them, but broadcasts and automatic journey email did not. Fixed: marketing mail now carries them.
+- Authentication (SPF, DKIM, DMARC): these are DNS records on your sending domain. The app cannot set them. Owner action: publish SPF and DKIM for your domain, and a DMARC record at p=none or stricter.
+- A person's own data: erasure existed; a copy for the person did not. Added: a downloadable copy, using the same records erasure scans, with the note that invoices and tax records are kept.
+- WhatsApp marketing: the app sends marketing by e-mail and text only. WhatsApp marketing would need approved templates and a WhatsApp-specific opt-in that names the business. Not built; not needed now.
+
+Checked and already present: sequences (journeys), lead scoring and routing, forecasting, call summaries, enrichment, attribution, booking and calendar sync, proposals and e-signature, invoicing and payment reminders, consent recorded per channel.
+
+Still open, stated plainly:
+- Email authentication records (owner action, above).
+- Decided not built: pop-ups, a native form builder, a public sign-up for sold-out items, SMS broadcasts without phone-level consent records, WhatsApp marketing.
+- Known leftover: the old product picker on the invoice form does nothing.
+- Balancr sync: working as you confirmed; invoice matching is by the key you paste once.
+- Your switches stay off until you turn them on.
+- Platform approvals: Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond your admins.
+
+Not run against live services or checked on screen beyond the tests and build.
+
+## Pass 265: automation control, sidebar, funnel (ported onto v264)
+
+Base: the uploaded v264 project. Its Balancr sync, its overnight autopilot route and its scheduled jobs are kept as they were.
+
+Built:
+- Automation control: one pause stops every switch that contacts people (journey email, auto-replies, rental texts, TikTok and Google sync, eBay publishing, visitor voice). Internal steps keep running: invoice drafts for won deals, and deals marked won when their invoice is paid. Status view lists what runs, what is paused and what waits for keys. Named separately from your overnight autopilot.
+- Sidebar: Today (daily work), Sell (customers, deals, quotes, bookings, partners, products), Market (content, landing page, experiments), Money (billing, contracts, business value), More (SOPs, integrations, account, app keys).
+- Acquisition funnel: cost per lead, lead-to-won, cost per new customer, LTV to CAC and churn, computed from counts; a missing figure shows as blank, never as zero. Not yet on screen.
+
+Fixed in the project:
+- The Balancr sync job is registered as a public route with its scheduler secret check.
+- The daily and hourly schedules now list the same jobs, as the schedule test requires.
+
+Flags for you to decide:
+- Eight scheduled jobs in vercel.json. Vercel's free plan limits scheduled jobs; check your plan.
+- Cron runs a schedule on the server; earlier we chose app-open triggers. Keep both or pick one.
+
+Not built yet (honest):
+- Traffic, click-through and bounce rate: these need Google Analytics reporting pulls, not yet built.
+- Review request, bad-review alert, birthday message, no-show rebooking and missed-call text-back: not built.
+- Trade-specific (construction) cost and time tracking: not built as a module.
+- Balancr v264 (version 2) was not in this upload, so the apps have not been aligned against it.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 266: free plan, work on app open (ported onto v264; checked against Balancr v266)
+
+Built:
+- No scheduled jobs anywhere (vercel.json and both timetables are empty). Free-plan safe.
+- Opening the app runs the owner's day work once per day: the Balancr sync (new leads, deal stages, invoice status), auto-send, daily operations, and draft preparation.
+- Work shared by all owners (due broadcasts, untouched-lead rerouting) runs once per day, by whoever opens first.
+- The Balancr sync test now checks the app-open trigger.
+
+Balancr v266 check: the sync's paths, methods and fields match v266 (lead create, lead stage update, lead pull with cursor, invoice status, stage webhook).
+
+Known regression, stated plainly:
+- Reply checking (check-replies) was a scheduled job. It is not yet on the app-open trigger, so replies to your outreach are only detected on days you open the app, and only once that is wired in. Decision needed: allow the server to run it from the app-open trigger using the scheduler secret (CRON_SECRET), or accept checking on open only.
+
+Not built yet:
+- Traffic, click-through and bounce rate (needs analytics reporting access; reconnect Google with that permission).
+- Funnel and churn figures are calculated but not on screen.
+- Review requests, bad-review alerts, birthday messages, no-show rebooking, missed-call text-back.
+- Construction-style cost and time tracking.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 267: persuasion and copy checks from your notes
+
+Built:
+- The message checker now also flags pressure ("act now", "last chance"), fear ("you'll regret it"), promises you cannot prove ("guaranteed results", "risk-free"), messages that never speak to the reader, and overlong messages. These checks run on any message, with no AI call.
+
+Applied from the notes (already in the app): referrals and reviews as wins, guarantees and trial offers on offers, reply and follow-up sequences, won and lost reasons, bundles and packages, value-based pricing, and a clear next step in every journey.
+
+Left out, because they are investing, finance or org-chart material and not sales or marketing: compound interest, asset classes, return types, financial ratios (ROE, ROCE, P/E, debt-to-equity, current ratio), tax structures, the C-suite roles, and the money concepts.
+
+Still open from earlier passes: reply checking on app open (needs a decision), traffic, click-through and bounce rate (needs analytics reporting), the funnel and churn figures on screen, five of the nineteen automations (review requests, bad-review alerts, birthday messages, no-show rebooking, missed-call text-back), and construction-style cost and time tracking.
+
+Not run against live services. Platform-gated items unchanged.
+

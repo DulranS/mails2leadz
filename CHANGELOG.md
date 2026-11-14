@@ -1,3 +1,116 @@
+## Pass 267 - copy checks from the persuasion notes
+
+- Message checker flags pressure, fear, unprovable promises, messages that never speak to the reader, and overlong messages.
+- Tests run here: the copy-check tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Investing and finance notes are outside this app and not built.
+
+## Pass 266 - free plan: work on app open
+
+- No scheduled jobs; the owner's daily work runs on app open, once per day.
+- Shared daily work (broadcasts, reroutes) runs once per day on the first open.
+- Checked the Balancr sync against Balancr v266.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0).
+
+Limits, plainly:
+- Reply checking is not yet on app open (regression from the removed schedule).
+- Traffic, funnel display and five of the nineteen automations not built.
+
+## Pass 265 - automation control, sidebar, funnel (on v264)
+
+- Automation control: one pause for everything that contacts people; invoice drafts and won-when-paid run internally.
+- Sidebar regrouped for long-term use.
+- Acquisition funnel and churn rates (pure; not yet on screen).
+- Scheduled Balancr sync registered as public with its secret check; daily and hourly schedules aligned.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Traffic, click-through and bounce rate need analytics pulls (not built).
+- Balancr v264 (version 2) not supplied; not aligned.
+
+## Pass 248 - final wrap; research
+
+- Marketing mail (broadcasts and journeys) now carries the one-click unsubscribe headers.
+- A person's own data can be downloaded as a copy; erasure is alongside it on the same panel.
+- Fixed a syntax error introduced in the journey sender, caught by the build.
+- Tests run here: the data-copy test (1 check), the full npm test chain (exit 0), and a production Next.js build (exit 0).
+
+Owner action:
+- Publish SPF, DKIM and a DMARC record for your sending domain.
+
+## Pass 247 - two-way sync with Balancr
+
+- Deals push to Balancr as leads (repeat-safe); stage moves in Balancr too.
+- Balancr's new leads pulled daily into the inbox.
+- Balancr stage webhook moves the matching deal.
+- Invoice paid status read from Balancr by key.
+- Balancr project: two routes added (lead stage, invoice status), BALANCR-SYNC.md.
+- Tests run here: the Balancr sync rule tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Balancr build and tests not run here.
+- Invoice matching by pasted key, not automatic.
+
+## Pass 246 - one stock system
+
+- Catalog is the only stock system; stock taken on payment, once per invoice.
+- Product stock taken at invoice creation switched off (named switch; stored data unchanged).
+- Tests run here: the one-stock test (1 check), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Invoice product picker is inert and should be removed later.
+- Accounting two-way sync not built; needs your software choice.
+
+## Pass 245 - wiring finished; payment benchmarks
+
+- Billing: items on invoices; stock taken once when paid; shortfalls shown.
+- Guest at a full event sees the waiting-list message.
+- Sales tools waiting-list form with counts per item.
+- Days sales outstanding on the measures screen; won deals with no invoice on the Do now list.
+- Tests run here: the payment-metrics tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Two stock systems not yet merged.
+- Accounting two-way sync not built.
+- Not run against live services or checked on screen.
+
+## Pass 244 - stock on payment, waiting lists
+
+- Stock taken once per paid invoice for tracked items; shortfalls reported; never below zero.
+- Full events take guests onto a waiting list.
+- Owner can record a customer waiting for an item; Do now reminds when it is back in stock.
+- Batch notification to the first people who asked, up to the places open.
+- Tests run here: the stock and waiting-list tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Billing screen hook, invoice item field, waiting-list entry form and guest waiting message are not yet on screen.
+- Public self sign-up for sold-out items is a decided exclusion (a form).
+
+## Pass 243 - sell outcomes
+
+- The catalog block tells the AI to sell the result each item gives the customer, not the effort.
+- Tests run here: the catalog tests (6 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0).
+
+## Pass 242 - catalog and stock for any business
+
+- Catalog of products, services, packages, offers and bundles, with price, stock where tracked, details and offer end dates.
+- AI reply helper reads the catalog; never promises out-of-stock items or ended offers.
+- Low and out-of-stock items on the Do now list.
+- Tests run here: the catalog tests (5 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Stock is not reduced automatically on payment.
+- Not run against live services or checked on a phone.
+
+## Pass 241 - walk-away minimum
+
+- Pricing check takes a walk-away minimum (% of the sale you must keep) and flags any sale below it.
+- Tests run here: the walk-away tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Public subscribe form and pop-ups remain decided, not built.
+
 ## Pass 240 - problem customers excluded; enricher columns
 
 - Broadcasts (email and text) leave out customers who owe money for over 30 days, with the reason.

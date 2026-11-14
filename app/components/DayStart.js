@@ -24,6 +24,7 @@ export default function DayStart() {
   useEffect(() => {
     if (started) return;
     started = true;
+    fetch("/api/open-day", { method: "POST", headers: { "Content-Type": "application/json" } }).catch(() => {});
     fetch("/api/day/open", { method: "POST", headers: { "Content-Type": "application/json" } })
       .then((r) => r.json().catch(() => ({})))
       .then((j) => { if (j && j.callList) setDay(j); })

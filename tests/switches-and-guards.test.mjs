@@ -23,7 +23,7 @@ t('the claim hold is on by default and the owner can turn it off', () => {
 
 t('only known switches with boolean values are kept', () => {
   assert.deepEqual(sanitizeSwitches({ enrichDeals: true, tiktokSync: 'yes', bogus: true }), { enrichDeals: true });
-  assert.deepEqual(Object.keys(SWITCHES).sort(), ['ebayAutoPublish', 'enrichDeals', 'googleSync', 'holdClaimRisk', 'journeyAutoSend', 'liveVoice', 'rentalTexts', 'stripeConnect', 'supportAutoReply', 'tiktokSync', 'visitorVoice']);
+  assert.deepEqual(Object.keys(SWITCHES).sort(), ['autoDealStages', 'autoInvoiceDrafts', 'ebayAutoPublish', 'enrichDeals', 'googleSync', 'holdClaimRisk', 'journeyAutoSend', 'liveVoice', 'rentalTexts', 'stripeConnect', 'supportAutoReply', 'tiktokSync', 'visitorVoice']);
 });
 
 t('the claim check flags price, result, guarantee, urgency and superlative wording, and passes plain wording', () => {

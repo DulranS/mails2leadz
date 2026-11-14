@@ -62,7 +62,9 @@ export async function POST(request) {
   // Stock first, inside one transaction: the reads come before the writes, and a sale that the shelf cannot cover is refused.
   // Hand-made sales are not held back by the online safety buffer or the per-order limit: the owner is selling it in person.
   let taken = [];
-  if (stockReq.lines.length) {
+  // One stock system: the catalog, taken when an invoice is paid. Product stock is no longer taken at invoice creation.
+  const PRODUCT_STOCK_AT_INVOICE = false;
+  if (PRODUCT_STOCK_AT_INVOICE && stockReq.lines.length) {
     const outcome = await runTx(db, async (tx) => {
       const lines = [];
       for (const l of stockReq.lines) {
@@ -93,6 +95,7 @@ export async function POST(request) {
   try {
     if (!r.write.number) r.write.number = await nextInvoiceNumber(db, uid);
     r.write.manualStockTaken = taken.filter((h) => h.tracked).map((h) => ({ productId: h.productId, variantId: h.variantId || '', quantity: h.quantity, tracked: true }));
+    r.write.saleLines = String(body?.saleLines || '').slice(0, 300);
     const ref = await addInvoiceWithCredit(db, uid, r.write);
     if (loyaltyUse?.ok) await spendPoints(db, uid, body?.email, loyaltyUse.pointsUsed).catch(() => ({}));
     return json({ ok: true, id: ref.id, number: r.write.number, dueAt: r.write.dueAt, stockTaken: taken.filter((h) => h.tracked).length });

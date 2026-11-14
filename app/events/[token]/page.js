@@ -18,7 +18,7 @@ export default function EventPage() {
   const rsvp = async (e) => {
     e.preventDefault();
     const r = await fetch("/api/events/rsvp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, ...form }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." }));
-    if (r.ok) { setDone(true); setMsg(""); } else setMsg(r.error || "Could not RSVP.");
+    if (r.ok) { setDone(true); setMsg(r.waitlisted ? r.message : ""); } else setMsg(r.error || "Could not RSVP.");
   };
 
   const shell = "min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-4 py-10";
@@ -30,7 +30,7 @@ export default function EventPage() {
         <h1 className="text-2xl font-semibold">{ev.title}</h1>
         <p>{new Date(ev.startsAt).toLocaleString()}{ev.place ? ` · ${ev.place}` : ""}</p>
         {ev.full ? <p className="text-sm">This event is full.</p> : ev.spotsLeft !== null ? <p className="text-sm">{ev.spotsLeft} spaces left.</p> : null}
-        {done ? <p className="rounded-md bg-green-50 dark:bg-green-900/30 p-4">You are on the list. See you there.</p> : ev.full ? null : (
+        {done ? <p className="rounded-md bg-green-50 dark:bg-green-900/30 p-4">{msg || "You are on the list. See you there."}</p> : ev.full ? null : (
           <form onSubmit={rsvp} className="space-y-3">
             <label htmlFor="rsvp-name" className="block text-sm font-medium">Your name</label>
             <input id="rsvp-name" className="w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />

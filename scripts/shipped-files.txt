@@ -16,7 +16,10 @@ app/api/ai-reply-assist/route.js
 app/api/ai-smart-outreach/route.js
 app/api/ai-targets/route.js
 app/api/auth/callback/route.js
+app/api/automation-control/route.js
 app/api/autopilot/route.js
+app/api/balancr/sync/route.js
+app/api/balancr/webhook/[uid]/route.js
 app/api/bids/draft/route.js
 app/api/book/manage/route.js
 app/api/book/request/route.js
@@ -39,10 +42,12 @@ app/api/check-replies/route.js
 app/api/connect/callback/route.js
 app/api/connect/start/route.js
 app/api/contacts/erase/route.js
+app/api/contacts/export/route.js
 app/api/contacts/inbox/route.js
 app/api/contacts/lookup/route.js
 app/api/credit-notes/route.js
 app/api/cron/autosend/route.js
+app/api/cron/balancr-sync/route.js
 app/api/cron/broadcasts/route.js
 app/api/cron/check-replies/route.js
 app/api/cron/daily-ops/route.js
@@ -109,6 +114,7 @@ app/api/loyalty/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js
 app/api/notices/route.js
+app/api/open-day/route.js
 app/api/ops-status/route.js
 app/api/outlook-calendar/callback/route.js
 app/api/outlook-calendar/route.js
@@ -155,6 +161,7 @@ app/api/site/settings/route.js
 app/api/social/route.js
 app/api/statement/link/route.js
 app/api/statement/route.js
+app/api/stock/payment/route.js
 app/api/stripe/webhook/route.js
 app/api/support/library/route.js
 app/api/support/route.js
@@ -178,6 +185,7 @@ app/api/voice/recording-audio/route.js
 app/api/voice/recording/route.js
 app/api/voice/turn/route.js
 app/api/voice/visitor-session/route.js
+app/api/waitlist/route.js
 app/api/webhooks/route.js
 app/api/whatsapp/consent/route.js
 app/api/whatsapp/log/route.js
@@ -195,6 +203,7 @@ app/components/AppShell.js
 app/components/AuthFetch.js
 app/components/AuthProvider.js
 app/components/AutoBatchModal.js
+app/components/AutomationControl.js
 app/components/BidDraft.js
 app/components/BillsPanel.js
 app/components/Broadcasts.js
@@ -226,6 +235,7 @@ app/components/MemberAccount.js
 app/components/OpenYourTools.js
 app/components/OpsStatusCard.js
 app/components/OutlookConnect.js
+app/components/PersonData.js
 app/components/PipelineAlerts.js
 app/components/PwaRegister.js
 app/components/SalesTools.js
@@ -238,6 +248,7 @@ app/components/SupportAndKpis.js
 app/components/TeamAccess.js
 app/components/TodayActions.js
 app/components/VisitorVoice.js
+app/components/WaitingList.js
 app/components/WorkerQueue.js
 app/components/ui/Button.js
 app/components/ui/Card.js
@@ -307,10 +318,12 @@ lib/apollo.js
 lib/app-routes.js
 lib/assignment.js
 lib/attribution.js
+lib/automation-control.js
 lib/automation-mode.js
 lib/autosend.js
 lib/back-in-stock.js
 lib/balance.js
+lib/balancr.js
 lib/bid-draft.js
 lib/billing-automation.js
 lib/billing-saas.js
@@ -328,6 +341,7 @@ lib/capacity.js
 lib/case-study.js
 lib/cash-cycle.js
 lib/cashflow.js
+lib/catalog.js
 lib/channel-drafts.js
 lib/claim-risk.js
 lib/click-to-call.js
@@ -342,9 +356,11 @@ lib/connect.js
 lib/connection-status.js
 lib/consent-guard.js
 lib/consent-rules.js
+lib/contact-export.js
 lib/content.js
 lib/contracts.js
 lib/conversations.js
+lib/copy-checks.js
 lib/corrective.js
 lib/credit-apply.js
 lib/credit-notes.js
@@ -386,6 +402,7 @@ lib/firebase.js
 lib/first-email-batch.js
 lib/form-webhooks.js
 lib/format.js
+lib/funnel.js
 lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js
@@ -435,12 +452,14 @@ lib/nps.js
 lib/offers.js
 lib/okr.js
 lib/onboarding.js
+lib/open-day.js
 lib/operator-owner.js
 lib/ops-status.js
 lib/outlook.js
 lib/owner-report.js
 lib/packages.js
 lib/partners.js
+lib/payment-metrics.js
 lib/payroll.js
 lib/pdf-text.js
 lib/pdl.js
@@ -512,9 +531,11 @@ lib/server/ad-sync.js
 lib/server/assign-arrival.js
 lib/server/auto-post.js
 lib/server/auto-targets.js
+lib/server/automation-control.js
 lib/server/autosend.js
 lib/server/availability.js
 lib/server/back-in-stock-job.js
+lib/server/balancr.js
 lib/server/booking-confirm.js
 lib/server/booking-mail.js
 lib/server/booking-manage.js
@@ -525,8 +546,10 @@ lib/server/broadcasts.js
 lib/server/bundles.js
 lib/server/calendar-read.js
 lib/server/calendar-write.js
+lib/server/catalog.js
 lib/server/connect.js
 lib/server/connection-test.js
+lib/server/contact-export.js
 lib/server/contact-recovery.js
 lib/server/content-plan.js
 lib/server/credit-apply.js
@@ -579,6 +602,7 @@ lib/server/meta-capi-sync.js
 lib/server/meta-purchases.js
 lib/server/milestones.js
 lib/server/niche-evidence.js
+lib/server/open-day.js
 lib/server/open-track.js
 lib/server/operator-owner.js
 lib/server/operator-settings.js
@@ -654,6 +678,7 @@ lib/speed-to-lead.js
 lib/statement-html.js
 lib/statement-token.js
 lib/statement.js
+lib/stock-draw.js
 lib/stock.js
 lib/support-alerts.js
 lib/support-bot.js
@@ -679,6 +704,7 @@ lib/utm.js
 lib/validation.js
 lib/visitor-voice.js
 lib/voice-agent.js
+lib/waitlist.js
 lib/weekly-kpi.js
 lib/whatsapp-log.js
 lib/worker-categories.js

@@ -4,6 +4,7 @@ import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js'
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { patternsFor, critiqueFor, spendAuditFor, reactivationFor } from '../../../lib/server/insights.js';
+import { copyChecks } from '../../../lib/copy-checks.js';
 
 const limiter = makeLimiter({ limit: 30, windowMs: 3600000 });
 const json = (b, s = 200) => NextResponse.json(b, { status: s, headers: NO_STORE });
@@ -26,7 +27,7 @@ export async function POST(request) {
     if (text.length < 10) return json({ error: 'Paste the message first.' }, 400);
     const channel = ['general', 'email', 'sms', 'whatsapp', 'web', 'video'].includes(body.channel) ? body.channel : 'general';
     const r = await critiqueFor(db, who.uid, text.slice(0, 3000), channel);
-    return json(r, r.ok ? 200 : 400);
+    return json({ ...r, checks: copyChecks(text).warnings }, r.ok ? 200 : 400);
   }
   if (body?.action === 'spend_audit') return json(await spendAuditFor(db, who.uid), 200);
   if (body?.action === 'reactivation') return json(await reactivationFor(db, who.uid), 200);

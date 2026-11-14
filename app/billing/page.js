@@ -107,7 +107,7 @@ function Bar({ value, max, label, right, color = "bg-blue-600" }) {
   );
 }
 
-const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "", stockProduct: "", stockQty: "1", chargeCurrency: "" };
+const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "", stockProduct: "", stockQty: "1", chargeCurrency: "", saleLines: "" };
 
 export default function BillingPage() {
   const { user, ready: authReady } = useAuthUser();
@@ -198,7 +198,7 @@ export default function BillingPage() {
         chargeCurrency: form.chargeCurrency, fxRate: fxRateFor(form.chargeCurrency),
       });
       if (!r.ok) { setError(r.error); return; }
-      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, chargeCurrency: form.chargeCurrency, stockLines: form.stockProduct ? [{ productId: form.stockProduct.split("|")[0], variantId: form.stockProduct.split("|")[1] || "", quantity: Number(form.stockQty) || 1 }] : [], issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
+      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ saleLines: form.saleLines, email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, chargeCurrency: form.chargeCurrency, stockLines: form.stockProduct ? [{ productId: form.stockProduct.split("|")[0], variantId: form.stockProduct.split("|")[1] || "", quantity: Number(form.stockQty) || 1 }] : [], issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
       const savedData = await saved.json().catch(() => ({}));
       if (!saved.ok) { setError(savedData.error || "Could not save the invoice. Please try again."); return; }
       r.write.number = savedData.number;
@@ -242,13 +242,15 @@ export default function BillingPage() {
     } catch (err) { console.error(err); setError("Could not email the invoice."); }
     finally { setSaving(""); }
   };
-  const markPaid = (inv) => patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`);
+  const takeStock = (inv, settled) => fetch("/api/stock/payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceId: inv.id, saleLines: inv.saleLines || "", assumePaid: settled === true }) }).then((x) => x.json()).then((j) => { if (j && j.shortfalls && j.shortfalls.length) setNotice(`Stock: ${j.shortfalls.map((x) => `${x.name} (${x.reason})`).join(", ")}.`); }).catch(() => {});
+  const markPaid = (inv) => { takeStock(inv, true); return patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`); };
   const reopen = (inv) => patchInvoice(inv, { status: "open", paidAt: null, amountPaid: 0 }, "Invoice reopened.");
   const recordPart = (inv) => {
     const raw = window.prompt(`How much did ${inv.businessName || inv.email} pay? (still owed: ${money2(inv.amount)})`);
     if (raw === null) return;
     const r = recordPaymentPatch(inv, Number(raw), new Date());
     if (!r.ok) { setError(r.error); return; }
+    if (r.settled) takeStock(inv, true);
     patchInvoice(inv, r.patch, r.settled ? `Settled: ${money2(Number(raw))} received.` : `Part payment recorded. ${money2(r.balance)} still owed.`);
   };
   const voidInvoice = (inv) => { if (window.confirm("Void this invoice? It stops counting as money owed.")) patchInvoice(inv, { status: "void" }, "Invoice voided."); };
@@ -374,6 +376,7 @@ export default function BillingPage() {
               </label>
               <label className="sm:col-span-2 text-sm font-medium text-gray-700 dark:text-gray-200">What it is for (optional)
                 <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} className={field} maxLength={200} />
+                <div className="sm:col-span-2"><label htmlFor="inv-items" className="block text-xs font-medium mb-1">Items sold (optional, takes stock when paid), e.g. Mug x2, Home visit</label><input id="inv-items" value={form.saleLines} onChange={(e) => setForm({ ...form, saleLines: e.target.value })} className={field} maxLength={300} /></div>
               </label>
               <label className="sm:col-span-1 text-sm font-medium text-gray-700 dark:text-gray-200">Product sold from your stock (optional)
                 <select value={form.stockProduct} onChange={(e) => setForm({ ...form, stockProduct: e.target.value })} className={field}>

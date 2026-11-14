@@ -41,6 +41,7 @@ export default function SupportAndKpis() {
   const [reps, setReps] = useState([]);
   const [credit, setCredit] = useState([]);
   const [trust, setTrust] = useState(null);
+  const [dso, setDso] = useState(null);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -59,6 +60,7 @@ export default function SupportAndKpis() {
       if (j.reps) setReps(j.reps);
       if (j.creditRisk) setCredit(j.creditRisk);
       if (j.trust) setTrust(j.trust);
+      if (j.dso !== undefined) setDso(j.dso);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -121,6 +123,7 @@ export default function SupportAndKpis() {
               </ul>
             </div>
           ) : null}
+          {dso !== null ? <p className={note}>Customers take about {dso} days to pay (days sales outstanding, last 12 months).</p> : null}
           {trust ? (
             <div className="px-2">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">Reliability: {trust.score} ({trust.label})</p>

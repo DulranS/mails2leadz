@@ -5,9 +5,13 @@ import Collapsible from "./Collapsible.js";
 import { pitchOutline } from "../../lib/pitch.js";
 import { JOURNEY_PRESETS } from "../../lib/journey-presets.js";
 import { parsePackages, comparePackages, recommendedIndex } from "../../lib/packages.js";
+import { belowFloor } from "../../lib/pricing.js";
 import { groupNumber as g } from "../../lib/format.js";
 import { cachedJson } from "../../lib/client-cache.js";
 import { parseProof, approvedProof } from "../../lib/insights.js";
+import WaitingList from "./WaitingList.js";
+import PersonData from "./PersonData.js";
+import AutomationControl from "./AutomationControl.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -47,6 +51,8 @@ export default function SalesTools() {
   const [enrolAgreed, setEnrolAgreed] = useState(false);
   const [journeyMsg, setJourneyMsg] = useState("");
   const [offersText, setOffersText] = useState("");
+  const [catalogText, setCatalogText] = useState("");
+  const [catalogMsg, setCatalogMsg] = useState("");
   const [offersMsg, setOffersMsg] = useState("");
   const [placesText, setPlacesText] = useDraft("sales:lead-searches", "");
   const [pkText, setPkText] = useState("");
@@ -57,7 +63,7 @@ export default function SalesTools() {
   const [evMsg, setEvMsg] = useState("");
   const [events, setEvents] = useState([]);
   const loadEvents = (fresh = true) => cachedJson("/api/events", { fresh }).then((j) => setEvents(j.events || [])).catch(() => {});
-  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setOffersText(j.offersText || ""); setProofText(j.proofText || ""); }).catch(() => {});
+  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setOffersText(j.offersText || ""); setCatalogText(j.catalogText || ""); setProofText(j.proofText || ""); }).catch(() => {});
   const saveAction = (body) => fetch("/api/sales-tools/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ error: "Could not reach the server." }));
   const [outline, setOutline] = useState("");
   const [priceHint, setPriceHint] = useState({});
@@ -78,7 +84,7 @@ export default function SalesTools() {
       }));
     }).catch(() => {});
   }, []);
-  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0", costPerUnit: "" });
+  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0", costPerUnit: "", minContributionPct: "" });
   const [out, setOut] = useState(null);
   const [agr, setAgr] = useDraft("sales:agreement", { kind: "service", seller: "", buyer: "", date: "", value: "", scope: "" });
   const [draft, setDraft] = useState("");
@@ -104,6 +110,7 @@ export default function SalesTools() {
           <Field id="p-tax" text="Tax, %"><input id="p-tax" className={field} inputMode="decimal" value={price.taxPct} onChange={(e) => setPrice({ ...price, taxPct: e.target.value })} /></Field>
           <Field id="p-dep" text="Deposit now, %"><input id="p-dep" className={field} inputMode="decimal" value={price.depositPct} onChange={(e) => setPrice({ ...price, depositPct: e.target.value })} /></Field>
           <Field id="p-cost" text="Cost to deliver, per item (optional)"><input id="p-cost" className={field} inputMode="decimal" value={price.costPerUnit} onChange={(e) => setPrice({ ...price, costPerUnit: e.target.value })} /></Field>
+          <Field id="p-floor" text="Walk-away minimum, % of the sale you must keep (optional)"><input id="p-floor" className={field} inputMode="decimal" value={price.minContributionPct} onChange={(e) => setPrice({ ...price, minContributionPct: e.target.value })} /></Field>
         </div>
         <div className="mt-3"><button type="button" onClick={calc} className={primary}>Work it out</button></div>
         {out?.ok ? (
@@ -116,6 +123,7 @@ export default function SalesTools() {
             <span>Balance later</span><strong>{g(out.balance)}</strong>
             <span>Per item</span><strong>{g(out.perUnit)}</strong>
             {out.contribution !== undefined ? <><span>Contribution</span><strong>{g(out.contribution)} ({out.contributionPct}%)</strong></> : null}
+            {out.contribution !== undefined && belowFloor(out.contributionPct, price.minContributionPct) ? <span className="col-span-2 text-red-600 dark:text-red-400">Below your walk-away minimum. Consider changing the price, or saying no to this work.</span> : null}
           </div>
         ) : out?.error ? <p className="text-sm text-red-600 mt-2">{out.error}</p> : null}
         {priceHint.typical ? <p className={`mt-2 ${note}`}>Your typical price is {priceHint.typical}.</p> : null}
@@ -227,6 +235,7 @@ export default function SalesTools() {
         <div className="mt-4"><Field id="critique-draft" text="Paste the message to check"><textarea id="critique-draft" className={field} rows={4} value={critiqueDraft} onChange={(e) => setCritiqueDraft(e.target.value)} /></Field></div>
         <div className="mt-2"><button type="button" disabled={critiqueBusy || critiqueDraft.trim().length < 10} className={primary} onClick={async () => { setCritiqueBusy(true); const r = await fetch("/api/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "critique", text: critiqueDraft, channel }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." })); setCritiqueOut(r); setCritiqueBusy(false); }}>{critiqueBusy ? "Checking..." : "Check it"}</button></div>
         {critiqueOut?.ok ? <pre className={`${card} mt-3 whitespace-pre-wrap text-sm font-sans`}>{critiqueOut.text}</pre> : critiqueOut?.error ? <p className="text-sm text-red-600 mt-2">{critiqueOut.error}</p> : null}
+        {critiqueOut?.checks?.length ? <ul className="mt-2 list-disc pl-5 space-y-1 text-sm">{critiqueOut.checks.map((c) => <li key={c.id}>{c.text}</li>)}</ul> : null}
       </Collapsible>
 
       <Collapsible title="Ad spend audit" hint="Reads your synced spend and won deals only. Points to waste and the best source.">
@@ -243,6 +252,27 @@ export default function SalesTools() {
         <Field id="proof-text" text="One per line: quote | customer | yes or no"><textarea id="proof-text" className={field} rows={4} value={proofText} onChange={(e) => setProofText(e.target.value)} placeholder={"They fixed our booking problem in a week. | Ann Clinic | yes"} /></Field>
         <div className="mt-2 flex items-center gap-3"><button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_proof", text: proofText }); setProofMsg(r.ok ? `Saved ${r.saved}. ${r.usable} usable.` : "Could not save."); loadManage(); }}>Save proof</button>{proofMsg ? <span className={note} role="status">{proofMsg}</span> : null}</div>
         <p className={`mt-2 ${note}`}>{approvedProof(parseProof(proofText)).length} usable now.</p>
+      </Collapsible>
+
+      <Collapsible title="Products, services, packages and stock" hint="Any kind of business: what you sell, what is in stock, and what is running. The AI reads this when it drafts replies.">
+        <p className={note}>One per line: "type | name | price | stock | details | ends YYYY-MM-DD". Types: product, service, package, offer, bundle. Leave stock blank if it is not tracked. Offers need an end date.</p>
+        <textarea id="catalog-text" className={field} rows={6} value={catalogText} onChange={(e) => setCatalogText(e.target.value)} placeholder={"product | Blue ceramic mug | 1500 | 12 | Dishwasher safe\nservice | Home visit | 3000 | | Within Colombo\noffer | Autumn bundle | 2500 | | Mug and visit | ends 2026-12-15"} />
+        <div className="mt-3 flex items-center gap-3">
+          <button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_catalog", text: catalogText }); setCatalogMsg(r.ok ? `Saved ${r.saved}.${r.skipped ? ` ${r.skipped} line(s) skipped.` : ""}` : "Could not save."); loadManage(); }}>Save catalog</button>
+          {catalogMsg ? <span className={note} role="status">{catalogMsg}</span> : null}
+        </div>
+      </Collapsible>
+
+      <Collapsible title="Someone's data" hint="Give a person a copy of what you hold about them, or erase it when they ask">
+        <PersonData />
+      </Collapsible>
+
+      <Collapsible title="Automation control" hint="What runs on its own, and one pause for everything that contacts people">
+        <AutomationControl />
+      </Collapsible>
+
+      <Collapsible title="Waiting list" hint="People who asked to hear when a sold-out item or a full event opens up">
+        <WaitingList />
       </Collapsible>
 
       <Collapsible title="Offers" hint="Each offer needs a real end date and a stated guarantee. Ending offers are shown on your Do now list.">
