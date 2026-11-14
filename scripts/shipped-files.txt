@@ -20,6 +20,7 @@ app/api/automation-control/route.js
 app/api/autopilot/route.js
 app/api/balancr/sync/route.js
 app/api/balancr/webhook/[uid]/route.js
+app/api/battle-card/route.js
 app/api/bids/draft/route.js
 app/api/book/manage/route.js
 app/api/book/request/route.js
@@ -205,6 +206,7 @@ app/components/AuthFetch.js
 app/components/AuthProvider.js
 app/components/AutoBatchModal.js
 app/components/AutomationControl.js
+app/components/BattleCard.js
 app/components/BidDraft.js
 app/components/BillsPanel.js
 app/components/Broadcasts.js
@@ -325,6 +327,7 @@ lib/autosend.js
 lib/back-in-stock.js
 lib/balance.js
 lib/balancr.js
+lib/battle-card.js
 lib/bid-draft.js
 lib/billing-automation.js
 lib/billing-saas.js
@@ -541,6 +544,7 @@ lib/server/autosend.js
 lib/server/availability.js
 lib/server/back-in-stock-job.js
 lib/server/balancr.js
+lib/server/battle-card.js
 lib/server/booking-confirm.js
 lib/server/booking-mail.js
 lib/server/booking-manage.js

@@ -12,6 +12,7 @@ import { parseProof, approvedProof } from "../../lib/insights.js";
 import WaitingList from "./WaitingList.js";
 import PersonData from "./PersonData.js";
 import AutomationControl from "./AutomationControl.js";
+import BattleCard from "./BattleCard.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -287,6 +288,10 @@ export default function SalesTools() {
           <option value="balancr">Balancr always</option>
         </select>
         {routineMsg ? <p role="status" className={`mt-2 ${note}`}>{routineMsg}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Battle card" hint="Before a call: why they are here, points tied to your catalogue, two objections with scripts, and one tip. Nothing is sent.">
+        <BattleCard />
       </Collapsible>
 
       <Collapsible title="Birthdays" hint="Email | MM-DD. You are reminded on the day, for people who agreed to hear from you.">

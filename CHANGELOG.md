@@ -1,3 +1,12 @@
+## Pass 273 - battle card from the respond-leads archive
+
+- Battle card before a call: lead snapshot, three points tied to the catalogue, two objections with scripts, one closer tip. Never invents stock.
+- Archive checked: WhatsApp 24-hour rule already met by template-only sending; other pieces already present or a different stack.
+- Tests run here: the battle-card tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Battle card needs your AI key and has not been run against it.
+
 ## Pass 272 - routine-message choice in the app
 
 - Sales tools: choose who sends booking confirmations, reminders and review requests (automatic, AutoLeads, or Balancr).

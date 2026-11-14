@@ -1471,3 +1471,13 @@ Remaining, and who closes each:
 
 Not run against live services. Platform-gated items unchanged.
 
+## Pass 273: respond-leads archive checked; battle card added
+
+Archive: a separate WhatsApp support product (Next.js and Supabase). Checked item by item:
+- Battle card (sales coach card before a call): ported. Built from the customer's notes and your catalogue; never invents stock; no pressure or fear; reply read into its parts without filling gaps. Sales tools screen.
+- WhatsApp 24-hour window and post-close lifecycle: already covered. AutoLeads sends WhatsApp only with Meta-approved templates and only to customers who agreed, so no free-form message goes outside the window.
+- Forecasting, lead scoring and routing, bulk operations, objection handling, audit log, currency: already in AutoLeads.
+- Not integrated, because it is a different stack or infrastructure: the Supabase schema, the Python agent and Discord client, the WhatsApp inbound bot (AutoLeads answers inbound with reply assist and the catalogue), the Vercel rate-limit and cron cleanup (AutoLeads runs on app open), and the inventory PDF.
+
+Not run against a live AI key. Platform-gated items unchanged.
+
