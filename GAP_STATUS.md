@@ -1488,3 +1488,42 @@ Not run against a live AI key. Platform-gated items unchanged.
 
 Not run against live services. Platform-gated items unchanged.
 
+## Pass 275: research check against sales, marketing and support (correction)
+
+The earlier statement that nothing was missing was too strong. A deeper check against current sales, marketing and support tools found these:
+
+Closed now:
+- Public help centre: your answer library as a public page at /help/{your ID}, off until you publish it. Shows question and answer only.
+
+Still missing (buildable, not yet built):
+- CSAT survey after a ticket is resolved (one question, a public rating page, the score kept on the ticket).
+- Customer ticket-status page (needs a private link per ticket).
+- Shared deal room or mutual action plan for the buyer (a read-only page of the deal's steps and their status).
+- Deflection rate (share of support questions answered without a person; needs the bot's answers marked on each ticket).
+
+Already covered, so not missing: email open tracking, link click tracking, call recording (through the voice service), deal rotting (customer health flags no movement), meeting scheduler (booking page), referral rewards, A/B tests, lead scoring, business-hours SLA, routing, and the call list on the start-of-day screen (the nearest to a power dialer).
+
+Outside AutoLeads by decision: landing-page and form builders, pop-ups, retargeting audiences (need platform ad approval), and CPQ.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 276: the four remaining gaps closed (free plan, no schedules)
+
+- Ticket status page: /support/{your ID}/{ticket}?k=key. A customer sees where their request stands and the latest reply. Each new ticket gets its own private key; tickets from before this pass have no link.
+- CSAT: a rating page /rate/{your ID}/{ticket}?k=key, open once the request is resolved, one to five and an optional comment. The rating average and response rate are on the measures screen.
+- Shared deal room: /room/{your ID}/{deal}?k=key, read only, with the deal's steps and whether each is done. Set it up on the sales tools screen (Customer links).
+- Deflection rate: the share of support questions in the last 30 days that the automatic answers handled. On the measures screen.
+- Your Customer links panel lists each ticket's status and rating links. You copy a link and send it yourself; nothing is sent automatically.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 277: the app checks its own go-live state
+
+I cannot run your live accounts (they need your sign-in, keys and phone), so the app now reports its own state:
+- Go-live checklist on the sales tools screen. It reads presence only (never values) and shows, for each connection and piece of content, whether it is ready, optional, or needs one step, with that step written out.
+- The email records (SPF, DKIM, DMARC) are a manual check: tick the box once published.
+
+Still needing a live test by you: the Google reconnect and GA4 property ID (for traffic), the Balancr round trip, the Twilio missed call, a battle card, one customer rating and one deal room link. The checklist shows which of these are set up; it does not run them.
+
+Not run against live services. Platform-gated items unchanged.
+

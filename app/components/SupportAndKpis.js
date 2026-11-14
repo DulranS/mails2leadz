@@ -44,6 +44,7 @@ export default function SupportAndKpis() {
   const [dso, setDso] = useState(null);
   const [funnel, setFunnel] = useState(null);
   const [web, setWeb] = useState(null);
+  const [supportFigures, setSupportFigures] = useState(null);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -65,6 +66,7 @@ export default function SupportAndKpis() {
       if (j.dso !== undefined) setDso(j.dso);
       if (j.funnel) setFunnel(j.funnel);
       if (j.web) setWeb(j.web);
+      if (j.support) setSupportFigures(j.support);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -126,6 +128,9 @@ export default function SupportAndKpis() {
                 ))}
               </ul>
             </div>
+          ) : null}
+          {supportFigures ? (
+            <p className={note}>Customer rating: {supportFigures.csat.avg ?? "n/a"} out of 5 from {supportFigures.csat.responses} response{supportFigures.csat.responses === 1 ? "" : "s"}. Answered automatically: {supportFigures.deflectionPct ?? "n/a"}% of questions in the last 30 days.</p>
           ) : null}
           {web && web.seo && web.seo.ok && web.seo.ctr !== null ? (
             <p className={note}>Search click-through rate, last {web.seo.days} days: {web.seo.ctr}% ({web.seo.clicks} clicks from {web.seo.impressions} impressions).</p>

@@ -15,6 +15,7 @@ import { trustScore } from '../../../lib/trust.js';
 import { slaStatus } from '../../../lib/support-routing.js';
 import { daysSalesOutstanding } from '../../../lib/payment-metrics.js';
 import { funnelRates } from '../../../lib/funnel.js';
+import { csatSummary, deflectionRate } from '../../../lib/customer-links.js';
 
 export async function GET(request) {
   const who = identify(request);
@@ -54,13 +55,14 @@ export async function GET(request) {
   const churned = atStart.filter(([e]) => now - (lastInvoice.get(e) || wonEmails.get(e) || 0) > HALF).length;
   const paidTotal = invoiceRows.filter((i) => i.status === 'paid').reduce((a, i) => a + (Number(i.amountPaid || i.total || i.amount) || 0), 0);
   const payers = new Set(invoiceRows.filter((i) => i.status === 'paid').map((i) => String(i.email || '').toLowerCase()).filter(Boolean)).size;
+  const supportFigures = { csat: csatSummary(ticketRows, now), deflectionPct: deflectionRate(ticketRows, now) };
   const webSaved = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).then((s) => s.data()?.webTotals || {}).catch(() => ({})));
   const funnel = funnelRates({ spend: spend12 || null, leads: leads12, qualified: qualified12, won: won12, newCustomers: won12, customersAtStart: atStart.length, customersLost: churned, ltv: payers ? paidTotal / payers : null });
   const ticketRows = (await getDocs(query(collection(db, 'users', who.uid, 'support_tickets'), limit(300))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
   const answered = ticketRows.length ? Math.round((ticketRows.filter((t) => slaStatus(t, now) !== 'breached').length / ticketRows.length) * 100) : null;
   const trust = trustScore({ supportTargetMetPct: answered, openComplaints: ticketRows.filter((t) => t.status !== 'resolved' && t.kind === 'complaint').length, creditRiskCount: credit.length });
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));
-  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, web: webSaved }, { headers: NO_STORE });
+  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, web: webSaved, support: supportFigures }, { headers: NO_STORE });
 }
 
 export async function POST(request) {

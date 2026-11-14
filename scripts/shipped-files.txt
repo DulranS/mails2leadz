@@ -55,6 +55,7 @@ app/api/cron/daily-ops/route.js
 app/api/cron/pipeline/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
+app/api/customer-links/route.js
 app/api/day/open/route.js
 app/api/deal-screen/route.js
 app/api/deal-watch/route.js
@@ -75,7 +76,9 @@ app/api/get-daily-count/route.js
 app/api/get-thread/route.js
 app/api/gmail-offline/callback/route.js
 app/api/gmail-offline/route.js
+app/api/go-live/route.js
 app/api/health/route.js
+app/api/help/publish/route.js
 app/api/inbound-key/route.js
 app/api/inbound/attach/route.js
 app/api/inbound/messages/route.js
@@ -126,6 +129,7 @@ app/api/products/buy/route.js
 app/api/products/route.js
 app/api/products/update/route.js
 app/api/promos/route.js
+app/api/public/rate/route.js
 app/api/quote/route.js
 app/api/quotes/floor/route.js
 app/api/quotes/milestone/route.js
@@ -222,6 +226,7 @@ app/components/Collapsible.js
 app/components/CommandPalette.js
 app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
+app/components/CustomerLinks.js
 app/components/DayStart.js
 app/components/DealScreen.js
 app/components/DealSourcing.js
@@ -230,6 +235,8 @@ app/components/DraftModal.js
 app/components/ErrorBoundary.js
 app/components/ExtensionCleaner.js
 app/components/FindLeads.js
+app/components/GoLive.js
+app/components/HelpCentre.js
 app/components/IntakeUrls.js
 app/components/LegalPage.js
 app/components/LiveVoice.js
@@ -272,6 +279,7 @@ app/dashboard/layout.js
 app/dashboard/page.js
 app/enquire/page.js
 app/events/[token]/page.js
+app/help/[uid]/page.js
 app/hooks/useAuth.js
 app/inbox/page.js
 app/integrations/page.js
@@ -288,11 +296,14 @@ app/payroll/page.js
 app/privacy/page.js
 app/products/page.js
 app/quotes/page.js
+app/rate/[uid]/[ticketId]/page.js
 app/robots.js
+app/room/[uid]/[dealId]/page.js
 app/site/page.js
 app/sitemap.js
 app/sops/page.js
 app/stock/page.js
+app/support/[uid]/[ticketId]/page.js
 app/terms/page.js
 app/unsubscribe/page.js
 components/ErrorBoundary.js
@@ -372,6 +383,7 @@ lib/credit-notes.js
 lib/credit-risk.js
 lib/cross-sell.js
 lib/currency.js
+lib/customer-links.js
 lib/customers.js
 lib/dashboard-config.js
 lib/dashboard-utils.js
@@ -411,12 +423,14 @@ lib/funnel.js
 lib/ga4.js
 lib/gift-cards.js
 lib/gmail-text.js
+lib/go-live.js
 lib/google-customer-match.js
 lib/google-leads.js
 lib/google-purchases.js
 lib/google-setup.js
 lib/graceful-degradation.js
 lib/health.js
+lib/help-center.js
 lib/httpClient.js
 lib/inbound.js
 lib/independence.js

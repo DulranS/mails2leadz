@@ -13,6 +13,9 @@ import WaitingList from "./WaitingList.js";
 import PersonData from "./PersonData.js";
 import AutomationControl from "./AutomationControl.js";
 import BattleCard from "./BattleCard.js";
+import HelpCentre from "./HelpCentre.js";
+import CustomerLinks from "./CustomerLinks.js";
+import GoLive from "./GoLive.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -292,6 +295,18 @@ export default function SalesTools() {
 
       <Collapsible title="Battle card" hint="Before a call: why they are here, points tied to your catalogue, two objections with scripts, and one tip. Nothing is sent.">
         <BattleCard />
+      </Collapsible>
+
+      <Collapsible title="Go-live checklist" hint="What is ready, and the one step left for anything that is not.">
+        <GoLive />
+      </Collapsible>
+
+      <Collapsible title="Customer links" hint="Ticket status and rating links for customers, and a deal room for the steps of a deal. Read only for the customer.">
+        <CustomerLinks />
+      </Collapsible>
+
+      <Collapsible title="Help centre" hint="A public page of your answer library. Off until you publish it.">
+        <HelpCentre />
       </Collapsible>
 
       <Collapsible title="Birthdays" hint="Email | MM-DD. You are reminded on the day, for people who agreed to hear from you.">

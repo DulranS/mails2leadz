@@ -1,3 +1,30 @@
+## Pass 277 - go-live checklist
+
+- Go-live checklist on the sales tools screen: ready, optional, or needs one step, from presence only.
+- Email records are a manual tick.
+- Tests run here: the go-live tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- The checklist reports setup; it does not run live tests.
+
+## Pass 276 - CSAT, ticket status, deal room, deflection
+
+- Ticket status page and CSAT rating page, each with a private key; ratings saved after resolution.
+- Read-only deal room with the steps of a deal.
+- Measures: customer rating and deflection rate.
+- Customer links panel on the sales tools screen (copy and send yourself).
+- Tests run here: the customer-link tests (5 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Links are copied and sent by you; nothing is sent automatically.
+- Tickets from before this pass have no status or rating link.
+
+## Pass 275 - research check; public help centre
+
+- Public help centre from the answer library, off until published.
+- Research check: four gaps remain (CSAT survey, ticket-status page, shared deal room, deflection rate); listed in GAP_STATUS.
+- Tests run here: the help-centre tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
 ## Pass 274 - landing page and business pipeline up to date
 
 - Landing page steps and features rewritten to the current app.
