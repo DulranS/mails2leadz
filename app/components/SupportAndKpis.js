@@ -42,6 +42,8 @@ export default function SupportAndKpis() {
   const [credit, setCredit] = useState([]);
   const [trust, setTrust] = useState(null);
   const [dso, setDso] = useState(null);
+  const [funnel, setFunnel] = useState(null);
+  const [web, setWeb] = useState(null);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -61,6 +63,8 @@ export default function SupportAndKpis() {
       if (j.creditRisk) setCredit(j.creditRisk);
       if (j.trust) setTrust(j.trust);
       if (j.dso !== undefined) setDso(j.dso);
+      if (j.funnel) setFunnel(j.funnel);
+      if (j.web) setWeb(j.web);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -121,6 +125,20 @@ export default function SupportAndKpis() {
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : null}
+          {web && web.seo && web.seo.ok && web.seo.ctr !== null ? (
+            <p className={note}>Search click-through rate, last {web.seo.days} days: {web.seo.ctr}% ({web.seo.clicks} clicks from {web.seo.impressions} impressions).</p>
+          ) : null}
+          {web && web.ga4 ? (web.ga4.ok ? (
+            <p className={note}>Website, last {web.ga4.days} days: {web.ga4.sessions} sessions, {web.ga4.users} visitors, bounce rate {web.ga4.bouncePct === null ? "n/a" : `${web.ga4.bouncePct}%`}.</p>
+          ) : (
+            <p className={note}>Website traffic is not shown yet: {web.ga4.reason}.</p>
+          )) : null}
+          {funnel ? (
+            <div className="px-2">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Acquisition, last 12 months</p>
+              <p className={note}>Cost per lead: {funnel.costPerLead ?? "not enough spend entered"} · Lead to won: {funnel.leadToWon !== null ? `${Math.round(funnel.leadToWon * 100)}%` : "n/a"} · Cost per new customer: {funnel.costPerNewCustomer ?? "n/a"} · Lifetime value to cost: {funnel.ltvToCac ?? "n/a"}x (aim for 3x) · Churn: {funnel.churnRate !== null ? `${Math.round(funnel.churnRate * 100)}%` : "n/a"}</p>
             </div>
           ) : null}
           {dso !== null ? <p className={note}>Customers take about {dso} days to pay (days sales outstanding, last 12 months).</p> : null}

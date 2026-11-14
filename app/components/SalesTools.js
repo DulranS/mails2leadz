@@ -51,6 +51,10 @@ export default function SalesTools() {
   const [enrolAgreed, setEnrolAgreed] = useState(false);
   const [journeyMsg, setJourneyMsg] = useState("");
   const [offersText, setOffersText] = useState("");
+  const [birthdaysText, setBirthdaysText] = useState("");
+  const [routineOwner, setRoutineOwner] = useState("");
+  const [routineMsg, setRoutineMsg] = useState("");
+  const [birthdaysMsg, setBirthdaysMsg] = useState("");
   const [catalogText, setCatalogText] = useState("");
   const [catalogMsg, setCatalogMsg] = useState("");
   const [offersMsg, setOffersMsg] = useState("");
@@ -63,7 +67,7 @@ export default function SalesTools() {
   const [evMsg, setEvMsg] = useState("");
   const [events, setEvents] = useState([]);
   const loadEvents = (fresh = true) => cachedJson("/api/events", { fresh }).then((j) => setEvents(j.events || [])).catch(() => {});
-  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setOffersText(j.offersText || ""); setCatalogText(j.catalogText || ""); setProofText(j.proofText || ""); }).catch(() => {});
+  const loadManage = (fresh = true) => cachedJson("/api/sales-tools/manage", { fresh }).then((j) => { setManage(j); setOkrText(j.okrText || ""); setAbmText(j.abmText || ""); setYourPrice(j.yourPrice || ""); setStandardText(j.standard || ""); setStandardsByChannel(j.standards || {}); setOffersText(j.offersText || ""); setBirthdaysText(j.birthdaysText || ""); setRoutineOwner(j.routineMessagesFrom || ""); setCatalogText(j.catalogText || ""); setProofText(j.proofText || ""); }).catch(() => {});
   const saveAction = (body) => fetch("/api/sales-tools/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ error: "Could not reach the server." }));
   const [outline, setOutline] = useState("");
   const [priceHint, setPriceHint] = useState({});
@@ -273,6 +277,21 @@ export default function SalesTools() {
 
       <Collapsible title="Waiting list" hint="People who asked to hear when a sold-out item or a full event opens up">
         <WaitingList />
+      </Collapsible>
+
+      <Collapsible title="Routine messages" hint="Booking confirmations, booking reminders and review requests. Balancr sends them when it is connected, so customers get each message once.">
+        <label htmlFor="routine-owner" className="block text-xs font-medium mb-1">Who sends them</label>
+        <select id="routine-owner" className={field} value={routineOwner} onChange={async (e) => { setRoutineOwner(e.target.value); const r = await saveAction({ action: "save_routine_owner", choice: e.target.value }); setRoutineMsg(r.ok ? "Saved." : "Could not save."); }}>
+          <option value="">Automatic (Balancr when connected, otherwise AutoLeads)</option>
+          <option value="autoleads">AutoLeads always</option>
+          <option value="balancr">Balancr always</option>
+        </select>
+        {routineMsg ? <p role="status" className={`mt-2 ${note}`}>{routineMsg}</p> : null}
+      </Collapsible>
+
+      <Collapsible title="Birthdays" hint="Email | MM-DD. You are reminded on the day, for people who agreed to hear from you.">
+        <textarea id="birthdays-text" className={field} rows={4} value={birthdaysText} onChange={(e) => setBirthdaysText(e.target.value)} placeholder={"ann@example.com | 11-14"} />
+        <div className="mt-3"><button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_birthdays", text: birthdaysText }); setBirthdaysMsg(r.ok ? `Saved ${r.saved}.` : "Could not save."); loadManage(); }}>Save birthdays</button>{birthdaysMsg ? <span className={`ml-3 ${note}`} role="status">{birthdaysMsg}</span> : null}</div>
       </Collapsible>
 
       <Collapsible title="Offers" hint="Each offer needs a real end date and a stated guarantee. Ending offers are shown on your Do now list.">

@@ -1,3 +1,51 @@
+## Pass 272 - routine-message choice in the app
+
+- Sales tools: choose who sends booking confirmations, reminders and review requests (automatic, AutoLeads, or Balancr).
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Traffic and bounce rate need the Google reconnect and GA4 property ID.
+- Not run against live services.
+
+## Pass 271 - aligned with Balancr v269
+
+- Balancr v269 contract checked: lead, invoice and webhook routes unchanged; AutoLeads sync compatible.
+- When Balancr is connected, AutoLeads stops sending booking confirmations, booking reminders and review requests (Balancr sends them).
+- Tests run here: the routine-message tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Routine-message choice is automatic; no in-app switch yet.
+- Not run against live Balancr.
+
+## Pass 270 - click-through rate, website traffic, bounce rate
+
+- Search Console click-through rate (28 days) refreshed on app open and shown on measures.
+- GA4 sessions, visitors and bounce rate (28 days) shown on measures; needs the analytics permission and the GA4 property ID.
+- Tests run here: the web-totals tests (2 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Traffic needs a reconnect (analytics permission) and the GA4 property ID.
+- Not run against live Google services.
+
+## Pass 269 - open items on the free plan
+
+- Missed-call webhook (Twilio signature checked) to lead inbox.
+- Do now counts: missed calls, no-shows to rebook, birthdays today, sales red flags.
+- Birthdays entered on the sales tools screen.
+- Tests run here: the open-item tests, the birthday tests, the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Traffic, bounce rate and click-through rate still need the Google access described in GAP_STATUS.
+
+## Pass 268 - reply check on open; acquisition figures
+
+- Reply check runs for the owner on app open (no schedule, no server secret).
+- Acquisition figures on the measures screen: cost per lead, lead to won, cost per new customer, lifetime value to cost, churn.
+- Tests run here: the full npm test chain (exit 0) and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Five automations and analytics still open (see GAP_STATUS).
+
 ## Pass 267 - copy checks from the persuasion notes
 
 - Message checker flags pressure, fear, unprovable promises, messages that never speak to the reader, and overlong messages.

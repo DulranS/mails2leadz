@@ -1396,3 +1396,78 @@ Still open from earlier passes: reply checking on app open (needs a decision), t
 
 Not run against live services. Platform-gated items unchanged.
 
+## Pass 268: open items, on the free plan (ported onto v266 state)
+
+Closed:
+- Reply checking now runs when the owner opens the app, for that owner, using the same logic as the Check replies button. No schedule and no server secret are needed. Replies arrive on the owner's next open.
+- Acquisition figures are on the measures screen, last 12 months: cost per lead, lead to won, cost per new customer, lifetime value to cost (aim for 3x), and churn. Figures show as n/a when the records are not there; nothing is guessed.
+
+Still open, stated plainly:
+- Bad-review alerts: need Balancr's review data in a shape AutoLeads has not yet read.
+- Birthday messages: need a birthday field on customers.
+- No-show rebooking: needs the booking module's no-show status wired to a rebook draft.
+- Missed-call text-back: needs a Twilio missed-call webhook.
+- Traffic, click-through and bounce rate: need Google Analytics reporting access (reconnect Google with that permission).
+- Construction-style cost and time tracking: not built as a module.
+- Investing material (stocks versus cash over time, asset classes, returns): outside AutoLeads, not built.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 269: open items closed on the free plan (no schedules)
+
+Closed:
+- Missed calls: a Twilio status webhook turns a missed or busy call into a new lead to return. It accepts only requests signed with your Twilio auth token. Nothing is sent automatically; the lead stays on the Do now list until you reply (its status then changes in the inbox).
+- No-show rebooking: no-shows from the last seven days appear on the Do now list until rebooked.
+- Birthdays: entered on the sales tools screen; reminded on the day, only for people who agreed to marketing.
+- Sales red flags, on the Do now list: won value falling more than 20% against the previous 90 days; more than a quarter of billed money over 30 days unpaid.
+- Bad-review alerts: Balancr already files the owner's low-review alert when a review is posted to it, so AutoLeads does not duplicate it.
+
+Still open, stated plainly:
+- Traffic, bounce rate: need Google Analytics reporting access (reconnect Google with the analytics read permission and set your GA4 property ID).
+- Click-through rate: needs a totals query on Search Console, using the same token the weekly search job uses, run on app open.
+- Construction-style cost and time tracking: not built. Time and cost per job belong in Balancr.
+- Investing and finance material: outside AutoLeads.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 270: click-through rate, website traffic and bounce rate (free plan)
+
+Wired:
+- Click-through rate: last 28 days from Search Console (clicks over impressions), using the same Search Console connection the weekly search job uses. Refreshed on app open; shown on the measures screen.
+- Website traffic and bounce rate: last 28 days from Google Analytics (sessions, visitors, bounce rate). Needs the analytics read permission on the Google connection (now requested) and your GA4 property ID (an owner key on Integrations). Until both are in place, the measures screen says what is missing.
+- The original GA4 conversion helper (lib/server/ga4.js) is unchanged; the traffic reader is in lib/server/ga4-report.js.
+
+Action needed:
+- If Google was connected before this build, reconnect it once so the analytics permission is granted, then enter the GA4 property ID.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 271: aligned with Balancr v269 (checked against v269)
+
+Balancr v269 check:
+- The lead create, lead stage update, lead pull, invoice status and stage webhook routes are identical to v266. AutoLeads' sync is compatible with v269 without change.
+- v269 adds ratios, red flags, customer messages, and key-entry connections (e-signature, review replies, market prices, distance routing). AutoLeads does not depend on any of them.
+
+Overlap fixed:
+- Balancr now sends six routine customer messages from its own records: booking confirmation, booking reminder, quote follow-up, thank-you, welcome, and review request. When Balancr is connected, AutoLeads no longer sends booking confirmations, booking reminders or review requests, so customers are not messaged twice. AutoLeads keeps receipts, owner digests, and its sales follow-ups.
+- If the Balancr check fails for any reason, AutoLeads keeps sending.
+
+Decision for you: the choice is automatic (Balancr when connected). An explicit switch in the app is not yet on screen; say so if you want it.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 272: the routine-message choice is in the app
+
+- Sales tools now has a "Routine messages" choice: automatic (Balancr when connected, otherwise AutoLeads), AutoLeads always, or Balancr always. Booking confirmations, booking reminders and review requests follow it.
+
+Remaining, and who closes each:
+- Traffic and bounce rate: reconnect Google once (analytics permission), then enter your GA4 property ID.
+- Click-through rate: works from your existing Search Console connection on the next app open.
+- Balancr: run one deal end to end (send, stage change back, invoice paid) on your live accounts.
+- Platform approvals (you apply, or they are not built): Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond your own admins.
+- Twilio: needs two values from your account (no approval flow).
+- Decided, not built: pop-ups, a native form builder, a public sign-up for sold-out items, SMS broadcasts without phone-level consent records, WhatsApp marketing.
+- Outside AutoLeads: construction-style cost and time tracking (Balancr), finance and investing material.
+
+Not run against live services. Platform-gated items unchanged.
+
