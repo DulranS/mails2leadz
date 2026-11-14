@@ -1527,3 +1527,31 @@ Still needing a live test by you: the Google reconnect and GA4 property ID (for 
 
 Not run against live services. Platform-gated items unchanged.
 
+## Pass 278: upsells from the catalogue, stock and offers
+
+Before this pass, cross-sell used only the old storefront product list, and the post-sale check-in gave general advice. Neither read the catalogue, stock or offers.
+
+Now:
+- Options per customer come from what they bought (sale items on their paid or sent invoices) and what you can supply now. Out-of-stock and ended items are never offered; what they already bought is not offered again.
+- Order: a bundle or offer that names what they bought comes first; then packages; then services; then products. Each option says why it fits. Combos come from bundles you define in the catalogue.
+- Sales tools: "Upsell ideas" panel by customer email. Nothing is sent; you use the option in your own message.
+- Do now: customers who paid in the last sixty days and have an option now.
+
+Not built: an automatic upsell message. A journey step would need the same consent and approval rules as other outreach.
+
+Not run against live services. Platform-gated items unchanged.
+
+## Pass 279: final review against the whole sales, marketing, deal and support scope
+
+Checked and already covered: full CSV export of records, sales cycle length, win rate, recurring revenue, data backup, audit log, deal rotting, lead scoring and routing, forecasting, funnel, battle cards, pricing with walk-away minimum, proposals and e-signature, journeys, consented broadcasts, support queue and SLA, help centre, ticket status, ratings, deal room, upsells, go-live checklist.
+
+Missing and now built:
+- Payback period: months to earn back what it cost to win a customer, from your gross margin (enter it on the sales tools screen; without it, the measure says so).
+- Pipeline coverage: open pipeline over what is still needed to reach target.
+- Net revenue retention: what customers who paid a year earlier paid in the last year, as a percentage.
+- Discount approval: a discount above your set limit is flagged on the pricing check.
+
+Still outside AutoLeads by decision or platform rule: platform approvals (Google Business Profile, LinkedIn lead forms and Connect, Meta Lead Ads beyond your admins), Twilio's two values, pop-ups, a native form builder, a public sign-up for sold-out items, SMS without phone consent, WhatsApp marketing, construction cost and time tracking (Balancr), and finance or investing material.
+
+Not run against live services. Platform-gated items unchanged.
+

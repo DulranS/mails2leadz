@@ -45,6 +45,7 @@ export default function SupportAndKpis() {
   const [funnel, setFunnel] = useState(null);
   const [web, setWeb] = useState(null);
   const [supportFigures, setSupportFigures] = useState(null);
+  const [revenue, setRevenue] = useState(null);
   const [sup, setSup] = useState({ tickets: [], kpis: null, smart: null, members: [] });
   const [profile, setProfile] = useState({ businessModel: "b2c", idealCustomer: "", marketingSpendMonthly: "" });
   const [profileMsg, setProfileMsg] = useState("");
@@ -67,6 +68,7 @@ export default function SupportAndKpis() {
       if (j.funnel) setFunnel(j.funnel);
       if (j.web) setWeb(j.web);
       if (j.support) setSupportFigures(j.support);
+      if (j.revenue) setRevenue(j.revenue);
       if (j.money) {
         setMoney(j.money);
         setProfile((p) => ({ ...p, businessModel: j.money.businessModel || "b2c", idealCustomer: j.money.idealCustomer || "" }));
@@ -128,6 +130,9 @@ export default function SupportAndKpis() {
                 ))}
               </ul>
             </div>
+          ) : null}
+          {revenue ? (
+            <p className={note}>Payback: {revenue.paybackMonths !== null ? `${revenue.paybackMonths} months` : (revenue.needsGrossMargin ? "enter your gross margin on the sales tools screen" : "n/a")} · Pipeline coverage: {revenue.pipelineCoverage !== null ? `${revenue.pipelineCoverage}x` : "n/a (set a target)"} · Net revenue retention: {revenue.netRevenueRetention !== null ? `${revenue.netRevenueRetention}%` : "n/a"}</p>
           ) : null}
           {supportFigures ? (
             <p className={note}>Customer rating: {supportFigures.csat.avg ?? "n/a"} out of 5 from {supportFigures.csat.responses} response{supportFigures.csat.responses === 1 ? "" : "s"}. Answered automatically: {supportFigures.deflectionPct ?? "n/a"}% of questions in the last 30 days.</p>

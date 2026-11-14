@@ -16,6 +16,7 @@ import { slaStatus } from '../../../lib/support-routing.js';
 import { daysSalesOutstanding } from '../../../lib/payment-metrics.js';
 import { funnelRates } from '../../../lib/funnel.js';
 import { csatSummary, deflectionRate } from '../../../lib/customer-links.js';
+import { paybackMonths, pipelineCoverage, netRevenueRetention } from '../../../lib/revenue-kpis.js';
 
 export async function GET(request) {
   const who = identify(request);
@@ -55,6 +56,18 @@ export async function GET(request) {
   const churned = atStart.filter(([e]) => now - (lastInvoice.get(e) || wonEmails.get(e) || 0) > HALF).length;
   const paidTotal = invoiceRows.filter((i) => i.status === 'paid').reduce((a, i) => a + (Number(i.amountPaid || i.total || i.amount) || 0), 0);
   const payers = new Set(invoiceRows.filter((i) => i.status === 'paid').map((i) => String(i.email || '').toLowerCase()).filter(Boolean)).size;
+  const openPipeline = deals.filter((d) => !['closed_won', 'closed_lost'].includes(d.stage)).reduce((a, d) => a + (Number(d.value) || 0), 0);
+  const remaining = forecast && forecast.target ? Math.max(0, Number(forecast.target) - Number(forecast.wonThisQuarter || 0)) : null;
+  const paidAll = invoiceRows.filter((i) => i.status === 'paid' && i.email);
+  const paidLast12 = paidAll.filter((i) => inYear(i.paidAt)).reduce((a, i) => a + (Number(i.amountPaid || i.total || i.amount) || 0), 0);
+  const payers12 = new Set(paidAll.filter((i) => inYear(i.paidAt)).map((i) => String(i.email).toLowerCase())).size;
+  const savedBiz = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).then((s) => s.data() || {}).catch(() => ({})));
+  const revenueFigures = {
+    paybackMonths: paybackMonths(funnel.costPerNewCustomer, payers12 ? paidLast12 / payers12 / 12 : null, savedBiz.grossMarginPct),
+    pipelineCoverage: pipelineCoverage(openPipeline, remaining),
+    netRevenueRetention: netRevenueRetention(invoiceRows, now),
+    needsGrossMargin: !(Number(savedBiz.grossMarginPct) > 0),
+  };
   const supportFigures = { csat: csatSummary(ticketRows, now), deflectionPct: deflectionRate(ticketRows, now) };
   const webSaved = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).then((s) => s.data()?.webTotals || {}).catch(() => ({})));
   const funnel = funnelRates({ spend: spend12 || null, leads: leads12, qualified: qualified12, won: won12, newCustomers: won12, customersAtStart: atStart.length, customersLost: churned, ltv: payers ? paidTotal / payers : null });
@@ -62,7 +75,7 @@ export async function GET(request) {
   const answered = ticketRows.length ? Math.round((ticketRows.filter((t) => slaStatus(t, now) !== 'breached').length / ticketRows.length) * 100) : null;
   const trust = trustScore({ supportTargetMetPct: answered, openComplaints: ticketRows.filter((t) => t.status !== 'resolved' && t.kind === 'complaint').length, creditRiskCount: credit.length });
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));
-  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, web: webSaved, support: supportFigures }, { headers: NO_STORE });
+  return NextResponse.json({ kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: support.kpis, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, web: webSaved, support: supportFigures, revenue: revenueFigures }, { headers: NO_STORE });
 }
 
 export async function POST(request) {

@@ -179,6 +179,7 @@ app/api/track/click/route.js
 app/api/track/open/route.js
 app/api/twilio/missed-call/[uid]/route.js
 app/api/unsubscribe/route.js
+app/api/upsell/route.js
 app/api/voice-agent/call/route.js
 app/api/voice-agent/setup/route.js
 app/api/voice-agent/webhook/route.js
@@ -257,6 +258,7 @@ app/components/StorefrontOrders.js
 app/components/SupportAndKpis.js
 app/components/TeamAccess.js
 app/components/TodayActions.js
+app/components/Upsell.js
 app/components/VisitorVoice.js
 app/components/WaitingList.js
 app/components/WorkerQueue.js
@@ -527,6 +529,7 @@ lib/reply-sync.js
 lib/request-deduplication.js
 lib/retry-queue.js
 lib/returns.js
+lib/revenue-kpis.js
 lib/review-asks.js
 lib/risk.js
 lib/roi-loop.js
@@ -677,6 +680,7 @@ lib/server/token-vault.js
 lib/server/twilio-account.js
 lib/server/tx.js
 lib/server/unsubscribe.js
+lib/server/upsell.js
 lib/server/voice-agent-service.js
 lib/server/voice-agent.js
 lib/server/webhooks.js
@@ -726,6 +730,7 @@ lib/trust.js
 lib/twilio-signature.js
 lib/typeform-connect.js
 lib/ugc.js
+lib/upsell.js
 lib/utm.js
 lib/validation.js
 lib/visitor-voice.js

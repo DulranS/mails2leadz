@@ -1,3 +1,21 @@
+## Pass 279 - final review; payback, coverage, retention, discount approval
+
+- Payback period, pipeline coverage, net revenue retention on the measures screen.
+- Discount approval flag on the pricing check.
+- Tests run here: the revenue-KPI tests (4 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- Payback needs your gross margin entered on the sales tools screen.
+
+## Pass 278 - upsells from the catalogue
+
+- Upsell options per customer from purchases, catalogue, stock and offers; combos via bundles.
+- Upsell panel on the sales tools screen; Do now count of customers ready.
+- Tests run here: the upsell tests (3 checks), the full npm test chain (exit 0), and a production Next.js build (exit 0). The code audit found no undefined names or correctness issues.
+
+Limits, plainly:
+- No automatic upsell message; owner sends.
+
 ## Pass 277 - go-live checklist
 
 - Go-live checklist on the sales tools screen: ready, optional, or needs one step, from presence only.

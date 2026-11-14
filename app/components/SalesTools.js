@@ -16,6 +16,8 @@ import BattleCard from "./BattleCard.js";
 import HelpCentre from "./HelpCentre.js";
 import CustomerLinks from "./CustomerLinks.js";
 import GoLive from "./GoLive.js";
+import Upsell from "./Upsell.js";
+import { approvalNeeded } from "../../lib/revenue-kpis.js";
 
 // Pricing check, pitch outline and agreement draft. Built only from what you enter; nothing is sent.
 const field = "w-full min-h-[40px] border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100";
@@ -92,7 +94,7 @@ export default function SalesTools() {
       }));
     }).catch(() => {});
   }, []);
-  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0", costPerUnit: "", minContributionPct: "" });
+  const [price, setPrice] = useDraft("sales:pricing", { unitPrice: "", quantity: "1", discountPct: "0", taxPct: "0", depositPct: "0", costPerUnit: "", minContributionPct: "", approvalAbove: "" });
   const [out, setOut] = useState(null);
   const [agr, setAgr] = useDraft("sales:agreement", { kind: "service", seller: "", buyer: "", date: "", value: "", scope: "" });
   const [draft, setDraft] = useState("");
@@ -119,6 +121,7 @@ export default function SalesTools() {
           <Field id="p-dep" text="Deposit now, %"><input id="p-dep" className={field} inputMode="decimal" value={price.depositPct} onChange={(e) => setPrice({ ...price, depositPct: e.target.value })} /></Field>
           <Field id="p-cost" text="Cost to deliver, per item (optional)"><input id="p-cost" className={field} inputMode="decimal" value={price.costPerUnit} onChange={(e) => setPrice({ ...price, costPerUnit: e.target.value })} /></Field>
           <Field id="p-floor" text="Walk-away minimum, % of the sale you must keep (optional)"><input id="p-floor" className={field} inputMode="decimal" value={price.minContributionPct} onChange={(e) => setPrice({ ...price, minContributionPct: e.target.value })} /></Field>
+          <Field id="p-approval" text="Discount you can give without approval, % (optional)"><input id="p-approval" className={field} inputMode="decimal" value={price.approvalAbove} onChange={(e) => setPrice({ ...price, approvalAbove: e.target.value })} /></Field>
         </div>
         <div className="mt-3"><button type="button" onClick={calc} className={primary}>Work it out</button></div>
         {out?.ok ? (
@@ -131,6 +134,7 @@ export default function SalesTools() {
             <span>Balance later</span><strong>{g(out.balance)}</strong>
             <span>Per item</span><strong>{g(out.perUnit)}</strong>
             {out.contribution !== undefined ? <><span>Contribution</span><strong>{g(out.contribution)} ({out.contributionPct}%)</strong></> : null}
+            {approvalNeeded(price.discountPct, price.approvalAbove) ? <span className="col-span-2 text-amber-700 dark:text-amber-300">This discount is above your limit of {price.approvalAbove}%. Get approval before you offer it.</span> : null}
             {out.contribution !== undefined && belowFloor(out.contributionPct, price.minContributionPct) ? <span className="col-span-2 text-red-600 dark:text-red-400">Below your walk-away minimum. Consider changing the price, or saying no to this work.</span> : null}
           </div>
         ) : out?.error ? <p className="text-sm text-red-600 mt-2">{out.error}</p> : null}
@@ -295,6 +299,10 @@ export default function SalesTools() {
 
       <Collapsible title="Battle card" hint="Before a call: why they are here, points tied to your catalogue, two objections with scripts, and one tip. Nothing is sent.">
         <BattleCard />
+      </Collapsible>
+
+      <Collapsible title="Upsell ideas" hint="What to offer a customer next, from what they bought and what you can supply now. Nothing is sent.">
+        <Upsell />
       </Collapsible>
 
       <Collapsible title="Go-live checklist" hint="What is ready, and the one step left for anything that is not.">
