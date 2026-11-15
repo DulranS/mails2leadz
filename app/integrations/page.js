@@ -264,7 +264,7 @@ export default function IntegrationsPage() {
 
         {coreItems.map(serviceCard)}
         {advancedItems.length > 0 && (
-          <details className="text-sm">
+          <details open className="text-sm">
             <summary className="cursor-pointer min-h-[44px] flex items-center font-semibold text-gray-900 dark:text-white">Advanced services ({advancedItems.length}): only if you use them</summary>
             <div className="space-y-4 mt-3">{advancedItems.map(serviceCard)}</div>
           </details>
@@ -290,7 +290,7 @@ export default function IntegrationsPage() {
           <div className="space-y-4">
             {coreKeyGroups.map(keyBlock)}
           </div>
-          <details className="mt-4 text-sm">
+          <details open className="mt-4 text-sm">
             <summary className="cursor-pointer min-h-[44px] flex items-center font-medium text-gray-900 dark:text-white">Advanced keys ({advancedKeyGroups.length} services): only if you use these</summary>
             <div className="space-y-4 mt-3">{advancedKeyGroups.map(keyBlock)}</div>
           </details>
@@ -430,7 +430,7 @@ export default function IntegrationsPage() {
       <div className="mt-4"><SignalsCard /></div>
       <div className="mt-4"><CalendarConnect /></div>
       <div className="mt-4"><IntakeUrls /></div>
-      <details className="mt-4 text-sm">
+      <details open className="mt-4 text-sm">
         <summary className="cursor-pointer min-h-[44px] flex items-center font-semibold text-gray-900 dark:text-white">Advanced: connect buttons for ads, shop, payments, Slack and more</summary>
         <div className="mt-3"><section className="mx-4 my-4"><h2 className="text-sm font-semibold mb-2">Open your tools</h2><OpenYourTools /></section>
         <ConnectButtons /></div>

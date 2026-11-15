@@ -1655,3 +1655,11 @@ Built:
 Not built, on purpose: website chat on landing pages (public AI endpoint; needs abuse and cost controls first); duplicate merge (merging deals, invoices and messages can lose data; the weekly email already lists possible duplicates).
 Test chain on this machine: 205 of 243 steps passed before this pass. The other failures are missing npm packages (firebase, stripe) that cannot be installed offline, not code failures. Run `npm test` after `npm install` on your side.
 Tests: tests/gap-close-285.test.mjs (7 checks); tests/gap-close-284.test.mjs has 2 more source checks for the pay and pipeline fixes.
+
+## Pass 286: decisions and close-out
+Confirmed by the owner: npm test passes on v285.
+Decided:
+- Consent bases kept as built (consent, contract, legitimate_interests_b2b); personal addresses need consent. Legal wording needs UK/EU review before selling there.
+- Website chat: not built. Public AI endpoint with cost and abuse risk; no traffic data showing demand. Revisit with real data.
+- Duplicate merge: not built. Weekly duplicate email covers it; automatic merge risks data loss.
+Scope status: closed for v285. Open only by decision, not by gap.
