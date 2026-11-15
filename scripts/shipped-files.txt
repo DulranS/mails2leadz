@@ -443,6 +443,7 @@ lib/insights.js
 lib/intake.js
 lib/integration-catalog.js
 lib/integrations.js
+lib/invoice-autosend.js
 lib/invoice-numbering.js
 lib/job-rules.js
 lib/journey-presets.js

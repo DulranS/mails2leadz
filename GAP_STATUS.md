@@ -1663,3 +1663,12 @@ Decided:
 - Website chat: not built. Public AI endpoint with cost and abuse risk; no traffic data showing demand. Revisit with real data.
 - Duplicate merge: not built. Weekly duplicate email covers it; automatic merge risks data loss.
 Scope status: closed for v285. Open only by decision, not by gap.
+
+## Pass 287: autopilot invoices respect a limit and the bounce rule
+Finding: the daily job emails won-deal invoices automatically when "Raise monthly invoices" is on. It did not check bounced addresses, and had no amount limit. The earlier claim that the first invoice is always sent by hand was wrong for autopilot users.
+Built:
+- Invoices are held, not emailed, when the address bounced (or the deal is Lost), or when the total is above the owner's limit (Account > "Hold invoices above", empty = no limit).
+- A held invoice stays open, gets no reminders, and shows on Today as "held for you to send". Sending it from Billing clears the hold.
+- Pure rule: lib/invoice-autosend.js. Setting: autoInvoiceMax in lib/autosend.js.
+Tests: tests/gap-close-287.test.mjs (7 checks). Related existing tests pass; the only failures are missing npm packages (stripe, firebase).
+One-flow diagram corrected to v287.
