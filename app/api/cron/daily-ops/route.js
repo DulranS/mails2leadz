@@ -9,6 +9,7 @@ import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
 import { runLifecycleEmails } from '../../../../lib/server/lifecycle.js';
+import { beginJob, endJob } from '../../../../lib/server/job-log.js';
 
 export const maxDuration = 300;
 
@@ -18,6 +19,9 @@ export async function GET(request) {
   if (!isAdminMode()) return NextResponse.json({ error: 'Needs the server database connection (service account or server login).' }, { status: 503, headers: NO_STORE });
 
   const db = getDb();
+  // Once a day: invoices and reminders must not go out twice. A retry after a finished run is skipped (see lib/server/job-log.js).
+  const run = await beginJob(db, 'daily-ops', { once: true });
+  if (run.skip) return NextResponse.json({ success: true, skipped: true, reason: run.reason }, { headers: NO_STORE });
   const deadline = Date.now() + 270000;
   const summary = { owners: 0, invoices: 0, invoiceEmails: 0, reminders: 0, reports: 0, posts: 0, notes: {} };
   for (const uid of await listAutopilotUsers(db)) {
@@ -37,5 +41,6 @@ export async function GET(request) {
   // Platform emails to the businesses that use this deployment (trial ending or ended, payment failed). SaaS mode with a mail
   // provider only; otherwise a no-op. Never lets a mail problem fail the owners' daily jobs above.
   try { summary.lifecycle = await runLifecycleEmails(db); } catch (e) { console.error('[cron daily-ops] lifecycle emails failed:', e?.message); summary.lifecycle = { error: true }; }
+  await endJob(run, { ok: !summary.notes.time, summary, error: summary.notes.time ? 'ran out of time for some owners' : '' });
   return NextResponse.json({ success: true, ...summary }, { headers: NO_STORE });
 }

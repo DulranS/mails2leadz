@@ -11,6 +11,7 @@ import { secretsFor, accountForNumber } from '../../../../lib/server/integration
 import { verifyTwilioSignature, parseInbound, isStopKeyword } from '../../../../lib/server/inbound-messages.js';
 import { getDoc, doc, updateDoc } from '../../../../lib/server-firestore.js';
 import { handleSupportMessage } from '../../../../lib/server/support-bot.js';
+import { attachCustomerMessage } from '../../../../lib/server/ticket-reopen.js';
 
 const xml = (body = '<Response/>', status = 200) => new NextResponse(body, { status, headers: { 'Content-Type': 'text/xml; charset=utf-8', ...NO_STORE } });
 
@@ -60,8 +61,10 @@ export async function POST(request) {
       if (m.email) await suppressContact(db, { uid, email: m.email, reason: 'unsubscribed', source: `${msg.channel}_stop` }).catch(() => {});
     }
   } else {
-    // a question: answered from the owner's library when on, otherwise queued for a person
-    await handleSupportMessage(db, uid, { channel: msg.channel, from: phone, to: msg.to, body: msg.body });
+    // A customer who already has a conversation with us: the message joins that ticket (reopening it if it was resolved),
+    // so one customer does not pile up tickets. Otherwise: answered from the owner's library when on, or queued for a person.
+    const joined = await attachCustomerMessage(db, uid, { phone, body: msg.body, channel: msg.channel });
+    if (!joined.matched) await handleSupportMessage(db, uid, { channel: msg.channel, from: phone, to: msg.to, body: msg.body });
   }
   return xml();
 }

@@ -339,6 +339,7 @@ lib/automation-mode.js
 lib/autosend.js
 lib/back-in-stock.js
 lib/balance.js
+lib/balancr-inbox.js
 lib/balancr.js
 lib/battle-card.js
 lib/bid-draft.js
@@ -375,6 +376,7 @@ lib/connection-status.js
 lib/consent-guard.js
 lib/consent-rules.js
 lib/contact-export.js
+lib/contact-rules.js
 lib/content.js
 lib/contracts.js
 lib/conversations.js
@@ -386,6 +388,7 @@ lib/credit-risk.js
 lib/cross-sell.js
 lib/currency.js
 lib/customer-links.js
+lib/customer-watch.js
 lib/customers.js
 lib/dashboard-config.js
 lib/dashboard-utils.js
@@ -441,6 +444,7 @@ lib/intake.js
 lib/integration-catalog.js
 lib/integrations.js
 lib/invoice-numbering.js
+lib/job-rules.js
 lib/journey-presets.js
 lib/journey-send.js
 lib/journey.js
@@ -476,6 +480,7 @@ lib/onboarding.js
 lib/open-day.js
 lib/operator-owner.js
 lib/ops-status.js
+lib/orders.js
 lib/outlook.js
 lib/owner-report.js
 lib/packages.js
@@ -616,6 +621,7 @@ lib/server/insights.js
 lib/server/intake.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
+lib/server/job-log.js
 lib/server/journey-send.js
 lib/server/journeys.js
 lib/server/landregistry.js
@@ -673,6 +679,7 @@ lib/server/team-store.js
 lib/server/template-vars.js
 lib/server/tenant-guard.js
 lib/server/tenant.js
+lib/server/ticket-reopen.js
 lib/server/tiktok-purchases.js
 lib/server/tiktok-sync.js
 lib/server/today-actions.js
@@ -720,6 +727,7 @@ lib/tally-connect.js
 lib/tax-rates.js
 lib/team.js
 lib/tenant.js
+lib/ticket-plan.js
 lib/tiktok-leads.js
 lib/tiktok-purchases.js
 lib/tiktok-sync.js

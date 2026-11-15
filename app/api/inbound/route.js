@@ -15,6 +15,7 @@ import { ownerFromKey } from '../../../lib/server/owner-key.js';
 import { getBusinessProfile, AiError } from '../../../lib/ai-client.js';
 import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, intakeToQualification, intakeFit, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
 import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
+import { contactBasisFor } from '../../../lib/consent-rules.js';
 import { stopColdFollowUps } from '../../../lib/server/inbound-stop.js';
 import { assignArrival } from '../../../lib/server/assign-arrival.js';
 import { emitWebhook } from '../../../lib/server/webhooks.js';
@@ -110,13 +111,16 @@ export async function POST(request) {
       const write = buildDealWrite({ uid, email: e.email, stage: 'new', businessName: e.company || e.name || '', source: isReferralSrc(e.src) ? 'referral' : 'inbound', sourceDetail: e.src || 'form' });
       if (e.intake) write.qualification = { ...intakeToQualification(e.intake), updatedAt: now.toISOString() }; // what they said fills budget, authority and timeline
       write.inboundAt = now.toISOString();
+      write.contactBasis = contactBasisFor({ email: e.email }).basis; // why we hold this contact: recorded when they enquire, not inferred later
       if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
       if (e.size) write.companySize = e.size; // the company size band, for routing
+      if (e.campaign) write.campaign = String(e.campaign).trim().toLowerCase().slice(0, 60); // first touch: the campaign that brought them, for ROAS
       await setDoc(dealRef, write, { merge: true });
       await assignArrival(db, uid, e.email, e.country || '', '', e.size || '').catch(() => {}); // speed to lead: an owner now, not when someone opens the Owners page
     } else {
       const patch = { lastInboundAt: now.toISOString(), lastUpdate: now.toISOString() };
       if (e.country && !existing.country) patch.country = e.country;
+      if (e.campaign && !existing.campaign) patch.campaign = String(e.campaign).trim().toLowerCase().slice(0, 60); // first touch is kept
       await setDoc(dealRef, patch, { merge: true });
     }
     // Speed to lead: the owner hears about a new enquiry straight away (Zapier, Slack, a CRM), not at the end of the day.

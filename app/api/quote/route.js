@@ -9,6 +9,7 @@ import { releaseMilestone, billedNetForQuote, issueAdjustmentInvoice } from '../
 import { quoteDisplay } from '../../../lib/currency.js';
 import { emitWebhook } from '../../../lib/server/webhooks.js';
 import { dealDocId } from '../../../lib/deal-utils.js';
+import { orderForAcceptedQuote } from '../../../lib/orders.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -99,6 +100,13 @@ export async function POST(request) {
     return failure('Something went wrong saving your answer. Please try again in a minute.', 500);
   }
   if (result.patch.status === 'accepted') {
+    // The sales order: a record of the commitment, linked to this quote and its invoices. Never fails the customer's acceptance.
+    try {
+      const order = orderForAcceptedQuote({ uid: loaded.who.uid, quote: { ...loaded.quote, ...result.patch }, now: Date.now() });
+      if (order) await setDoc(doc(loaded.db, 'users', loaded.who.uid, 'orders', order.id), order, { merge: true });
+    } catch (e) {
+      console.error('[quote] order record failed:', String(e?.message || '').slice(0, 120));
+    }
     // Move the deal to won, so the existing routine invoices it and sends the invoice (see lib/billing-automation.js).
     // The acceptance is already saved; if the deal cannot be updated, say so on the quote instead of failing the customer.
     try {

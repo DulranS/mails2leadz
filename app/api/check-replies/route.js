@@ -5,6 +5,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, query, where, getDocs, updateDoc, isAdminMode } from '../../../lib/server-firestore.js';
 import { hardBounceRecipients } from '../../../lib/server/bounces.js';
 import { suppressContact } from '../../../lib/server/suppress.js';
+import { attachCustomerMessage } from '../../../lib/server/ticket-reopen.js';
 import { google } from 'googleapis';
 import { cancelPendingFollowUps, pickEmailsToCheck, REPLY_CHECK_BATCH } from '../../../lib/reply-sync.js';
 import { triageReply } from '../../../lib/server/reply-triage.js';
@@ -244,6 +245,9 @@ export async function POST(request) {
 
             // Stop chasing: cancel pending follow-up reminders for this lead.
             await cancelPendingFollowUps(db, userId, toEmail);
+
+            // A reply from a customer with a support ticket goes onto that ticket and reopens it if it was resolved.
+            await attachCustomerMessage(db, userId, { email: toEmail, body: snippet, channel: 'email' });
 
             // Read the reply: opt-out wording is suppressed, a positive reply moves the deal forward (never sends anything).
             if (isAdminMode()) {

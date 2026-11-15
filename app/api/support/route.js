@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { collection, doc, getDoc, getDocs, query, limit, setDoc } from '../../../lib/server-firestore.js';
-import { ticketsFor, setTicket } from '../../../lib/server/support-queue.js';
+import { ticketsFor, setTicket, addInternalNote } from '../../../lib/server/support-queue.js';
 import { replyToTicket } from '../../../lib/server/support-reply.js';
 import { slaStatus, escalationFor, customerHistory, suggestedAnswer, smartSupportKpis } from '../../../lib/support-routing.js';
 import { cleanLibrary } from '../../../lib/support-bot.js';
@@ -40,6 +40,11 @@ export async function POST(request) {
   const id = String(body?.id || '');
   if (body?.reply !== undefined) {
     const r = await replyToTicket(db, who.uid, id, String(body.reply || ''));
+    return NextResponse.json(r, { status: r.ok ? 200 : 400, headers: NO_STORE });
+  }
+  if (body?.internalNote !== undefined) {
+    // Team-only note on the ticket; the customer never sees it.
+    const r = await addInternalNote(db, who.uid, id, String(body.internalNote || ''), String(body.by || ''));
     return NextResponse.json(r, { status: r.ok ? 200 : 400, headers: NO_STORE });
   }
   if (body?.assign !== undefined) {

@@ -11,7 +11,7 @@ import IntakeUrls from "../components/IntakeUrls";
 import ConnectButtons from "../components/ConnectButtons";
 import OutlookConnect from "../components/OutlookConnect";
 import SignalFeedsCard from "../components/SignalFeedsCard";
-import { CATALOG_GROUPS as KEY_GROUPS } from "../../lib/integration-catalog.js";
+import { CATALOG_GROUPS as KEY_GROUPS, CORE_GROUP_TITLES, CORE_SERVICE_IDS } from "../../lib/integration-catalog.js";
 import OpenYourTools from "../components/OpenYourTools.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
@@ -197,6 +197,40 @@ export default function IntegrationsPage() {
     );
   };
 
+  // One card per service, used both for the core list and the closed "Advanced" list.
+  const serviceCard = (i) => {
+    const [label, cls] = BADGE[i.state] || BADGE.needs_keys;
+    return (
+      <section key={i.id} className={card}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold text-gray-900 dark:text-white">{i.label}</h2>
+          <span className={`text-xs px-2 py-1 rounded-full ${cls}`}>{label}</span>
+        </div>
+        <p className="text-sm text-gray-700 dark:text-gray-200 mt-2"><span className="font-medium">Unlocks:</span> {i.unlocks}</p>
+        {i.state !== "not_built" && <p className="text-sm text-gray-700 dark:text-gray-200 mt-1"><span className="font-medium">Runs by itself:</span> {i.automatic}</p>}
+        {i.state !== "not_built" && <p className="text-sm text-gray-700 dark:text-gray-200 mt-1"><span className="font-medium">Consent and limits:</span> {i.consent}</p>}
+        {i.state === "needs_keys" && <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">Still needed: {i.missing.join("; ")}</p>}
+        {i.state === "not_built" && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{i.reason}</p>}
+        {i.state === "ready" && (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" disabled={busy} onClick={() => testConnection(i.id)} className={ghost}>Test this connection</button>
+            {checks[i.id] && <span className={`text-sm ${checks[i.id].ok ? "text-teal-700 dark:text-teal-300" : "text-red-600 dark:text-red-300"}`}>{checks[i.id].message}</span>}
+          </div>
+        )}
+      </section>
+    );
+  };
+  const coreItems = items.filter((i) => CORE_SERVICE_IDS.includes(i.id));
+  const advancedItems = items.filter((i) => !CORE_SERVICE_IDS.includes(i.id));
+  const keyBlock = (g) => (
+    <div key={g.title} className="space-y-2">
+      <p className="text-sm font-medium text-gray-900 dark:text-white">{g.title}</p>
+      {g.items.map(keyRow)}
+    </div>
+  );
+  const coreKeyGroups = KEY_GROUPS.filter((g) => CORE_GROUP_TITLES.includes(g.title));
+  const advancedKeyGroups = KEY_GROUPS.filter((g) => !CORE_GROUP_TITLES.includes(g.title));
+
   return (
     <DashboardLayout title="Integrations" subtitle="Connect a service with its keys. Keys are stored encrypted for this account and are never shown again.">
       <div className="space-y-4">
@@ -228,28 +262,13 @@ export default function IntegrationsPage() {
           </section>
         )}
 
-        {items.map((i) => {
-          const [label, cls] = BADGE[i.state] || BADGE.needs_keys;
-          return (
-            <section key={i.id} className={card}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-semibold text-gray-900 dark:text-white">{i.label}</h2>
-                <span className={`text-xs px-2 py-1 rounded-full ${cls}`}>{label}</span>
-              </div>
-              <p className="text-sm text-gray-700 dark:text-gray-200 mt-2"><span className="font-medium">Unlocks:</span> {i.unlocks}</p>
-              {i.state !== "not_built" && <p className="text-sm text-gray-700 dark:text-gray-200 mt-1"><span className="font-medium">Runs by itself:</span> {i.automatic}</p>}
-              {i.state !== "not_built" && <p className="text-sm text-gray-700 dark:text-gray-200 mt-1"><span className="font-medium">Consent and limits:</span> {i.consent}</p>}
-              {i.state === "needs_keys" && <p className="text-sm text-amber-700 dark:text-amber-300 mt-2">Still needed: {i.missing.join("; ")}</p>}
-              {i.state === "not_built" && <p className="text-sm text-gray-600 dark:text-gray-300 mt-2">{i.reason}</p>}
-              {i.state === "ready" && (
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <button type="button" disabled={busy} onClick={() => testConnection(i.id)} className={ghost}>Test this connection</button>
-                  {checks[i.id] && <span className={`text-sm ${checks[i.id].ok ? "text-teal-700 dark:text-teal-300" : "text-red-600 dark:text-red-300"}`}>{checks[i.id].message}</span>}
-                </div>
-              )}
-            </section>
-          );
-        })}
+        {coreItems.map(serviceCard)}
+        {advancedItems.length > 0 && (
+          <details className="text-sm">
+            <summary className="cursor-pointer min-h-[44px] flex items-center font-semibold text-gray-900 dark:text-white">Advanced services ({advancedItems.length}): only if you use them</summary>
+            <div className="space-y-4 mt-3">{advancedItems.map(serviceCard)}</div>
+          </details>
+        )}
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-1">Send events to other tools (Zapier, Make, a CRM)</h2>
@@ -269,13 +288,12 @@ export default function IntegrationsPage() {
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white mb-2">Keys</h2>
           <div className="space-y-4">
-            {KEY_GROUPS.map((g) => (
-              <div key={g.title} className="space-y-2">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{g.title}</p>
-                {g.items.map(keyRow)}
-              </div>
-            ))}
+            {coreKeyGroups.map(keyBlock)}
           </div>
+          <details className="mt-4 text-sm">
+            <summary className="cursor-pointer min-h-[44px] flex items-center font-medium text-gray-900 dark:text-white">Advanced keys ({advancedKeyGroups.length} services): only if you use these</summary>
+            <div className="space-y-4 mt-3">{advancedKeyGroups.map(keyBlock)}</div>
+          </details>
           {!saas && <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">Self-hosted: a key you do not set here can come from the server settings (.env), and the page says where it is set.</p>}
         </section>
 
@@ -412,8 +430,11 @@ export default function IntegrationsPage() {
       <div className="mt-4"><SignalsCard /></div>
       <div className="mt-4"><CalendarConnect /></div>
       <div className="mt-4"><IntakeUrls /></div>
-      <div className="mt-4"><section className="mx-4 my-4"><h2 className="text-sm font-semibold mb-2">Open your tools</h2><OpenYourTools /></section>
-      <ConnectButtons /></div>
+      <details className="mt-4 text-sm">
+        <summary className="cursor-pointer min-h-[44px] flex items-center font-semibold text-gray-900 dark:text-white">Advanced: connect buttons for ads, shop, payments, Slack and more</summary>
+        <div className="mt-3"><section className="mx-4 my-4"><h2 className="text-sm font-semibold mb-2">Open your tools</h2><OpenYourTools /></section>
+        <ConnectButtons /></div>
+      </details>
       <div className="mt-4"><OutlookConnect /></div>
       <div className="mt-4"><SignalFeedsCard /></div>
     </DashboardLayout>

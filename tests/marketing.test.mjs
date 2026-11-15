@@ -8,7 +8,7 @@ const oct = Date.UTC(2026, 9, 5), sep = Date.UTC(2026, 8, 5), aug = Date.UTC(202
 
 test('sanitizeSpend accepts a real entry and rejects bad ones', () => {
   assert.deepEqual(sanitizeSpend({ channel: 'paid_ads', amount: '120.456', month: '2026-10', note: ' boosted  post ' }).entry,
-    { channel: 'paid_ads', amount: 120.46, month: '2026-10', note: 'boosted post', recurring: false });
+    { channel: 'paid_ads', amount: 120.46, month: '2026-10', note: 'boosted post', campaign: '', recurring: false });
   assert.match(sanitizeSpend({ channel: 'nope', amount: 1, month: '2026-10' }).error, /channel/);
   assert.match(sanitizeSpend({ channel: 'events', amount: '', month: '2026-10' }).error, /spent/);
   assert.match(sanitizeSpend({ channel: 'events', amount: -5, month: '2026-10' }).error, /spent/);

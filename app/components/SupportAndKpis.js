@@ -43,6 +43,7 @@ export default function SupportAndKpis() {
   const [trust, setTrust] = useState(null);
   const [dso, setDso] = useState(null);
   const [funnel, setFunnel] = useState(null);
+  const [months, setMonths] = useState(12); // look-back for the acquisition figures: 3, 6 or 12 months
   const [web, setWeb] = useState(null);
   const [supportFigures, setSupportFigures] = useState(null);
   const [revenue, setRevenue] = useState(null);
@@ -57,7 +58,7 @@ export default function SupportAndKpis() {
   const [targets, setTargets] = useState({ monthlyRevenue: "", newCustomersPerMonth: "", winRatePct: "" });
 
   const load = (fresh = true) => {
-    cachedJson("/api/kpis", { fresh }).then((j) => {
+    cachedJson(`/api/kpis?months=${months}`, { fresh }).then((j) => {
       if (j.kpis) setKpi(j.kpis);
       if (j.forecast) setForecast(j.forecast);
       if (j.atRisk) setAtRisk(j.atRisk);
@@ -79,6 +80,8 @@ export default function SupportAndKpis() {
   };
   useEffect(() => {
     load(false);
+  }, [months]);
+  useEffect(() => {
     cachedJson("/api/support/library").then((j) => { if (j.library) setLibText(j.library.map((x) => `${x.q} | ${x.a}`).join("\n")); }).catch(() => {});
   }, []);
 
@@ -147,7 +150,7 @@ export default function SupportAndKpis() {
           )) : null}
           {funnel ? (
             <div className="px-2">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white">Acquisition, last 12 months</p>
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-gray-900 dark:text-white">Acquisition, last {months} months</p><label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-2">Look back<select aria-label="Look back" value={months} onChange={(e) => setMonths(Number(e.target.value))} className="min-h-[44px] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 text-sm">{[3, 6, 12].map((m) => <option key={m} value={m}>{m} months</option>)}</select></label></div>
               <p className={note}>Cost per lead: {funnel.costPerLead ?? "not enough spend entered"} · Lead to won: {funnel.leadToWon !== null ? `${Math.round(funnel.leadToWon * 100)}%` : "n/a"} · Cost per new customer: {funnel.costPerNewCustomer ?? "n/a"} · Lifetime value to cost: {funnel.ltvToCac ?? "n/a"}x (aim for 3x) · Churn: {funnel.churnRate !== null ? `${Math.round(funnel.churnRate * 100)}%` : "n/a"}</p>
             </div>
           ) : null}
@@ -317,6 +320,16 @@ export default function SupportAndKpis() {
                 </select>
                 <button type="button" className={secondary} onClick={() => call({ id: t.id, status: "in_progress" }).then(load)}>In progress</button>
                 <button type="button" className={secondary} onClick={() => call({ id: t.id, status: "resolved" }).then(load)}>Mark resolved</button>
+              </div>
+              {t.lastCustomerMessage ? <p className={note}>Latest from the customer{t.reopenCount ? ` (reopened ${t.reopenCount}x)` : ""}: {t.lastCustomerMessage}</p> : null}
+              <div className="space-y-1">
+                <p className={label}>Internal notes (never sent to the customer)</p>
+                {(t.internalNotes || []).slice(-5).map((n, i) => <p key={i} className={note}>{n.by ? `${n.by}: ` : ""}{n.text}</p>)}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <label className="sr-only" htmlFor={`note-${t.id}`}>Add an internal note</label>
+                  <input id={`note-${t.id}`} className={`${field} flex-1`} value={drafts[`note:${t.id}`] ?? ""} onChange={(e) => setDrafts({ ...drafts, [`note:${t.id}`]: e.target.value })} placeholder="Add a note for the team" />
+                  <button type="button" className={secondary} onClick={async () => { const text = String(drafts[`note:${t.id}`] || "").trim(); if (!text) return; const r = await call({ id: t.id, internalNote: text, by: sup.members.find((m) => m.id === t.assignedTo)?.name || "Owner" }); if (r.ok) { setDrafts({ ...drafts, [`note:${t.id}`]: "" }); load(); } else setMsg(r.error || "The note was not saved."); }}>Add note</button>
+                </div>
               </div>
               {canReply(t) ? (
                 <div className="space-y-2">

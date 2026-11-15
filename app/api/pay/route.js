@@ -60,6 +60,7 @@ export async function POST(request) {
 }
 
 async function payFlow(token, rawCode, method) {
+  const env = operatorEnv(); // read here: payFlow is called by GET and POST, which each have their own copy
   const who = verifyPayToken(token);
   if (!who) return page('This payment link is not valid. Please reply to the email and ask for a new one.', 400);
   const base = String(env.NEXT_PUBLIC_BASE_URL || '').trim();

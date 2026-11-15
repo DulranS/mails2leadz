@@ -1555,3 +1555,103 @@ Still outside AutoLeads by decision or platform rule: platform approvals (Google
 
 Not run against live services. Platform-gated items unchanged.
 
+
+## Pass 280: the last scope pass (sales, marketing, deals, support, follow-ups)
+
+Built in this pass (tests: tests/gap-close-280.test.mjs, 14 checks, run with the suite):
+- Marketing opt-outs no longer stop service messages. A quote the customer asked for goes out after a marketing opt-out. Bounces and Lost deals still stop everything; a Lost deal from a stop request does not stop a quote (lib/contact-rules.js, lib/server/route-helpers.js, app/api/quotes/send).
+- A customer's reply reopens their support ticket, with a fresh 2-hour target and the reopen count kept. An open ticket takes the message; automatic answers are never reopened (lib/ticket-plan.js, lib/server/ticket-reopen.js). Wired into email replies (check-replies) and WhatsApp/SMS (app/api/inbound/twilio).
+- Internal notes on support tickets, never sent to the customer (app/api/support, support queue screen).
+- ROAS: won deal value over spend, overall and inbound/outbound (lib/marketing.js, Marketing spend panel). Per campaign is not possible: deals carry a source, not a campaign.
+- Balancr leads are imported once: one inbox row per Balancr lead id, and the sync cursor moves only when every lead on the page was written (lib/balancr-inbox.js, lib/server/balancr.js).
+- Run ledger for scheduled jobs (job_runs, server-only). A daily job that finished today is not run again on a retry. balancr-sync records every run and its failures (lib/job-rules.js, lib/server/job-log.js).
+
+Verified, not changed:
+- Deal WON is set when a quote is accepted (app/api/quote). The paid-invoice path is a backstop only. Matches "won means committed".
+
+Still not built (each one is stated in code terms, not hidden):
+- Custom fields on contacts and deals.
+- Warranty, contracts and service periods.
+- Duplicate customer detection and a merge tool (dedupe is by e-mail on ingest only).
+- A separate sales-order record. Decision: the accepted quote (signed name, date) and its invoices already hold the order; a separate table would duplicate them.
+- Campaign-level attribution and ROAS per campaign.
+- A single approval centre (approvals exist per feature).
+- A website chat widget.
+- Atomic duplicate-run locking. The run ledger skips a finished daily job, but two runs starting at the same instant are not locked (needs a Firestore transaction; the server wrapper does not expose one).
+- An on-screen view of the run ledger (the data is written; no screen reads it yet).
+
+Not run against live services. Packages are not installed in this build, so the full build and test suite have not been run.
+
+## Pass 281: in-scope check (marketing, sales, deals, support, follow-ups only)
+
+Built in this pass (tests: tests/gap-close-281.test.mjs, 11 checks):
+- Follow-up gate: marketing stops for a customer with an invoice 30+ days overdue. Quotes and replies still go (lib/contact-rules.js, route-helpers.js).
+- Atomic run lock for the daily jobs: one Firestore transaction claims the run. A finished run is skipped; a run still going is skipped; a failed or crashed run (still "running" after 20 minutes) is taken over. Server-login mode falls back to a read-then-write and is not atomic (lib/server-firestore.js claimJobRun, lib/job-rules.js lockDecision, lib/server/job-log.js).
+- Win-back list: won customers with no open deal and no payment for 90 days. Listed in the weekly digest for you to write; nothing is auto-sent. Each customer is listed once per 90 days (lib/customer-watch.js, lib/server/gap-tools.js).
+- Possible duplicate customers: different e-mail addresses sharing a phone (last 9 digits) or a business name. Listed for you to check; nothing is merged (lib/customer-watch.js).
+
+Verified, already built: post-sale welcome (1 day), one-week check-in, one-month check-in, quarterly review, churn win-back for cancelled customers, review and referral asks, stall alerts per stage (STALL_DAYS), quote acceptance sets WON.
+
+Still not built, in scope:
+- Website chat on landing pages (marketing).
+- Per-campaign ROAS. Enquiries carry a campaign; deals and marketing spend do not, so the figures cannot be joined yet.
+- Sales-order record as its own table (decision still open; the accepted quote and its invoices hold the order today).
+- Custom date ranges on the KPI screen (the KPIs use fixed 12-month and 3-month windows).
+- Structured BANT qualification (only an estimated-budget score exists).
+- Automatic win-back sending. Deliberately not built: it is customer-facing, so it stays with you.
+- Merging duplicate customers. Detection only.
+- Consent evidence for WhatsApp and SMS consent records: not verified in this pass.
+
+Not run against live services. Packages are not installed in this build, so the full build and test suite have not been run.
+
+## Pass 282: campaigns, look-back, sales orders (in scope)
+
+Built (tests: tests/gap-close-282.test.mjs, 7 checks; marketing.test.mjs updated for the campaign field):
+- Campaign attribution: an enquiry's campaign is carried onto its deal as first touch (app/api/inbound/route.js). Marketing spend can carry a campaign name (lib/marketing.js sanitizeSpend, Marketing spend panel).
+- ROAS per campaign: spend and won value per campaign, with ROAS and cost per win (lib/marketing.js byCampaign; the panel's "By campaign" table).
+- Look-back of 3, 6 or 12 months on the marketing panel (computeMarketing already took a window; the panel now offers the choice).
+- Sales order record: created on quote acceptance in users/{you}/orders, linked to the quote by id and to its invoices by quoteId. Status (confirmed, invoiced, paid) is derived from the invoices when read, not stored as the truth (lib/orders.js, app/api/quote/route.js). No screen lists orders yet.
+
+Verified, partly built:
+- BANT: intake captures budget, authority and timeline. Need is never captured.
+- Consent evidence: WhatsApp consent records store the source and the time. The purpose is not recorded.
+
+Still not built, in scope:
+- Website chat on landing pages.
+- Custom date ranges on the sales and funnel KPIs (only the marketing panel has a look-back choice).
+- A screen for sales orders.
+- Capturing "need" at intake, and the purpose on consent records.
+- Automatic win-back sending (deliberately not built: customer-facing, stays with the owner).
+- Merging duplicate customers (detection only).
+- An approval centre (approvals exist per feature).
+
+Not run against live services. Packages are not installed in this build, so the full build and test suite have not been run. The spend panel's JSX has not been compiled here.
+
+## Pass 283: only what the sales flow needs on the Integrations screen
+Built (hide, never delete):
+- Core on the screen: AI writer, Gmail sending, Balancr (accounting, two-way), Calendar, the outbound webhook list.
+- Everything else sits under closed "Advanced" sections: ads and tracking keys, Shopify, eBay, Stripe, Twilio, Vapi voice, lead enrichment, Companies House, Dropbox Sign, form tools, and the connect buttons (Google Ads, Shopify, Stripe, Slack, eBay, TikTok, Meta).
+- Sidebar: Deal owners, Partners, Experiments and Contracts moved to More. Routes and labels unchanged.
+- Test: tests/gap-close-283.test.mjs (7 checks), added to the test chain.
+Not changed on purpose: server code still reads every key; a key set under Advanced keeps working.
+Judgment calls to revisit with real customers: Twilio (SMS/WhatsApp support) is Advanced, though it is the one advanced channel that touches support; Stripe is Advanced because Balancr owns paid status.
+
+## Pass 284: date range on acquisition KPIs; KPI route crash fixed
+Fixed (important): app/api/kpis/route.js read `funnel` and `ticketRows` before they were declared. That throws a ReferenceError on every call, so the KPI panel, Sales tools and the business summary all failed to load. Fetches now come first.
+Built: acquisition figures (cost per lead, lead to won, cost per new customer, LTV to CAC, churn) take a 3, 6 or 12 month look-back (default 12). The KPI panel has the selector. The response says which window it used.
+Checked, not a gap: BANT. The CRM already has a select for each of budget, decision maker, real need and timeline.
+Still open: consent purpose (why we hold a contact and may write to them). Needs your wording and legal basis before it is built.
+Tests: tests/gap-close-284.test.mjs (5 source checks; the route needs Firebase to run, so it is not exercised end to end).
+
+## Pass 285: whole-code scan, runtime fixes, approval list, contact basis
+Found by a full TypeScript scan of app/ and lib/ (745 files) for undefined names and use-before-declare, then fixed:
+- app/api/pay/route.js: the card payment page read `env` in a function that did not define it. Every customer pay link failed. Fixed (critical).
+- lib/pipeline-alerts.js: the daily digest wrote to `out` before declaring it. It crashed whenever a new lead was waiting. Fixed.
+- app/api/kpis/route.js: read `funnel` and `ticketRows` before declaring them. Fixed in pass 284.
+- scripts/shipped-files.txt was stale, so the release-files check failed. Regenerated (752 files); release-files now passes, including the import check.
+Built:
+- Approval list: follow-up drafts waiting for approval appear first on Today (count of ready drafts, link to the sender). The sender itself is unchanged.
+- Contact basis: each new enquiry records why we hold the contact (consent, contract, or legitimate interest for B2B). A personal address without consent is never marketable. Data is recorded; no screen shows it yet.
+Not built, on purpose: website chat on landing pages (public AI endpoint; needs abuse and cost controls first); duplicate merge (merging deals, invoices and messages can lose data; the weekly email already lists possible duplicates).
+Test chain on this machine: 205 of 243 steps passed before this pass. The other failures are missing npm packages (firebase, stripe) that cannot be installed offline, not code failures. Run `npm test` after `npm install` on your side.
+Tests: tests/gap-close-285.test.mjs (7 checks); tests/gap-close-284.test.mjs has 2 more source checks for the pay and pipeline fixes.

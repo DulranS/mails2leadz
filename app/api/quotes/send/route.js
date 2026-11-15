@@ -42,8 +42,9 @@ export async function POST(request) {
 
   const plan = quoteSendPlan({ quote, kind, acknowledgeMargin: body?.acknowledgeMargin === true });
   if (plan.error) return json({ error: plan.error, code: plan.code || null }, 409);
-  if (await isBlockedContact(db, uid, quote.customerEmail)) {
-    return json({ error: 'This customer has opted out, or their deal is lost. Nothing was sent.' }, 409);
+  // A quote is a service message the customer asked for: a marketing opt-out does not block it (bounces and Lost deals still do).
+  if (await isBlockedContact(db, uid, quote.customerEmail, 'transactional')) {
+    return json({ error: 'This address cannot receive mail (it bounced), or the deal is marked Lost. Nothing was sent.' }, 409);
   }
 
   const box = await openMailbox(db, uid);
