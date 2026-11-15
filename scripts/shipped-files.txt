@@ -39,6 +39,7 @@ app/api/call-webhook/route.js
 app/api/calls/click/route.js
 app/api/calls/summarise/route.js
 app/api/case-studies/route.js
+app/api/chat/route.js
 app/api/check-replies/route.js
 app/api/connect/callback/route.js
 app/api/connect/start/route.js
@@ -362,6 +363,7 @@ lib/cash-cycle.js
 lib/cashflow.js
 lib/catalog.js
 lib/channel-drafts.js
+lib/chat-rules.js
 lib/claim-risk.js
 lib/click-to-call.js
 lib/client-cache.js

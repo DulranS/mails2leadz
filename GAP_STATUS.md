@@ -1672,3 +1672,19 @@ Built:
 - Pure rule: lib/invoice-autosend.js. Setting: autoInvoiceMax in lib/autosend.js.
 Tests: tests/gap-close-287.test.mjs (7 checks). Related existing tests pass; the only failures are missing npm packages (stripe, firebase).
 One-flow diagram corrected to v287.
+
+Owner ran v287 on 2026-11-15: working. Scope closed at v287.
+
+## Pass 288: website chat (reverses the Pass 286 "not built" decision)
+Decision: the owner asked for it to close the scope gaps. Built with cost and abuse limits, not as an open AI endpoint.
+Built:
+- Visitors ask questions on the owner's site. Answers come only from the public business profile (name, offer, value, audience, optional https booking link). Internal sales notes never reach the model.
+- No invented prices, dates or guarantees. Visitor text is treated as data. Replies are plain text, three sentences at most.
+- Visitors who want a reply, or get no answer, leave name and email (phone optional). Those go through the normal enquiry route as a deal tagged src "chat".
+- Limits: 20 messages per visitor per hour (best effort per server instance), 200 answered questions per owner per day. Only the count is stored, never the text.
+- Owner gets the one-line snippet on the Integrations page, beside the lead-form addresses, using the enquiry key.
+Files: lib/chat-rules.js (pure rules), app/api/chat/route.js, public/chat.js (widget), proxy.js (/api/chat public), app/components/IntakeUrls.js (snippet).
+Fixed during the pass: the snippet first read the key from the intake URLs, which do not carry it; it now reads /api/inbound-key. A missing daily count was blocking the chat; it now counts as zero.
+Tests: tests/gap-close-288.test.mjs (12 checks), release-files (5), TypeScript scan (only the known ad-sync false positive).
+Not tested live: nothing has run against Firebase or the AI provider in this sandbox. The owner needs to paste the snippet on a test page and send one question.
+Open: UK/EU wording for consent on chat-captured contacts still needs legal review before selling there.
