@@ -332,7 +332,7 @@ export default function SalesTools() {
       </Collapsible>
 
       <Collapsible title="Journeys" hint="Steps you send, one at a time, from your list. Nothing is sent for you.">
-        <p className={note}>One step per line: "wait days | email or sms | message". Up to eight steps. A reply to a journey stops it for that person.</p>
+        <p className={note}>One step per line: "wait days | email or sms | message". Up to eight steps. A reply to a journey stops it for that person. Add "trigger: deal_won", "trigger: invoice_paid" or "trigger: ticket_resolved" to enrol people automatically when that happens. Their emails wait for you to confirm consent before anything is sent.</p>
         <div className={grid}>
           <Field id="j-name" text="Journey name"><input id="j-name" className={field} value={journeyName} onChange={(e) => setJourneyName(e.target.value)} /></Field>
           <Field id="j-enrol" text="Enrol these emails (comma or space separated)"><input id="j-enrol" className={field} value={enrolEmails} onChange={(e) => setEnrolEmails(e.target.value)} /></Field>

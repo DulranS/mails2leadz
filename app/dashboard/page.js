@@ -5603,6 +5603,7 @@ function DashboardComponent() {
           businessName: contact.business,
           userId: user.uid,
           callType,
+          email: contact.email || "",
         }),
       });
 

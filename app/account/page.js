@@ -23,7 +23,7 @@ import TeamAccess from "../components/TeamAccess";
 import MemberAccount from "../components/MemberAccount";
 import { ANGLES } from "../../lib/angles.js";
 import { sanitizeTeam, TEAM_ROLES, MAX_MEMBERS, MAX_COMMISSION_PCT } from "../../lib/team.js";
-import { autosendStatusLine, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
+import { autosendStatusLine, autosendPausedNow, lastRunLine, CONTENT_PLATFORM_IDS, AUTOSEND_DEFAULTS } from "../../lib/autosend.js";
 import { safeHttpsUrl, parseProofPoints, parsePackages, playbookStrength, sanitizeKit, parseObjections, KIT_LIMITS } from "../../lib/sales-kit.js";
 
 const field = "mt-1 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -289,6 +289,7 @@ export default function AccountPage() {
     const next = { ...ap.settings, ...patch };
     if (!next.senderName && user?.displayName) next.senderName = user.displayName;
     next.tzOffsetMin = -new Date().getTimezoneOffset(); // the send window is in the owner's own local time
+    next.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || next.timezone || ""; // the zone name, so daylight saving is right
     setAp((a) => ({ ...a, settings: next, busy: "save", msg: "" }));
     try {
       const res = await fetch("/api/autopilot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next) });
@@ -705,8 +706,8 @@ export default function AccountPage() {
             <div className="text-sm font-medium text-gray-900 dark:text-white">Emails: {autosendStatusLine(ap.settings, { canSend: gm.canSend, connected: gm.connected })}</div>
             <div className="flex flex-col sm:flex-row gap-2 mt-2">
               {!(ap.settings.autoSend && ap.settings.autoBilling && ap.settings.autoContent && ap.settings.weeklyReport && ap.settings.dailyBrief && ap.settings.autoLearn && ap.settings.enabled) && <button type="button" disabled={ap.loading || !ap.available || ap.busy === "save"} onClick={() => saveAutopilot({ enabled: true, autoSend: true, autoBilling: true, autoContent: true, weeklyReport: true, dailyBrief: true, autoLearn: true, autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Run my business on autopilot</button>}
-              {ap.settings.autoSend && !ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: true, autoSendPauseReason: "You paused it." })} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Pause sending</button>}
-              {ap.settings.autoSend && ap.settings.autoSendPaused && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: false })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Resume sending</button>}
+              {ap.settings.autoSend && !autosendPausedNow(ap.settings) && <div className="flex flex-wrap gap-2 w-full">{[[1, "Pause for 1 day"], [7, "Pause for 7 days"], [0, "Pause until I resume"]].map(([days, label]) => <button key={label} type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: true, autoSendPauseReason: days ? `You paused it for ${days} day${days === 1 ? "" : "s"}.` : "You paused it.", autoSendPausedUntil: days ? new Date(Date.now() + days * 86400000).toISOString() : "" })} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{label}</button>)}</div>}
+              {ap.settings.autoSend && autosendPausedNow(ap.settings) && <button type="button" disabled={ap.busy === "save"} onClick={() => saveAutopilot({ autoSendPaused: false, autoSendPausedUntil: "" })} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Resume sending</button>}
             </div>
             {ap.lastRun && lastRunLine(ap.lastRun.lastAutoSend, ap.lastRun.lastDailyOps) && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2">Last run: {lastRunLine(ap.lastRun.lastAutoSend, ap.lastRun.lastDailyOps)}</p>}
             {ap.settings.autoSend && !gm.canSend && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Emails can only go out automatically after you connect Gmail with automatic sending (the card above). Until then the drafts wait for you in the dashboard.</p>}

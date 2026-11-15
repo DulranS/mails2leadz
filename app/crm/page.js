@@ -11,6 +11,7 @@ import DealSourcing from "../components/DealSourcing.js";
 import SupportAndKpis from "../components/SupportAndKpis.js";
 import CaseStudyDrafts from "../components/CaseStudyDrafts.js";
 import SalesTools from "../components/SalesTools.js";
+import MembershipPanel from "../components/MembershipPanel.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
@@ -153,6 +154,7 @@ export default function CRMPage() {
       const dealValues = {};
       const dealCurrencies = {};
       const dealNotes = {};
+      const dealTags = {};
       const dealQual = {};
       const dealOwners = {};
       const dealLost = {}; // lost deals: why, and how long since the last contact (decides whether a revive draft is offered)
@@ -165,6 +167,7 @@ export default function CRMPage() {
         if (Number(deal.value) > 0 && deal.valueIsEstimate !== true) dealValues[email] = Number(deal.value);
         if (deal.chargeCurrency) dealCurrencies[email] = String(deal.chargeCurrency);
         if (Array.isArray(deal.notes)) dealNotes[email] = deal.notes;
+        if (Array.isArray(deal.tags)) dealTags[email] = deal.tags;
         if (deal.qualification) dealQual[email] = deal.qualification;
         if (deal.ownerId) dealOwners[email] = deal.ownerId;
         if (dealStages[email] === "closed_lost") dealLost[email] = { reason: deal.lostReason || "", quietDays: daysQuiet(deal, nowMs) };
@@ -202,6 +205,7 @@ export default function CRMPage() {
           .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
         return {
           ...lead,
+          tags: dealTags[lead.email] || [],
           notes,
           nextFollowUp: nextTask[lead.email] || toIso(lead.followUpAt) || toIso(contacts[lead.email]?.nextFollowUp) || null,
           lastContact: lead.lastContact || toIso(contacts[lead.email]?.lastContact),
@@ -260,6 +264,7 @@ export default function CRMPage() {
       touch: changes.touch,
     });
     if (changes.notes) write.notes = changes.notes;
+    if (Array.isArray(changes.tags)) write.tags = changes.tags;
     if (changes.chargeCurrency !== undefined) write.chargeCurrency = String(changes.chargeCurrency || "").toUpperCase().slice(0, 3);
     await setDoc(ref, write, { merge: true });
     return { write, existing };
@@ -368,6 +373,19 @@ export default function CRMPage() {
   };
 
   // Give a lead a proper name (for leads that arrived with only a phone number, or a wrong name). Saved on the deal, which wins everywhere.
+  const handleSaveTags = async (email, tags) => {
+    if (!user?.uid || !db) return false;
+    const e = norm(email);
+    try {
+      await writeDeal(e, { tags });
+      setData((prev) => ({ ...prev, leads: prev.leads.map((l) => (l.email === e ? { ...l, tags } : l)) }));
+      return true;
+    } catch {
+      addNotification("Could not save the tags. Try again.", "error");
+      return false;
+    }
+  };
+
   const handleRename = async (email, name) => {
     if (!user?.uid || !db) return false;
     const clean = pickBusinessName([String(name || "").slice(0, 120)], {});
@@ -471,6 +489,7 @@ export default function CRMPage() {
         onScheduleFollowUp={handleScheduleFollowUp}
         onAddLead={handleAddLead}
         onRename={handleRename}
+        onSaveTags={handleSaveTags}
       />
       <Collapsible title="More tools" hint="Voice, call summaries, click-to-call, tender drafts, deal sourcing and resale">
       <LiveVoice />
@@ -489,6 +508,7 @@ export default function CRMPage() {
         </Collapsible>
         <Collapsible title="Pricing, pitch and agreements" hint="Quote maths, a pitch outline from your numbers, and contract or NDA drafts">
         <SalesTools />
+        <MembershipPanel />
       </Collapsible>
       </Collapsible>
       <LostReasonModal

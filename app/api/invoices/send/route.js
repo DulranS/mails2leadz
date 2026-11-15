@@ -1,7 +1,8 @@
 // app/api/invoices/send/route.js - the owner emails an invoice from the Billing page, through their own connected Gmail.
 // The email carries the pay-by-card line when the account has card payments set up. Nothing is sent to anyone else.
 import { NextResponse } from 'next/server';
-import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { identify, getDb, actorFromRequest, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { recordAudit } from '../../../../lib/server/audit.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { getDoc, updateDoc, doc } from '../../../../lib/server-firestore.js';
 import { openMailbox } from '../../../../lib/server/autosend.js';
@@ -68,6 +69,8 @@ export async function POST(request) {
     console.error('[invoices/send] gmail failed:', String(e?.message || '').slice(0, 120));
     return json({ error: 'Gmail did not accept the message. Nothing was recorded as sent. Try again.' }, 502);
   }
+  const actorInv = actorFromRequest(request);
+  await recordAudit(db, uid, { action: 'invoice.sent', actorUid: actorInv.uid, actorEmail: actorInv.email, entityId: id, summary: 'Emailed through the connected Gmail' });
   try {
     await updateDoc(doc(db, 'invoices', id), { emailedAt: new Date().toISOString(), emailedBy: 'owner-app', emailedMessageId: sent?.id || null });
   } catch (e) {

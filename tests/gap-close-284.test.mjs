@@ -32,7 +32,7 @@ t('the window is 3, 6 or 12 months, defaulting to 12, and the answer says which'
 t('the KPI panel asks for the chosen window and offers 3, 6 and 12 months', () => {
   assert.ok(panel.includes('/api/kpis?months=${months}'));
   assert.ok(panel.includes('[3, 6, 12].map'));
-  assert.ok(panel.includes('Acquisition, last {months} months'));
+  assert.ok(panel.includes('last ${months} months')); // the heading also shows a picked range (Pass 304)
 });
 
 t('the Stripe pay page defines env inside payFlow (it used a name only GET and POST had)', () => {

@@ -17,6 +17,7 @@ const SLA_LABEL = { breached: "Past target", due_soon: "Due soon", on_track: "On
 const SLA_STYLE = { breached: "text-red-700 dark:text-red-300 font-medium", due_soon: "text-amber-700 dark:text-amber-300", on_track: "text-gray-600 dark:text-gray-300", done: "text-gray-500" };
 const MODEL_NAME = { b2b: "B2B", b2c: "B2C and D2C", rental: "rentals" };
 const call = (body) => fetch("/api/support", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json().catch(() => ({})));
+import { TICKET_CATEGORIES } from "../../lib/ticket-categories.js";
 const fmt = (v, suffix = "") => (v === null || v === undefined || v === "" ? "n/a" : `${g(v)}${suffix}`);
 
 function Stat({ name, value, hint }) {
@@ -44,6 +45,9 @@ export default function SupportAndKpis() {
   const [dso, setDso] = useState(null);
   const [funnel, setFunnel] = useState(null);
   const [months, setMonths] = useState(12); // look-back for the acquisition figures: 3, 6 or 12 months
+  const [range, setRange] = useState(null); // an exact { from, to } day range, when the owner picks one
+  const [fromDay, setFromDay] = useState('');
+  const [toDay, setToDay] = useState('');
   const [web, setWeb] = useState(null);
   const [supportFigures, setSupportFigures] = useState(null);
   const [revenue, setRevenue] = useState(null);
@@ -58,7 +62,7 @@ export default function SupportAndKpis() {
   const [targets, setTargets] = useState({ monthlyRevenue: "", newCustomersPerMonth: "", winRatePct: "" });
 
   const load = (fresh = true) => {
-    cachedJson(`/api/kpis?months=${months}`, { fresh }).then((j) => {
+    cachedJson(`/api/kpis?months=${months}${range ? `&from=${range.from}&to=${range.to}` : ''}`, { fresh }).then((j) => {
       if (j.kpis) setKpi(j.kpis);
       if (j.forecast) setForecast(j.forecast);
       if (j.atRisk) setAtRisk(j.atRisk);
@@ -80,7 +84,7 @@ export default function SupportAndKpis() {
   };
   useEffect(() => {
     load(false);
-  }, [months]);
+  }, [months, range]);
   useEffect(() => {
     cachedJson("/api/support/library").then((j) => { if (j.library) setLibText(j.library.map((x) => `${x.q} | ${x.a}`).join("\n")); }).catch(() => {});
   }, []);
@@ -150,7 +154,7 @@ export default function SupportAndKpis() {
           )) : null}
           {funnel ? (
             <div className="px-2">
-              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-gray-900 dark:text-white">Acquisition, last {months} months</p><label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-2">Look back<select aria-label="Look back" value={months} onChange={(e) => setMonths(Number(e.target.value))} className="min-h-[44px] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 text-sm">{[3, 6, 12].map((m) => <option key={m} value={m}>{m} months</option>)}</select></label></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-gray-900 dark:text-white">Acquisition, {range ? `${range.from} to ${range.to}` : `last ${months} months`}</p><label className="text-xs text-gray-600 dark:text-gray-300 inline-flex items-center gap-2">Look back<select aria-label="Look back" value={months} onChange={(e) => { setRange(null); setMonths(Number(e.target.value)); }} className="min-h-[44px] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 text-sm">{[3, 6, 12].map((m) => <option key={m} value={m}>{m} months</option>)}</select></label><span className="inline-flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300"><label className="inline-flex items-center gap-1">From<input type="date" aria-label="From date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} className="min-h-[44px] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 text-sm" /></label><label className="inline-flex items-center gap-1">To<input type="date" aria-label="To date" value={toDay} onChange={(e) => setToDay(e.target.value)} className="min-h-[44px] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 text-sm" /></label><button type="button" disabled={!fromDay || !toDay} onClick={() => setRange({ from: fromDay, to: toDay })} className="min-h-[44px] px-3 rounded-md text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Apply</button>{range ? <button type="button" onClick={() => { setRange(null); setFromDay(''); setToDay(''); }} className="min-h-[44px] px-3 rounded-md text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Use months</button> : null}</span></div>
               <p className={note}>Cost per lead: {funnel.costPerLead ?? "not enough spend entered"} · Lead to won: {funnel.leadToWon !== null ? `${Math.round(funnel.leadToWon * 100)}%` : "n/a"} · Cost per new customer: {funnel.costPerNewCustomer ?? "n/a"} · Lifetime value to cost: {funnel.ltvToCac ?? "n/a"}x (aim for 3x) · Churn: {funnel.churnRate !== null ? `${Math.round(funnel.churnRate * 100)}%` : "n/a"}</p>
             </div>
           ) : null}
@@ -270,9 +274,13 @@ export default function SupportAndKpis() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Stat name="Missed target" value={fmt(sup.smart.breachRatePct, "%")} hint="Of answered tickets" />
             <Stat name="Answered automatically" value={fmt(sup.smart.autoAnsweredPct, "%")} />
+            {sup.kpis ? <Stat name="Past resolve target" value={sup.kpis.resolveOverdue} hint={`Open tickets past their ${sup.kpis.resolveHours}-hour close target`} /> : null}
             <Stat name="Unassigned" value={sup.smart.unassigned} />
             <Stat name="Repeat customers" value={sup.smart.repeatCustomers} />
           </div>
+          {sup.kpis?.categories ? (
+            <p className={`mt-3 ${note}`}>Questions by type: {Object.entries(sup.kpis.categories).filter(([, c]) => c > 0).map(([c, k]) => `${c} ${k}`).join(" · ") || "none yet"}</p>
+          ) : null}
           {sup.smart.agents.length ? (
             <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
               {sup.smart.agents.map((a) => (
@@ -313,6 +321,10 @@ export default function SupportAndKpis() {
               </div>
               <p className="text-sm text-gray-900 dark:text-gray-100">{t.question || t.summary}</p>
               <div className="flex flex-col sm:flex-row gap-2">
+                <label className="sr-only" htmlFor={`cat-${t.id}`}>Question type</label>
+                <select id={`cat-${t.id}`} className={`${field} sm:w-40`} value={t.category || "general"} onChange={async (e) => { await call({ id: t.id, category: e.target.value }); load(); }}>
+                  {TICKET_CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+                </select>
                 <label className="sr-only" htmlFor={`assign-${t.id}`}>Assign this ticket</label>
                 <select id={`assign-${t.id}`} className={`${field} sm:w-56`} value={t.assignedTo || ""} onChange={async (e) => { const m = sup.members.find((x) => x.id === e.target.value); await call({ id: t.id, assign: e.target.value, assignedName: m?.name || "" }); load(); }}>
                   <option value="">Unassigned</option>

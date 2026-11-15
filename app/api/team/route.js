@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { identify, getDb, actorFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { recordAudit } from '../../../lib/server/audit.js';
 import { getEntitlement } from '../../../lib/server/tenant.js';
 import {acceptInvite, createInvite, leaveWorkspace, loadRoster, removeMember, revokeInvite, setMemberRole, acceptPendingInvites } from '../../../lib/server/team-store.js';
 import { sendSystemMail, mailProvider } from '../../../lib/server/system-mail.js';
@@ -72,11 +73,12 @@ export async function POST(request) {
         const sent = await sendSystemMail({ db, to: r.email, kind: 'invite', uid: ownerUid, ...mail });
         emailed = sent.sent;
       }
+      await recordAudit(db, ownerUid, { action: 'team.invited', actorUid: actor.uid, actorEmail: actor.email, summary: `Invited as ${r.role}` });
       return ok({ link, emailed, email: r.email, role: r.role, expiresAt: r.expiresAt });
     }
-    if (action === 'revoke_invite') { const r = await revokeInvite(db, ownerUid, body?.id); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
-    if (action === 'remove') { const r = await removeMember(db, ownerUid, String(body?.uid || '')); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
-    if (action === 'set_role') { const r = await setMemberRole(db, ownerUid, String(body?.uid || ''), String(body?.role || '')); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
+    if (action === 'revoke_invite') { const r = await revokeInvite(db, ownerUid, body?.id); if (r.ok) await recordAudit(db, ownerUid, { action: 'team.invite_revoked', actorUid: actor.uid, actorEmail: actor.email, entityId: String(body?.id || '') }); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
+    if (action === 'remove') { const r = await removeMember(db, ownerUid, String(body?.uid || '')); if (r.ok) await recordAudit(db, ownerUid, { action: 'team.removed', actorUid: actor.uid, actorEmail: actor.email, entityId: String(body?.uid || '') }); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
+    if (action === 'set_role') { const r = await setMemberRole(db, ownerUid, String(body?.uid || ''), String(body?.role || '')); if (r.ok) await recordAudit(db, ownerUid, { action: 'team.role_changed', actorUid: actor.uid, actorEmail: actor.email, entityId: String(body?.uid || ''), summary: `Set to ${String(body?.role || '')}` }); return r.ok ? ok({}) : fail(r.status, r.error, r.code); }
     return fail(400, 'Unknown action.', 'BAD_ACTION');
   } catch (e) {
     console.error('team error:', e);

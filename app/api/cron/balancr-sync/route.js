@@ -33,7 +33,7 @@ export async function GET(request) {
       summary.dealsChecked += rec.checked || 0;
       summary.dealsUpdated += rec.updated || 0;
       summary.dealsPushed += rec.pushed || 0;
-      const invs = (await getDocs(collection(db, 'users', uid, 'invoices'))).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const invs = (await getDocs(query(collection(db, 'invoices'), where('userId', '==', uid)))).docs.map((d) => ({ id: d.id, ...d.data() }));
       for (const inv of invs.filter((i) => i.balancrInvoiceKey && i.status !== 'paid').slice(0, 50)) {
         summary.invoicesChecked++;
         await syncInvoice(db, uid, inv.id, inv.balancrInvoiceKey);

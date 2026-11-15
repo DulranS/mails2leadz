@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { verifyUnsubToken } from '../../../lib/server/unsubscribe.js';
-import { suppressContact } from '../../../lib/server/suppress.js';
+import { suppressContact, resubscribeContact } from '../../../lib/server/suppress.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
 
@@ -23,7 +23,17 @@ export async function POST(request) {
     return NextResponse.json({ ok: false, error: 'Opt-out is temporarily unavailable. Please reply to the email and ask to be removed.' }, { status: 503, headers: NO_STORE });
   }
   try {
-    await suppressContact(getDb(), { uid: who.uid, email: who.email, reason: 'unsubscribed', source: 'unsubscribe_link' });
+    // ?action=resubscribe switches emails back on for an address that opted out with this same link.
+    if (new URL(request.url).searchParams.get('action') === 'resubscribe') {
+      const r = await resubscribeContact(getDb(), { uid: who.uid, email: who.email });
+      if (!r.ok) {
+        return NextResponse.json({ ok: false, error: 'This address bounced, so emails cannot be switched back on from this link. Please reply to the email and ask us.' }, { status: 409, headers: NO_STORE });
+      }
+      return NextResponse.json({ ok: true, changed: r.changed }, { headers: NO_STORE });
+    }
+    // ?action=stop_all stops every email from this sender, not only sales emails.
+    const stopAll = new URL(request.url).searchParams.get('action') === 'stop_all';
+    await suppressContact(getDb(), { uid: who.uid, email: who.email, reason: 'unsubscribed', source: stopAll ? 'all_mail' : 'unsubscribe_link' });
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   } catch (e) {
     console.error('[unsubscribe] failed:', e.message);

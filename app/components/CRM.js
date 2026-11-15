@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
+import TagBox from "./TagBox";
 import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
 import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
 import { NO_NAME_LABEL } from "../../lib/lead-name.js";
@@ -38,6 +39,7 @@ export const CRM = ({
   onScheduleFollowUp,
   onAddLead,
   onRename,
+  onSaveTags,
 }) => {
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState("");
@@ -426,6 +428,7 @@ export const CRM = ({
                   </p>
                 )}
               </div>
+              {onSaveTags ? <TagBox value={selectedLead.tags || []} onSave={(tags) => onSaveTags(selectedLead.email, tags)} /> : null}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Email

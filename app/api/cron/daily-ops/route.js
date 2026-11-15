@@ -10,6 +10,8 @@ import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
 import { runLifecycleEmails } from '../../../../lib/server/lifecycle.js';
 import { beginJob, endJob } from '../../../../lib/server/job-log.js';
+import { recordRun } from '../../../../lib/server/run-log.js';
+import { runRecord } from '../../../../lib/run-log-rules.js';
 
 export const maxDuration = 300;
 
@@ -32,10 +34,12 @@ export async function GET(request) {
       if (!featureAllowed(await getEntitlement(db, uid), 'autopilot')) continue; // unpaid / suspended / plan without it (SAAS_MODE only)
       summary.owners++;
       const r = await dailyOpsForUser(db, uid, { settings, deadline });
+      await recordRun(db, uid, runRecord({ ok: true, counts: r, notes: r.notes }));
       summary.invoices += r.invoices; summary.invoiceEmails += r.invoiceEmails; summary.reminders += r.reminders; summary.posts += r.posts; if (r.report) summary.reports++;
       for (const n of r.notes) summary.notes[n] = (summary.notes[n] || 0) + 1;
     } catch (e) {
       console.error('[cron daily-ops] owner failed:', uid, e?.message);
+      await recordRun(db, uid, runRecord({ ok: false, notes: ['run_error'] }));
     }
   }
   // Platform emails to the businesses that use this deployment (trial ending or ended, payment failed). SaaS mode with a mail

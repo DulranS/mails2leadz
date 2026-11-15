@@ -80,6 +80,8 @@ export async function POST(request) {
   try {
     const payload = await request.json();
     const { toPhone, businessName, callType = 'direct' } = payload;
+    const leadEmailRaw = String(payload.email || '').trim().toLowerCase();
+    const leadEmail = /^[^\s@]{1,64}@[^\s@]{1,200}\.[^\s@]{2,}$/.test(leadEmailRaw) && leadEmailRaw.length <= 254 ? leadEmailRaw : '';
     const who = identify(request, payload.userId); // the verified user, never the body
     if (who.response) return who.response;
     const userId = who.uid;
@@ -144,6 +146,7 @@ export async function POST(request) {
       toPhone: formattedPhone,
       businessName: businessName || 'Unknown',
       callType,
+      email: leadEmail || null,
       callSid: call.sid,
       status: call.status,
       createdAt: new Date().toISOString(),

@@ -15,6 +15,7 @@ app/api/ai-insights/route.js
 app/api/ai-reply-assist/route.js
 app/api/ai-smart-outreach/route.js
 app/api/ai-targets/route.js
+app/api/audit/route.js
 app/api/auth/callback/route.js
 app/api/automation-control/route.js
 app/api/autopilot/route.js
@@ -58,6 +59,7 @@ app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
 app/api/customer-links/route.js
 app/api/day/open/route.js
+app/api/deal-activity/route.js
 app/api/deal-screen/route.js
 app/api/deal-watch/route.js
 app/api/deals/assign/route.js
@@ -103,6 +105,7 @@ app/api/integrations/typeform/connect/route.js
 app/api/integrations/typeform/route.js
 app/api/invoices/cancel/route.js
 app/api/invoices/create/route.js
+app/api/invoices/migrate/route.js
 app/api/invoices/refund-card/route.js
 app/api/invoices/refund-manual/route.js
 app/api/invoices/return/route.js
@@ -118,6 +121,7 @@ app/api/listings/shopify/sync/route.js
 app/api/loyalty/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js
+app/api/membership/route.js
 app/api/notices/route.js
 app/api/open-day/route.js
 app/api/ops-status/route.js
@@ -172,8 +176,10 @@ app/api/stripe/webhook/route.js
 app/api/support/library/route.js
 app/api/support/route.js
 app/api/system-check/route.js
+app/api/tasks/route.js
 app/api/team/route.js
 app/api/tenant/route.js
+app/api/timeline/route.js
 app/api/today/route.js
 app/api/track-company/route.js
 app/api/track/click/route.js
@@ -201,6 +207,7 @@ app/api/whatsapp/send/route.js
 app/api/worker-queue/route.js
 app/app-keys/page.js
 app/assets/page.js
+app/audit/page.js
 app/bets/page.js
 app/billing/page.js
 app/book/page.js
@@ -240,10 +247,12 @@ app/components/FindLeads.js
 app/components/GoLive.js
 app/components/HelpCentre.js
 app/components/IntakeUrls.js
+app/components/LeadTags.js
 app/components/LegalPage.js
 app/components/LiveVoice.js
 app/components/MarketingSpendPanel.js
 app/components/MemberAccount.js
+app/components/MembershipPanel.js
 app/components/OpenYourTools.js
 app/components/OpsStatusCard.js
 app/components/OutlookConnect.js
@@ -257,6 +266,7 @@ app/components/SocialPosts.js
 app/components/StockAdjust.js
 app/components/StorefrontOrders.js
 app/components/SupportAndKpis.js
+app/components/TagBox.js
 app/components/TeamAccess.js
 app/components/TodayActions.js
 app/components/Upsell.js
@@ -283,6 +293,7 @@ app/dashboard/page.js
 app/enquire/page.js
 app/events/[token]/page.js
 app/help/[uid]/page.js
+app/history/page.js
 app/hooks/useAuth.js
 app/inbox/page.js
 app/integrations/page.js
@@ -307,6 +318,7 @@ app/sitemap.js
 app/sops/page.js
 app/stock/page.js
 app/support/[uid]/[ticketId]/page.js
+app/tasks/page.js
 app/terms/page.js
 app/unsubscribe/page.js
 components/ErrorBoundary.js
@@ -335,6 +347,7 @@ lib/apollo.js
 lib/app-routes.js
 lib/assignment.js
 lib/attribution.js
+lib/audit-rules.js
 lib/automation-control.js
 lib/automation-mode.js
 lib/autosend.js
@@ -356,6 +369,7 @@ lib/business-metrics.js
 lib/business-profile.js
 lib/calendar-events.js
 lib/calendar-links.js
+lib/call-backfill.js
 lib/call-summary.js
 lib/capacity.js
 lib/case-study.js
@@ -379,6 +393,7 @@ lib/consent-guard.js
 lib/consent-rules.js
 lib/contact-export.js
 lib/contact-rules.js
+lib/contact-tags.js
 lib/content.js
 lib/contracts.js
 lib/conversations.js
@@ -390,13 +405,16 @@ lib/credit-risk.js
 lib/cross-sell.js
 lib/currency.js
 lib/customer-links.js
+lib/customer-timeline.js
 lib/customer-watch.js
 lib/customers.js
 lib/dashboard-config.js
 lib/dashboard-utils.js
 lib/day-start.js
+lib/deal-activity.js
 lib/deal-client.js
 lib/deal-extras.js
+lib/deal-history.js
 lib/deal-screen.js
 lib/deal-utils.js
 lib/deal-watch.js
@@ -444,14 +462,18 @@ lib/independence.js
 lib/insights.js
 lib/intake.js
 lib/integration-catalog.js
+lib/integration-health.js
 lib/integrations.js
 lib/invoice-autosend.js
 lib/invoice-numbering.js
+lib/invoice-store-rules.js
 lib/job-rules.js
 lib/journey-presets.js
 lib/journey-send.js
+lib/journey-triggers.js
 lib/journey.js
 lib/kpi-economics.js
+lib/kpi-range.js
 lib/kpi-scorecard.js
 lib/landregistry.js
 lib/lead-finder-categories.js
@@ -469,6 +491,7 @@ lib/mailbox-verify.js
 lib/manual-stock.js
 lib/marketing.js
 lib/meeting-brief.js
+lib/membership.js
 lib/meta-capi.js
 lib/meta-leads.js
 lib/meta-purchases.js
@@ -536,12 +559,14 @@ lib/reply-notices.js
 lib/reply-sync.js
 lib/request-deduplication.js
 lib/retry-queue.js
+lib/retry-rules.js
 lib/returns.js
 lib/revenue-kpis.js
 lib/review-asks.js
 lib/risk.js
 lib/roi-loop.js
 lib/routine-owner.js
+lib/run-log-rules.js
 lib/runway.js
 lib/saas-metrics.js
 lib/sales-kit.js
@@ -562,6 +587,7 @@ lib/server/abandoned-basket-job.js
 lib/server/ad-import.js
 lib/server/ad-sync.js
 lib/server/assign-arrival.js
+lib/server/audit.js
 lib/server/auto-post.js
 lib/server/auto-targets.js
 lib/server/automation-control.js
@@ -580,6 +606,7 @@ lib/server/broadcasts.js
 lib/server/bundles.js
 lib/server/calendar-read.js
 lib/server/calendar-write.js
+lib/server/call-backfill.js
 lib/server/catalog.js
 lib/server/connect.js
 lib/server/connection-test.js
@@ -590,6 +617,7 @@ lib/server/credit-apply.js
 lib/server/credit-number.js
 lib/server/cron-auth.js
 lib/server/customer-mail.js
+lib/server/customer-timeline.js
 lib/server/daily-count.js
 lib/server/daily-ops.js
 lib/server/day-start.js
@@ -622,10 +650,13 @@ lib/server/inbox-store.js
 lib/server/ingest-key.js
 lib/server/insights.js
 lib/server/intake.js
+lib/server/integration-health.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
+lib/server/invoice-store.js
 lib/server/job-log.js
 lib/server/journey-send.js
+lib/server/journey-triggers.js
 lib/server/journeys.js
 lib/server/landregistry.js
 lib/server/lead-finder-io.js
@@ -643,6 +674,7 @@ lib/server/open-track.js
 lib/server/operator-owner.js
 lib/server/operator-settings.js
 lib/server/outlook-calendar.js
+lib/server/owner-clock.js
 lib/server/owner-key.js
 lib/server/owner-report.js
 lib/server/owner-settings.js
@@ -659,6 +691,7 @@ lib/server/reply-triage.js
 lib/server/reroute.js
 lib/server/route-helpers.js
 lib/server/routine-owner.js
+lib/server/run-log.js
 lib/server/search-console.js
 lib/server/send-ramp.js
 lib/server/sender-auth.js
@@ -678,6 +711,7 @@ lib/server/support-queue.js
 lib/server/support-reply.js
 lib/server/suppress.js
 lib/server/system-mail.js
+lib/server/tasks.js
 lib/server/team-store.js
 lib/server/template-vars.js
 lib/server/tenant-guard.js
@@ -727,14 +761,17 @@ lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js
 lib/tally-connect.js
+lib/task-rules.js
 lib/tax-rates.js
 lib/team.js
 lib/tenant.js
+lib/ticket-categories.js
 lib/ticket-plan.js
 lib/tiktok-leads.js
 lib/tiktok-purchases.js
 lib/tiktok-sync.js
 lib/time-log.js
+lib/timezone-rules.js
 lib/today-actions.js
 lib/trends.js
 lib/trust.js

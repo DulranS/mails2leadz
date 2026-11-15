@@ -3,7 +3,8 @@
 // (sentAt, the Gmail message id) rather than in the cold-outreach records, so the automatic cold follow-up sequence never
 // picks up a customer who was quoted.
 import { NextResponse } from 'next/server';
-import { identify, getDb, NO_STORE, isBlockedContact } from '../../../../lib/server/route-helpers.js';
+import { identify, getDb, actorFromRequest, NO_STORE, isBlockedContact } from '../../../../lib/server/route-helpers.js';
+import { recordAudit } from '../../../../lib/server/audit.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { doc, getDoc, updateDoc } from '../../../../lib/server-firestore.js';
 import { openMailbox } from '../../../../lib/server/autosend.js';
@@ -72,6 +73,8 @@ export async function POST(request) {
   const fields = kind === 'followup'
     ? { lastFollowUpAt: at, lastFollowUpMessageId: messageId }
     : { sentAt: at, sentVia: 'gmail', sentMessageId: messageId, sentThreadId: sent?.threadId || null };
+  const actorQ = actorFromRequest(request);
+  await recordAudit(db, uid, { action: kind === 'followup' ? 'quote.followup_sent' : 'quote.sent', actorUid: actorQ.uid, actorEmail: actorQ.email, entityId: id, summary: 'Emailed through the connected Gmail' });
   try {
     await updateDoc(doc(db, 'users', uid, 'quotes', id), fields);
     return json({ ok: true, sentAt: at, messageId });

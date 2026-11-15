@@ -3,6 +3,7 @@
 // Pick the ones you want, load them into the sender (the dashboard), review and press Send there.
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import LeadTags from "../components/LeadTags";
 import { useRouter } from "next/navigation";
 import { setDoc, doc } from "../../lib/client-firestore.js";
 import { useAuthUser } from "../components/AuthProvider";
@@ -244,6 +245,7 @@ export default function InboxPage() {
                       {l.email || "no email"}{l.whatsapp_number ? ` · ${l.whatsapp_number}` : ""}{l.first_name ? ` · contact: ${l.first_name} ${l.last_name || ""}` : ""}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{l.address}{l.rating ? ` · ${l.rating} stars (${l.review_count})` : ""}</div>
+                    <LeadTags id={l._id} tags={l.tags} />
                     {(l.decision_maker_name || (l.company_size && l.company_size !== "unknown") || l.enrich_status) && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                         {[

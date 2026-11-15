@@ -15,6 +15,7 @@ import MarketingSpendPanel from "../components/MarketingSpendPanel";
 import CohortPanel from "../components/CohortPanel";
 import OpsStatusCard from "../components/OpsStatusCard";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
+import { autosendPausedNow } from "../../lib/autosend.js";
 import { computeProfit, forecastProfit } from "../../lib/profit.js";
 import { computeCapacity } from "../../lib/capacity.js";
 import { computeWhyChosen, computeAwayCheck } from "../../lib/independence.js";
@@ -243,7 +244,7 @@ export default function BusinessValuePage() {
   const away = useMemo(() => computeAwayCheck({
     waiting: m.present?.inboundWaiting?.length || 0, unconverted: raw.unconverted?.length || 0, overdueCount: billing.overdue.count,
     stuckOnboarding: customers.stuckOnboarding, renewalsSoon: rec.renewals?.dueSoon?.count || 0, atRisk: customers.atRisk.count,
-    autopilotOn: !!(raw.autopilot && raw.autopilot.autoSend && !raw.autopilot.autoSendPaused), coverage: sopCoverage,
+    autopilotOn: !!(raw.autopilot && raw.autopilot.autoSend && !autosendPausedNow(raw.autopilot)), coverage: sopCoverage,
     people: 1 + (raw.team?.length || 0), customers: customers.total, revenue90: profit.revenue,
   }), [m, raw, billing, customers, rec, sopCoverage, profit]);
   const exps = useMemo(() => computeExperiments({ items: raw.experiments }), [raw]);

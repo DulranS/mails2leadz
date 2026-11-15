@@ -18,6 +18,8 @@ import { funnelRates } from '../../../lib/funnel.js';
 import { csatSummary, deflectionRate } from '../../../lib/customer-links.js';
 import { paybackMonths, pipelineCoverage, netRevenueRetention } from '../../../lib/revenue-kpis.js';
 
+import { customDayRange, asOfTime } from '../../../lib/kpi-range.js';
+
 export async function GET(request) {
   const who = identify(request);
   if (who.response) return who.response;
@@ -32,22 +34,25 @@ export async function GET(request) {
   ]);
   const money = await economicsFor(db, who.uid).catch(() => null);
   const now = Date.now();
-  // The window the lead, deal, spend and funnel figures cover: 3, 6 or 12 months (default 12).
+  // The window the lead, deal, spend and funnel figures cover: 3, 6 or 12 months back (default 12), or an exact from-to range.
   const asked = Number(request.nextUrl.searchParams.get('months'));
-  const months = [3, 6, 12].includes(asked) ? asked : 12;
-  const WINDOW = Math.round(months * 30.44 * 86400000);
+  const range = customDayRange(request.nextUrl.searchParams.get('from'), request.nextUrl.searchParams.get('to'), now);
+  const months = range ? range.months : ([3, 6, 12].includes(asked) ? asked : 12);
+  const end = range ? range.end : now;
+  const asOf = asOfTime(range, now);
+  const WINDOW = range ? range.end - range.start : Math.round(months * 30.44 * 86400000);
   const HALF = 180 * 86400000;
-  const forecast = quarterForecast({ deals, monthlyTarget: money?.targets?.monthlyRevenue || 0, now });
-  const atRisk = deals.map((d) => ({ name: d.businessName || d.email || 'Deal', value: d.value || 0, health: dealHealth(d, now) })).filter((d) => d.health && d.health.status === 'at_risk').sort((a, b) => b.value - a.value).slice(0, 5);
+  const forecast = quarterForecast({ deals, monthlyTarget: money?.targets?.monthlyRevenue || 0, now: asOf });
+  const atRisk = deals.map((d) => ({ name: d.businessName || d.email || 'Deal', value: d.value || 0, health: dealHealth(d, asOf) })).filter((d) => d.health && d.health.status === 'at_risk').sort((a, b) => b.value - a.value).slice(0, 5);
   const demand = demandTrend(leads, now);
   const teamDoc = (await getDoc(doc(db, 'users', who.uid, 'settings', 'team')).catch(() => null))?.data?.() || {};
   const memberList = Array.isArray(teamDoc.members) ? teamDoc.members : [];
-  const invoiceRows = (await getDocs(query(collection(db, 'users', who.uid, 'invoices'), limit(1000))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
+  const invoiceRows = (await getDocs(query(collection(db, 'invoices'), where('userId', '==', who.uid), limit(1000))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
   const credit = creditRisk(invoiceRows, now);
   const dso = daysSalesOutstanding(invoiceRows, now);
-  const inWindow = (t) => t && now - Date.parse(t) <= WINDOW;
+  const inWindow = (t) => t && Date.parse(t) <= end && end - Date.parse(t) <= WINDOW;
   const spendRows = (await getDocs(query(collection(db, 'users', who.uid, 'marketing_spend'), limit(200))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
-  const monthCut = new Date(now - WINDOW).toISOString().slice(0, 7);
+  const monthCut = new Date(end - WINDOW).toISOString().slice(0, 7);
   const spendWin = spendRows.filter((r) => String(r.month || '') >= monthCut).reduce((a, r) => a + (Number(r.amount) || 0), 0);
   const leadsWin = (await getDocs(query(collection(db, 'lead_inbox'), where('userId', '==', who.uid), limit(2000))).then((x) => x.docs.map((d) => d.data())).catch(() => [])).filter((l) => inWindow(l.receivedAt)).length;
   const qualifiedWin = deals.filter((d) => inWindow(d.stageTimes?.qualified)).length;
@@ -56,7 +61,7 @@ export async function GET(request) {
   for (const d of deals) if (d.stage === 'closed_won' && d.email) wonEmails.set(String(d.email).toLowerCase(), Math.max(wonEmails.get(String(d.email).toLowerCase()) || 0, Date.parse(d.stageTimes?.closed_won || d.closedAt || '') || 0));
   const lastInvoice = new Map();
   for (const i of invoiceRows) { const e = String(i.email || '').toLowerCase(); const t = Date.parse(i.issuedAt || i.createdAt || '') || 0; if (e && t > (lastInvoice.get(e) || 0)) lastInvoice.set(e, t); }
-  const atStart = [...wonEmails.entries()].filter(([, t]) => t && now - t > WINDOW);
+  const atStart = [...wonEmails.entries()].filter(([, t]) => t && end - t > WINDOW);
   const churned = atStart.filter(([e]) => now - (lastInvoice.get(e) || wonEmails.get(e) || 0) > HALF).length;
   const paidTotal = invoiceRows.filter((i) => i.status === 'paid').reduce((a, i) => a + (Number(i.amountPaid || i.total || i.amount) || 0), 0);
   const payers = new Set(invoiceRows.filter((i) => i.status === 'paid').map((i) => String(i.email || '').toLowerCase()).filter(Boolean)).size;

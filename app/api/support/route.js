@@ -7,6 +7,7 @@ import { ticketsFor, setTicket, addInternalNote } from '../../../lib/server/supp
 import { replyToTicket } from '../../../lib/server/support-reply.js';
 import { slaStatus, escalationFor, customerHistory, suggestedAnswer, smartSupportKpis } from '../../../lib/support-routing.js';
 import { cleanLibrary } from '../../../lib/support-bot.js';
+import { TICKET_CATEGORIES } from '../../../lib/ticket-categories.js';
 
 export async function GET(request) {
   const who = identify(request);
@@ -49,6 +50,14 @@ export async function POST(request) {
   }
   if (body?.assign !== undefined) {
     await setDoc(doc(db, 'users', who.uid, 'support_tickets', id), { assignedTo: String(body.assign || ''), assignedName: String(body.assignedName || ''), updatedAt: new Date().toISOString() }, { merge: true });
+    return NextResponse.json({ ok: true }, { headers: NO_STORE });
+  }
+  if (body?.category !== undefined) {
+    // The owner can change the category the system gave a question (spec 5.1).
+    const category = String(body.category || '');
+    if (!id) return NextResponse.json({ error: 'Pick a ticket first.' }, { status: 400, headers: NO_STORE });
+    if (!TICKET_CATEGORIES.includes(category)) return NextResponse.json({ error: 'Pick a category from the list.' }, { status: 400, headers: NO_STORE });
+    await setDoc(doc(db, 'users', who.uid, 'support_tickets', id), { category, categoryBy: 'owner', updatedAt: new Date().toISOString() }, { merge: true });
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   }
   const r = await setTicket(db, who.uid, id, String(body?.status || ''), String(body?.note || ''));

@@ -7,7 +7,7 @@ test('a reminder for a part-paid invoice quotes what is still owed, not the full
   const invoices = [{
     _id: 'inv_part_1', id: 'inv_part_1', userId: 'u1', email: 'client@example.com', businessName: 'Client Ltd',
     amount: 1000, amountPaid: 400, status: 'partial', number: 'INV-7',
-    issuedAt: '2026-09-01T00:00:00Z', dueAt: '2026-10-01T00:00:00Z',
+    issuedAt: '2026-09-01T00:00:00Z', dueAt: '2026-10-01T00:00:00Z', emailedAt: '2026-09-02T00:00:00Z',
   }];
   const out = planReminders({ invoices, now, currency: 'USD', senderName: 'Me', paymentInfo: '' });
   assert.ok(out.length >= 1, 'a reminder is planned for an overdue part-paid invoice');

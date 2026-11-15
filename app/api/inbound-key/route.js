@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { doc, getDoc, setDoc, isAdminMode } from '../../../lib/server-firestore.js';
 import { getDb, uidFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { generateIngestKey } from '../../../lib/server/ingest-key.js';
+import { recordAudit } from '../../../lib/server/audit.js';
 
 const reply = (status, body) => NextResponse.json(body, { status, headers: NO_STORE });
 const keyRef = (db, uid) => doc(db, 'users', uid, 'settings', 'inbound_key');
@@ -24,6 +25,7 @@ export async function POST(request) {
   if (!isAdminMode()) return reply(503, { error: 'Set FIREBASE_SERVICE_ACCOUNT_JSON on the server first: enquiries are stored by the server.' });
   const { key, hash, last4 } = generateIngestKey(uid);
   await setDoc(keyRef(getDb(), uid), { hash, last4, key, createdAt: new Date().toISOString(), revokedAt: null });
+  await recordAudit(getDb(), uid, { action: 'enquiry_key.rotated', summary: 'Links shared with the old key stop working' });
   return reply(200, { key, last4, note: 'Links you already shared with the old key stop working: share the new ones.' });
 }
 
@@ -31,5 +33,6 @@ export async function DELETE(request) {
   const uid = uidFromRequest(request);
   if (!uid) return reply(401, { error: 'Please sign in again.' });
   await setDoc(keyRef(getDb(), uid), { revokedAt: new Date().toISOString() }, { merge: true });
+  await recordAudit(getDb(), uid, { action: 'enquiry_key.revoked', summary: 'Enquiry forms and website chat stop taking new enquiries' });
   return reply(200, { revoked: true });
 }

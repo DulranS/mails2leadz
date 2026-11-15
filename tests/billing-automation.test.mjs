@@ -5,7 +5,7 @@ let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 const now = Date.parse('2026-10-18T06:00:00Z'); const D = 86400000;
 const ago = (d) => new Date(now - d * D).toISOString();
 const sub = (email, extra = {}) => ({ email, businessName: email.split('@')[0], stage: 'closed_won', value: 1000, recurringMonthly: 80, lastUpdate: ago(5), ...extra });
-const inv = (email, o = {}) => ({ email, amount: 80, status: 'open', issuedAt: ago(40), createdAt: ago(40), dueAt: ago(26), reminders: 0, ...o });
+const inv = (email, o = {}) => ({ email, amount: 80, status: 'open', issuedAt: ago(40), createdAt: ago(40), dueAt: ago(26), reminders: 0, emailedAt: ago(30), ...o });
 
 t('subscription invoice: raised for a subscriber invoiced 40 days ago, with month note, terms and amount', () => {
   const p = planSubscriptionInvoices({ uid: 'u1', deals: [sub('a@x.lk')], invoices: [inv('a@x.lk', { status: 'paid' })], now, termsDays: 10 });

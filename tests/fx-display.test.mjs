@@ -42,7 +42,7 @@ t('the invoice email carries the approximate sentence only when one is given', (
   assert.doesNotMatch(without.body, /indicative/);
 });
 
-const overdue = { id: 'i1', email: 'buyer@example.com', businessName: 'Buyer Co', number: 'INV-1', status: 'open', amount: 100, total: 100, amountPaid: 0, reminders: 0, lastReminderAt: null, issuedAt: new Date(Date.now() - 40 * DAY).toISOString(), dueAt: new Date(Date.now() - 30 * DAY).toISOString() };
+const overdue = { id: 'i1', email: 'buyer@example.com', businessName: 'Buyer Co', number: 'INV-1', status: 'open', emailedAt: new Date(Date.now() - 35 * DAY).toISOString(), amount: 100, total: 100, amountPaid: 0, reminders: 0, lastReminderAt: null, issuedAt: new Date(Date.now() - 40 * DAY).toISOString(), dueAt: new Date(Date.now() - 30 * DAY).toISOString() };
 
 t('overdue reminders show the approximate amount next to the owed amount, and nothing extra without rates', () => {
   const fx = sanitizeFxDisplay('EUR 0.92', 'USD');

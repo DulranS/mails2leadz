@@ -1688,3 +1688,280 @@ Fixed during the pass: the snippet first read the key from the intake URLs, whic
 Tests: tests/gap-close-288.test.mjs (12 checks), release-files (5), TypeScript scan (only the known ad-sync false positive).
 Not tested live: nothing has run against Firebase or the AI provider in this sandbox. The owner needs to paste the snippet on a test page and send one question.
 Open: UK/EU wording for consent on chat-captured contacts still needs legal review before selling there.
+
+Owner reported 2026-11-15: npm test and the live website chat test on v288 are done. Scope closed at v288. Chat answers from the business profile only; contacts go to the enquiry inbox tagged chat. Consent wording still needs UK/EU review before selling there.
+
+## Pass 289: audit log (spec 10.4) and consent purpose (spec 9.3)
+Correction: the v288 "scope closed" note was measured against the ledger's pass list, not the 10-section spec. The spec audit (2026-11-15) shows 27 lines built, 47 partly built, 3 not built and 3 outside what code can settle. That supersedes the v288 close.
+Built:
+- Audit log in users/{uid}/audit: invoice emailed, quote emailed, quote follow-up, team invite, invite revoked, member removed, role changed, enquiry key replaced, enquiry key switched off.
+- Owner-only read at /audit (menu: More). Newest 200 entries, read-only.
+- Entries hold no keys, customer addresses or message text. A failed write is logged and never blocks the action it records.
+- Each enquiry records contactPurpose next to contactBasis: enquiry_reply, or enquiry_and_marketing where marketing is allowed.
+Limits: only actions in the app are logged (not Balancr-side actions); no export or retention setting yet; a failed write leaves no entry.
+Not done in this pass, with reasons: job-run screen (job_runs is global across tenants and needs filtering first); timezone (needs checking whether a business setting already exists); backup scheduling (infrastructure); per-automation pause (design choice); duplicate merge (owner decision); per-market consent rules (legal input).
+Tests: tests/gap-close-289.test.mjs (11 checks), tests/gap-close-285.test.mjs (still passing), release-files (5), TypeScript scan clean apart from the known ad-sync false positive. Nothing run live.
+
+## Pass 290: owner's automation run history (spec 7.3, partly)
+Built:
+- Each owner's daily job run is recorded in users/{uid}/runs: status (done or failed), counts (invoices made, emailed, reminders, posts, weekly report sent) and plain codes for anything that stopped or failed.
+- Shown on /audit under "Automation runs", newest 30.
+- Raw error text and customer details are never stored; the failure note says "details are in the server log".
+Limits: runs are recorded only for owners the daily job reaches (owners with autopilot on). No delivery tracking per email yet. The global job_runs ledger is still server-only and is not shown to owners, because it covers all tenants.
+Checked and deferred: business timezone (10.9). The daily job uses UTC day keys (job-log dayKey, job lock), so a timezone setting changes invoice and reminder timing and needs its own pass.
+Tests: tests/gap-close-290.test.mjs (7 checks), gap-close-289 (11), release-files (5), TypeScript scan clean apart from the known false positive. Nothing run live.
+
+## Pass 291: support resolution target (spec 5.2) and two checks
+Built:
+- Each ticket has a first-reply target (2 hours, unchanged) and a separate close target: 24 hours for a complaint, 48 hours otherwise.
+- Support KPIs add: resolveOverdue (open tickets past their close target), resolutionTargetMetPct (share closed in time), resolveHours.
+- The support panel shows "Past resolve target". Tickets from before this pass use the 48-hour target, counted from when they were opened.
+Checked, status corrected:
+- 7.4 retries: partly built. A failed invoice email is not marked sent, so the next daily run tries again; a crashed daily run is taken over after 20 minutes. There is no explicit retry queue, and failed reminder sends are not listed for the owner.
+- 7.8 pausing: partly built. Each automation has its own on/off switch in Account, and the prospect autosend has a pause switch that also trips on a high bounce rate. There is no timed pause ("pause until").
+Deferred: business timezone (10.9), for the UTC day-key reason in Pass 290.
+Tests: tests/gap-close-291.test.mjs (6 checks); tests/measures.test.mjs still runs in the chain; release-files (5); TypeScript scan clean apart from the known false positive. Nothing run live.
+
+## Pass 292: owners can tag leads (spec 2.4, part)
+Finding: broadcasts and segments already filter by tag, but nothing in the app wrote tags, so only imports could set them.
+Built:
+- A tag box on each lead in the Lead Inbox. Tags are lowercase, any language's letters and numbers, spaces, dashes and underscores. Max 20 per lead, 30 characters each, saved when you leave the box.
+- Tags are kept in the same lead record the segment filter reads, so a broadcast to "vip" reaches them.
+Limits: tags on deals and customer records are not editable yet, so 2.4 stays partly built. Tags are not enforced by the database rules (the owner writes their own leads, as the inbox already does for status).
+Tests: tests/gap-close-292.test.mjs (6 checks), gap-close-291 (6), release-files (5), TypeScript scan clean apart from the known false positive. A release-check failure on the first run was a test string that looked like an import; fixed, and the test now checks the component name instead. Nothing run live.
+
+## Pass 293: team tasks (spec 3.3) and landing and pipeline check
+Built:
+- /tasks: a task has a title, an optional due day and one assignee from the team (owner or managers). Mark done, reopen, or delete.
+- Overdue and due-today tasks count on Today ("tasksNeedAttention", priority 2.5).
+- Viewers can read tasks but are blocked from changing them (the role comes from the verified workspace through proxy.js, not from the request).
+- A due day must be a real calendar day (31 February is refused).
+Limits: no reminder emails and no recurring tasks. Due days use UTC+05:30 until the timezone setting (10.9) is built, so an owner in another timezone sees "overdue" and "due today" a few hours off near midnight.
+Landing and pipeline check (by tests and link checks, not a browser run): every internal link on the public home page resolves; the three in-page anchors exist; no placeholder text; the /landing editor only shows testimonials the customer agreed to in writing; sales-ops (19), today-actions (4), ui-guards and quick-links pass. The pipeline stages are covered by sales-ops and measures; not clicked through here.
+Tests: gap-close-293 (8 checks, including a fix for 31 February rolling into March and a check that the viewer block depends on the proxy header), plus gap-close-289 to 292, release-files (5), and the TypeScript scan (760 files, only the known ad-sync false positive). Nothing run live.
+
+## Pass 294: owner timezone (spec 10.9)
+Correction: earlier passes said the daily job uses UTC day keys. That is true only for the job-run lock and run log. Owner-facing day keys and the send window already used the stored offset (tzOffsetMin). The real gaps were: no zone name (so daylight saving was wrong for any zone that has it), tasks and Today counts ignoring the owner's offset, and a hard-coded Sri Lanka offset in availability.
+Built:
+- The owner's zone name (for example Europe/London) is saved from the browser with the autopilot settings, next to tzOffsetMin.
+- One helper reads the owner's clock: the zone when valid, else the stored offset, else Sri Lanka time (+05:30).
+- Used by the daily job, the autosend window and day key, availability, the tasks page and the Today task count.
+Limits: an owner's zone is whatever their browser reported when they last saved the account page. A zone can only be changed by saving from a browser set to that zone. The run lock and run log remain UTC.
+Tests: tests/gap-close-294.test.mjs (6 checks), gap-close-293 (8), gap-close-292, today-actions, autosend, quick-links, sales-ops, release-files (5), and the TypeScript scan (769 files, only the known false positive).
+Environment: tests/routes-e2e and tests/booking-calendar cannot load the stripe and node-ical packages in this sandbox (network is off). They failed before this pass and are not caused by it.
+
+## Pass 295: customer history (spec 2.3)
+Owner report, 2026-11-15: the owner ran the app and it works. This is the owner's report, not a test result from this sandbox.
+Built:
+- /history: enter a customer's email and see one newest-first list of their emails sent, quotes sent and accepted, invoices emailed and paid, bookings, and support questions opened and resolved.
+- Read-only. The email is checked before any search. Matching ignores case. Capped at 200 events. A record without a usable time is left out.
+Limits: the list covers the records listed above only (not calls, meetings or WhatsApp). It is found by email, so a customer who uses two addresses shows two histories. It does not yet link from the customers page.
+Tests: tests/gap-close-295.test.mjs (8 checks), gap-close-294 and 293 still pass, today-actions and quick-links pass, release-files (5), TypeScript scan (773 files, only the known false positive). Nothing run live.
+Landing and pipeline: no landing changes in this pass; the link and placeholder check from Pass 293 still holds.
+
+## Pass 296: tags on deals and customers (spec 2.4)
+Built:
+- The CRM lead panel has a tag box under the company name. Tags are saved to the deal (the same record Rename writes), so one tag per customer, and they are read back onto the lead.
+- Deal tags were already read by segments; now they can be set. The same cleaning rules apply as for lead tags (lowercase, 20 tags, 30 characters, letters from any language).
+Limits: a customer with no deal (lead only) keeps the tags on their lead record, edited in the Lead Inbox. Tags are not shown on the customer list yet.
+Tests: tests/gap-close-296.test.mjs (4 checks), gap-close-292 and 295 still pass, ui-guards, quick-links, sales-ops, release-files (5), TypeScript scan (774 files, only the known false positive). Nothing run live.
+
+## Pass 297: retries for failed invoice emails (spec 7.4) and a reminder fix
+Found while building (this corrects an earlier note):
+- A failed automatic invoice email was never tried again. The planners skip customers who were invoiced recently, so the invoice sat unsent with no retry and no flag. The earlier note that it "retries next day" was wrong.
+- Automatic reminders could go to an invoice the customer had never been sent. The reminder planner did not check the sent date.
+- An invoice created while the send window was closed was never sent either.
+Built:
+- lib/retry-rules.js: a failed send is tried again a day later, up to three tries, then it stops and is marked given up. At most 20 retries per run. A customer blocked since the first try is held, not emailed.
+- Invoices the send window closed on are queued and sent when the window next opens.
+- Automatic reminders only go to invoices that were emailed.
+- Today shows "invoice emails have not gone out" with a link to Billing. The run log explains the two new codes.
+- A manual send from Billing still works and stops the automatic retries.
+Limits: retries run on the daily job (once a day), not on demand. Automatic reminders now skip any invoice with no sent date, so an older invoice that was sent but never stamped will not get an automatic reminder. Check those on Billing.
+Found, not changed (needs an owner decision): invoices live in two places. The daily job, the invoice list, numbering, statements and the storefront use the top-level invoices collection. Today's counts (held invoices, won deals not yet invoiced), customer history, KPIs, economics, and the automation, stock payment and Balancr code use users/{uid}/invoices. The automation, stock and Balancr code write to the second place. So Today and history can miss invoices the daily job created. Fixing it means choosing one store and moving data on live accounts.
+Tests: tests/gap-close-297.test.mjs (11 checks, chained). The billing-automation, fx-display and reminder-balance fixtures now mark their invoices as emailed, because the reminder rule changed. Chained tests: 218 pass. 36 cannot run in this sandbox because packages (firebase, next, stripe, pptxgenjs and others) are not installed; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 298: one place for invoices (fixes the split found in Pass 297)
+Decision taken: invoices live in the top-level `invoices` collection, tagged with userId. That is where the daily job, the invoice list, numbering, every creation route (through addInvoiceWithCredit), the refund, cancel and ship routes, the pay webhook and the manual send already write.
+Built:
+- Automatic invoices from automation-control are now created in the main collection (they were written to the per-customer path).
+- Every reader that used users/{uid}/invoices now reads the main collection, filtered to the owner: KPIs, economics, Today, customer history, day start, upsell, broadcasts, gap tools, pipeline run, meta, google, tiktok purchases, route helpers, Balancr sync, and the statement-style readers.
+- A stock draw and a Balancr update check that the invoice belongs to the owner before they change it. The invoice is found by id in the main collection.
+- lib/server/invoice-store.js copies older invoices from users/{uid}/invoices into the main collection, once per owner. It runs in the daily job before the money section. Same ids; the copy is only written where that id is not already in the main collection; the old rows are not deleted; a settings flag stops it running again. The pure copy rule is lib/invoice-store-rules.js.
+Limits, to know before you rely on it:
+- Until an owner's daily job has run once after this release, their older invoices (the per-customer path) are not visible to the readers listed above. Newer invoices are fine. If an owner has many older invoices, the copy takes more than one daily run (300 per run).
+- Nothing has been copied on live accounts from here. The copy runs in the next daily job.
+- Old per-customer rows stay where they are; they are not cleaned up.
+Tests: tests/gap-close-298.test.mjs (8 checks, chained). gap-close-295 now expects the main collection. The release-file check now passes. Chained tests: 219 pass; 36 cannot run in this sandbox because packages are not installed (firebase, next, stripe, pptxgenjs and others); none fails for any other reason. TypeScript scan: only the known false positive. Nothing run live.
+
+## Pass 299: Firebase projects separated (documentation, no code change)
+- AutoLeads is the Firebase project mails2leadz. Balancr is the separate project balancr-3d9d0, on the same Google account.
+- No AutoLeads code refers to balancr-3d9d0. The project id and service account come from environment variables, and Balancr is reached only through its HTTP API.
+- ENV_CONFIG.md now records the mapping. Check on each deployment that NEXT_PUBLIC_FIREBASE_PROJECT_ID is mails2leadz and that the service account JSON is from mails2leadz.
+- Pass 298's invoice work does not touch Balancr's data.
+
+## Pass 300: timed pause for Autosend (spec 7.8)
+Built:
+- Account offers "Pause for 1 day", "Pause for 7 days" and "Pause until I resume". The pause is stored with an end time (capped at 30 days).
+- When the end time passes, sending goes back on by itself. The daily send run clears the expired pause before it decides whether to stop.
+- An expired pause does not show as paused, and does not raise the Today alert. The Account line reads "Paused until <date> UTC" while it holds.
+- A pause with no end time still holds until the owner resumes. An unreadable end time is treated the same way (the safe side).
+Limits: the Business page (app/business/page.js) still reads the stored flag, so it shows "paused" until the next send run clears it. Timed pauses cover Autosend only; the invoice reminders and daily billing keep their own switches.
+Tests: tests/gap-close-300.test.mjs (9 checks, chained). Chained tests: 220 pass; 36 blocked by packages not installed in this sandbox; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive, which also covers the Account page. Nothing run live; the Account page's JSX was not compiled here.
+
+## Pass 301: journeys start themselves on a trigger (spec 7.2)
+Built:
+- A journey can carry one line, "trigger: deal_won", "trigger: invoice_paid" or "trigger: ticket_resolved". The journey help in Sales tools explains it.
+- The daily job adds people when the event happens: a deal moves to won, an invoice is paid, or a support question is resolved. Each person joins a journey once.
+- Only events after the journey was saved count. Turning a trigger on never reaches back to old customers.
+- Blocked or opted-out contacts are never enrolled. Each new enrolment has no consent recorded, so auto-send holds its steps until the owner confirms consent. Nothing is sent to a new enrolment without that.
+Limits: the win time is the deal's last update, so a deal edited after it was won can count as a new win. Looks back three days, so a skipped daily run loses events older than that. The owner still confirms consent for each new person; a journey-level consent setting would remove that step, and it needs the consent review that is still open.
+Tests: tests/gap-close-301.test.mjs (11 checks, chained). Chained tests: 221 pass; 36 blocked by packages not installed in this sandbox; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive, which also covers the Sales tools page. Nothing run live.
+
+## Pass 302: connections checked every day (spec 10.11)
+Built:
+- Every connected service (all its keys saved) is checked once a day by the daily job, oldest check first, at most twelve per run. Before this, a check ran only when the owner pressed Test.
+- Each result is stored per service: ok or not, a short message, and when it was checked. The Integrations page reads the same results.
+- A service whose check fails shows on Today ("connection has stopped working"), with a link to Integrations. It clears on the next check once the key works again.
+Limits: the daily job only covers owners with autopilot switched on, since the job runs for them. Each check calls the outside service once a day, so a service with many errors is not checked more often than that. A failing check says that it failed, not why beyond the service's own message.
+Tests: tests/gap-close-302.test.mjs (6 checks, chained). Chained tests: 222 pass; 36 blocked by packages not installed in this sandbox; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 303: support questions sorted into categories (spec 5.1)
+Built:
+- Each new support question gets a category from the customer's words: billing, delivery, booking, product, account, or general. The rules are first-match and checked by tests.
+- The support numbers now carry the count per category, so the owner can see what customers keep asking about.
+Limits: the owner cannot yet change a ticket's category by hand, and the category counts are not shown on screen yet (they are in the support numbers only). Older tickets count as general. Matching is by keyword, so an unusual wording can land in general.
+Tests: tests/gap-close-303.test.mjs (6 checks, chained). Chained tests: 223 pass; 36 blocked by packages not installed in this sandbox; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 304: category counts on screen, exact date ranges on the sales numbers (specs 5.1, 6.7), landing and pipeline check
+Built:
+- Support today shows the question counts by type (billing, delivery, booking, product, account, general).
+- The sales numbers can be read for an exact from-to range, up to 24 months. Pick the dates, press Apply; "Use months" goes back to the 3, 6 or 12 month look-back. The heading shows the range. A bad or reversed range is refused and the normal look-back is used.
+- The range's end is used for every window check (wins, acquisition, the at-start cohort), so a past range does not pick up later records.
+Landing and pipeline check: no placeholder or TODO text in the landing page, the CRM pipeline, or the Sales tools screens; internal links resolve (the one flagged link is an API route that exists).
+Limits: the forecast and at-risk figures still use today, not the range end. The category counts are on the support panel only, not in the ticket list, and owners cannot change a category by hand yet.
+Tests: tests/gap-close-304.test.mjs (6 checks, chained). Updated tests/gap-close-284.test.mjs: its heading check now matches the new heading, which can show a picked range. Chained tests: 224 pass; 36 blocked by packages not installed in this sandbox; none fails for any other reason. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 305: owner sets a ticket's category by hand (spec 5.1)
+Built:
+- Each ticket row on the support panel has a category picker. It saves only a category from the list, and records that the owner set it (categoryBy: owner).
+Limits: the ticket list itself does not show categories yet; they are on the support panel rows and in the category counts.
+Tests: tests/gap-close-305.test.mjs (3 checks, chained).
+
+## Pass 306: switch emails back on after an opt-out
+Built:
+- After opting out with the link in an email, the page offers "Switch emails back on". It works only for an opt-out made through that link. The suppression record is removed, so sends can reach that address again.
+- A bounce is never switched back on from a link. The page then says to reply to the email and ask.
+Limits: the open deal that the opt-out marked Lost is NOT restored. It stays Lost with the reason unsubscribed, as the record of what happened, and nothing brings it back automatically. Consent for automatic follow-ups is still under review, so a switched-back-on address gets the same handling as any other address. Nothing run live: the page and the route have not been tried in a browser or against Firestore.
+Tests: tests/gap-close-306.test.mjs (7 checks, chained). Chained tests: 225 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 307: Business page pause rule, forecast and at-risk on the picked range, ticket categories checked
+Built:
+- The Business page shows Autopilot as off while a pause is in force. A timed pause that has run out counts as on, the same rule the server uses.
+- Forecast and at-risk deals on the sales numbers are read as of the picked range's end, never later than today. With no range picked, nothing changes.
+- Ticket categories: the Support panel rows already show each ticket's category in a picker (Pass 305), so this item is closed. The customer link list is not a support queue and shows no category, by design.
+Limits: the forecast on a past range uses the quarter of that range's end, but is built from the deals' current stages, not the pipeline as it stood on that day.
+Tests: tests/gap-close-307.test.mjs (5 checks, chained). Chained tests: 226 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive. Nothing run live.
+
+## Pass 308: calls, meetings and notes logged by hand, AI call summaries in the customer history (spec 2.3)
+Built:
+- On the customer history screen, once a customer's history is shown, the owner can log a call, a meeting or a note: a short summary and an optional next step. It is saved and the history refreshes.
+- A logged entry can be dated earlier than now, but not in the future. The email must be a valid address; the type must be call, meeting or note.
+- AI call summaries (already saved per customer by the call summary tool) now appear in that customer's history as "Call summarised".
+Limits:
+- Calls placed through the dialler are not in the history. Those records carry only a phone number, and deals keep no phone number, so they cannot be matched to a customer by email. Fixing that needs the phone number stored on the deal.
+- Deal stage changes are not in the history list. The full deal history view is still open.
+- Logged entries cannot be edited or deleted yet.
+- Call summaries are read from the 300 newest saved; an older summary past that will not appear.
+- Nothing run live against Firestore.
+Tests: tests/gap-close-308.test.mjs (6 checks, chained). Chained tests: 227 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 309: dialler calls and deal stage changes in the customer history (spec 2.3)
+Built:
+- A call placed from the dashboard now records the lead's email on the call. Calls placed from then on show in that customer's history as "Call placed", with the status and length when the call has them.
+- Stage changes on the customer's deal show in the history as "Moved to <stage>", with the time of each change.
+- Only a real email address is stored on a call; a missing or bad one is stored as empty and the call simply does not appear in any history.
+Limits:
+- Calls placed before this release have no email on their record, so they do not appear in a customer's history. Nothing backfills them.
+- Deals still keep no phone number. Matching is by email, not phone, so a call placed without a lead email cannot be linked.
+- A stage change appears only where the deal recorded its stage time (deals that moved before the stage times were kept do not show them).
+- The full deal history view (a separate screen for one deal) is still not built; the history list carries the stage changes.
+- Call status and length come from the call webhook; a call whose webhook never arrived keeps the status it was created with (for example "queued").
+- Nothing run live against Firestore or Twilio.
+Tests: tests/gap-close-309.test.mjs (5 checks, chained). Chained tests: 228 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 310: full deal history, edit and delete of logged entries, resubscribe reopens the deal, journey win date (spec 2.3, 9.2)
+Built:
+- A deal card on the customer history: its stage, whether it is open, won or lost (with the reason, for opt-outs and bounces), its value, and every stage it went through in order.
+- The owner can edit the summary and next step of their own logged call, meeting or note, and delete it (with a confirm). Nobody else's entry can be changed; a missing or foreign entry is refused.
+- Switching emails back on now also puts the deal that the opt-out marked Lost back in the open stage it was in before. This closes the limit left by Pass 306.
+- A journey's "deal won" trigger now dates the win from when the deal first reached won, not from its last update. This closes the limit left by Pass 302's journey work.
+Limits:
+- The deal card shows the most recently updated deal for that email. A customer with several deals sees the one that changed last.
+- A deal reopened after an opt-out with no usable stage times goes back to New.
+- Editing an entry does not change its time or type.
+- Invoices copied from before the store change are still reached only by the daily run. Billing reads its invoices on the page, so the copy cannot be done from a route the page calls. Left open for that reason.
+- Nothing run live against Firestore, email, or the browser.
+Tests: tests/gap-close-310.test.mjs (9 checks, chained); tests/gap-close-306.test.mjs updated to the new reopen behaviour. Chained tests: 229 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 311: older invoices brought across when billing reads them (spec 7.4, closes the Pass 298 limit)
+Built:
+- Before the invoice list is read, the app copies this owner's invoices from before the single store into it. The copy is the same safe routine the daily job uses: it skips invoices already across and can be repeated.
+- If the copy fails, the list still loads, and the copy is tried again on the next read.
+Limits:
+- The copy brings across up to 300 invoices per load. An owner with more than 300 older invoices sees the rest come across on later page loads.
+- The copy runs once per page session on the client; it is not repeated within one session.
+- Nothing run live against Firestore.
+Tests: tests/gap-close-311.test.mjs (3 checks, chained). Chained tests: 230 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 312: monthly membership offer (scope: upselling and recurring revenue)
+Built:
+- The owner names a monthly membership, its monthly price, an optional currency, and what it includes (CRM screen, Monthly membership panel).
+- The panel shows the offer text, built only from what the owner entered, with a Copy button.
+- The owner adds a member by email (and optional business name). The member's deal gets the monthly amount, so recurring revenue counts it. A deal already won keeps its stage.
+Scope decision on the 25-item operations list (attached by the owner): only the monthly membership is in AutoLeads' scope. The rest (autopay bills, second signer, team spending limit, bonuses tied to results, recorded SOP videos, training plan for new hires, and people or service items) belong to Balancr, the operations product. Balancr's code is not in this workspace, so none of those were changed.
+Limits:
+- Taking payment is not part of this: no charge is set up for a member. The owner marks the deal won when the money arrives, and until then the member is a proposal.
+- The offer is copied and sent by the owner; nothing is emailed automatically.
+- No per-member list or membership status page yet; members appear in the pipeline as deals.
+- Nothing run live.
+Tests: tests/gap-close-312.test.mjs (5 checks, chained). Chained tests: 231 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 313: the person chooses what to stop (preference centre, opt-down only; spec 9.2, 9.3)
+Decisions taken (owner approved opt-down only):
+- The signed unsubscribe page now offers two choices: "Stop sales emails" (marketing and follow-up emails, as before) and "Stop all emails" (everything from that sender, including invoices and receipts). Each says plainly what it stops.
+- A stop-all is recorded as its own suppression kind and blocks every email. It can be switched back on from the same page, the same as a sales opt-out. A bounce still cannot be switched back on.
+- Journey auto-enrolment stays off for people until the owner confirms it; this was already the default and is unchanged.
+Fixed on the way: an opt-out on an address that had bounced used to replace the bounce record, which would have let a bounced address be switched back on. A bounce record is now never replaced.
+Limits:
+- This is two choices, not one setting per topic. Per-topic choice would change the blocking rule every send path uses, which I have not built.
+- Per-market consent (9.4) is still open: which countries need opt-in is a legal question.
+- Shared customer IDs (8.2) still need Balancr's code.
+- Nothing run live.
+Tests: tests/gap-close-313.test.mjs (5 checks, chained). Chained tests: 232 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 314: older calls linked to their customer by phone number (spec 2.3, closes the old-calls limit); decisions on the rest
+Built:
+- Each day, the owner's older calls with no customer are matched to a customer whose phone number on file is the same (lead records, call attempts, and deals with a phone). A number held by two different customers is not linked to either.
+- A linked call shows in that customer's history, and the link is recorded as a phone match.
+Decisions (made without asking):
+- Per-topic preferences: not built. The design is two choices (stop sales emails; stop all emails), and per-topic would change the blocking rule every send path uses. Owner may override; it stays a deliberate limit.
+- Per-market consent (9.4): still open. Which countries need opt-in is a legal question, not a product one, so I did not choose it.
+- Shared customer IDs (8.2): AutoLeads already sends a stable reference (autoleads:<deal id>) on every Balancr lead. Whether Balancr stores and returns it is on Balancr's side, which I cannot see. Left as partly done.
+- Integrations beyond the existing ones: not built, since each needs platform keys and documentation I cannot verify from here.
+Limits:
+- A call to a number that no record holds stays unlinked.
+- Matching uses the last nine digits, so a number from another country with the same nine digits would match; this is a known risk.
+- The link runs once a day, not on each history view.
+- Nothing run live.
+Tests: tests/gap-close-314.test.mjs (5 checks, chained). Chained tests: 233 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 315: synced with Balancr v285 (spec 8.2 shared customer IDs; the Balancr sync)
+Checked against the Balancr v285 release (SYNC.md, its v1 routes and its lead stages). The contract is written down in BALANCR_CONTRACT.md.
+Found and fixed:
+- Balancr stores a lead's contact as "phone · email" when it has both. AutoLeads compared the whole text as an e-mail, so the stage webhook missed the deal, and the inbox row kept the text as an e-mail. The contact is now split into its e-mail and its phone, and both are kept.
+- A Balancr lead is now matched to its deal by Balancr's lead id (stored when the deal was sent), then by the external id "autoleads:<deal id>" that Balancr returns, and only then by contact.
+Closed with this: shared customer IDs (8.2). Balancr returns both its lead id and our external id on every lead, and AutoLeads matches on them.
+Checked and unchanged: the endpoints, the Bearer header, the lead and invoice response wrappers, the seven stages, the invoice statuses (paid, overdue, open), and the since and limit parameters.
+Still on Balancr's side: event-based sync is still open in Balancr's changelog. The stage webhook and the daily sync both run here; the daily sync is the fallback.
+Tests: tests/gap-close-315.test.mjs (6 checks, chained); the existing Balancr tests (balancr, gap-close-280, balancr-sync) still pass. Chained tests: 234 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.

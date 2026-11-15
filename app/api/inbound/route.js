@@ -15,7 +15,7 @@ import { ownerFromKey } from '../../../lib/server/owner-key.js';
 import { getBusinessProfile, AiError } from '../../../lib/ai-client.js';
 import { sanitizeEnquiry, enquiryDocId, enquiryContext, isReferralSrc, intakeToQualification, intakeFit, INBOUND_DRAFTS_PER_DAY, INBOUND_PER_KEY_PER_HOUR } from '../../../lib/inbound.js';
 import { buildDealWrite, dealDocId } from '../../../lib/deal-utils.js';
-import { contactBasisFor } from '../../../lib/consent-rules.js';
+import { contactBasisFor, contactPurposeFor } from '../../../lib/consent-rules.js';
 import { stopColdFollowUps } from '../../../lib/server/inbound-stop.js';
 import { assignArrival } from '../../../lib/server/assign-arrival.js';
 import { emitWebhook } from '../../../lib/server/webhooks.js';
@@ -112,6 +112,7 @@ export async function POST(request) {
       if (e.intake) write.qualification = { ...intakeToQualification(e.intake), updatedAt: now.toISOString() }; // what they said fills budget, authority and timeline
       write.inboundAt = now.toISOString();
       write.contactBasis = contactBasisFor({ email: e.email }).basis; // why we hold this contact: recorded when they enquire, not inferred later
+      write.contactPurpose = contactPurposeFor({ email: e.email }); // what we hold it for, recorded with the basis
       if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
       if (e.size) write.companySize = e.size; // the company size band, for routing
       if (e.campaign) write.campaign = String(e.campaign).trim().toLowerCase().slice(0, 60); // first touch: the campaign that brought them, for ROAS

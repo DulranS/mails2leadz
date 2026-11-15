@@ -1,6 +1,6 @@
 // app/api/stock/payment/route.js - takes stock once for a paid invoice. Runs once per invoice: a second call changes nothing. Signed-in owner only.
 import { NextResponse } from 'next/server';
-import { collection, doc, getDoc, setDoc } from '../../../../lib/server-firestore.js';
+import { doc, getDoc, setDoc } from '../../../../lib/server-firestore.js';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { loadCatalog } from '../../../../lib/server/catalog.js';
@@ -16,9 +16,9 @@ export async function POST(request) {
   if (g.response) return g.response;
   let body;
   try { body = await request.json(); } catch { return json({ error: 'Send JSON.' }, 400); }
-  const invRef = doc(db, 'users', who.uid, 'invoices', String(body?.invoiceId || ''));
+  const invRef = doc(db, 'invoices', String(body?.invoiceId || ''));
   const inv = (await getDoc(invRef).catch(() => null))?.data?.();
-  if (!inv) return json({ error: 'That invoice was not found.' }, 404);
+  if (!inv || inv.userId !== who.uid) return json({ error: 'That invoice was not found.' }, 404);
   if (inv.stockDrawnAt) return json({ ok: true, alreadyDone: true, drawn: [], shortfalls: [] });
   if (inv.status !== 'paid' && body?.assumePaid !== true) return json({ error: 'Stock is taken once the invoice is paid.' }, 400);
   const lines = Array.isArray(inv.saleItems) ? inv.saleItems : parseSaleLines(body?.saleLines || inv.saleLines || '');
