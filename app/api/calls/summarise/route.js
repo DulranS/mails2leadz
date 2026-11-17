@@ -26,7 +26,7 @@ export async function POST(request) {
   const email = String(body?.email || '').trim().toLowerCase().slice(0, 200);
   let ai;
   try {
-    ai = await callAI({ uid: who.uid, feature: 'call_summary', tier: 'fast', system: CALL_SUMMARY_SYSTEM, prompt: callSummaryPrompt(transcript), maxTokens: 500 });
+    ai = await callAI({ uid: who.uid, feature: 'call_summary', leadEmail: email, tier: 'fast', system: CALL_SUMMARY_SYSTEM, prompt: callSummaryPrompt(transcript), maxTokens: 500 });
   } catch (e) {
     return json({ error: 'The summary could not be made right now. Try again later.' }, 502);
   }

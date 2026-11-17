@@ -49,7 +49,7 @@ export async function POST(request) {
       }
       const refLink = purpose === 'referral_ask' ? await referralLinkFor(getDb(), uid, request, businessName || to) : purpose === 'review_ask' ? await reviewLinkFor(getDb(), uid) : '';
       const { system, prompt } = postSaleMessages({ profile, purpose, businessName, to, refLink, senderName });
-      const ai = await callAI({ uid, feature: 'customer_checkin', tier: 'fast', system, prompt, maxTokens: 400 });
+      const ai = await callAI({ uid, feature: 'customer_checkin', leadEmail: to, tier: 'fast', system, prompt, maxTokens: 400 });
       const subject = clip(ai.data?.subject, 150).replace(/[\r\n]+/g, ' ');
       const text = String(ai.data?.body || '').trim();
       if (!subject || text.length < 20) return NextResponse.json({ success: false, error: 'The AI returned an unusable draft. Try again.' }, { status: 502, headers: NO_STORE });

@@ -28,7 +28,7 @@ export default function BusinessSalesSummary() {
     cachedJson("/api/deals").then((j) => setDeals(j)).catch(() => {});
     cachedJson("/api/support").then((j) => setSupport(j)).catch(() => {});
     cachedJson("/api/sales-tools/manage").then((j) => setAccountsText(j.abmText || "")).catch(() => {});
-    cachedJson("/api/kpis").then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); setHealth({ funnel: j.funnel || null, trust: j.trust || null, dso: j.dso ?? null, web: j.web || null }); }).catch(() => {});
+    cachedJson("/api/kpis").then((j) => { setKpis(j); setForecast(j.forecast || null); setAtRisk(j.atRisk || []); setDemand(j.demand || null); setHealth({ funnel: j.funnel || null, aiCost: j.aiCost || null, trust: j.trust || null, dso: j.dso ?? null, web: j.web || null }); }).catch(() => {});
   }, []);
 
   const targets = deals.targets || [];
@@ -60,6 +60,7 @@ export default function BusinessSalesSummary() {
       {health ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat name="Cost per lead" value={health.funnel?.costPerLead ?? "n/a"} hint="Last 12 months, from the spend you entered" />
+          <Stat name="AI cost per lead" value={health.aiCost?.perLeadUsd != null ? `$${health.aiCost.perLeadUsd.toFixed(3)}` : "n/a"} hint={health.aiCost?.leads ? `${health.aiCost.leads} lead${health.aiCost.leads === 1 ? "" : "s"} with AI spend; cap $${Number(health.aiCost.leadBudgetUsd).toFixed(2)} each` : "No lead-linked AI spend yet"} />
           <Stat name="Lead to won" value={health.funnel?.leadToWon !== null && health.funnel?.leadToWon !== undefined ? `${Math.round(health.funnel.leadToWon * 100)}%` : "n/a"} hint="Share of leads that became won deals" />
           <Stat name="Lifetime value to cost" value={health.funnel?.ltvToCac ?? "n/a"} hint="Aim for 3x or more" />
           <Stat name="Churn" value={health.funnel?.churnRate !== null && health.funnel?.churnRate !== undefined ? `${Math.round(health.funnel.churnRate * 100)}%` : "n/a"} hint="Customers who have stopped paying" />

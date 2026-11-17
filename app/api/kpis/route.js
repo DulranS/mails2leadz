@@ -15,6 +15,7 @@ import { trustScore } from '../../../lib/trust.js';
 import { slaStatus } from '../../../lib/support-routing.js';
 import { daysSalesOutstanding } from '../../../lib/payment-metrics.js';
 import { funnelRates } from '../../../lib/funnel.js';
+import { aiCostPerLead } from '../../../lib/ai-client.js';
 import { csatSummary, deflectionRate } from '../../../lib/customer-links.js';
 import { paybackMonths, pipelineCoverage, netRevenueRetention } from '../../../lib/revenue-kpis.js';
 
@@ -85,7 +86,8 @@ export async function GET(request) {
   const trust = trustScore({ supportTargetMetPct: answered, openComplaints: ticketRows.filter((t) => t.status !== 'resolved' && t.kind === 'complaint').length, creditRiskCount: credit.length });
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));
   // `support` is the support figures (csat, deflection); the ticket queue summary stays in `kpis` (salesKpis reads it).
-  return NextResponse.json({ months, kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: supportFigures, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, web: webSaved, revenue: revenueFigures }, { headers: NO_STORE });
+  const aiCost = await aiCostPerLead(db, who.uid).catch(() => null); // the per-lead AI meter (pass 329)
+  return NextResponse.json({ months, kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: supportFigures, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, aiCost, web: webSaved, revenue: revenueFigures }, { headers: NO_STORE });
 }
 
 export async function POST(request) {

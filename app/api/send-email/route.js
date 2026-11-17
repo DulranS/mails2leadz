@@ -12,7 +12,7 @@ import { sendBreakerFor } from '../../../lib/server/send-breaker.js';
 import { senderGateFor } from '../../../lib/server/sender-auth.js';
 import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
 import { isAngleId } from '../../../lib/angles.js';
-import { withTextFooter } from '../../../lib/server/unsubscribe.js';
+import { withTextFooter, postalAddressProblem } from '../../../lib/server/unsubscribe.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { nicheFields } from '../../../lib/niche.js';
 
@@ -251,8 +251,11 @@ export async function POST(request) {
     const senderAddress = await getSenderAddress(db, userId); // postal address for the footer, read once per request
 
     // v326: marketing email must show a valid contact address (ICO), so a bulk send waits until the owner has one.
-    if (!senderAddress) {
-      return NextResponse.json({ error: 'Add your postal address under Account > Your business before sending. Marketing email must show a contact address.' }, { status: 422 });
+    const addressProblem = postalAddressProblem(senderAddress);
+    if (addressProblem) return NextResponse.json({ error: addressProblem }, { status: 422 });
+    // v327 close-out: every bulk email needs a working one-click opt-out. If the link cannot be built on this server, hold the send.
+    if (!optOutFor(userId, 'probe@example.com', senderAddress)) {
+      return NextResponse.json({ error: "The opt-out link cannot be built on this server, so bulk email is held back. Check the app's public https address and the server's Firebase admin settings." }, { status: 503 });
     }
     // v326: refuse to send from a domain that is definitely missing SPF or DMARC (unknown DNS results never block).
     const senderGate = await senderGateFor(senderEmail);

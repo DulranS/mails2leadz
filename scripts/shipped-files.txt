@@ -9,6 +9,7 @@ app/api/agreements/accept/route.js
 app/api/agreements/invite/route.js
 app/api/ai-channel/route.js
 app/api/ai-content/route.js
+app/api/ai-cost-per-lead/route.js
 app/api/ai-deal-draft/route.js
 app/api/ai-followup/route.js
 app/api/ai-insights/route.js
@@ -339,6 +340,7 @@ lib/action-list.js
 lib/admin-actions.js
 lib/agreement.js
 lib/ai-client.js
+lib/ai-lead-budget.js
 lib/angles.js
 lib/api-retry.js
 lib/api-writes.js

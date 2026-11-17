@@ -32,7 +32,7 @@ t('an unknown lookup (timeout) never blocks', () => {
 t('the send route applies the postal-address check and the gate before sending', () => {
   const src = fs.readFileSync('app/api/send-email/route.js', 'utf8');
   assert.match(src, /senderGateFor\(senderEmail\)/);
-  assert.match(src, /if \(!senderAddress\)/);
+  assert.match(src, /postalAddressProblem\(senderAddress\)/);
   assert.match(src, /status: 422/);
 });
 console.log(`  ${n} sender gate checks passed`);
