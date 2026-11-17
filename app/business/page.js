@@ -44,7 +44,9 @@ import { computeOutboundPlan } from "../../lib/plan.js";
 import { angleLabel } from "../../lib/angles.js";
 import { computeNicheStats } from "../../lib/niche.js";
 import { buildNextActions } from "../../lib/next-actions.js";
-import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, STAGE_LABELS, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
+import { stageLabel } from "../../lib/work-mode.js";
+import { useWorkMode } from "../components/useWorkMode";
+import { ALL_STAGES, PROSPECT_STAGES, PIPELINE_STAGES, buildDealWrite, dealDocId, normalizeStage } from "../../lib/deal-utils.js";
 
 import { makeMoney, currencySymbol } from "../../lib/currency.js";
 import { computeBilling, computeUnbilled } from "../../lib/billing.js";
@@ -93,6 +95,7 @@ const EMPTY_RAW = { partners: [], partnerPayouts: [], employees: [], payrollRate
 
 export default function BusinessValuePage() {
   const { user, ready: authReady, workspace } = useAuthUser();
+  const workMode = useWorkMode();
   const ownerView = !workspace || workspace.isOwner; // salaries, loans, bills and contracts are the owner's alone, so profit and cash are shown to the owner only // one shared sign-in listener: no spinner on the way back to this page
   // The last numbers shown (if any) paint at once; the fresh ones load quietly behind them.
   const snapKey = user?.uid ? `${user.uid}|page|business` : null;
@@ -832,7 +835,7 @@ export default function BusinessValuePage() {
         {chanceTip && !dismissedTip && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-100">
             <div className="font-medium">Your closed deals suggest different stage chances</div>
-            <ul className="mt-1 space-y-0.5">{chanceTip.rows.map((r) => <li key={r.stage}>{STAGE_LABELS[r.stage]}: {pct(r.current)} → <b>{pct(r.suggested)}</b> <span className="text-xs opacity-80">({r.wins} won of {r.deals} deals that reached it)</span></li>)}</ul>
+            <ul className="mt-1 space-y-0.5">{chanceTip.rows.map((r) => <li key={r.stage}>{stageLabel(r.stage, workMode)}: {pct(r.current)} → <b>{pct(r.suggested)}</b> <span className="text-xs opacity-80">({r.wins} won of {r.deals} deals that reached it)</span></li>)}</ul>
             <p className="text-xs opacity-80 mt-1">Nothing changes unless you apply it. You can still edit every chance in Account → Money settings.</p>
             <div className="flex gap-2 mt-2">
               <button type="button" disabled={saving === "chances"} onClick={applyChances} className="min-h-[44px] px-4 rounded-lg bg-blue-600 text-white disabled:opacity-60">{saving === "chances" ? "Saving…" : "Apply"}</button>
@@ -964,7 +967,7 @@ export default function BusinessValuePage() {
               <table className="w-full text-sm">
                 <thead><tr className="text-left text-xs text-gray-500 dark:text-gray-400"><th className="py-1">Stage</th><th className="py-1 text-right">Deals</th><th className="py-1 text-right">Value</th><th className="py-1 text-right">Chance</th><th className="py-1 text-right">Weighted</th></tr></thead>
                 <tbody>{m.present.stages.map((s) => (
-                  <tr key={s.stage} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">{STAGE_LABELS[s.stage]}</td><td className="py-1.5 text-right">{s.count}</td><td className="py-1.5 text-right">{money(s.value)}</td><td className="py-1.5 text-right">{pct(s.probability)}</td><td className="py-1.5 text-right">{money(s.weighted)}</td></tr>
+                  <tr key={s.stage} className="border-t border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100"><td className="py-1.5">{stageLabel(s.stage, workMode)}</td><td className="py-1.5 text-right">{s.count}</td><td className="py-1.5 text-right">{money(s.value)}</td><td className="py-1.5 text-right">{pct(s.probability)}</td><td className="py-1.5 text-right">{money(s.weighted)}</td></tr>
                 ))}</tbody>
               </table>
             </div>
@@ -973,7 +976,7 @@ export default function BusinessValuePage() {
             {stale.length === 0 ? <p className="text-sm text-gray-500 dark:text-gray-400">Nothing stuck. Open deals untouched for 14+ days appear here.</p> : (
               <ul className="divide-y divide-gray-100 dark:divide-gray-700">{stale.map((d) => (
                 <li key={d.email} className="py-2 flex items-center justify-between gap-3 text-sm">
-                  <div className="min-w-0"><div className="truncate text-gray-900 dark:text-white">{d.businessName || d.email}</div><div className="text-xs text-gray-500 dark:text-gray-400">{STAGE_LABELS[d.stage]} · {Math.floor((Date.now() - d.lastUpdate) / 86400000)} days quiet</div></div>
+                  <div className="min-w-0"><div className="truncate text-gray-900 dark:text-white">{d.businessName || d.email}</div><div className="text-xs text-gray-500 dark:text-gray-400">{stageLabel(d.stage, workMode)} · {Math.floor((Date.now() - d.lastUpdate) / 86400000)} days quiet</div></div>
                   <div className="shrink-0 font-medium text-gray-900 dark:text-white">{money(d.value)}</div>
                 </li>))}</ul>)}
             <Link href="/crm" className="inline-block mt-3 text-sm text-blue-600 dark:text-blue-400 underline">Open CRM to follow up</Link>
@@ -1027,7 +1030,7 @@ export default function BusinessValuePage() {
                 <div key={d.email} className="flex flex-col sm:flex-row sm:items-center gap-2 border border-gray-100 dark:border-gray-700 rounded-lg p-3">
                   <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-gray-900 dark:text-white">{d.businessName || d.email}</div><div className="truncate text-xs text-gray-500 dark:text-gray-400">{d.email}{d.estimated ? " · using default value" : ""}</div></div>
                   <select aria-label={`Stage for ${d.email}`} value={d.stage} disabled={saving === d.email} onChange={(e) => saveDeal(d, { stage: e.target.value })} className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                    {ALL_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                    {ALL_STAGES.map((s) => <option key={s} value={s}>{stageLabel(s, workMode)}</option>)}
                   </select>
                   <label className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-200">{currencySymbol(m.settings.currency)}
                     <input aria-label={`Value for ${d.email}`} type="number" min="0" inputMode="decimal" defaultValue={d.estimated ? "" : d.value} placeholder={String(d.value)} disabled={saving === d.email}

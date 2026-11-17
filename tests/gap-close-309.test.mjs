@@ -49,7 +49,7 @@ t('the server loader reads this owner\'s calls and deals for the customer', () =
   const src = fs.readFileSync('lib/server/customer-timeline.js', 'utf8');
   assert.ok(src.includes("collection(db, 'calls')"));
   assert.ok(src.includes("collection(db, 'deals')"));
-  assert.ok(src.includes('calls, deals })'));
+  assert.ok(src.includes('calls, deals, mode })'));
 });
 
 console.log(`gap-close-309: ${n} checks passed`);

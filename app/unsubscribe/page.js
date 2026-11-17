@@ -11,6 +11,7 @@ export default function UnsubscribePage() {
   const [stoppedAll, setStoppedAll] = useState(false);
   const [back, setBack] = useState('idle'); // idle | working | on | error  (switching emails back on, after an opt-out)
   const [backMessage, setBackMessage] = useState('');
+  const [stoppedTopic, setStoppedTopic] = useState('');
 
   useEffect(() => {
     setToken(new URLSearchParams(window.location.search).get('t') || '');
@@ -47,6 +48,20 @@ export default function UnsubscribePage() {
     }
   }
 
+  // v318: stop one kind of marketing email only (follow-up reminders, or campaigns and offers).
+  async function stopTopic(topic, text) {
+    setState('working');
+    try {
+      const res = await fetch(`/api/unsubscribe?t=${encodeURIComponent(token)}&action=stop_topic&topic=${topic}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) { setStoppedTopic(text); setState('done'); }
+      else { setMessage(data.error || 'Something went wrong. Please try again.'); setState('error'); }
+    } catch {
+      setMessage('Could not reach the server. Please try again.');
+      setState('error');
+    }
+  }
+
   async function switchBackOn() {
     setBack('working');
     try {
@@ -71,7 +86,7 @@ export default function UnsubscribePage() {
             <p style={{ margin: 0, color: '#475569' }}>You may receive emails from this sender again. Use the link in any email to opt out again.</p></>
         ) : state === 'done' ? (
           <><h1 style={{ fontSize: 20, margin: '0 0 8px' }}>You are opted out</h1>
-            <p style={{ margin: '0 0 16px', color: '#475569' }}>{stoppedAll ? 'You will not receive any emails from this sender, including invoices and receipts.' : 'You will not receive further sales emails from this sender.'}</p>
+            <p style={{ margin: '0 0 16px', color: '#475569' }}>{stoppedAll ? 'You will not receive any emails from this sender, including invoices and receipts.' : (stoppedTopic || 'You will not receive further sales emails from this sender.')}</p>
             <p style={{ margin: '0 0 12px', color: '#475569', fontSize: 14 }}>Opted out by mistake?</p>
             <button onClick={switchBackOn} disabled={back === 'working'}
               style={{ ...BUTTON, background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', opacity: back === 'working' ? 0.6 : 1 }}>
@@ -80,10 +95,18 @@ export default function UnsubscribePage() {
             {back === 'error' && <p role="alert" style={{ margin: '12px 0 0', color: '#b91c1c' }}>{backMessage}</p>}</>
         ) : (
           <><h1 style={{ fontSize: 20, margin: '0 0 8px' }}>Opt out of these emails?</h1>
-            <p style={{ margin: '0 0 16px', color: '#475569' }}>Stop sales emails: no marketing or follow-up emails from this sender. Stop all emails: nothing from this sender, including invoices and receipts.</p>
+            <p style={{ margin: '0 0 16px', color: '#475569' }}>Stop follow-up reminders: only the follow-up emails. Stop campaigns and offers: only new campaign and offer emails. Stop sales emails: both of those. Stop all emails: nothing from this sender, including invoices and receipts.</p>
             <button onClick={confirm} disabled={state === 'working' || token === null}
               style={{ ...BUTTON, opacity: state === 'working' ? 0.6 : 1 }}>
               {state === 'working' ? 'Working…' : 'Stop sales emails'}
+            </button>
+            <button onClick={() => stopTopic('follow_ups', 'You will not receive follow-up reminders from this sender. Other emails may still arrive.')} disabled={state === 'working' || token === null}
+              style={{ ...BUTTON, marginTop: 8, background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', opacity: state === 'working' ? 0.6 : 1 }}>
+              Stop follow-up reminders
+            </button>
+            <button onClick={() => stopTopic('campaigns', 'You will not receive campaign or offer emails from this sender. Follow-ups may still arrive.')} disabled={state === 'working' || token === null}
+              style={{ ...BUTTON, marginTop: 8, background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', opacity: state === 'working' ? 0.6 : 1 }}>
+              Stop campaigns and offers
             </button>
             <button onClick={stopAll} disabled={state === 'working' || token === null}
               style={{ ...BUTTON, marginTop: 8, background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', opacity: state === 'working' ? 0.6 : 1 }}>

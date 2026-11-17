@@ -198,7 +198,7 @@ export async function POST(request) {
       );
     }
     
-    if (await isBlockedContact(db, userId, email)) {
+    if (await isBlockedContact(db, userId, email, 'marketing', 'follow_ups')) {
       return NextResponse.json(
         { error: 'This contact opted out or the deal is marked Lost, so no more follow-ups are sent. (A Lost deal can be reopened; an opt-out cannot.)', code: 'DEAL_LOST' },
         { status: 409, headers }

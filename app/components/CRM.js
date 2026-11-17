@@ -4,17 +4,19 @@ import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import TagBox from "./TagBox";
-import { ALL_STAGES, STAGE_LABELS, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
+import { ALL_STAGES, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
+import { stageLabel } from "../../lib/work-mode.js";
+import { useWorkMode } from "./useWorkMode";
 import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
 import { NO_NAME_LABEL } from "../../lib/lead-name.js";
 import { QUAL_FIELDS, qualificationSummary } from "../../lib/deal-extras.js";
 import DraftModal from "./DraftModal";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
-const StageOptions = () =>
+const StageOptions = ({ mode }) =>
   ALL_STAGES.map((st) => (
     <option key={st} value={st}>
-      {STAGE_LABELS[st]}
+      {stageLabel(st, mode)}
     </option>
   ));
 
@@ -41,6 +43,7 @@ export const CRM = ({
   onRename,
   onSaveTags,
 }) => {
+  const workMode = useWorkMode();
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [noteText, setNoteText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -175,7 +178,7 @@ export const CRM = ({
           onChange={(e) => onUpdateLead?.(lead.email, { stage: e.target.value })}
           className="text-xs md:text-sm max-w-[6.5rem] md:max-w-none border border-gray-300 dark:border-gray-600 rounded px-1 md:px-2 py-1 bg-white dark:bg-gray-700"
         >
-          <StageOptions />
+          <StageOptions mode={workMode} />
         </select>
       ),
     },
@@ -467,7 +470,7 @@ export const CRM = ({
                 }
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                <StageOptions />
+                <StageOptions mode={workMode} />
               </select>
             </div>
 
@@ -660,7 +663,7 @@ export const CRM = ({
               Stage
               <select value={addForm.stage} onChange={(e) => setAddForm({ ...addForm, stage: e.target.value })}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                <StageOptions />
+                <StageOptions mode={workMode} />
               </select>
             </label>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

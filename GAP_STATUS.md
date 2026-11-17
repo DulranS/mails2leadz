@@ -1965,3 +1965,93 @@ Closed with this: shared customer IDs (8.2). Balancr returns both its lead id an
 Checked and unchanged: the endpoints, the Bearer header, the lead and invoice response wrappers, the seven stages, the invoice statuses (paid, overdue, open), and the since and limit parameters.
 Still on Balancr's side: event-based sync is still open in Balancr's changelog. The stage webhook and the daily sync both run here; the daily sync is the fallback.
 Tests: tests/gap-close-315.test.mjs (6 checks, chained); the existing Balancr tests (balancr, gap-close-280, balancr-sync) still pass. Chained tests: 234 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 316: efficiency: fewer reads in the daily call linking and on the sales numbers
+Built:
+- A call that could not be linked to a customer is marked as checked, and is looked at again only after seven days. Before, every such call was re-read each day for every owner, and the lead inbox was read each time.
+- When no call is due, the daily job now stops before reading the lead inbox, the deals or the phone-call attempts.
+- The sales numbers read the lead inbox once (they read it twice before) and take the web figures from the business settings already read.
+Limits:
+- Efficiency has not been measured on live data; these are read reductions found by reading the code.
+- The history screen still reads several collections in full per customer (quotes, bookings, tickets), filtering in code. Narrowing those queries is left for a pass on live data, because stored customer emails may not all be lower case and a narrower query would miss them.
+- Per-market consent (9.4) still needs a legal decision; per-topic preferences are deliberately not built; event-based sync is open on Balancr's side; integrations beyond the existing ones need keys and docs; live verification needs a deployment.
+Tests: tests/gap-close-316.test.mjs (4 checks, chained); tests/gap-close-314.test.mjs updated to the new check. Chained tests: 235 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+
+## Pass 317: fresh start, legacy invoice copy removed
+Decision: the data is being started fresh, so nothing old needs carrying across. The one-time copy of invoices from the old per-customer path is removed.
+Removed: lib/server/invoice-store.js, lib/invoice-store-rules.js, the invoices migrate route, the billing read's call to it, the daily job's copy step, and tests/gap-close-311.test.mjs. The Pass 298 test is rewritten: it now checks only the single store (no reads of the old path, automatic invoices and owner checks in the main collection, billing reading the main collection).
+Kept: the single invoice store and every reader and writer that uses it.
+Tests: tests/gap-close-298.test.mjs (4 checks, rewritten); 311 removed from the chain. Chained tests: 234 pass; 34 blocked by packages not installed in this sandbox; 0 fail. release-files (5). TypeScript scan clean except the known false positive.
+Not changed by a fresh start: per-market consent (9.4) still needs a legal decision for new contacts; per-topic preferences stay deliberately unbuilt; event-based sync is open on Balancr's side; integrations beyond the existing ones need keys and docs; live verification needs a deployment.
+
+## Pass 318: per-topic marketing stops (closes the per-topic preference gap)
+- Built. A recipient can stop follow-up reminders only, or campaigns and offers only, from the unsubscribe page, in addition to the existing sales stop and stop-all. Each send path now passes its topic: follow-ups use follow_ups; campaigns, broadcasts, journeys, first outreach and WhatsApp use campaigns.
+- The stronger stop is kept. A bounce beats a stop-all, which beats a sales stop, which beats a topic stop, so a later opt-out can never weaken a bounce or a stop-all (this also fixes an older case where a sales opt-out could replace a stop-all record). Topic stops accumulate.
+- A topic stop does not mark the deal Lost, and does not block invoices or replies. A follow-up stop cancels pending follow-up reminders; a campaign stop does not.
+- Limits: a topic stop is a choice of two topics, not a per-template or per-campaign setting. Sends with no topic given default to campaigns. Switch-back-on clears every stop for that address, topics included.
+- Tests: tests/gap-close-318.test.mjs (11 checks, chained). tests/gap-close-313.test.mjs updated to check the stronger-stop rule instead of the old bounce-only line. Full run: 235 pass; 36 blocked by packages not installed in this sandbox; 1 fail before the 313 update, 0 after. Nothing run live.
+
+## Pass 319: CRM push to HubSpot and Pipedrive
+Built:
+- Once a day, each deal that changed since the last run is sent to the owner's HubSpot and/or Pipedrive as a contact. The CRM is checked by email first: a contact already there is left as it is, and a new one is created. Only deals with a usable email are sent.
+- The keys are entered on the Integrations screen under "CRM push", and stored encrypted per account like the other keys. Nothing is sent when no CRM key is set.
+- The last-sent mark is kept on users/{uid}/settings/crm. A rejected key or a server error stops the run, so the next run resumes from the same deal. A bad contact (400 or 422) skips only that deal. At most 200 deals per run.
+Limits:
+- Contacts only. Deals, pipeline stages and activities are not pushed, and nothing is pulled back from the CRM (one-way).
+- Changes to an existing contact's details are not written back; a contact is created once, then left alone.
+- Request shapes were checked against HubSpot and Pipedrive's public docs. Not run against live accounts; live verification needs a deployment.
+- Per-market consent (9.4) still needs a legal decision; event-based sync is open on Balancr's side; integrations beyond these need keys and docs.
+Tests: tests/gap-close-319.test.mjs (14 checks, chained). Chain: 238 pass; 36 blocked by packages not installed in this sandbox; 0 fail.
+
+## Pass 320: CRM deals sync both ways (won and lost); closes the one-way gap from Pass 319
+Built:
+- Each deal with a usable email gets a CRM deal, linked to its contact (HubSpot: deal-to-contact association type 3; Pipedrive v2: title and person_id). The CRM deal id is kept on the AutoLeads deal.
+- Won and lost are kept the same in both directions. Each deal remembers the outcome it last wrote to each CRM. On a run: if the CRM's outcome differs from that, the CRM changed it and AutoLeads takes it (a deal reopened in the CRM goes back to "contacted"); otherwise, if AutoLeads' outcome differs, it is sent. When both changed since the last sync, the CRM's change wins, and the overwrite is the cost of that rule.
+- A CRM deal that was deleted or archived is created again.
+- Linked deals are re-read every run, so a change made in the CRM is found within a day. Changed deals are processed first, then linked deals, least recently checked first, within the run's cap of 200.
+- Change detection now uses the later of lastUpdate and updatedAt. Stage moves write updatedAt, so they were missed before.
+- Each CRM keeps its own contact id (a HubSpot id is never sent to Pipedrive as a person).
+Limits:
+- Open pipeline stages are not mirrored. Only the won and lost outcome, and the existence of the deal, sync. Mirroring open stages needs each owner's HubSpot stage ids or Pipedrive stage ids, which differ per pipeline; that is left out on purpose.
+- Deal amounts are not sent yet: the CRM value fields were not verified against their docs in this pass.
+- A pull applies on the daily run, so a change made in the CRM reaches AutoLeads within a day, not at once.
+- Deals with no usable email are not created in a CRM (a contact needs one). Their existing links still sync.
+- Verified: request shapes were checked against HubSpot's and Pipedrive's docs as fetched in this pass. The HubSpot search doc used versioned paths (crm/objects/2026-09), which the deal calls use. Not run against live accounts; live verification needs a deployment.
+- Per-market consent (9.4) still needs a legal decision; event-based sync is open on Balancr's side.
+Tests: tests/gap-close-320.test.mjs (22 checks, chained); tests/gap-close-319.test.mjs updated to the new code (14 checks). The Firebase calls cannot run in this sandbox, so the loop is checked against its source and the rules are tested directly.
+
+## Pass 321: CRM deal amounts, and the open-stage decision
+- Deal amounts now go to the owner's CRM: HubSpot deal `amount` (a string with 2 decimals) and Pipedrive `value` (with `currency` when the deal has a 3-letter one). Sent on create, and again whenever the deal's value changes (`crmAmounts` on the deal records what was last sent to each CRM).
+- Nothing is read back from the CRM for amounts, so no unverified response field is relied on.
+- Field names checked in the vendor docs this pass: HubSpot deal `amount`; Pipedrive v2 POST and PATCH `/deals` take `value` and `currency`.
+- Open pipeline stages stay out on purpose (decided, not deferred). Mirroring them needs a stage mapping per owner's pipeline; a wrong mapping would silently move deals in their CRM. Won and lost, which drive revenue reporting, remain two-way. Checked: HubSpot `GET /crm/v3/pipelines/deals` and `.../stages`; Pipedrive `GET /api/v2/stages?pipeline_id`. A mapping screen can be added later if owners ask for it.
+- A cleared deal value is not sent: the CRM keeps its last amount.
+- Limit: the Pipedrive deal response field names (value, stage_id) are still not confirmed by the docs, so nothing reads them. Amounts are one-way (AutoLeads to CRM).
+- Tests: tests/gap-close-321.test.mjs (10 checks, chained). Not run against live accounts; live verification needs a deployment.
+
+## Pass 322: landing page claims checked against the code
+- Checked every product claim on app/page.js against lib/switches.js, lib/autosend.js, lib/automation-mode.js and the job code.
+- Fixed: "Automatic invoices on won deals" was listed as off, but autoInvoiceDrafts defaults on (drafts are created, never sent). Replaced with the real off item: automatic e-mailing of invoices and payment reminders (autoBilling, off by default). Added the on-by-default, never-sent invoice drafts line.
+- Fixed: "Watch-list reminders for listings left undecided" had no code behind it. Replaced with the real price watch on chosen listing feeds (lib/deal-watch.js).
+- Rendered the page to static HTML and checked it in headless Chromium: no JavaScript errors, corrected copy present, internal links resolve.
+- Not checked: the mobile layout and visual design. No CSS build (Tailwind compile tooling and node_modules are not available here), so layout needs a real build and a look at phone width.
+
+## Pass 323: HubSpot amounts need the account currency; recruitment decision
+- HubSpot deal amounts go in as plain numbers, with no currency code. The HubSpot deal currency property was not confirmed in the docs this pass, so no property name is guessed. The owner-facing text (lib/integration-catalog.js, CRM sync) now says the HubSpot account currency must match the one used in AutoLeads. Pipedrive sends its currency with the value.
+- Recruitment or headhunting: not built in this release. Decision: stay in the sales scope.
+  - Reasons: the headhunting techniques that work (referrals, networking, face-to-face meetings, a trusted network) are mostly human, so the share AutoLeads can automate is small. Candidates need a different record (profile, CV, consent to be approached) and a different fee model (retained or contingency placement fees), which means a new data model under the pipeline rather than a relabelled one. Cold outreach to individuals also brings consent obligations that this sandbox could not check (see the PDPA note in Balancr's gap log).
+  - Lower-risk pivot that stays on the existing engine: outsourced appointment-setting for other businesses (outbound plus CRM handoff). It is still a service business, so the software is the engine rather than the product on its own.
+  - To test before building anything: run a two-week manual pilot (one recruiter or agency, one client, a fixed number of approaches), measure reply rate and placements, then decide.
+- Tests: `node run-chain.mjs` over the npm test chain: 276 commands, 240 pass, 36 blocked (the `firebase` package is not installed in this sandbox), 0 fail.
+- Not checked: live HubSpot and Pipedrive accounts (needs a deployment); the mobile layout of the landing page.
+
+## Pass 324: work mode (sales or recruitment) and HubSpot deal pipelines
+- Work mode: the account page asks "What do you use AutoLeads for?" Sales and marketing is the default and changes nothing. Recruitment and headhunting changes the words only: the CRM board, business value page, conversations, customers, deal history, customer timeline and stall alerts show recruiter words ("Sourced", "Screened", "Placed", and so on). The stored stage names, reports, guards and CRM sync do not change.
+- Two AI drafts that write to someone already in a deal (the closing nudge and the revival email) get a recruiter rule in recruitment mode: say what the role is, ask if they are interested, do not sell, never promise a job, a salary or an outcome. Sales prompts are byte-for-byte unchanged.
+- Recruitment is a label layer, not a separate product. The placement fee is the deal value. Not built: candidate profiles and CVs, consent to be approached, retained or contingency fee terms. Those need their own data model, and pass 323 records why it was not started.
+- HubSpot stage ids: the won, lost and open ids were hard-coded to the default pipeline (closedwon, closedlost, appointmentscheduled). A custom pipeline would have broken the sync. Now each run reads the owner's deal pipelines (GET /crm/v3/pipelines/deals), uses the default pipeline if present or the first one, finds won (probability 1.0), lost (probability 0.0) and the earliest open stage, and creates deals in that pipeline. If the read fails, the default ids are used, as before.
+- Not done: mirroring the owner's custom open-stage names into AutoLeads. Open deals in HubSpot count as open; their stage name is not copied.
+- Pipedrive: the stage_id, value and currency field names were not checked this pass (the vendor docs redirected and were not reached). Pipedrive code is unchanged.
+- Tests: work-mode 10 checks, HubSpot pipeline 9 checks, and the existing CRM tests (gap-close-320 22, gap-close-321 10) pass. Two existing checks were updated to match the new wiring (gap-close-309 expects the mode passed to the timeline; release-files manifest regenerated, 794 files).
+- Test chain: 278 commands, 242 pass, 36 blocked (the `firebase` package is not installed in this sandbox), 0 fail.
+- Not checked: a live HubSpot or Pipedrive account; the mobile layout of the pages and the landing page (no CSS build here).

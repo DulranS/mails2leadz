@@ -11,7 +11,8 @@ import DraftModal from "../components/DraftModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeCustomers, sanitizeReviewLink } from "../../lib/customers.js";
 import { computeRecurring } from "../../lib/recurring.js";
-import { STAGE_LABELS } from "../../lib/deal-utils.js";
+import { stageLabel } from "../../lib/work-mode.js";
+import { useWorkMode } from "../components/useWorkMode";
 import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { completeFollowUpTask } from "../../lib/firebase-operations.js";
@@ -43,6 +44,7 @@ function Stat({ label, value, hint, tone }) {
 }
 
 export default function CustomersPage() {
+  const workMode = useWorkMode();
   const { user, ready: authReady } = useAuthUser(); // shared sign-in: nothing to wait for when coming back to this page
   // What this page showed last time paints at once; fresh data loads quietly behind it (only the first visit shows a spinner).
   const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|customers`)) || null);
@@ -303,7 +305,7 @@ export default function CustomersPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">{c.businessName || c.email}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${h.cls}`}>{h.label}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{STAGE_LABELS[c.stage]}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{stageLabel(c.stage, workMode)}</span>
                       </div>
                       <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.lifetimeValue > 0 ? ` · paid to date ${money(c.lifetimeValue)}` : ""}{c.estimated ? " (estimate)" : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
                       {c.reasons.length > 0 && <ul className="mt-1 text-xs text-gray-700 dark:text-gray-200 list-disc pl-4">{c.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}

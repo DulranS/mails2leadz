@@ -12,13 +12,12 @@ const STEPS = [
 const GROUPS = [
   { title: 'Find and reach', points: ['Weekly lead searches on Google Places', 'Forms, ads, storefront, inbox and missed calls in one place', 'Journeys you send one step at a time', 'Events with RSVPs, waiting lists and reminders', 'Birthdays, for people who agreed to hear from you'] },
   { title: 'Sell and follow up', points: ['Pipeline, stages and a quarter forecast', 'A battle card before each call, built from your catalogue', 'Deals and customers at risk, with early warnings', 'Proposals, quotes and electronic signature', 'Packages, a pricing check and a walk-away minimum', 'Booking no-shows flagged to rebook'] },
-  { title: 'Buy and resell', points: ['UK company checks and undervalued eBay listings', 'Sold-price comparables and resale margins', 'Sale readiness for your own business', 'Watch-list reminders for listings left undecided'] },
+  { title: 'Buy and resell', points: ['UK company checks and undervalued eBay listings', 'Sold-price comparables and resale margins', 'Sale readiness for your own business', 'A price watch on the listing feeds you choose, flagging undervalued new listings'] },
   { title: 'Support, stock and grow', points: ['One support queue with two-hour targets and a reliability score', 'A catalogue of products, services, packages and offers, with stock and end dates', 'Waiting lists for sold-out items and full events', 'Your own Facebook Page and Instagram, published only when you approve', 'Balancr: the operations app, sharing leads, deal stages and invoice payments'] },
 ];
 
 const SWITCHED_OFF = [
-  'Automatic invoices on won deals',
-  'Automatic reminders for unpaid invoices',
+  'Automatic e-mailing of invoices and payment reminders (Autopilot billing)',
   'Automatic sending of messages',
   'Automatic answers to customers',
   'Automatic journey emails',
@@ -105,6 +104,7 @@ export default function Home() {
               <li key={c} className="flex gap-3 text-sm text-gray-200"><span aria-hidden="true" className="text-blue-400">✓</span><span>{c}</span></li>
             ))}
           </ul>
+          <p className="mt-5 text-sm text-gray-300">On by default, and never sent: an invoice draft for each won deal. You review it and send it yourself.</p>
         </div>
       </section>
 

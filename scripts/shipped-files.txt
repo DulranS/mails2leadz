@@ -105,7 +105,6 @@ app/api/integrations/typeform/connect/route.js
 app/api/integrations/typeform/route.js
 app/api/invoices/cancel/route.js
 app/api/invoices/create/route.js
-app/api/invoices/migrate/route.js
 app/api/invoices/refund-card/route.js
 app/api/invoices/refund-manual/route.js
 app/api/invoices/return/route.js
@@ -283,6 +282,7 @@ app/components/ui/NotificationProvider.js
 app/components/ui/Sidebar.js
 app/components/ui/ThemeProvider.js
 app/components/useDraft.js
+app/components/useWorkMode.js
 app/content/page.js
 app/contracts/page.js
 app/conversations/page.js
@@ -402,6 +402,7 @@ lib/corrective.js
 lib/credit-apply.js
 lib/credit-notes.js
 lib/credit-risk.js
+lib/crm.js
 lib/cross-sell.js
 lib/currency.js
 lib/customer-links.js
@@ -466,7 +467,6 @@ lib/integration-health.js
 lib/integrations.js
 lib/invoice-autosend.js
 lib/invoice-numbering.js
-lib/invoice-store-rules.js
 lib/job-rules.js
 lib/journey-presets.js
 lib/journey-send.js
@@ -615,6 +615,7 @@ lib/server/contact-recovery.js
 lib/server/content-plan.js
 lib/server/credit-apply.js
 lib/server/credit-number.js
+lib/server/crm.js
 lib/server/cron-auth.js
 lib/server/customer-mail.js
 lib/server/customer-timeline.js
@@ -653,7 +654,6 @@ lib/server/intake.js
 lib/server/integration-health.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
-lib/server/invoice-store.js
 lib/server/job-log.js
 lib/server/journey-send.js
 lib/server/journey-triggers.js
@@ -729,6 +729,7 @@ lib/server/voice-agent-service.js
 lib/server/voice-agent.js
 lib/server/webhooks.js
 lib/server/whatsapp.js
+lib/server/work-mode.js
 lib/server/worker-queue-store.js
 lib/server/workspace.js
 lib/service-account.js
@@ -786,6 +787,7 @@ lib/voice-agent.js
 lib/waitlist.js
 lib/weekly-kpi.js
 lib/whatsapp-log.js
+lib/work-mode.js
 lib/worker-categories.js
 lib/worker-queue.js
 lib/workspace-access.js

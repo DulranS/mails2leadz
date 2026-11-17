@@ -41,7 +41,7 @@ t('the daily job links older calls, and the link is recorded as a phone match', 
   assert.ok(daily.includes('await backfillCallEmails(db, uid)'));
   const srv = fs.readFileSync('lib/server/call-backfill.js', 'utf8');
   assert.ok(srv.includes("emailLinkedBy: 'phone_match'"));
-  assert.ok(srv.includes('if (!calls.some((c) => !c.email)) return { linked: 0 };'));
+  assert.ok(srv.includes('if (!due.length) return { linked: 0 };'));
 });
 
 console.log(`gap-close-314: ${n} checks passed`);

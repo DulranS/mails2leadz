@@ -28,7 +28,7 @@ export async function GET(request) {
   if (g.response) return g.response;
   const [deals, leads, targets, support] = await Promise.all([
     getDocs(query(collection(db, 'deals'), where('userId', '==', who.uid), limit(1000))).then((s) => s.docs.map((d) => d.data())).catch(() => []),
-    getDocs(query(collection(db, 'lead_inbox'), where('userId', '==', who.uid), limit(1000))).then((s) => s.docs.map((d) => d.data())).catch(() => []),
+    getDocs(query(collection(db, 'lead_inbox'), where('userId', '==', who.uid), limit(2000))).then((s) => s.docs.map((d) => d.data())).catch(() => []),
     listTargets(db, who.uid).catch(() => []),
     ticketsFor(db, who.uid).catch(() => ({ tickets: [], kpis: null })),
   ]);
@@ -54,7 +54,7 @@ export async function GET(request) {
   const spendRows = (await getDocs(query(collection(db, 'users', who.uid, 'marketing_spend'), limit(200))).then((x) => x.docs.map((d) => d.data())).catch(() => []));
   const monthCut = new Date(end - WINDOW).toISOString().slice(0, 7);
   const spendWin = spendRows.filter((r) => String(r.month || '') >= monthCut).reduce((a, r) => a + (Number(r.amount) || 0), 0);
-  const leadsWin = (await getDocs(query(collection(db, 'lead_inbox'), where('userId', '==', who.uid), limit(2000))).then((x) => x.docs.map((d) => d.data())).catch(() => [])).filter((l) => inWindow(l.receivedAt)).length;
+  const leadsWin = leads.filter((l) => inWindow(l.receivedAt)).length;
   const qualifiedWin = deals.filter((d) => inWindow(d.stageTimes?.qualified)).length;
   const wonWin = deals.filter((d) => d.stage === 'closed_won' && inWindow(d.stageTimes?.closed_won)).length;
   const wonEmails = new Map();
@@ -80,7 +80,7 @@ export async function GET(request) {
     needsGrossMargin: !(Number(savedBiz.grossMarginPct) > 0),
   };
   const supportFigures = { csat: csatSummary(ticketRows, now), deflectionPct: deflectionRate(ticketRows, now) };
-  const webSaved = (await getDoc(doc(db, 'users', who.uid, 'settings', 'business')).then((s) => s.data()?.webTotals || {}).catch(() => ({})));
+  const webSaved = savedBiz.webTotals || {};
   const answered = ticketRows.length ? Math.round((ticketRows.filter((t) => slaStatus(t, now) !== 'breached').length / ticketRows.length) * 100) : null;
   const trust = trustScore({ supportTargetMetPct: answered, openComplaints: ticketRows.filter((t) => t.status !== 'resolved' && t.kind === 'complaint').length, creditRiskCount: credit.length });
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));

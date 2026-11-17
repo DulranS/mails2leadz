@@ -20,13 +20,13 @@ t('a stop-all can be switched back on by the person; a bounce still cannot', () 
 
 t('the suppression check treats a stop-all as blocking everything', () => {
   const src = fs.readFileSync('lib/server/route-helpers.js', 'utf8');
-  assert.ok(src.includes("source === 'bounce' || source === 'all_mail' ? 'all' : 'marketing'"));
+  assert.ok(src.includes('kindOfSource(snap.data()?.source)'));
 });
 
 t('a bounce is never replaced by an opt-out', () => {
   const src = fs.readFileSync('lib/server/suppress.js', 'utf8');
-  assert.ok(src.includes('const keepBounce = before?.source === \'bounce\';'));
-  assert.ok(src.includes('if (!keepBounce) await setDoc('));
+  assert.ok(src.includes('rankOf(before.source) > rankOf(source)'));
+  assert.ok(src.includes('source: keptSource'));
 });
 
 t('the signed link offers stop-all, and the page shows both choices', () => {

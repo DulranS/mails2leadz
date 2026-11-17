@@ -10,7 +10,9 @@ import { stale, put } from "../../lib/swr-cache.js";
 import { getDeals, getConversations, getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
-import { dealDocId, ALL_STAGES, STAGE_LABELS, LOST_REASONS, isClosed } from "../../lib/deal-utils.js";
+import { dealDocId, ALL_STAGES, LOST_REASONS, isClosed } from "../../lib/deal-utils.js";
+import { stageLabel } from "../../lib/work-mode.js";
+import { useWorkMode } from "../components/useWorkMode";
 import { sanitizeTeam } from "../../lib/team.js";
 import { CHANNELS, channelLabel, sanitizeConversation, defaultStageFor, planConversation, MAX_TEXT } from "../../lib/conversations.js";
 
@@ -21,6 +23,7 @@ const EMPTY = { channel: "whatsapp", email: "", businessName: "", text: "" };
 
 export default function ConversationsPage() {
   const { user, ready: authReady } = useAuthUser();
+  const workMode = useWorkMode();
   const [snap0] = useState(() => (user?.uid && stale(`${user.uid}|page|conversations`)) || null);
   const [deals, setDeals] = useState(snap0?.deals || []);
   const [recent, setRecent] = useState(snap0?.recent || []);
@@ -82,7 +85,7 @@ export default function ConversationsPage() {
         for (const t of tasks.docs) { await updateDoc(t.ref, { status: "completed", completedAt: plan.row.at, completedReason: "lead_replied" }).catch(() => {}); stopped++; }
       }
       await addDoc(collection(db, "users", user.uid, "conversations"), plan.row);
-      setNotice(`Saved. ${existing ? "The deal" : "A new deal"} is now ${STAGE_LABELS[plan.write.stage] || plan.write.stage}${stopped ? `, and ${stopped} follow-up${stopped === 1 ? "" : "s"} to ${s.value.email} stopped` : ""}.`);
+      setNotice(`Saved. ${existing ? "The deal" : "A new deal"} is now ${stageLabel(plan.write.stage, workMode) || plan.write.stage}${stopped ? `, and ${stopped} follow-up${stopped === 1 ? "" : "s"} to ${s.value.email} stopped` : ""}.`);
       setF(EMPTY); setRead({ busy: false, error: "", result: null }); setStage(""); setStop(true); setOwner("");
       load();
     } catch (e) { console.error(e); setError("Could not save. Check your connection and try again."); }
@@ -140,7 +143,7 @@ export default function ConversationsPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
             <label className="text-xs text-gray-600 dark:text-gray-300">Pipeline stage after this
-              <select value={shownStage} onChange={(e) => setStage(e.target.value)} className={`${field} mt-1`}>{ALL_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s] || s}</option>)}</select>
+              <select value={shownStage} onChange={(e) => setStage(e.target.value)} className={`${field} mt-1`}>{ALL_STAGES.map((s) => <option key={s} value={s}>{stageLabel(s, workMode) || s}</option>)}</select>
             </label>
             {lost && (
               <label className="text-xs text-gray-600 dark:text-gray-300">Why was it lost?
@@ -156,7 +159,7 @@ export default function ConversationsPage() {
               </select>
             </label>
           )}
-          {existing && isClosed(existing.stage) && <p className="text-xs text-gray-500">This deal is {STAGE_LABELS[existing.stage] || existing.stage}. It stays that way unless you change the stage above.</p>}
+          {existing && isClosed(existing.stage) && <p className="text-xs text-gray-500">This deal is {stageLabel(existing.stage, workMode) || existing.stage}. It stays that way unless you change the stage above.</p>}
           <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px]"><input type="checkbox" className="h-5 w-5" checked={stop} onChange={(e) => setStop(e.target.checked)} />Stop the follow-up emails to this person (they have answered)</label>
           <button type="button" disabled={busy || !f.email || f.text.trim().length < 2} onClick={save} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white`}>{busy ? "Saving..." : "Save to my pipeline"}</button>
         </section>
@@ -170,7 +173,7 @@ export default function ConversationsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">{channelLabel(r.channel)}</span>
                     <span className="font-medium text-gray-900 dark:text-white">{r.businessName || r.email}</span>
-                    <span className="text-xs text-gray-500">{STAGE_LABELS[r.stage] || r.stage} · {String(r.at || "").slice(0, 10)}</span>
+                    <span className="text-xs text-gray-500">{stageLabel(r.stage, workMode) || r.stage} · {String(r.at || "").slice(0, 10)}</span>
                   </div>
                   <p className="text-gray-600 dark:text-gray-300 text-xs mt-1 break-words">{r.summary || String(r.text || "").slice(0, 160)}</p>
                 </li>

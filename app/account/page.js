@@ -13,7 +13,9 @@ import { useAuthUser } from "../components/AuthProvider";
 import { getSettingsDoc } from "../../lib/client-data.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { db, auth } from "../../lib/firebase-client.js";
-import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES, STAGE_LABELS } from "../../lib/deal-utils.js";
+import { DEFAULT_STAGE_PROBABILITY, PIPELINE_STAGES as OPEN_STAGES } from "../../lib/deal-utils.js";
+import { stageLabel, normalizeWorkMode, WORK_MODES, WORK_MODE_INFO } from "../../lib/work-mode.js";
+import { useWorkMode } from "../components/useWorkMode";
 import { exportAllData, deleteAllData } from "../../lib/account-data.js";
 import { CURRENCIES, normalizeCurrency, currencySymbol, sanitizeFxDisplay } from "../../lib/currency.js";
 import { sanitizeStallDays } from "../../lib/pipeline-alerts.js";
@@ -32,6 +34,9 @@ const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-
 
 export default function AccountPage() {
   const { user, ready, workspace, raw } = useAuthUser();
+  const liveWorkMode = useWorkMode();
+  const [modeDraft, setModeDraft] = useState(null); // null until the owner changes it, so a save never writes a mode it did not show
+  const workMode = modeDraft ?? liveWorkMode;
   const [senderDomain, setSenderDomain] = useState("");
   const [senderBusy, setSenderBusy] = useState(false);
   const [senderMsg, setSenderMsg] = useState("");
@@ -347,6 +352,7 @@ export default function AccountPage() {
         bdrMonthlyCost: Math.max(0, Number(bdrCost) || 0),
         bdrCommissionPct: Math.min(100, Math.max(0, Number(bdrPct) || 0)),
         probabilities,
+        ...(modeDraft ? { workMode: modeDraft } : {}),
         updatedAt: new Date().toISOString(),
       }, { merge: true });
       setMsg({ type: "ok", text: "Saved. The AI and your forecasts now use these." });
@@ -595,12 +601,19 @@ export default function AccountPage() {
               <div><label className={label} htmlFor="bdrp">Rep commission on won revenue (%)</label><input id="bdrp" type="number" min="0" max="100" inputMode="decimal" className={field} value={bdrPct} onChange={(e) => setBdrPct(e.target.value)} placeholder="0" /></div>
             </div>
           </details>
+          <div className="mt-4">
+            <label className={label} htmlFor="work-mode">What do you use AutoLeads for?</label>
+            <select id="work-mode" className={field} value={workMode} onChange={(e) => setModeDraft(normalizeWorkMode(e.target.value))}>
+              {WORK_MODES.map((m) => <option key={m} value={m}>{WORK_MODE_INFO[m].label}</option>)}
+            </select>
+            <p className="text-xs text-gray-500 mt-2">{WORK_MODE_INFO[workMode].help} Your data stays the same; only the words change.</p>
+          </div>
           <details className="mt-4">
             <summary className="cursor-pointer text-sm text-gray-700 dark:text-gray-200">Chance of winning at each stage (advanced)</summary>
             <p className="text-xs text-gray-500 mt-2">Applies once a lead is qualified. People you have only contacted are prospects and are not counted as pipeline.</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               {OPEN_STAGES.map((s) => (
-                <div key={s}><label className={label} htmlFor={`p-${s}`}>{STAGE_LABELS[s]} (%)</label><input id={`p-${s}`} type="number" min="0" max="100" className={field} value={probs[s]} onChange={(e) => setProbs({ ...probs, [s]: e.target.value })} /></div>
+                <div key={s}><label className={label} htmlFor={`p-${s}`}>{stageLabel(s, workMode)} (%)</label><input id={`p-${s}`} type="number" min="0" max="100" className={field} value={probs[s]} onChange={(e) => setProbs({ ...probs, [s]: e.target.value })} /></div>
               ))}
             </div>
             <p className="text-xs text-gray-500 mt-2">Start with the defaults and adjust once you've closed a few deals.</p>

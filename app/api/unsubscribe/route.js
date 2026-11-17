@@ -8,6 +8,7 @@ import { getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { verifyUnsubToken } from '../../../lib/server/unsubscribe.js';
 import { suppressContact, resubscribeContact } from '../../../lib/server/suppress.js';
+import { TOPICS, TOPIC_SOURCE } from '../../../lib/contact-rules.js';
 
 const tokenOf = (request) => new URL(request.url).searchParams.get('t') || '';
 
@@ -31,8 +32,16 @@ export async function POST(request) {
       }
       return NextResponse.json({ ok: true, changed: r.changed }, { headers: NO_STORE });
     }
+    // ?action=stop_topic&topic=... stops one kind of marketing email. Everything else still reaches them.
+    const params = new URL(request.url).searchParams;
+    if (params.get('action') === 'stop_topic') {
+      const topic = params.get('topic') || '';
+      if (!TOPICS.includes(topic)) return NextResponse.json({ ok: false, error: 'That is not a kind of email that can be stopped.' }, { status: 400, headers: NO_STORE });
+      await suppressContact(getDb(), { uid: who.uid, email: who.email, reason: 'unsubscribed', source: TOPIC_SOURCE, topics: [topic] });
+      return NextResponse.json({ ok: true, topic }, { headers: NO_STORE });
+    }
     // ?action=stop_all stops every email from this sender, not only sales emails.
-    const stopAll = new URL(request.url).searchParams.get('action') === 'stop_all';
+    const stopAll = params.get('action') === 'stop_all';
     await suppressContact(getDb(), { uid: who.uid, email: who.email, reason: 'unsubscribed', source: stopAll ? 'all_mail' : 'unsubscribe_link' });
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   } catch (e) {
