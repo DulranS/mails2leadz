@@ -8,6 +8,8 @@ import { google } from 'googleapis';
 import { cachedQuery, invalidateCache } from '../../../lib/firebase-cache.js';
 import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../../../lib/server/route-helpers.js';
 import { countToday } from '../../../lib/server/daily-count.js';
+import { sendBreakerFor } from '../../../lib/server/send-breaker.js';
+import { senderGateFor } from '../../../lib/server/sender-auth.js';
 import { fillTemplate, resolveSenderName } from '../../../lib/server/template-vars.js';
 import { isAngleId } from '../../../lib/angles.js';
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
@@ -199,6 +201,12 @@ export async function POST(request) {
     if (gate.response) return gate.response;
     const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS, await sendRampCap(db, userId, { record: true })); // the plan can only LOWER the safety cap; a new account ramps up
 
+    // Circuit breaker (pass 326): if recent opt-outs and bounces are above 0.3% of sends, stop and ask the owner to review the list.
+    const breaker = await sendBreakerFor(db, userId);
+    if (breaker.state === 'paused') {
+      return NextResponse.json({ error: breaker.message, breaker }, { status: 423 });
+    }
+
     // Daily safety limit (protects the customer's Gmail account from being flagged for bulk sending).
     // If today's count cannot be read at all we continue, but the limit is also enforced inside the loop below.
     const sentToday = await countToday(db, 'sent_emails', 'sentAt', userId);
@@ -241,6 +249,14 @@ export async function POST(request) {
     const results = [];
     
     const senderAddress = await getSenderAddress(db, userId); // postal address for the footer, read once per request
+
+    // v326: marketing email must show a valid contact address (ICO), so a bulk send waits until the owner has one.
+    if (!senderAddress) {
+      return NextResponse.json({ error: 'Add your postal address under Account > Your business before sending. Marketing email must show a contact address.' }, { status: 422 });
+    }
+    // v326: refuse to send from a domain that is definitely missing SPF or DMARC (unknown DNS results never block).
+    const senderGate = await senderGateFor(senderEmail);
+    if (!senderGate.ok) return NextResponse.json({ error: senderGate.message }, { status: 422 });
     
     for (const row of dataRows) {
       if (remaining <= 0) {

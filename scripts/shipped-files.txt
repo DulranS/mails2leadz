@@ -575,6 +575,7 @@ lib/sales-metrics.js
 lib/sales-red-flags.js
 lib/seasonality.js
 lib/segments.js
+lib/send-breaker.js
 lib/send-ramp.js
 lib/send-timing.js
 lib/sender-auth.js
@@ -694,6 +695,7 @@ lib/server/route-helpers.js
 lib/server/routine-owner.js
 lib/server/run-log.js
 lib/server/search-console.js
+lib/server/send-breaker.js
 lib/server/send-ramp.js
 lib/server/sender-auth.js
 lib/server/shared-cache.js
