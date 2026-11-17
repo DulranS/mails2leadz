@@ -586,6 +586,7 @@ lib/server-login.js
 lib/server/abandoned-basket-job.js
 lib/server/ad-import.js
 lib/server/ad-sync.js
+lib/server/ai-operator-keys.js
 lib/server/assign-arrival.js
 lib/server/audit.js
 lib/server/auto-post.js

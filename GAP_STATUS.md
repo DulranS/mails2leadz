@@ -2055,3 +2055,5 @@ Tests: tests/gap-close-320.test.mjs (22 checks, chained); tests/gap-close-319.te
 - Tests: work-mode 10 checks, HubSpot pipeline 9 checks, and the existing CRM tests (gap-close-320 22, gap-close-321 10) pass. Two existing checks were updated to match the new wiring (gap-close-309 expects the mode passed to the timeline; release-files manifest regenerated, 794 files).
 - Test chain: 278 commands, 242 pass, 36 blocked (the `firebase` package is not installed in this sandbox), 0 fail.
 - Not checked: a live HubSpot or Pipedrive account; the mobile layout of the pages and the landing page (no CSS build here).
+
+Pass 325: operator AI keys for the owner's accounts only (AI_OPERATOR_UIDS, lib/server/ai-operator-keys.js). The server's or app-saved DeepSeek/OpenAI/Anthropic keys are no longer a default: SaaS accounts use their own saved key, and team members of the owner's account are covered through the owner's uid. SAAS_OPERATOR_AI is removed. callAI never falls back to server keys when there is no database. Test: tests/operator-ai-keys.test.mjs (6 checks), in the chain. Chain result: run again at the end of this pass.
