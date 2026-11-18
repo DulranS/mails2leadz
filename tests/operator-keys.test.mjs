@@ -11,7 +11,7 @@ t('bootstrap values (database credentials, the encryption key, the admin list) c
 });
 
 t('the keys that sign people in and connect apps can be set in the app', () => {
-  for (const k of ['NEXT_PUBLIC_GOOGLE_CLIENT_ID', 'NEXT_PUBLIC_GOOGLE_CLIENT_SECRET', 'EBAY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET', 'STRIPE_PLATFORM_SECRET_KEY', 'ANTHROPIC_API_KEY']) {
+  for (const k of ['NEXT_PUBLIC_GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'EBAY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET', 'STRIPE_PLATFORM_SECRET_KEY', 'ANTHROPIC_API_KEY']) {
     assert.ok(OPERATOR_KEYS.includes(k), k);
   }
 });

@@ -2613,7 +2613,15 @@ function DashboardComponent() {
         const tasks = await loadFollowUpTasks(user.uid);
         setFollowUpTasks(tasks);
         const dueNow = (tasks.pending || []).some((t) => !t.scheduledFor || new Date(t.scheduledFor) <= new Date());
-        if (dueNow) setShowFollowUpQueue(true);
+        // Opens itself at most once per browser session (pass 330), not on every visit.
+        if (dueNow) {
+          let shown = false;
+          try { shown = sessionStorage.getItem("autoleads_queue_auto_shown") === "1"; } catch { /* no storage: show once */ }
+          if (!shown) {
+            try { sessionStorage.setItem("autoleads_queue_auto_shown", "1"); } catch { /* ignore */ }
+            setShowFollowUpQueue(true);
+          }
+        }
       } catch (error) {
         console.error("Follow-up prefetch error:", error);
       }
