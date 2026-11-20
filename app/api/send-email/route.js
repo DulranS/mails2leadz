@@ -15,6 +15,8 @@ import { isAngleId } from '../../../lib/angles.js';
 import { withTextFooter, postalAddressProblem } from '../../../lib/server/unsubscribe.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { nicheFields } from '../../../lib/niche.js';
+import { bodyWithNotice, markNoticeGiven } from '../../../lib/server/privacy-notices.js';
+import { complaintVerdict } from '../../../lib/autosend.js';
 
 // The dashboard sends in small batches, so one request should finish well inside this.
 import { sendRampCap } from '../../../lib/server/send-ramp.js';
@@ -197,6 +199,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Spam complaints (pass 347): the owner's saved Postmaster counts. At or over the 0.3% limit, sends stop until the counts are reviewed
+    // on Account. Saving counts below the limit clears it. Automated runs pause the same way (lib/server/autosend.js).
+    const apNow = await getDoc(doc(db, 'users', userId, 'settings', 'autopilot')).catch(() => null);
+    const apData = apNow?.exists?.() ? apNow.data() : {};
+    const complaintStop = complaintVerdict({ delivered: apData.postmasterDelivered, complaints: apData.postmasterComplaints });
+    if (complaintStop.pause) return NextResponse.json({ error: complaintStop.reason, code: 'complaints_over' }, { status: 409 });
+
     const gate = await guardTenant(db, userId); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
     if (gate.response) return gate.response;
     const emailCap = Math.min(CONFIG.MAX_DAILY_EMAILS, gate.ent.limits.emailsPerDay ?? CONFIG.MAX_DAILY_EMAILS, await sendRampCap(db, userId, { record: true })); // the plan can only LOWER the safety cap; a new account ramps up
@@ -326,13 +335,16 @@ export async function POST(request) {
       try {
         // Opt-out link + headers (null when they cannot work, e.g. no public https URL). The stored copy of the email stays without the footer.
         const optOut = optOutFor(userId, email, senderAddress);
-        const rawMessage = createMimeMessage(email, subject, withTextFooter(body, optOut), senderEmail, senderName, replyToEmail, emailAttachments, optOut?.headers || '');
+        // A sourced person still owed the privacy notice gets it in this email (pass 334). The stored copy below stays without it.
+        const noticed = await bodyWithNotice(db, userId, email, body, senderName);
+        const rawMessage = createMimeMessage(email, subject, withTextFooter(noticed.body, optOut), senderEmail, senderName, replyToEmail, emailAttachments, optOut?.headers || '');
         const encoded = Buffer.from(rawMessage).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         
         const response = await gmail.users.messages.send({
           userId: 'me',
           requestBody: { raw: encoded }
         });
+        if (noticed.notice) await markNoticeGiven(db, noticed.notice).catch(() => {}); // sent: the notice is given now
         
         // Save to Firebase AFTER successful send
         const emailData = {

@@ -126,7 +126,7 @@ t('a deal the CRM no longer has (404, or deleted) is treated as missing and crea
 });
 t('each CRM keeps its own contact id, so a HubSpot id is never used as a Pipedrive person', () => {
   assert.match(crm, /const contactIds = \{\}/);
-  assert.match(crm, /contactId: contactIds\[provider\]/);
+  assert.match(crm, /contactId: contact\.id/); // pass 347: the contact is { id, created }
 });
 t('the sync writes the outcome it sent back to the deal, and the stage when the CRM changed it', () => {
   assert.match(crm, /crmSynced: synced/);

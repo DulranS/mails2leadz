@@ -32,7 +32,8 @@ export function useLeadFinder({ enabled, onAdded }) {
   const stop = useRef(false);
   const onAddedRef = useRef(onAdded);
   useEffect(() => { onAddedRef.current = onAdded; }, [onAdded]);
-  const merge = (d) => setState((s) => ({ ...s, job: d.job ?? s.job, settings: d.settings ?? s.settings, today: d.today ?? s.today, loaded: true }));
+  // privacyOverdue: an array, or null when the server could not check (kept as null so the panel says so).
+  const merge = (d) => setState((s) => ({ ...s, job: d.job ?? s.job, settings: d.settings ?? s.settings, today: d.today ?? s.today, privacyOverdue: d.privacyOverdue !== undefined ? d.privacyOverdue : s.privacyOverdue, loaded: true }));
 
   const refresh = useCallback(async () => {
     try { merge(await call("GET")); setError(""); } catch (e) { setError(e.message); setState((s) => ({ ...s, loaded: true })); }
@@ -75,6 +76,19 @@ export function useLeadFinder({ enabled, onAdded }) {
     return true;
   }, [loop, running]);
 
+  // Recruitment sourcing (pass 333): screen the owner's candidate list against a role brief, then queue those who pass.
+  const sourceCandidates = useCallback(async (brief, rows, meta = {}) => {
+    if (running) return false;
+    setError("");
+    try {
+      setRunning(true);
+      merge(await call("POST", { action: "source-candidates", brief, rows, listSource: meta.listSource || "", lawfulBasis: meta.lawfulBasis || "" }));
+    } catch (e) { setError(e.message); setRunning(false); return false; }
+    setRunning(false);
+    await loop();
+    return true;
+  }, [loop, running]);
+
   const cancel = useCallback(async () => {
     stop.current = true;
     try { merge(await call("POST", { action: "cancel" })); } catch (e) { setError(e.message); }
@@ -100,7 +114,19 @@ export function useLeadFinder({ enabled, onAdded }) {
     return saveSettings({ enabled: true, searches: [...cur.searches, ...add] });
   }, [saveSettings, state.settings]);
 
-  return { ...state, running, error, setError, start, importList, loop, cancel, saveSettings, saveAuto, addNightly, refresh };
+  // Erasure on request (pass 334): removes the person's privacy-notice record and inbox lead, and stops all mail to them.
+  const deleteNotice = useCallback(async (id) => {
+    try { setError(""); merge(await call("POST", { action: "privacy-delete", id })); return true; }
+    catch (e) { setError(e.message); return false; }
+  }, []);
+
+  // The owner told this person by hand (pass 335): the notice leaves the overdue list.
+  const markTold = useCallback(async (id) => {
+    try { setError(""); merge(await call("POST", { action: "privacy-told", id })); return true; }
+    catch (e) { setError(e.message); return false; }
+  }, []);
+
+  return { ...state, running, error, setError, start, importList, sourceCandidates, loop, cancel, saveSettings, saveAuto, addNightly, deleteNotice, markTold, refresh };
 }
 
 const pct = (job) => (job?.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : job?.status === "done" ? 100 : 0);
@@ -111,6 +137,17 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
   const [listSource, setListSource] = useState("");
   const [listBasis, setListBasis] = useState("");
   const [listError, setListError] = useState("");
+  // Recruitment sourcing form (pass 333): role brief + a candidate CSV, screened on the server.
+  const [briefRole, setBriefRole] = useState("");
+  const [briefLocation, setBriefLocation] = useState("");
+  const [briefMust, setBriefMust] = useState("");
+  const [briefNice, setBriefNice] = useState("");
+  const [briefExclude, setBriefExclude] = useState("");
+  const [briefMin, setBriefMin] = useState("50");
+  const [briefSource, setBriefSource] = useState("");
+  const [briefBasis, setBriefBasis] = useState("");
+  const [briefRows, setBriefRows] = useState(null); // { name, rows } once a candidate CSV is read in the browser
+  const [briefError, setBriefError] = useState("");
   const { job, settings, today, running, error } = finder;
   const live = job.status === "running";
   const st = job.stats || {};
@@ -228,6 +265,71 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
               <button type="button" onClick={runImport} disabled={running || live || list.preview.stats.usable === 0} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>Read websites and add to my inbox</button>
               <button type="button" onClick={() => setList(null)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Cancel</button>
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Hiring? Screen a candidate list against a role</h3>
+        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Upload your own candidate list as a CSV (name, title, company, skills, email or phone, LinkedIn). Each person is scored against the role. Only people who pass are added to your inbox, each with a privacy-notice date. Nothing is sent.</p>
+        <div className="grid sm:grid-cols-2 gap-2 mt-2">
+          <label className="text-sm text-gray-700 dark:text-gray-200">Role<input value={briefRole} onChange={(e) => setBriefRole(e.target.value)} maxLength={120} placeholder="e.g. Senior Node.js engineer" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Location (optional)<input value={briefLocation} onChange={(e) => setBriefLocation(e.target.value)} maxLength={120} placeholder="e.g. Colombo" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Must-have skills (comma separated)<input value={briefMust} onChange={(e) => setBriefMust(e.target.value)} maxLength={300} placeholder="e.g. node, postgres, aws" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Nice-to-have skills (comma separated)<input value={briefNice} onChange={(e) => setBriefNice(e.target.value)} maxLength={300} placeholder="e.g. next.js, terraform" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Leave out these companies (comma separated)<input value={briefExclude} onChange={(e) => setBriefExclude(e.target.value)} maxLength={300} className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Minimum fit score (0 to 100)<input type="number" min={0} max={100} value={briefMin} onChange={(e) => setBriefMin(e.target.value)} className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Where did this list come from?<input value={briefSource} onChange={(e) => setBriefSource(e.target.value)} maxLength={120} placeholder="e.g. Applicants to job ad, Nov 2026" className={input} /></label>
+          <label className="text-sm text-gray-700 dark:text-gray-200">Lawful basis for using it<select value={briefBasis} onChange={(e) => setBriefBasis(e.target.value)} className={input}><option value="">Choose one</option><option value="legitimate_interests_b2b">Business contacts (legitimate interests, B2B)</option><option value="consent">The people consented</option><option value="contract">Existing contract with them</option></select></label>
+        </div>
+        <label className={`${btn} inline-flex items-center border border-indigo-400 dark:border-indigo-500 text-indigo-700 dark:text-indigo-300 mt-2 cursor-pointer ${live || running ? "opacity-50 pointer-events-none" : ""}`}>
+          Choose a candidate CSV
+          <input type="file" accept=".csv,text/csv" className="sr-only" disabled={live || running} onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            setBriefError(""); setBriefRows(null);
+            if (!f) return;
+            if (f.size > 5 * 1024 * 1024) { setBriefError("That file is over 5 MB. Split it into smaller files."); return; }
+            Papa.parse(f, {
+              header: true, skipEmptyLines: "greedy", worker: false,
+              complete: (res) => {
+                const rows = (res.data || []).filter((r) => r && typeof r === "object");
+                if (!rows.length) { setBriefError("That file has no rows. Use a CSV with a header row."); return; }
+                setBriefRows({ name: f.name, rows: rows.slice(0, 2000) });
+              },
+              error: () => setBriefError("That file could not be read. Save it as CSV (UTF-8) and try again."),
+            });
+          }} />
+        </label>
+        {briefRows && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">{briefRows.name}: {briefRows.rows.length} row{briefRows.rows.length === 1 ? "" : "s"} read.</p>}
+        {briefError && <p role="alert" className="text-sm text-red-700 dark:text-red-300 mt-2">{briefError}</p>}
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button type="button" disabled={!briefRows || running || live} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`} onClick={async () => {
+            const words = (s) => String(s).split(",").map((x) => x.trim()).filter(Boolean);
+            const brief = { role: briefRole.trim(), location: briefLocation.trim(), mustHave: briefMust, niceToHave: briefNice, excludeCompanies: briefExclude, minScore: Number(briefMin) || 0 };
+            if (!brief.role && !words(briefMust).length && !words(briefNice).length) { setBriefError("Describe the role first: a title and the skills you need."); return; }
+            if (!briefSource.trim() || !briefBasis) { setBriefError("Say where this list came from and the lawful basis for using it."); return; }
+            setBriefError("");
+            if (await finder.sourceCandidates(brief, briefRows.rows, { listSource: briefSource.trim(), lawfulBasis: briefBasis })) setBriefRows(null);
+          }}>Screen and add to my inbox</button>
+        </div>
+
+        {finder.privacyOverdue === null && <p role="alert" className="text-sm text-amber-800 dark:text-amber-200 mt-3">Could not check the privacy notices right now. Reload the page to try again.</p>}
+        {Array.isArray(finder.privacyOverdue) && finder.privacyOverdue.length > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-300 dark:border-amber-600 p-3">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Privacy notices overdue ({finder.privacyOverdue.length})</h4>
+            <p className="text-xs text-gray-700 dark:text-gray-200 mt-1">These people were found from a list and have not yet been told how you got their details. The notice goes out with your next email to them. People with only a phone number cannot get it by email: tell them yourself, then press Told by me. Erase deletes their record and inbox lead and stops all mail to them.</p>
+            <ul className="mt-2 space-y-2">
+              {finder.privacyOverdue.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-800 dark:text-gray-100">
+                  <span className="break-all">{r.email || "phone or profile only"} · due {r.noticeBy}</span>
+                  <span className="flex gap-2">
+                    <button type="button" onClick={() => finder.markTold(r.id)} className="min-h-[44px] px-3 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100" aria-label={`Mark ${r.email || "this person"} as told`}>Told by me</button>
+                    <button type="button" onClick={() => finder.deleteNotice(r.id)} className="min-h-[44px] px-3 rounded-lg text-sm border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300" aria-label={`Erase ${r.email || "this person"}`}>Erase</button>
+                  </span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

@@ -39,7 +39,7 @@ t('hiding is not deleting: every catalog key is still listed, once', () => {
 });
 
 t('the sales flow stays in the sidebar; secondary pages move to More, under the same labels', () => {
-  assert.deepEqual(navIn('Sell'), ['/crm', '/customers', '/quotes', '/bookings', '/products']);
+  assert.deepEqual(navIn('Sell'), ['/crm', '/customers', '/quotes', '/orders', '/bookings', '/products']); // Orders added in pass 338
   for (const href of ['/owners', '/partners', '/bets', '/contracts']) assert.ok(navIn('More').includes(href), href);
   assert.equal(NAV_ITEMS.find((i) => i.href === '/owners').label, 'Deal owners');
 });

@@ -2067,3 +2067,213 @@ Pass 328 (close-out of the partly closed gaps): bulk email is refused when the p
 Pass 329 (closes the last partly closed gap, AutoLeads 7, per-lead AI and data cost meter): every lead-linked AI call (11 call sites) carries the lead's email, which is stored only as a hash. Each call adds its cost to that lead's meter (ai_lead_usage) and stops at AI_LEAD_BUDGET_USD (default 0.50 per lead, HTTP 429 with a plain message). Cached answers are free and skip the check. The KPI screen shows AI cost per lead beside cost per lead (GET /api/kpis, aiCost). Data cost: each enriched record stores how many paid lookups it used (vendorCalls: Apollo, then People Data Labs; at most two, each record looked up once). Hunter domain searches are per company and are not metered per lead. Checks: tests/ai-lead-budget.test.mjs (9 checks), in the test chain. Deploy note: the ai_lead_usage collection is written by the server only.
 
 Pass 330 (admin and AI keys, follow-up queue, DeepSeek default): the follow-up queue opens by itself at most once per browser session (sessionStorage), not on every visit. DeepSeek is the default AI provider unless AI_PROVIDER names another one. AI_OPERATOR_UIDS can be saved in the app (operator settings) as well as in the environment; the saved list is read from the in-memory cache, which warms on the server's usual settings read. Not run here: the sandbox lacks the firebase package, so the runtime check is blocked (syntax checked only).
+
+Pass 331 (recruitment sourcing and events mode): a role brief (title, must-have and nice-to-have skills, location, excluded companies, minimum score) screens the owner's own candidate list. Rows need a name, a way to contact, and no opt-out; they are scored by whole-word skill matches, de-duplicated, and queued through the same source and lawful-basis gate as any list (find-leads action source-candidates). Candidates land in the Lead Inbox with recruiter stage names. A third work mode, Events and bookings, uses the same pipeline with event stage names. Not built: searching the open web for candidates; no candidate-search source is wired in. Tests: tests/recruit-sourcing.test.mjs (7 checks, pass). Not run end to end: the sandbox lacks the Firebase packages.
+
+## Pass 332
+- Recruitment sourcing: each sourced candidate now carries a privacy-notice date (one calendar month from sourcing, end-of-month clamped), per ICO guidance on finding candidates ("as soon as possible, and by no later than one month"). The date is shown on the lead's category line; a candidate contacted earlier still needs notice at first contact (not tracked automatically).
+- Tests: recruit-sourcing (9 checks) pass.
+- Not built here: the brief-entry form in the sourcing panel (the source-candidates API exists; no form yet).
+
+## Pass 333
+- Hiring: a sourcing form in the Find leads panel. Enter the role brief (role, location, must-have and nice-to-have skills, companies to leave out, minimum fit score), the list source and the lawful basis, choose a candidate CSV, and the server screens it and adds the people who pass to the inbox. It uses the existing source-candidates action, so the same checks apply (name, contact, opt-outs, excluded companies, minimum score, lawful basis).
+- Not run in a browser here: the form is a client component. Its JSX parses; the server path is covered by the recruit-sourcing tests (9 checks).
+
+## Pass 334
+- Privacy notice for sourced people (GDPR / UK GDPR Article 14). Each person found through a candidate list now gets a notice record with its due date (one month from sourcing). The notice text is added after the body of their first email, before the opt-out footer, from the automatic sender and from the manual send route. The record is marked given only after Gmail accepts the email. A failed check stops the send rather than sending without the notice.
+- Overdue list in the hiring panel: records past their date with no notice given. "Erase" deletes the record and the inbox lead, and writes an all-mail stop for the address (an existing stronger stop is kept).
+- Fixed: the hiring form has never worked on the server. The action guard rejected source-candidates as an unknown action since pass 331. It is now accepted.
+- Fixed: the notice date was written into the lead's category text, which is clipped at 100 characters, so the date could be cut off. It now lives in the notice record only.
+- Two stale tests updated to the current code: ui-guards (follow-up panel opens once per session, pass 330) and work-mode (events mode, pass 331). Both were failing in v333.
+- Tests run here: privacy-notice (7 checks), recruit-sourcing (9), autosend, lead-inbox, release-files (manifest regenerated, 802 files), ui-guards, work-mode. All pass. Parse check passes for every changed file, including the JSX panel.
+- Not covered by the notice: broadcast, quote, invoice, and follow-up senders. A sourced person first contacted through one of those gets no notice. People with only a phone number cannot receive the notice by email; they appear on the overdue list for the owner to tell directly.
+- Not run here: the Firestore paths (privacy_notices, suppressions) and the browser panel. Thirty-five test files need packages this sandbox does not have (firebase, stripe, twilio, web-push), including the route and workspace tests that cover send-email.
+- Outside code: the notice wording needs legal review before use.
+
+## Pass 335
+- Privacy notice now reaches every send path that can reach a sourced person: automatic follow-up (send-followup), customer mail (customer-mail), quotes (quotes/send), invoices (invoices/send) and broadcasts. Booking, signup, daily digests and system mail are not changed: they go only to people who asked for them, or to the owner.
+- "Told by me": the owner can mark a person as told by hand. It sets the notice given (givenBy: owner) and removes them from the overdue list. This closes the phone-only gap, since those people cannot get the notice by email.
+- Customer row -> "Full history": opens /history with the customer's email filled in and loaded. Invalid addresses give the plain page (lib/customer-history-link.js, tests/customer-history-link.test.mjs, 2 checks).
+- Checked and found already built, no change: editing and deleting logged entries (deal-activity route, pass 309+); ticket category change by hand and per-category counts on the support panel (pass 304); a per-customer history that shows deal stage changes (pass 309); calls matched to a customer by phone as well as email (daily matching, later pass).
+- Pipedrive field names: the vendor docs confirm title, person_id, value and currency for create, and value and currency for update (Pipedrive API v2 pages, fetched this pass). The code calls the v1 endpoint; the v2 page does not state v1 field names, so v1 is not confirmed.
+- Left open, each needing an owner or legal decision, not code: duplicate merge (merging can lose data); per-topic consent preferences (deliberately not built: the blocking rule would change everywhere); per-market consent (legal); recruitment candidate profiles, CVs and fee terms (new data model); invoices held in two collections (moving them changes numbers, so it needs an owner decision); copying invoices from before a store change (Billing reads its invoices on the page); HubSpot custom open-stage names (needs a second, read-back sync direction that cannot be tested here without a HubSpot account).
+- Not run here: browser paths, live Firestore, email. 35 test files need packages this sandbox lacks. Suite here: 251 pass, 0 fail.
+- Outside code: legal review of the notice wording; deploy; a browser check of the new links and the overdue panel.
+
+## Pass 336
+- HubSpot custom stage names: the owner's own open-stage name for a deal is read on each sync and shown on the history page as "In your CRM: <name>". Closed (won or lost) and deleted deals drop it. Read-only: the name is never written back to HubSpot. Pure helper hubspotStageLabels (lib/crm.js), dealHistory crmStage, tests/crm-stage-names.test.mjs (7 checks). The HubSpot read itself is not run live.
+- Pipedrive v1 field names: still unconfirmed. The vendor pages reachable from here document v2 only (title, person_id, value, currency, stage_id all writable on v2). The code calls v1; moving the integration to v2 would change live behaviour and cannot be tested here.
+- Suite here: 252 pass, 0 fail. 35 test files need packages this sandbox lacks.
+
+## Pass 337: decision items closed; no new code
+
+- Invoices in two places: closed by the pass 317 decision (fresh start). The copy from the old per-customer path was removed then, and no code reads or writes users/{uid}/invoices now (checked by search). The pass 297 and pass 311 notes describe the state before that and are history. An import route was built in this pass and reverted, because it would undo the pass 317 decision. Assumption: no live account needs its older invoices copied. If one does, that is a one-off data task for the owner, not a feature.
+- Duplicate merge: closed as detection only, by decision. The weekly email lists possible duplicates (lib/server/gap-tools.js, possibleDuplicateCustomers). Merges stay a manual choice, since an automatic merge can lose deals, invoices or messages. Assumption made without asking, as the owner asked.
+- Per-topic consent: built in pass 318 (stop follow-ups, stop campaigns, plus the existing sales stop and stop-all). The pass 335 note "deliberately not built" is superseded. Assumption: two topics are enough; no per-template or per-campaign setting.
+- Recruitment candidate profiles: not built. Assumption: the sourcing screen (pass 331) stays the recruitment tool and the sales pipeline keeps the label. No CV storage and no fee terms, since CVs are personal data and need a legal decision first.
+- Tests: 249 pass, 0 fail, 37 cannot run in this sandbox (every one needs a package not installed here: firebase, stripe, next, googleapis, pptxgenjs, web-push, twilio, redis, node-ical). The earlier count of 252 pass / 35 sandbox is out of date.
+- Still open, outside code: deploy; a browser check of the pass 333 to 336 screens; live Firestore, Gmail and HubSpot paths; legal review of the privacy notice wording; per-market consent (legal); Pipedrive v1 field names (vendor docs cover v2 only).
+
+## Pass 338: remaining implementable gaps closed in code
+
+Built in this pass:
+- Orders screen (/orders, in the Sell menu). One line per accepted quote, with its status worked out from the invoices made for it: confirmed, invoiced or paid. Counts and the value not yet paid. The pure rule is orderRows in lib/orders.js. The invoice stays the record of money.
+- Sales figures follow the chosen window. "Won" used a fixed 365 days, while the funnel already followed the 3, 6 or 12 month choice or the exact range. Now both do. The label shows the window. A call with no window is unchanged.
+- WhatsApp consent records a purpose: "replies and updates" or "marketing". A record with no purpose says not_stated. The Integrations form asks for it. Sends are not yet gated by purpose, so the record is evidence only.
+- Your own customer fields (lib/custom-fields.js; app/components/CustomFields.js). You define up to 10 fields (text, number, date, yes or no) once. Each customer's values are kept on their deal, since there is one deal per customer. A customer with no deal yet cannot hold values until a deal exists.
+- Tests: tests/gap-close-338.test.mjs (17 checks). tests/gap-close-283.test.mjs updated for the new Sell menu item.
+
+Stale "not built" notes, now shown closed by the code (no change needed):
+- Atomic duplicate-run lock: built in pass 281 (claimJobRun).
+- Website chat widget: built in pass 288.
+- Per-campaign ROAS: built in pass 282.
+- Owner's view of the automation run log: the audit page shows each owner's runs (/api/audit reads users/{uid}/runs). The global job_runs ledger stays admin-only, since it is not per owner.
+- Structured BANT: the CRM already has a select for each of budget, decision maker, real need and timeline.
+- Invoices in two places: closed by the pass 317 fresh-start decision.
+
+Decided, not built (stated in code terms):
+- A single approval centre: each approval sits beside the record it approves. A second list would duplicate them.
+- Automatic upsell or win-back sending: customer-facing, so it stays with the owner (consent rules).
+- Mirroring open pipeline stages into HubSpot or Pipedrive: needs each owner's stage mapping (pass 321).
+- Duplicate merge: detection only (weekly email).
+- Recruitment candidate profiles and CVs: personal data, needs a legal decision first.
+
+Still outside code (cannot be closed here):
+- Missed-call text-back: needs a Twilio missed-call webhook set up by the owner.
+- Traffic, click-through and bounce rate: needs analytics or Search Console access on the account.
+- Per-market consent (9.4): a legal question.
+- Integrations beyond the existing ones: need platform keys and documentation.
+- Not built, and not on the gap list: custom fields in filters, CSV export or import. Add them when a customer asks.
+
+## Pass 339: the open items from pass 338 closed in code
+
+Built in this pass:
+- WhatsApp sends are gated by the consent purpose. A quote or an invoice needs "replies and updates" or "marketing"; a follow-up needs "marketing". A customer with no purpose recorded (not_stated) is blocked until it is recorded again on Integrations. The gate is canSendWhatsApp in lib/server/whatsapp.js, called from app/api/whatsapp/send/route.js with the message kind.
+- EU and UK addresses (opt-in markets, list in lib/consent-rules.js as OPT_IN_TLDS): marketing is not allowed unless the contact has consented. Replies and invoices still go. This is a conservative default and a product decision, not legal advice. The basis stays legitimate interests for B2B.
+- Clearing a custom field now sticks. updateDealExtras replaces customFields instead of merging, so a cleared value is removed (lib/deal-client.js).
+- A customer with no deal yet can hold custom values. They are kept in users/{uid}/customer_fields/{id} and shown on the Customers page.
+- Candidate profiles for recruitment mode (/candidates, in the More menu): name, contact, role, stage, notes (no CVs, no bank details), and whether the candidate agreed to be approached. Each profile gets a 12-month retention date. Past it, the profile is flagged for the owner to decide. Nothing is deleted automatically. No fee terms, since the fee is the deal value (lib/candidates.js, app/candidates/page.js).
+- Tests: tests/gap-close-338.test.mjs has 43 checks, and it passes. tests/integrations.test.mjs has the purpose and kind fixtures and the new purpose assertions. It cannot run in the sandbox (stripe is missing). The same gate logic was re-run from a scratch copy of whatsapp.js and passes.
+
+Decided in this pass (changes the pass 338 list):
+- Recruitment profiles: built, without CVs and without fee terms.
+- Per-market consent: EU and UK are opt-in by default. Other markets are unchanged.
+- Duplicate merge: unchanged, detection plus a manual merge.
+
+Still outside code: missed-call text-back (needs the owner to set up the Twilio missed-call webhook), traffic and click-through figures (needs analytics or Search Console access), and the legal wording of the per-market consent (a legal sign-off).
+
+Checks for this pass: the full npm test chain run per file (288 commands): 251 pass, 0 fail, 37 blocked by missing packages (sandbox). The manifest has 808 files.
+
+## Pass 340: the remaining code gaps closed (the gap table)
+
+Built in this pass:
+- Sri Lanka marketing consent: `.lk` addresses join the opt-in default, the same as EU and UK. Marketing to them needs recorded consent (PDPA 2022 s.27(1)). Replies and invoices still go. Our conservative default, not legal advice.
+- Data requests (/data-requests, in the More menu): log a request to see, correct, erase or withdraw consent. Each gets a 21-working-day answer date (PDPA s.17(1)), counted Monday to Friday. Public holidays are not excluded, so the date is never later than the legal one. Overdue and due-soon requests are flagged. The owner answers the person; the app only tracks the time. Rules in lib/data-requests.js.
+- Customers CSV (Customers page, "Download customers (CSV)"): name, email, company, stage, value, currency, and one column per custom field. Yes or no fields write Yes or No. Customers with saved values but no deal are included, once each. Formula-like text is neutralised. lib/customers-csv.js.
+- Spam complaints (Account page): type delivered and complaint counts from Google Postmaster Tools. The rate is judged against 0.3% (limit) and 0.1% (aim); under 100 delivered is too few to judge. Nothing is sent. lib/sender-auth.js, complaintRateStatus.
+
+Checked, already built (no change, the table was out of date):
+- Recruitment brief form: FindLeads, pass 333.
+
+Not closed here (blocked, not code):
+- Accounting sync with QuickBooks and Xero: needs an app key from each provider and a connected account. Export stays manual (accounting-export.js).
+- Pipedrive field names on v1: the deal writes use v2 (crm.js); a live check is needed before changing anything else.
+- Bad-review alert: the app has no review data. It needs a review platform connection or a manual review log, which is a separate decision.
+- Twilio missed-call text-back, traffic and click-through figures, platform approvals, further integrations: owner or platform setup (unchanged from pass 339).
+- Legal: per-market consent beyond UK, EU and LK; the privacy notice wording; breach notification rules (PDPA s.23, not yet issued); processor contracts with email and WhatsApp providers (PDPA s.21).
+
+Checks for this pass: tests/gap-close-340.test.mjs (31 checks, passing). Sweep: full test chain 289 commands, 252 pass, 0 fail, 37 blocked by missing packages (sandbox). tests/gap-close-338.test.mjs updated: its .lk assertions and route pins now match this pass. The full test chain (289 commands) is recorded in the sweep line of this pass.
+
+## Pass 341: the last code gaps closed (the gap table)
+
+| Item | Status | Where | Note |
+|---|---|---|---|
+| Bad-review alert | Built | lib/reviews.js, app/reviews | Owner logs reviews by hand; 2 stars or fewer alerts until answered. No third-party review feed. |
+| Custom-field filters | Built | app/components/CustomFieldFilters.js | Uses lib/custom-fields.js. |
+| Pipedrive v2 | Built | lib/server/crm.js | Every call on v2. Live check needs an account. |
+| Xero and QuickBooks sync | Built, not live | lib/accounting-sync.js | Push once, poll payments. Needs client keys. |
+| Website traffic (GA4) | Built, not live | lib/traffic.js | 28 days; needs GA4 property and analytics.readonly. |
+| Balancr event receiver | Built | app/api/balancr/events | Signed, timestamped, one-time per event ID. |
+| Missed-call text-back | Built | lib/server/missed-call-reply.js | Once per caller per 24 hours; stops when automations are paused (pass 342). |
+| Legal items | Outside code | - | Per-market consent beyond UK/EU/LK, privacy wording, PDPA s.23, processor contracts. |
+
+## Pass 343: breach register (PDPA s.23 log, the last implementable item from pass 341)
+
+Built in this pass:
+- Breach register (More menu, /breaches): the owner logs each personal data breach, what it affected, containment, and the dates the Authority and the people were told. Owner-only, under users/{uid}/breach_register.
+- Prompts, not rules: "Decide: tell the Authority?" when personal data may be affected and no Authority date is recorded; "Review" when still open after 72 hours. No notice deadline is computed.
+
+Not closed here (legal or external, outside code):
+- PDPA s.23 notice rules and any time limit: not set in code; the owner decides with an adviser.
+- Per-market consent beyond UK, EU and LK; privacy notice wording; processor contracts with email and WhatsApp providers (PDPA s.21).
+- QuickBooks and Xero live sync, GA4 traffic live, Pipedrive v1 check, Twilio text-back webhook: need keys, accounts or owner setup.
+
+Tests: tests/gap-close-343.test.mjs (16 checks, chained). tests/gap-close-338.test.mjs route pins updated for /breaches. Per-file runs: 283, 289, 293, 295, 338, 340, 341, 343 pass.
+
+## Pass 344: CVs on candidate profiles (last recruitment gap), erasure and export reach candidates
+
+Built in this pass:
+- CV as pasted text on a candidate profile (/candidates, CV button). Capped at 20,000 characters; removable at any time; flagged past the 12-month retention date.
+- Erasure and access requests now scan the candidates subcollection by the email on the profile (lib/erase-contact.js), so the CV goes with it. Before this, candidates were missed by both tools.
+- A candidate is approached only with recorded agreement and its time (canApproach).
+
+Not closed here (decided or outside code):
+- CV files (PDF, Word) are not uploaded: pasted text only, so no file storage is added.
+- Fee terms: not held; the placement fee is the deal value (pass 331).
+- A profile with no email is outside the email-keyed erase and export tools; the owner deletes it by hand.
+- Lawful basis for holding CVs and the notice to the candidate: legal, outside code.
+
+Tests: tests/gap-close-344.test.mjs (11 checks, chained). Per-file runs: erase-contact, gap-close-338 (route pins), 343, 344 and release-files pass.
+
+## Pass 345: deadlines checked against the sources; candidates with no email
+
+Checked against the sources (web research, this pass):
+- Access requests: the Personal Data Protection (Amendment) Act No. 22 of 2025 (certified 30 Oct 2025) changes s.17 to one month, extendable to three. Commencement not confirmed, so the app uses the earlier of 21 working days and one month.
+- Breach notice: s.23 sets no period; the DPA draft Data Breach Notification Rules v1.0 set 72 hours to the Authority (rule 5(1)) and notice to people at the same time (rule 9). Draft: the register uses 72 hours and says so.
+- Direct marketing: s.27(1) requires consent, not opt-out. The app's opt-in list for Sri Lanka matches.
+- Processors: s.21(1) requires processors to be bound by a contract. Contracts themselves are outside code.
+- Section 2 and Part III of the Act take effect 1 Jan 2027 (FT, Gazette 2498/16).
+
+Built in this pass:
+- Data requests: earlier of 21 working days and one calendar month.
+- Breach register: 72-hour Authority deadline from discovery time, two overdue/due states, a people-told action.
+- Candidates: a CV needs an email on the profile; no-email profiles are flagged; the erase form takes an optional name, and matching no-email profiles are listed for review (not deleted).
+
+Not closed (outside code):
+- Commencement of the 2025 amendment and the final breach rules: Gazette / DPA.
+- Processor contracts (s.21): documents, not code.
+- Still a legal decision: lawful basis for holding CVs, candidate notice.
+
+Tests: tests/gap-close-345.test.mjs (20 checks, chained). Tests 340, 343, 344 updated. Per-file runs pass: 338, 340, 343, 344, 345, erase-contact, release-files.
+
+## Pass 346: Autosend pauses on spam complaints (from the research report)
+
+Checked against the codebase before building: sequences, reporting, API keys, webhooks, one-click unsubscribe (POST), SPF/DKIM/DMARC checks, and the 0.3% and 0.1% complaint rates already exist. The one real gap was that the complaint rate was calculated on Account but never used to stop sending.
+
+Built:
+- Save the owner's Postmaster counts (delivered, spam complaints) on Account. They are stored with the autopilot settings.
+- Before each automated run, at or over 0.3% (with at least 100 delivered) Autosend pauses with a plain reason. Under the limit it runs as before.
+- Pure rule: complaintVerdict in lib/autosend.js. Wiring: lib/server/autosend.js, lib/draft-queue.js (sanitizer), app/account/page.js.
+- Manual sends too (app/api/send-email/route.js): at or over the limit the send route returns 409 with code complaints_over and the reason, so the dashboard shows it and nothing is sent. Clearing it means saving lower counts on Account.
+
+Not closed (decided or outside code):
+- The counts are typed in by hand from Google Postmaster Tools; the app does not read them. Google's API for Postmaster data is not used.
+- Once paused, Autosend stays paused until the owner switches it back on, even after lower counts are saved.
+
+Tests: tests/gap-close-346.test.mjs (8 checks, chained after 345). Related runs pass: autosend (13), sender-auth, gap-close-344 and 345, release-files.
+
+## Pass 347 - CRM sync log (match, create, skip and error record)
+
+Gap: a deal with no usable email was skipped without a trace, matches and failures were only in the server console, and the owner could not see what the last CRM run did.
+
+Built:
+- Each CRM action on a deal is recorded with a reason: created (new or matched existing contact by email), sent (status or amount), pulled (the CRM changed the status), skipped (no usable email) and failed (the error message, for example a rejected key).
+- The log is kept on users/{uid}/settings/crm: the last 50 entries from the latest run that did something, plus the last check time. A quiet day does not wipe the log.
+- Owner route: app/api/crm-sync/route.js (read only, signed in). Panel: app/components/CrmSyncLog.js, shown on Integrations under the signal feeds card. It shows which CRMs are connected, the totals and each entry with its reason.
+- Pure helpers in lib/crm.js: syncLogEntry, capSyncLog, syncLogSummary. Wiring: lib/server/crm.js (helpers now return { id, created } so a match is told apart from a new contact).
+
+Not closed (decided or outside code):
+- The log covers the latest run that did something. Earlier runs are not kept beyond those 50 entries.
+- The run itself was not exercised against a live HubSpot or Pipedrive account, and Firestore was not run here (the sandbox lacks the firebase package).
+
+Tests: tests/gap-close-347.test.mjs (16 checks, chained after 346). Updated the wording checks in gap-close-319 and gap-close-320 for the new return shape (same behaviour).

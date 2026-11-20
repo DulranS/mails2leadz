@@ -1,8 +1,9 @@
 "use client";
 // Customer history: every email, quote, invoice, booking, support question, logged call or meeting, summarised call and deal stage change for one customer, newest first.
 // The deal card shows where the deal is and how it got there. The owner can log, edit and delete their own entries.
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { historyHref } from "../../lib/customer-history-link.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 
@@ -26,6 +27,16 @@ export default function HistoryPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState("");
   const [editing, setEditing] = useState(null); // { ref, summary, nextStep } while an entry is being changed
+
+  // Opened from a customer row: /history?email=... fills the box and loads that customer straight away (pass 335).
+  useEffect(() => {
+    try {
+      const fromLink = new URLSearchParams(window.location.search).get("email") || "";
+      const href = historyHref(fromLink);
+      if (href !== "/history") { setEmail(fromLink.trim().toLowerCase()); load(fromLink.trim().toLowerCase()); }
+    } catch { /* a bad address in the link leaves the plain page */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = async (address) => {
     setError("");
@@ -142,6 +153,7 @@ export default function HistoryPage() {
         {deal ? (
           <section className={card} aria-label="Deal">
             <p className="font-medium text-gray-900 dark:text-white text-sm">Deal: {deal.stage} · {OUTCOME[deal.outcome] || deal.outcome}{deal.value ? ` · ${deal.value}` : ""}</p>
+            {deal.crmStage && <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">In your CRM: {deal.crmStage}</p>}
             {deal.lostReason ? <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{deal.lostReason}</p> : null}
             {deal.steps.length > 0 ? (
               <ol className="mt-3 space-y-1 text-xs text-gray-600 dark:text-gray-300">

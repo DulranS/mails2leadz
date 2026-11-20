@@ -87,7 +87,12 @@ export async function GET(request) {
   const reps = repScorecard(deals, now).map((r) => ({ ...r, name: r.owner === 'unassigned' ? 'Unassigned' : (memberList.find((m) => String(m.id) === String(r.owner))?.name || 'Team member') }));
   // `support` is the support figures (csat, deflection); the ticket queue summary stays in `kpis` (salesKpis reads it).
   const aiCost = await aiCostPerLead(db, who.uid).catch(() => null); // the per-lead AI meter (pass 329)
-  return NextResponse.json({ months, kpis: salesKpis({ deals, leads, targets, tickets: support.tickets }), support: supportFigures, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, aiCost, web: webSaved, revenue: revenueFigures }, { headers: NO_STORE });
+  // The sales figures follow the same window as the funnel: the chosen months, or the exact range (pass 338).
+  const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const salesWindow = range
+    ? { windowStart: range.start, windowEnd: range.end, windowLabel: `${dayOf(range.start)} to ${dayOf(range.end - 86400000)}` }
+    : { windowStart: end - WINDOW, windowEnd: end, windowLabel: `last ${months} months` };
+  return NextResponse.json({ months, kpis: salesKpis({ deals, leads, targets, tickets: support.tickets, ...salesWindow }), support: supportFigures, money, forecast, atRisk, demand, reps, creditRisk: credit, trust, dso, funnel, aiCost, web: webSaved, revenue: revenueFigures }, { headers: NO_STORE });
 }
 
 export async function POST(request) {

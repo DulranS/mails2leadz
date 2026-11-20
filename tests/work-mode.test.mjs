@@ -10,7 +10,7 @@ let n = 0; const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
 
 t('sales is the default; anything unknown falls back to sales', () => {
   assert.equal(DEFAULT_WORK_MODE, 'sales');
-  assert.deepEqual(WORK_MODES, ['sales', 'recruitment']);
+  assert.deepEqual(WORK_MODES, ['sales', 'recruitment', 'events']); // events added in pass 331
   assert.equal(normalizeWorkMode('recruitment'), 'recruitment');
   assert.equal(normalizeWorkMode('bogus'), 'sales');
   assert.equal(normalizeWorkMode(undefined), 'sales');

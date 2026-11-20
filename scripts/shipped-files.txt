@@ -2,6 +2,9 @@ app/accept/[token]/page.js
 app/account/page.js
 app/admin/page.js
 app/analytics/page.js
+app/api/accounting/[system]/callback/route.js
+app/api/accounting/[system]/route.js
+app/api/accounting/sync/route.js
 app/api/ad-spend/sync/route.js
 app/api/admin/operator-settings/route.js
 app/api/admin/tenants/route.js
@@ -20,6 +23,7 @@ app/api/audit/route.js
 app/api/auth/callback/route.js
 app/api/automation-control/route.js
 app/api/autopilot/route.js
+app/api/balancr/events/route.js
 app/api/balancr/sync/route.js
 app/api/balancr/webhook/[uid]/route.js
 app/api/battle-card/route.js
@@ -50,6 +54,7 @@ app/api/contacts/export/route.js
 app/api/contacts/inbox/route.js
 app/api/contacts/lookup/route.js
 app/api/credit-notes/route.js
+app/api/crm-sync/route.js
 app/api/cron/autosend/route.js
 app/api/cron/balancr-sync/route.js
 app/api/cron/broadcasts/route.js
@@ -143,6 +148,7 @@ app/api/quotes/route.js
 app/api/quotes/send/route.js
 app/api/reorder/route.js
 app/api/research-company/route.js
+app/api/reviews/route.js
 app/api/saas/checkout/route.js
 app/api/saas/portal/route.js
 app/api/sales-tools/deck.pptx/route.js
@@ -184,6 +190,7 @@ app/api/today/route.js
 app/api/track-company/route.js
 app/api/track/click/route.js
 app/api/track/open/route.js
+app/api/traffic/route.js
 app/api/twilio/missed-call/[uid]/route.js
 app/api/unsubscribe/route.js
 app/api/upsell/route.js
@@ -212,7 +219,9 @@ app/bets/page.js
 app/billing/page.js
 app/book/page.js
 app/bookings/page.js
+app/breaches/page.js
 app/business/page.js
+app/candidates/page.js
 app/components/AccessNotice.js
 app/components/AppShell.js
 app/components/AuthFetch.js
@@ -235,6 +244,9 @@ app/components/Collapsible.js
 app/components/CommandPalette.js
 app/components/ConnectButtons.js
 app/components/ConnectionBanner.js
+app/components/CrmSyncLog.js
+app/components/CustomFieldFilters.js
+app/components/CustomFields.js
 app/components/CustomerLinks.js
 app/components/DayStart.js
 app/components/DealScreen.js
@@ -269,6 +281,7 @@ app/components/SupportAndKpis.js
 app/components/TagBox.js
 app/components/TeamAccess.js
 app/components/TodayActions.js
+app/components/TrafficFigures.js
 app/components/Upsell.js
 app/components/VisitorVoice.js
 app/components/WaitingList.js
@@ -291,6 +304,7 @@ app/crm/page.js
 app/customers/page.js
 app/dashboard/layout.js
 app/dashboard/page.js
+app/data-requests/page.js
 app/enquire/page.js
 app/events/[token]/page.js
 app/help/[uid]/page.js
@@ -303,6 +317,7 @@ app/landing/page.js
 app/layout.js
 app/leads/page.js
 app/manage/page.js
+app/orders/page.js
 app/owners/page.js
 app/page.js
 app/paid/page.js
@@ -312,6 +327,7 @@ app/privacy/page.js
 app/products/page.js
 app/quotes/page.js
 app/rate/[uid]/[ticketId]/page.js
+app/reviews/page.js
 app/robots.js
 app/room/[uid]/[dealId]/page.js
 app/site/page.js
@@ -336,6 +352,7 @@ lib/acceptance.js
 lib/access.js
 lib/account-data.js
 lib/accounting-export.js
+lib/accounting-sync.js
 lib/action-list.js
 lib/admin-actions.js
 lib/agreement.js
@@ -355,6 +372,7 @@ lib/automation-mode.js
 lib/autosend.js
 lib/back-in-stock.js
 lib/balance.js
+lib/balancr-events.js
 lib/balancr-inbox.js
 lib/balancr.js
 lib/battle-card.js
@@ -365,6 +383,7 @@ lib/billing.js
 lib/birthdays.js
 lib/booking.js
 lib/brand.js
+lib/breach-register.js
 lib/broadcast.js
 lib/bundles.js
 lib/business-metrics.js
@@ -373,6 +392,7 @@ lib/calendar-events.js
 lib/calendar-links.js
 lib/call-backfill.js
 lib/call-summary.js
+lib/candidates.js
 lib/capacity.js
 lib/case-study.js
 lib/cash-cycle.js
@@ -407,12 +427,16 @@ lib/credit-risk.js
 lib/crm.js
 lib/cross-sell.js
 lib/currency.js
+lib/custom-fields.js
+lib/customer-history-link.js
 lib/customer-links.js
 lib/customer-timeline.js
 lib/customer-watch.js
+lib/customers-csv.js
 lib/customers.js
 lib/dashboard-config.js
 lib/dashboard-utils.js
+lib/data-requests.js
 lib/day-start.js
 lib/deal-activity.js
 lib/deal-client.js
@@ -497,6 +521,7 @@ lib/membership.js
 lib/meta-capi.js
 lib/meta-leads.js
 lib/meta-purchases.js
+lib/missed-call-text-rules.js
 lib/money.js
 lib/multi-touch.js
 lib/next-actions.js
@@ -528,6 +553,7 @@ lib/postage.js
 lib/pptx-deck.js
 lib/preflight.js
 lib/pricing.js
+lib/privacy-notice.js
 lib/products.js
 lib/profit.js
 lib/promo-results.js
@@ -544,6 +570,7 @@ lib/raw-email.js
 lib/realtime-voice.js
 lib/recommended-setup.js
 lib/recovery.js
+lib/recruit-sourcing.js
 lib/recurring.js
 lib/redis.js
 lib/redux/hooks.js
@@ -565,6 +592,7 @@ lib/retry-rules.js
 lib/returns.js
 lib/revenue-kpis.js
 lib/review-asks.js
+lib/reviews.js
 lib/risk.js
 lib/roi-loop.js
 lib/routine-owner.js
@@ -587,6 +615,7 @@ lib/server-auth.js
 lib/server-firestore.js
 lib/server-login.js
 lib/server/abandoned-basket-job.js
+lib/server/accounting-store.js
 lib/server/ad-import.js
 lib/server/ad-sync.js
 lib/server/ai-operator-keys.js
@@ -672,6 +701,7 @@ lib/server/mailbox-verify.js
 lib/server/meta-capi-sync.js
 lib/server/meta-purchases.js
 lib/server/milestones.js
+lib/server/missed-call-reply.js
 lib/server/niche-evidence.js
 lib/server/open-day.js
 lib/server/open-track.js
@@ -686,6 +716,7 @@ lib/server/payments.js
 lib/server/pipeline-run.js
 lib/server/places-leads.js
 lib/server/prepare-drafts.js
+lib/server/privacy-notices.js
 lib/server/promo.js
 lib/server/push.js
 lib/server/queue-checks.js
@@ -693,6 +724,7 @@ lib/server/quote-replies.js
 lib/server/relationship-asks.js
 lib/server/reply-triage.js
 lib/server/reroute.js
+lib/server/reviews.js
 lib/server/route-helpers.js
 lib/server/routine-owner.js
 lib/server/run-log.js
@@ -779,6 +811,7 @@ lib/tiktok-sync.js
 lib/time-log.js
 lib/timezone-rules.js
 lib/today-actions.js
+lib/traffic.js
 lib/trends.js
 lib/trust.js
 lib/twilio-signature.js

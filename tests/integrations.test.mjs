@@ -120,14 +120,24 @@ t('the insights request names the account without its act_ prefix doubled, and a
 });
 
 t('a WhatsApp send needs the keys, an approved template, no opt-out, and recorded consent with a phone', () => {
-  const ok = { consent: true, phone: '+94770000000' };
-  assert.equal(canSendWhatsApp({ ready: false, templateSid: 'HX1', blocked: false, consent: ok }).ok, undefined);
+  const ok = { consent: true, phone: '+94770000000', purpose: 'marketing' };
+  assert.equal(canSendWhatsApp({ ready: false, templateSid: 'HX1', blocked: false, consent: ok, kind: 'followup' }).ok, undefined);
   assert.match(canSendWhatsApp({ ready: false, templateSid: 'HX1', blocked: false, consent: ok }).error, /not connected/);
   assert.match(canSendWhatsApp({ ready: true, templateSid: '', blocked: false, consent: ok }).error, /template/);
   assert.match(canSendWhatsApp({ ready: true, templateSid: 'HX1', blocked: true, consent: ok }).error, /opted out/);
   assert.match(canSendWhatsApp({ ready: true, templateSid: 'HX1', blocked: false, consent: null }).error, /consent/);
   assert.match(canSendWhatsApp({ ready: true, templateSid: 'HX1', blocked: false, consent: { consent: false, phone: '+9' } }).error, /consent/);
-  assert.deepEqual(canSendWhatsApp({ ready: true, templateSid: 'HX1', blocked: false, consent: ok }), { ok: true });
+  assert.deepEqual(canSendWhatsApp({ ready: true, templateSid: 'HX1', blocked: false, consent: ok, kind: 'followup' }), { ok: true });
+  // Pass 339: the purpose the customer agreed to must cover the kind of message.
+  const replies = { consent: true, phone: '+94770000000', purpose: 'replies_and_updates' };
+  const base = { ready: true, templateSid: 'HX1', blocked: false };
+  assert.deepEqual(canSendWhatsApp({ ...base, consent: replies, kind: 'invoice' }), { ok: true });
+  assert.deepEqual(canSendWhatsApp({ ...base, consent: replies, kind: 'quote' }), { ok: true });
+  assert.match(canSendWhatsApp({ ...base, consent: replies, kind: 'followup' }).error, /marketing consent/);
+  assert.deepEqual(canSendWhatsApp({ ...base, consent: { ...replies, purpose: 'marketing' }, kind: 'followup' }), { ok: true });
+  const legacy = { consent: true, phone: '+94770000000', purpose: 'not_stated' };
+  assert.match(canSendWhatsApp({ ...base, consent: legacy, kind: 'invoice' }).error, /Record what this customer agreed/);
+  assert.match(canSendWhatsApp({ ...base, consent: { consent: true, phone: '+9' }, kind: 'quote' }).error, /Record what this customer agreed/);
 });
 
 t('WhatsApp template ids come from the environment by kind; readiness needs the three Twilio keys', () => {

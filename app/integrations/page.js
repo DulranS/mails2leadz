@@ -11,6 +11,7 @@ import IntakeUrls from "../components/IntakeUrls";
 import ConnectButtons from "../components/ConnectButtons";
 import OutlookConnect from "../components/OutlookConnect";
 import SignalFeedsCard from "../components/SignalFeedsCard";
+import CrmSyncLog from "../components/CrmSyncLog";
 import { CATALOG_GROUPS as KEY_GROUPS, CORE_GROUP_TITLES, CORE_SERVICE_IDS } from "../../lib/integration-catalog.js";
 import OpenYourTools from "../components/OpenYourTools.js";
 
@@ -43,7 +44,7 @@ export default function IntegrationsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
-  const [consent, setConsent] = useState({ email: "", phone: "", agreed: false });
+  const [consent, setConsent] = useState({ email: "", phone: "", agreed: false, purpose: "replies_and_updates" });
   const [send, setSend] = useState({ email: "", kind: "quote", v1: "", v2: "" });
   const [voiceConsent, setVoiceConsent] = useState({ email: "", phone: "", agreed: false });
   const [call, setCall] = useState({ email: "", purpose: "" });
@@ -117,7 +118,7 @@ export default function IntegrationsPage() {
   });
 
   const recordConsent = () => run(async () => {
-    const r = await post("/api/whatsapp/consent", { email: consent.email, phone: consent.phone, consent: consent.agreed });
+    const r = await post("/api/whatsapp/consent", { email: consent.email, phone: consent.phone, consent: consent.agreed, purpose: consent.purpose });
     if (!r.ok) { setError(r.data.error || "Could not save the consent."); return; }
     setNotice(consent.agreed ? "Consent recorded. You can now send a WhatsApp template to this customer." : "Withdrawn. No WhatsApp messages will be sent to this customer.");
   });
@@ -314,6 +315,7 @@ export default function IntegrationsPage() {
                 <label className="text-sm text-gray-700 dark:text-gray-200">Customer email<input className={field} type="email" value={consent.email} onChange={(e) => setConsent({ ...consent, email: e.target.value })} /></label>
                 <label className="text-sm text-gray-700 dark:text-gray-200">WhatsApp number (with country code)<input className={field} value={consent.phone} onChange={(e) => setConsent({ ...consent, phone: e.target.value })} /></label>
               </div>
+              <label className="block text-sm text-gray-700 dark:text-gray-200 mt-3">What they agreed to receive<select className={field} value={consent.purpose} onChange={(e) => setConsent({ ...consent, purpose: e.target.value })}><option value="replies_and_updates">Replies and order or booking updates</option><option value="marketing">Marketing too (offers and news)</option></select></label>
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 mt-3 min-h-[44px]"><input type="checkbox" checked={consent.agreed} onChange={(e) => setConsent({ ...consent, agreed: e.target.checked })} /> The customer agreed to WhatsApp messages from me</label>
               <button type="button" disabled={busy || !consent.email || !consent.phone} onClick={recordConsent} className={`${solid} mt-2`}>Save</button>
             </section>
@@ -437,6 +439,7 @@ export default function IntegrationsPage() {
       </details>
       <div className="mt-4"><OutlookConnect /></div>
       <div className="mt-4"><SignalFeedsCard /></div>
+      <div className="mt-4"><CrmSyncLog /></div>
     </DashboardLayout>
   );
 }

@@ -73,7 +73,8 @@ t('the sync reads the pipeline once per run and uses its stages', () => {
   const src = fs.readFileSync('lib/server/crm.js', 'utf8');
   assert.match(src, /hubspotAdapter\(cfg\.hubspot\.token, fetchImpl, await hubspotPipeline\(cfg\.hubspot\.token, fetchImpl\)\)/);
   assert.match(src, /\/crm\/v3\/pipelines\/deals/);
-  assert.match(src, /hubspotOutcome\(\(await r\.json\(\)\)\?\.properties\?\.dealstage, pipe\.stages\)/);
+  // Pass 336: the read now returns the outcome and the owner's stage name together (remoteDeal).
+  assert.match(src, /const stageId = \(await r\.json\(\)\)\?\.properties\?\.dealstage;\s*return \{ outcome: hubspotOutcome\(stageId, pipe\.stages\)/);
 });
 
 console.log(`  ${n} HubSpot pipeline checks passed`);

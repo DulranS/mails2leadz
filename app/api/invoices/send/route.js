@@ -12,6 +12,7 @@ import { sanitizeFxDisplay, approxSentence, fixedRateSentence } from '../../../.
 import { isForeignInvoice } from '../../../../lib/billing.js';
 import { invoiceState } from '../../../../lib/billing.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
+import { bodyWithNotice, markNoticeGiven } from '../../../../lib/server/privacy-notices.js';
 import { openPixelUrl, trackedHtml } from '../../../../lib/server/open-track.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 
@@ -64,7 +65,10 @@ export async function POST(request) {
   try {
     const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
     const pixel = process.env.TRACK_OPENS === 'off' ? '' : openPixelUrl(who.uid, id, base, 'open-invoice');
-    sent = await box.sendRaw(buildRawEmail({ from: box.email, fromName: senderName, to: inv.email, subject: text.subject, body: text.body, html: pixel ? trackedHtml(text.body, pixel) : '' }));
+    // A sourced person still owed the privacy notice gets it in this email too (pass 335).
+    const noticed = await bodyWithNotice(db, who.uid, inv.email, text.body, senderName);
+    sent = await box.sendRaw(buildRawEmail({ from: box.email, fromName: senderName, to: inv.email, subject: text.subject, body: noticed.body, html: pixel ? trackedHtml(noticed.body, pixel) : '' }));
+    if (noticed.notice) await markNoticeGiven(db, noticed.notice).catch(() => {});
   } catch (e) {
     console.error('[invoices/send] gmail failed:', String(e?.message || '').slice(0, 120));
     return json({ error: 'Gmail did not accept the message. Nothing was recorded as sent. Try again.' }, 502);

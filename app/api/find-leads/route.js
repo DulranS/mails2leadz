@@ -6,7 +6,9 @@
 // POST { action: "step" }                               work through the queue    (time-boxed; call again until finished)
 // POST { action: "cancel" }                             stop the running search
 // POST { action: "settings", enabled, searches }        the nightly routine (saved searches)
-// GET                                                   progress + nightly settings + today's allowance
+// POST { action: "source-candidates", brief, rows, listSource, lawfulBasis }  screen a candidate list against a role brief
+// POST { action: "privacy-delete", id }                 erase one sourced person on request (record, inbox lead, all mail stopped)
+// GET                                                  progress + nightly settings + today's allowance
 import { NextResponse, after } from 'next/server';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
@@ -17,6 +19,8 @@ import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadF
 import { needsAutoRefresh } from '../../../lib/lead-finder.js';
 import { buyListGate } from '../../../lib/consent-rules.js';
 import { mapImportRows } from '../../../lib/lead-import.js';
+import { normaliseBrief, prepareCandidates } from '../../../lib/recruit-sourcing.js';
+import { writeSourcedNotices, overdueFor, eraseNotice, markNoticeTold } from '../../../lib/server/privacy-notices.js';
 import { suggestTargets } from '../../../lib/server/auto-targets.js';
 import { loadAutopilot, prepareDraftsForUser } from '../../../lib/server/prepare-drafts.js';
 import { QUEUE_KINDS } from '../../../lib/draft-queue.js';
@@ -27,17 +31,23 @@ const ok = (body) => NextResponse.json({ success: true, attribution: OSM_ATTRIBU
 const fail = (status, error, code) => NextResponse.json({ success: false, error, code }, { status, headers: NO_STORE });
 const STATUS = { DAILY_LIMIT: 429, BAD_SEARCH: 422, AREA_NOT_FOUND: 422, AREA_TOO_BIG: 422, BAD_QUERY: 422, MAP_UNAVAILABLE: 503, MAP_BUSY: 503, JOB_RUNNING: 409, BAD_LIST: 422 };
 
-async function overview(db, uid) {
+// privacy: also list the sourced people whose privacy notice is overdue. Only the status load, a screen and an erase ask for it:
+// a search calls overview on every step, and reading the notice list each time would cost a read per open notice per step.
+async function overview(db, uid, { privacy = false } = {}) {
   const [job, settings] = await Promise.all([loadJob(db, uid), loadFinderSettings(db, uid)]);
   const used = job?.usage?.day === new Date().toISOString().slice(0, 10) ? job.usage : { searches: 0, sites: 0 };
-  return { job: publicJob(job), settings, today: { searches: used.searches || 0, sites: used.sites || 0, ...limits() } };
+  const base = { job: publicJob(job), settings, today: { searches: used.searches || 0, sites: used.sites || 0, ...limits() } };
+  if (!privacy) return base;
+  // null (not []) when the check itself failed, so the panel can say so.
+  const privacyOverdue = await overdueFor(db, uid, new Date().toISOString().slice(0, 10)).catch(() => null);
+  return { ...base, privacyOverdue };
 }
 
 export async function GET(request) {
   const who = identify(request);
   if (who.response) return who.response;
   if (!isAdminMode()) return fail(503, 'The lead finder needs a server connection to the database. Set FIREBASE_SERVICE_ACCOUNT_JSON on the server first.', 'NO_ADMIN');
-  try { return ok(await overview(getDb(), who.uid)); } catch (e) { console.error('find-leads status error:', e); return fail(500, 'Could not read the finder status right now.'); }
+  try { return ok(await overview(getDb(), who.uid, { privacy: true })); } catch (e) { console.error('find-leads status error:', e); return fail(500, 'Could not read the finder status right now.'); }
 }
 
 export async function POST(request) {
@@ -64,11 +74,47 @@ export async function POST(request) {
       return ok({ ...(await overview(db, uid)), settings });
     }
 
-    if (action !== 'start' && action !== 'step' && action !== 'import-list') return fail(400, 'Unknown action.', 'BAD_ACTION');
+    if (action === 'privacy-told') {
+      // The owner has told this person by hand (pass 335): the notice leaves the overdue list.
+      const res = await markNoticeTold(db, uid, body.id);
+      if (!res.ok) return fail(404, 'That privacy notice record was not found.', 'NOT_FOUND');
+      return ok(await overview(db, uid, { privacy: true }));
+    }
+
+    if (action === 'privacy-delete') {
+      // Erasure on request (pass 334): removes the person's privacy-notice record and inbox lead, and stops all mail to that address.
+      const res = await eraseNotice(db, uid, body.id);
+      if (!res.ok) return fail(404, 'That privacy notice record was not found.', 'NOT_FOUND');
+      return ok(await overview(db, uid, { privacy: true }));
+    }
+
+    if (action !== 'start' && action !== 'step' && action !== 'import-list' && action !== 'source-candidates') return fail(400, 'Unknown action.', 'BAD_ACTION');
     const gate = await guardTenant(db, uid); // plan / trial / suspension (a no-op unless SAAS_MODE=on)
     if (gate.response) return gate.response;
     const ctx = defaultCtx();
     const t0 = Date.now();
+
+    if (action === 'source-candidates') {
+      // Recruitment sourcing (pass 331): screen the owner's own candidate list against a role brief, then queue it
+      // through the same lawful-basis gate and import as any list.
+      const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
+      if (!rows.length) return fail(400, 'The candidate list is empty.', 'BAD_LIST');
+      const brief = normaliseBrief(body.brief);
+      if (!brief.role && !brief.mustHave.length && !brief.niceToHave.length) {
+        return fail(400, 'Describe the role first: a title and the skills you need.', 'NO_BRIEF');
+      }
+      const source = String(body.listSource || '').trim().slice(0, 120);
+      const lawfulBasis = String(body.lawfulBasis || '');
+      const sourced = prepareCandidates(rows, brief, { source, lawfulBasis });
+      if (sourced.error) return fail(400, sourced.error, 'SOURCE_BLOCKED');
+      if (sourced.rows.length === 0) return fail(400, 'No candidate in this list passed the brief.', 'NONE_PASSED');
+      const gate = buyListGate({ source, lawfulBasis }, mapImportRows(sourced.rows).candidates);
+      if (!gate.ok) return fail(400, gate.reasons.join(' '), 'LIST_BLOCKED');
+      await startImport(db, uid, { label: String(body.label || brief.role || 'candidates').slice(0, 80), rows: sourced.rows });
+      // The notice is recorded only once the import is queued, so a refused import leaves no record behind (pass 334).
+      await writeSourcedNotices(db, uid, sourced.rows, { noticeBy: sourced.noticeBy, source, lawfulBasis });
+      return ok({ ...(await overview(db, uid, { privacy: true })), sourcing: sourced.stats, rejected: sourced.rejected.slice(0, 200) });
+    }
 
     if (action === 'import-list') {
       const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];

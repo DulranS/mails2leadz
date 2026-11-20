@@ -22,7 +22,7 @@ export async function POST(request) {
   const gate = await guardTenant(db, uid);
   if (gate.response) return gate.response;
   try {
-    const r = await eraseContact(db, uid, body?.email);
+    const r = await eraseContact(db, uid, body?.email, { name: String(body?.name || '').slice(0, 120) });
     if (r.error) return json({ error: r.error }, 400);
     return json(r);
   } catch (e) {

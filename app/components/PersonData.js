@@ -9,6 +9,7 @@ const note = "text-xs text-gray-600 dark:text-gray-300";
 
 export default function PersonData() {
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [typed, setTyped] = useState("");
   const [msg, setMsg] = useState("");
   const download = async () => {
@@ -22,7 +23,7 @@ export default function PersonData() {
   };
   const erase = async () => {
     setMsg("");
-    const r = await fetch("/api/contacts/erase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, confirm: typed }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." }));
+    const r = await fetch("/api/contacts/erase", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, name, confirm: typed }) }).then((x) => x.json()).catch(() => ({ error: "Could not reach the server." }));
     setMsg(r.error || r.message || "Erased. Invoices and tax records were kept, as the law requires.");
     if (!r.error) { setTyped(""); }
   };
@@ -34,6 +35,8 @@ export default function PersonData() {
       <div className="flex flex-col sm:flex-row gap-2">
         <button type="button" className={secondary} disabled={!email.trim()} onClick={download}>Download their data</button>
       </div>
+      <label htmlFor="pd-name" className="block text-xs font-medium">Their name (optional: finds candidate profiles that have no email)</label>
+      <input id="pd-name" className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Their name" />
       <label htmlFor="pd-confirm" className="block text-xs font-medium">To erase, type ERASE</label>
       <div className="flex flex-col sm:flex-row gap-2">
         <input id="pd-confirm" className={field} value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="ERASE" />

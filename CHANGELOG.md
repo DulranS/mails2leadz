@@ -1,3 +1,127 @@
+## Pass 347: CRM sync log
+
+- **Added.** Each CRM action on a deal is recorded with its reason: created (matched an existing contact by email, or a new one), sent, pulled, skipped (no usable email) or failed (the error). Kept on settings/crm: the last 50 entries from the latest run that did something.
+- **Added.** Owner-only read route /api/crm-sync and a "Last CRM sync" panel on Integrations.
+- **Changed.** The contact helpers return { id, created }. Skipped and failed deals are no longer silent. Pass 319 and 320 checks updated for the new return shape.
+- **Open.** Only the latest run that did something is kept. Not run against live HubSpot or Pipedrive here. See GAP_STATUS.md, pass 347.
+- **Tests.** tests/gap-close-347.test.mjs (16 checks). Also passing: gap-close-319, 320, 321, 346, release-files, autosend, crm-* suites.
+
+## Pass 346: Autosend pauses on spam complaints
+
+- **Added.** The owner's Postmaster counts (delivered, spam complaints) are saved on Account. A rate at or over 0.3% (with at least 100 delivered) pauses Autosend, and stops manual sends with a plain reason (HTTP 409, code complaints_over).
+- **Checked first.** Sequences, reporting, API keys, webhooks, one-click unsubscribe, SPF/DKIM/DMARC and the complaint rate display already existed. The gap was only the missing link to sending.
+- **Open.** Counts are typed in by hand, not read from Google. A paused Autosend stays paused until switched on. See GAP_STATUS.md, pass 346.
+- **Tests.** tests/gap-close-346.test.mjs (8 checks).
+
+## Pass 345 - legal deadlines from the sources, candidates with no email
+
+- Data requests: the answer-by date is now the EARLIER of 21 working days and one calendar month. The Personal Data Protection (Amendment) Act No. 22 of 2025 changes s.17 to one month (extendable by two months for reasons given), but its commencement is by Ministerial Order and I could not confirm it, so the app takes the stricter date. The page says so.
+- Breach register: the Authority deadline is 72 hours after discovery, from the DPA's DRAFT Data Breach Notification Rules v1.0 (rule 5(1)). Draft: confirm the final text. Discovery is a date and time (Sri Lanka time). New states: "Authority notice due" and "Authority notice overdue". New action: "Record people told", since the draft requires people to be told at the same time (rule 9).
+- Candidates with no email: a CV can only be saved on a profile with a valid email (so erasure and access requests can always reach it). Profiles with no email show a warning. The erase form has an optional name field; a profile with no email and the same name is listed for review, never deleted automatically.
+- Corrected: the earlier note that the breach deadline is not set in code is no longer true; it is set from the draft rules and labelled as such.
+- Files: lib/data-requests.js, lib/breach-register.js, lib/candidates.js, lib/erase-contact.js, lib/server/erase-contact.js, app/api/contacts/erase/route.js, app/components/PersonData.js, app/data-requests/page.js, app/breaches/page.js, app/candidates/page.js, tests/gap-close-345.test.mjs (20 checks, chained); tests 340, 343, 344 updated where the rule changed.
+- Not closed: the commencement of the 2025 amendment (Ministerial Order) and the final breach rules (DPA draft). Both need the Gazette, not code.
+
+## Pass 344 - CVs on candidate profiles, and erasure and export reach candidates
+
+- New: a CV can be pasted onto a candidate profile (CV button on /candidates). Stored on the profile, capped at 20,000 characters, shown as "CV on file". Remove it at any time.
+- Approach: a candidate is approached only when the owner recorded agreement and the time (canApproach in lib/candidates.js).
+- Retention: a CV past the 12-month date is flagged, as the profile is.
+- Erasure and access requests: candidates is now in the per-account scan (lib/erase-contact.js), so a profile and its CV that hold the person's email are erased or exported with the rest. A profile with no email cannot be matched by email; the owner must delete it by hand.
+- Files: lib/candidates.js, app/candidates/page.js, lib/erase-contact.js, tests/gap-close-344.test.mjs (11 checks), chained.
+- Still a legal decision (not code): the lawful basis for holding CVs and the notice to the candidate.
+
+## Pass 343 - breach register (PDPA s.23 log)
+
+- New: Breach register (More menu, /breaches). Owner logs each personal data breach: what happened, whether personal data is affected (yes, no, not known), people affected, containment, and the dates the Authority and the people were told. Stored under users/{uid}/breach_register; the existing owner-only rule covers it.
+- Flags: an open breach that may involve personal data and has no Authority date shows "Decide: tell the Authority?". Any breach still open after 72 hours shows a review prompt. Both are prompts, not legal rules. No notice deadline is computed; PDPA s.23 notice rules are not set in code.
+- Files: lib/breach-register.js (pure), app/breaches/page.js, tests/gap-close-343.test.mjs (16 checks). tests/gap-close-338.test.mjs route pins now allow /breaches.
+- Not built: the notice wording and any deadline (legal). The Authority notice itself is sent outside the app.
+
+## Pass 342 - missed-call text-back respects the owner's pause
+
+- **Changed, the missed-call text-back now stops when the owner has paused automations** (Settings, the existing pause that stops everything that contacts people, `users/{uid}/settings/business.automationPaused`). This is the owner's off-switch for the text-back; a separate switch was not added. `lib/missed-call-text-rules.js`, `lib/server/missed-call-reply.js`.
+- **Tests.** `tests/gap-close-341.test.mjs` covers the pause (67 sections, all pass).
+
+## Pass 341 - the last code gaps closed
+
+- **Bad-review alerts (Reviews page).** The owner logs a review by hand. A review of 2 stars or fewer raises an alert until it is marked answered. Reviews come from the owner's own entry, not from a review site; a live feed from Google or another site would need that site's approval and is not built. `lib/reviews.js`, `lib/server/reviews.js`, `app/api/reviews`, `app/reviews/page.js`.
+- **Custom-field filters on the Customers page.** Filter the list by the owner's own custom fields with the rules already in `lib/custom-fields.js`. `app/components/CustomFieldFilters.js`.
+- **Pipedrive on API v2 only.** Every Pipedrive call uses v2. `lib/server/crm.js`. Checked against the code, not against a live Pipedrive account.
+- **Xero and QuickBooks two-way sync.** Connect by OAuth 2.0. Each issued invoice is pushed once: the external ID is saved on the invoice, so a second push is skipped. Payments are polled back. Tokens are encrypted with the token vault. With no client keys every call says "not configured". `lib/accounting-sync.js`, `lib/server/accounting-store.js`, `app/api/accounting/*`, `app/billing` (Accounting section). Live use needs a Xero and a QuickBooks app with client keys, which are not set here.
+- **Website traffic on the Dashboard.** Sessions, visitors and bounce rate for the last 28 days from the GA4 Data API, using the analytics read permission on the owner's Google connection and a GA4 property ID. Shows "not configured" until both are set. `lib/traffic.js`, `lib/server/ga4-report.js`, `app/api/traffic`, `app/components/TrafficFigures.js`. Live use needs the GA4 property and the Google permission.
+- **Balancr events received (`/api/balancr/events`).** Signed requests only: HMAC-SHA256 over `timestamp.body` with the shared secret, and a timestamp more than five minutes old is refused. Only a business linked to the owner (`balancr_link`) is accepted. Each event ID is applied once. `invoice.paid` closes the matching deal and lands on the customer's timeline. `lib/balancr-events.js`, `app/api/balancr/events/route.js`.
+- **Missed-call text-back.** A missed call to the Twilio number gets one short text (plain wording, STOP to opt out) at most once every 24 hours per caller. It is sent only after the Twilio signature check and after the lead is recorded, and it never fails the call. Not built: a switch for the owner to turn it off; the text is on for every business with Twilio connected. `lib/missed-call-text-rules.js` (pure), `lib/server/missed-call-reply.js`, `app/api/twilio/missed-call/[uid]`.
+- **Tests.** `tests/gap-close-341.test.mjs` (67 sections, all pass). `release-files` passes after the manifest was regenerated (826 files).
+- **Still blocked, not code:** live Xero, QuickBooks, GA4 and Twilio calls (keys and accounts); Pipedrive live check (an account); a review feed from a third-party site (that site's approval); legal items (per-market consent beyond UK, EU and Sri Lanka, privacy notice wording, PDPA s.23 breach rules, processor contracts).
+
+## Pass 340 - remaining code gaps closed
+
+- Sri Lanka (.lk) joins the opt-in default: marketing needs recorded consent (PDPA 2022 s.27).
+- Data requests (/data-requests): log access, correction, erasure and withdrawal requests; 21-working-day answer date (s.17(1)), weekends skipped; overdue and due-soon flags. Nothing answered automatically.
+- Customers CSV with custom fields as columns (Customers page).
+- Spam-complaint check (Account page): delivered and complaint counts against 0.3% (limit) and 0.1% (aim).
+- Tests: gap-close-340 (31 checks). gap-close-338 updated for the .lk decision and the new route.
+- Sweep: full test chain 289 commands, 252 pass, 0 fail, 37 blocked by missing packages (sandbox).
+- Still blocked, not code: QuickBooks and Xero sync (needs provider keys and an account); bad-review alert (needs a review source); Pipedrive v1 live check; legal items (per-market consent, privacy wording, breach rules, processor contracts).
+
+## Pass 339 - open items from pass 338 closed
+
+- WhatsApp sends gated by consent purpose: quote and invoice need replies and updates (or marketing); follow-up needs marketing; not_stated is blocked until recorded again.
+- EU and UK addresses default to no marketing without consent (conservative product default, not legal advice).
+- Clearing a custom field now sticks (deal-client replaces the field instead of merging).
+- Customers with no deal can hold custom values (customer_fields collection).
+- Candidate profiles (/candidates): contact, role, stage, notes (no CVs, no bank details), consent, 12-month retention flag. Nothing deleted automatically.
+- Tests: gap-close-338 (43 checks, passes). integrations.test.mjs updated; it cannot run in the sandbox (stripe missing), but the gate logic passes from a scratch copy.
+- Sweep: 288 chain commands, 251 pass, 0 fail, 37 blocked by missing packages.
+
+## Pass 338 - remaining implementable gaps closed
+
+- Orders screen (/orders): one line per accepted quote, status from its invoices (confirmed, invoiced, paid).
+- Sales figures follow the chosen window, as the funnel already did. The label shows the window.
+- WhatsApp consent records what the customer agreed to receive (replies and updates, or marketing). Sends are not gated by it yet.
+- Your own customer fields: up to 10, once set up; values are kept on each customer's deal.
+- Stale "not built" notes checked against the code and corrected in GAP_STATUS (duplicate-run lock, website chat, per-campaign ROAS, owner's run log).
+- Tests: gap-close-338 (17 checks); gap-close-283 updated for the new menu item. Sweep: see GAP_STATUS pass 338.
+
+## Pass 337 - decision items closed (no new code)
+
+- Older invoices: no import. The pass 317 fresh-start decision removed the old per-customer copy and nothing reads that path now. An import route was built and reverted in this pass.
+- Duplicates: detection only (weekly email). Merges stay manual.
+- Per-topic consent: two topic stops, built in pass 318.
+- Recruitment profiles: not built; the sourcing screen (pass 331) stays the recruitment tool.
+- Tests: 249 pass, 0 fail, 37 need packages not installed in this sandbox.
+
+## Pass 336 - CRM stage names shown on the history page
+
+- Open deals show the owner's own HubSpot stage name ("In your CRM"). Read on each sync, never written back. Closed or deleted deals drop it.
+- Pipedrive v1 field names are still unconfirmed: the reachable docs cover v2 only.
+- Tests here: 252 pass, 0 fail; 35 files need packages not in this sandbox.
+
+## Pass 335 - privacy notice on every email path; Told by me; customer history link
+
+- The privacy notice now reaches follow-ups, customer mail, quotes, invoices and broadcasts, as well as the automatic and manual senders. Booking, signup, digests and system mail are unchanged.
+- "Told by me" on the overdue list marks a person as told by hand (for phone-only people, who cannot get the notice by email).
+- Customers page: "Full history" opens the customer's history with their email filled in.
+- Already built, checked and unchanged: editing and deleting logged entries; ticket category change and per-category counts; stage changes in history; calls matched to a customer by phone.
+- Pipedrive v2 field names confirmed from the vendor docs; v1 not confirmed.
+- Tests here: 251 pass, 0 fail; 35 files need packages not in this sandbox.
+
+Left open, by decision (not code): duplicate merge, per-topic consent, per-market consent, recruitment profiles and fee terms, invoices in two collections, copying invoices from before a store change, HubSpot custom stage names (needs a second sync direction).
+
+## Pass 334 - privacy notice for sourced people; hiring form fixed
+
+- Sourced candidates get a privacy notice record with its due date; the notice goes out with their first email (automatic and manual sends), and is marked given once the email is accepted.
+- Overdue notices list in the hiring panel, with erase (record, inbox lead, all mail stopped).
+- Hiring form fixed: the server had rejected its action since pass 331.
+- Notice date kept out of the lead's category text (it was clipped).
+- Tests run here: privacy-notice (7 checks), recruit-sourcing (9), autosend, lead-inbox, release-files, ui-guards, work-mode. All pass.
+
+Limits, plainly:
+- Broadcast, quote, invoice and follow-up senders do not add the notice yet.
+- Phone-only people cannot receive it by email; they stay on the overdue list.
+- Firestore paths and the browser panel are not run here.
+
 ## Pass 279 - final review; payback, coverage, retention, discount approval
 
 - Payback period, pipeline coverage, net revenue retention on the measures screen.

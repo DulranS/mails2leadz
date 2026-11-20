@@ -190,7 +190,7 @@ export default function SupportAndKpis() {
           ) : null}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-2">
             <Stat name="Open pipeline" value={`${kpi.pipeline.open} deals`} hint={`Worth ${g(kpi.pipeline.value)}`} />
-            <Stat name="Won in 12 months" value={kpi.sales.wonLast12Months} hint={`Worth ${g(kpi.sales.wonValueLast12Months)}`} />
+            <Stat name={`Won, ${kpi.sales.windowLabel || 'last 12 months'}`} value={kpi.sales.wonLast12Months} hint={`Worth ${g(kpi.sales.wonValueLast12Months)}`} />
             <Stat name="Win rate" value={fmt(kpi.sales.winRatePct, "%")} />
             <Stat name="New leads waiting" value={kpi.speed.newLeadsWaiting} hint="Waiting for a first reply" />
           </div>

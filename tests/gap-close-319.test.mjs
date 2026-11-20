@@ -81,7 +81,7 @@ t('the daily job pushes deals to the CRM after the integration check', () => {
 
 t('the CRM run is idempotent: it looks up before it creates, and marks progress only for what it sent', () => {
   const crm = fs.readFileSync('lib/server/crm.js', 'utf8');
-  assert.match(crm, /if \(found\.ok\) return String/);
+  assert.match(crm, /if \(found\.ok\) return \{ id: String/); // pass 347: the helper returns { id, created }
   assert.match(crm, /firstPipedriveMatch\(/);
   assert.match(crm, /if \(!e\.permanent\) \{ transientStop = true; break; \}/);
 });

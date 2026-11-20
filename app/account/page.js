@@ -1,5 +1,6 @@
 "use client";
 // Account: who you are, what you sell (drives the AI), your money settings, and control of your data.
+import { complaintRateStatus } from "../../lib/sender-auth.js";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { signOut, deleteUser } from "firebase/auth";
@@ -41,6 +42,8 @@ export default function AccountPage() {
   const [senderBusy, setSenderBusy] = useState(false);
   const [senderMsg, setSenderMsg] = useState("");
   const [senderReport, setSenderReport] = useState(null);
+  const [complaintDelivered, setComplaintDelivered] = useState("");
+  const [complaintCount, setComplaintCount] = useState("");
   const [eraseEmail, setEraseEmail] = useState("");
   const [eraseConfirm, setEraseConfirm] = useState("");
   const [eraseBusy, setEraseBusy] = useState(false);
@@ -843,6 +846,24 @@ export default function AccountPage() {
             <input type="text" inputMode="url" placeholder="example.com" value={senderDomain} onChange={(e) => setSenderDomain(e.target.value)} aria-label="Sending domain" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
             <button type="button" disabled={!senderDomain.trim() || senderBusy} onClick={checkSender} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{senderBusy ? "Checking..." : "Check domain"}</button>
           </div>
+          <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <p className="text-sm font-medium text-gray-900 dark:text-white">Spam complaints</p>
+            <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">Gmail and Yahoo want under 0.3% spam complaints; aim for 0.1%. Type the delivered and complaint counts for the same period from Google Postmaster Tools, then save them. Autosend checks the saved counts before each run and stops if the rate is at or over 0.3%.</p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-2">
+              <input type="number" min="0" inputMode="numeric" placeholder="Delivered" value={complaintDelivered} onChange={(e) => setComplaintDelivered(e.target.value)} aria-label="Delivered mail" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+              <input type="number" min="0" inputMode="numeric" placeholder="Spam complaints" value={complaintCount} onChange={(e) => setComplaintCount(e.target.value)} aria-label="Spam complaints" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+            </div>
+            {complaintDelivered !== "" && complaintCount !== "" ? (() => {
+              const c = complaintRateStatus({ delivered: complaintDelivered, complaints: complaintCount });
+              const msg = c.status === "invalid" ? "Complaints cannot be more than the delivered mail."
+                : c.status === "too_few" ? "Need at least 100 delivered messages before the rate means anything."
+                : c.status === "over" ? `Your rate is ${c.ratePct}%: at or above the 0.3% limit. Pause bulk sends and clean the list before sending again.`
+                : c.status === "watch" ? `Your rate is ${c.ratePct}%: above the 0.1% aim. Check the most recent sends.`
+                : `Your rate is ${c.ratePct}%: under the 0.1% aim.`;
+              return <p role="status" className="text-sm text-gray-900 dark:text-white mt-2">{msg}</p>;
+            })() : null}
+          </div>
+          <button type="button" onClick={() => saveAutopilot({ postmasterDelivered: complaintDelivered === "" ? "" : Number(complaintDelivered), postmasterComplaints: complaintCount === "" ? "" : Number(complaintCount) })} className="mt-2 text-sm underline text-gray-900 dark:text-white">Save these counts for the Autosend check</button>
           {senderMsg && <p role="status" className="text-sm text-red-700 dark:text-red-300 mt-2">{senderMsg}</p>}
           {senderReport && !senderReport.error && (
             <div className="mt-3 space-y-2">

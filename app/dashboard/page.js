@@ -130,6 +130,7 @@ import { invalidateCache } from "../../lib/firebase-cache.js";
 import { makeMoney } from "../../lib/currency.js";
 import { cleanBusinessName } from "../../lib/lead-name.js";
 import { resolveWorkspaceUser } from "../../lib/workspace-client.js";
+import TrafficFigures from "../components/TrafficFigures";
 
 // ============================================================================
 // FIREBASE INITIALIZATION WITH ERROR HANDLING
@@ -10948,6 +10949,9 @@ function DashboardComponent() {
           </div>
         </div>
       )}
+
+      {/* Website traffic, last 28 days from GA4 (pass 341) */}
+      <TrafficFigures />
 
       {/* Replies Panel */}
       {user?.uid && user.accessToken && (

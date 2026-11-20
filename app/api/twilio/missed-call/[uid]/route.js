@@ -1,5 +1,6 @@
 // POST /api/twilio/missed-call/{uid}  - Twilio posts a call's status here. A missed call becomes a new lead to return. Only requests signed by Twilio are accepted.
 import { collection, addDoc } from '../../../../../lib/server-firestore.js';
+import { textBackMissedCall } from '../../../../../lib/server/missed-call-reply.js';
 import { getDb } from '../../../../../lib/server/route-helpers.js';
 import { secretsFor } from '../../../../../lib/server/integration-secrets.js';
 import { validTwilioRequest } from '../../../../../lib/twilio-signature.js';
@@ -22,6 +23,8 @@ export async function POST(request) {
         userId: uid, name: '', email: '', phone: String(params.From).slice(0, 40), source: 'Missed call',
         status: 'new', receivedAt: new Date().toISOString(), note: `Call ${params.CallStatus}. Return the call or send a text.`,
       });
+      // Pass 341: the caller gets one text straight away (at most once a day). Never fails the call.
+      await textBackMissedCall(db, uid, String(params.From), '').catch(() => null);
     }
     return new Response(TWIML, { status: 200, headers: { 'Content-Type': 'text/xml' } });
   } catch (e) {

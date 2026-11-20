@@ -35,6 +35,7 @@ export async function POST(request) {
     templateSid: templateSidFor(kind, secrets),
     blocked: await isBlockedContact(db, uid, email),
     consent,
+    kind, // the purpose the customer agreed to must cover this kind of message (pass 339)
   });
   if (plan.error) return json({ error: plan.error }, 409);
 

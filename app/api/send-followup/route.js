@@ -9,6 +9,7 @@ import { headerSafe, pickOriginal, isBlockedContact, optOutFor, getSenderAddress
 import { withTextFooter } from '../../../lib/server/unsubscribe.js';
 import { fillTemplate } from '../../../lib/server/template-vars.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
+import { bodyWithNotice, markNoticeGiven } from '../../../lib/server/privacy-notices.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -258,11 +259,13 @@ export async function POST(request) {
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     
     const optOut = optOutFor(userId, email, await getSenderAddress(db, userId));
+    // A sourced person still owed the privacy notice gets it in this follow-up too (pass 335).
+    const noticed = await bodyWithNotice(db, userId, email, body, senderName);
     const rawMessage = createMimeMessage({
       from: process.env.GMAIL_SENDER_EMAIL ? `${headerSafe(senderName) || 'Team'} <${process.env.GMAIL_SENDER_EMAIL}>` : '',
       to: email,
       subject,
-      body: withTextFooter(body, optOut),
+      body: withTextFooter(noticed.body, optOut),
       attachments,
       extraHeaders: optOut?.headers || ''
     });
@@ -271,6 +274,7 @@ export async function POST(request) {
       userId: 'me',
       requestBody: { raw: rawMessage }
     });
+    if (noticed.notice) await markNoticeGiven(db, noticed.notice).catch(() => {});
     
     const newFollowUpCount = followUpCount + 1;
     const now = new Date().toISOString();

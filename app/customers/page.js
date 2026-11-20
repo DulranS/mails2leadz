@@ -12,12 +12,17 @@ import { db, auth } from "../../lib/firebase-client.js";
 import { computeCustomers, sanitizeReviewLink } from "../../lib/customers.js";
 import { computeRecurring } from "../../lib/recurring.js";
 import { stageLabel } from "../../lib/work-mode.js";
+import { historyHref } from "../../lib/customer-history-link.js";
+import { sanitizeDefinitions, applyCustomFilters } from "../../lib/custom-fields.js";
+import { customersCsv, downloadText } from "../../lib/customers-csv.js";
+import { CustomFieldsEditor, CustomFieldValues } from "../components/CustomFields";
+import CustomFieldFilters from "../components/CustomFieldFilters";
 import { useWorkMode } from "../components/useWorkMode";
 import { ONBOARDING_STEPS, setOnboardingStep, addIssue, setIssueResolved } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { completeFollowUpTask } from "../../lib/firebase-operations.js";
 import { makeMoney, normalizeCurrency, currencySymbol } from "../../lib/currency.js";
-import { doc, getDoc, setDoc } from "../../lib/client-firestore.js";
+import { collection, doc, getDoc, getDocs, limit, query, setDoc } from "../../lib/client-firestore.js";
 import { addProofPoint } from "../../lib/sales-kit.js";
 import { WIN_REASONS } from "../../lib/independence.js";
 
@@ -62,6 +67,17 @@ export default function CustomersPage() {
   const [issueText, setIssueText] = useState("");
   const [reply, setReply] = useState(null); // { email, issueId, plan }
   const [reviewText, setReviewText] = useState("");
+  // The owner's own customer fields (pass 338): the list is saved once; each customer's values sit on their deal.
+  const [fieldDefs, setFieldDefs] = useState([]);
+  const [customFilters, setCustomFilters] = useState([]); // filters on the owner's own fields (pass 341)
+  const [extraFields, setExtraFields] = useState({}); // values for customers with no deal yet, by email (pass 339)
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    getSettingsDoc(db, user.uid, "custom_fields").then((s) => setFieldDefs(sanitizeDefinitions(s?.exists?.() ? s.data().fields : []))).catch(() => {});
+    getDocs(query(collection(db, "users", user.uid, "customer_fields"), limit(1000)))
+      .then((snap) => setExtraFields(Object.fromEntries(snap.docs.map((d) => [String(d.data().email || "").toLowerCase(), d.data().customFields || {}]))))
+      .catch(() => {});
+  }, [user?.uid]);
 
   useEffect(() => { if (!auth) setLoading(false); }, []);
 
@@ -94,7 +110,9 @@ export default function CustomersPage() {
   const data = useMemo(() => computeCustomers({ deals, invoices, avgDealValue: settings.avgDealValue, reviewLink: settings.reviewLink || "" }), [deals, invoices, settings.avgDealValue, settings.reviewLink]);
   const reviewStats = { asked: data.customers.filter((c) => c.reviewAsked).length, reviewed: data.customers.filter((c) => c.reviewed).length };
   const rec = useMemo(() => computeRecurring({ deals }), [deals]);
-  const list = data.customers.filter((c) => (filter === "all" ? true : filter === "action" ? c.health === "at_risk" || c.health === "attention" : c.health === filter));
+  const tabList = data.customers.filter((c) => (filter === "all" ? true : filter === "action" ? c.health === "at_risk" || c.health === "attention" : c.health === filter));
+  // Custom-field filters (pass 341): the owner's values for each customer, from the deal or, with no deal, from the saved values by email.
+  const list = applyCustomFilters(tabList, fieldDefs, customFilters, (c) => deals.find((d) => lower(d.email) === lower(c.email))?.customFields ?? extraFields[lower(c.email)] ?? {});
   const counts = { action: data.atRisk.count + data.attention.count, onboarding: data.customers.filter((c) => c.health === "onboarding").length, healthy: data.customers.filter((c) => c.health === "healthy").length, all: data.total };
 
   // Save an extras change and patch it into local state, so ticking boxes feels instant (no full reload).
@@ -253,6 +271,10 @@ export default function CustomersPage() {
   return (
     <DashboardLayout title="Customers" subtitle="Onboard them well, keep them, and catch problems early">
       <div className="space-y-4 sm:space-y-6">
+        <div className="flex justify-end">
+          <button type="button" className="min-h-[44px] px-4 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" onClick={() => downloadText("customers.csv", customersCsv({ deals, extraFields, defs: fieldDefs }))}>Download customers (CSV)</button>
+        </div>
+        <CustomFieldsEditor db={db} uid={user.uid} defs={fieldDefs} onSaved={setFieldDefs} />
         <section className={card} aria-label="Public reviews">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Public reviews</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste the page where customers leave a public review (Google, Trustpilot, Facebook). Only happy, settled customers are asked. Asked {reviewStats.asked} · left {reviewStats.reviewed}.</p>
@@ -289,6 +311,8 @@ export default function CustomersPage() {
           ))}
         </div>
 
+        <CustomFieldFilters defs={fieldDefs} filters={customFilters} onChange={setCustomFilters} />
+
         {loading ? <section className={card}><p className="text-sm text-gray-500 dark:text-gray-400">Loading...</p></section> : data.total === 0 ? (
           <section className={card}><p className="text-sm text-gray-600 dark:text-gray-300">No customers yet. When you mark a deal Won (dashboard, CRM or Business Value) it appears here with an onboarding checklist.</p></section>
         ) : list.length === 0 ? (
@@ -321,12 +345,16 @@ export default function CustomersPage() {
                       {c.review?.eligible && <button type="button" disabled={busy === c.email} onClick={() => askReview(c)} title={c.review.why} className={`${btn} bg-amber-500 hover:bg-amber-400 text-white`}>Ask for a review</button>}
                       {c.reviewAsked && !c.reviewed && <button type="button" disabled={busy === c.email} onClick={() => markReviewed(c)} title="Tap once they tell you they left one" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>They left a review</button>}
                       <button type="button" disabled={busy === c.email} onClick={() => logContact(c)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>I spoke to them</button>
+                      <Link href={historyHref(c.email)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Full history</Link>
                       <button type="button" onClick={() => { setOpen(isOpen ? null : c.email); setIssueText(""); setReply(null); setSub({ email: c.email, amount: c.recurringMonthly ? String(c.recurringMonthly) : "", renewal: c.renewalAt ? c.renewalAt.slice(0, 10) : "", reason: "", cost: (() => { const dd = deals.find((x) => lower(x.email) === lower(c.email)); return dd && dd.deliveryCost !== undefined && dd.deliveryCost !== null ? String(dd.deliveryCost) : ""; })(), quote: c.customerQuote || "", winReason: c.winReason || "", line: c.line || "", hours: c.hoursSpent === null || c.hoursSpent === undefined ? "" : String(c.hoursSpent), nps: c.nps === null || c.nps === undefined ? "" : String(c.nps) }); }} aria-expanded={isOpen} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>{isOpen ? "Close" : `Details${c.openIssueCount ? ` (${c.openIssueCount})` : ""}`}</button>
                     </div>
                   </div>
 
                   {isOpen && (
                     <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
+                      <div className="lg:col-span-2">
+                        <CustomFieldValues key={c.email} db={db} uid={user.uid} email={c.email} defs={fieldDefs} values={deals.find((d) => lower(d.email) === lower(c.email))?.customFields ?? extraFields[lower(c.email)]} onSaved={(clean) => { setDeals((prev) => prev.map((d) => (lower(d.email) === lower(c.email) ? { ...d, customFields: clean } : d))); setExtraFields((prev) => ({ ...prev, [lower(c.email)]: clean })); }} />
+                      </div>
                       <div>
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Onboarding checklist</h3>
                         <ul className="space-y-1">

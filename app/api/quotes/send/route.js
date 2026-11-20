@@ -11,6 +11,7 @@ import { openMailbox } from '../../../../lib/server/autosend.js';
 import { buildRawEmail } from '../../../../lib/raw-email.js';
 import { quoteSendPlan, quoteEmail, nudgeDraft } from '../../../../lib/quotes.js';
 import { openPixelUrl, trackedHtml } from '../../../../lib/server/open-track.js';
+import { bodyWithNotice, markNoticeGiven } from '../../../../lib/server/privacy-notices.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 const MAILBOX_MESSAGE = {
@@ -60,8 +61,11 @@ export async function POST(request) {
   try {
     const base = String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
     const pixel = process.env.TRACK_OPENS === 'off' ? '' : openPixelUrl(uid, id, base);
-    const raw = buildRawEmail({ from: box.email, fromName: senderName, to: quote.customerEmail, subject: email.subject, body: email.text, html: trackedHtml(email.text, pixel) });
+    // A sourced person still owed the privacy notice gets it in this email too (pass 335).
+    const noticed = await bodyWithNotice(db, uid, quote.customerEmail, email.text, senderName);
+    const raw = buildRawEmail({ from: box.email, fromName: senderName, to: quote.customerEmail, subject: email.subject, body: noticed.body, html: trackedHtml(noticed.body, pixel) });
     sent = await box.sendRaw(raw);
+    if (noticed.notice) await markNoticeGiven(db, noticed.notice).catch(() => {});
   } catch (e) {
     console.error('[quotes/send] gmail send failed:', e.message);
     return json({ error: 'Gmail did not accept the message. Nothing was recorded as sent. Try again.' }, 502);

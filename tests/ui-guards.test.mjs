@@ -24,7 +24,8 @@ t('dark: styles follow the .dark class the theme toggle sets (Tailwind v4 ignore
 t('the follow-up queue does not open itself when nothing is due (a new customer\'s first screen)', () => {
   const src = read('app/dashboard/page.js');
   assert.match(src, /useState\(false\); \/\/ opens by itself only when a follow-up is due/);
-  assert.match(src, /if \(dueNow\) setShowFollowUpQueue\(true\)/);
+  // Pass 330: it opens itself once per browser session when something is due (the block also checks sessionStorage).
+  assert.match(src, /if \(dueNow\) \{[\s\S]*?setShowFollowUpQueue\(true\)/);
 });
 t('AI-sent emails schedule their follow-ups (single draft and batch)', () => {
   const src = read('app/dashboard/page.js');

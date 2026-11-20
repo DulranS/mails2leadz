@@ -25,9 +25,12 @@ export async function POST(request) {
   const consent = body?.consent === true;
   const phone = normalizePhone(String(body?.phone || ''));
   if (!phone) return json({ error: 'Enter the phone number with its country code, for example +94 77 000 0000.' }, 400);
+  // What the customer agreed to receive (pass 338). Recorded with the consent, so the evidence says why. Not stated = 'not_stated'.
+  const PURPOSES = ['replies_and_updates', 'marketing'];
+  const purpose = PURPOSES.includes(body?.purpose) ? body.purpose : 'not_stated';
   try {
     await setDoc(doc(db, 'users', uid, 'whatsapp_consent', dealDocId(uid, email)), {
-      email, phone, consent, recordedAt: new Date().toISOString(), source: 'recorded by owner', userId: uid,
+      email, phone, consent, purpose, recordedAt: new Date().toISOString(), source: 'recorded by owner', userId: uid,
     });
     return json({ ok: true, consent });
   } catch (e) {
