@@ -1,3 +1,9 @@
+## Pass 358 - profit view counts the hours on the time log first (21 Nov 2026)
+- The profit view used the typed "hours spent" figure for a customer and ignored the time log. The logged hours for a customer now win when there are any; the typed figure is used only when nothing is logged for that customer (lib/profit.js).
+- Tests: tests/profit-hours.test.mjs (2 checks: logged hours win over a typed figure; a typed figure is used when nothing is logged). Added to the npm test chain after profit.test.mjs. profit.test.mjs still passes (12 of 12 with the new file).
+- Checked and already built (no change): loyalty redeem on the invoice, points back on void, points for hand payments, customers-list balance (passes 355 and the newer changelog entries); payment status per lead on the CRM pipeline (Billing column); the sign-up ?ref= capture (ReferralCapture in the layout); Pipedrive on the v2 API for deals and persons; Xero and QuickBooks two-way sync (pass 341); GA4 traffic (lib/traffic.js); the Balancr event receiver and sync routes; the missed-call text-back owner pause (automation-control).
+- Not run here: the full npm test chain (lib/server-firestore.js imports the firebase package, which is not installed in this sandbox).
+
 ## Pass 357 - sending domain checked against the Spamhaus blocklist (last closable gap from the sales research)
 - Account > Sender check now also looks up the sending domain on the Spamhaus Domain Block List (a DNS lookup of <domain>.dbl.spamhaus.org; no mail is sent). It shows Listed, Clear or Unknown beside the SPF, DKIM and DMARC checks.
 - Unknown is shown when the check cannot run from here: a timeout, a server error, or a refused query (Spamhaus often refuses public resolvers). That is not a failure, and it never shows as Clear.
