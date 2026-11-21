@@ -6,9 +6,20 @@
 // Mounted once in the root layout.
 import { useEffect } from 'react';
 import { getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, signOut } from 'firebase/auth';
 import { invalidate } from '../../lib/swr-cache.js';
 import { callMayWrite } from '../../lib/api-writes.js';
+
+// A browser can hold a Firebase session the server no longer accepts (the account was deleted or disabled, or its sign-in was revoked).
+// Its token cannot be refreshed, so every request goes out without a valid token, each is refused, and the data screens fill with
+// permission errors while the app still shows the person as signed in. Such a session is ended here, so the sign-in screen shows instead.
+// Network errors do not end the session.
+const BROKEN_SESSION = new Set([auth/user-token-expired, auth/user-not-found, auth/user-disabled, auth/invalid-user-token, auth/user-token-revoked]);
+async function endIfBroken(err) {
+  if (!BROKEN_SESSION.has(err?.code) || !getApps().length) return false;
+  try { await signOut(getAuth(getApp())); } catch { /* already signed out */ }
+  return true;
+}
 
 export default function AuthFetch() {
   useEffect(() => {
@@ -54,8 +65,9 @@ export default function AuthFetch() {
             finalInit = { ...init, headers };
           }
         }
-      } catch {
-        /* send without a token; the server answers 401 and the user is told to sign in again */
+      } catch (err) {
+        // Send without a token; if the session is broken it is ended (below), otherwise the server answers 401.
+        await endIfBroken(err);
       }
       const response = await original(input, finalInit);
       // A server call that may have written (send, ingest, draft, import ...) makes the shared read cache stale: drop it, keep the
@@ -64,6 +76,10 @@ export default function AuthFetch() {
         const method = finalInit?.method || (typeof input !== 'string' ? input?.method : '') || 'GET';
         if (callMayWrite(method, url)) invalidate((k) => !k.includes('|page|'));
       } catch { /* the cache must never break a request */ }
+      // The server refused the token: confirm with a forced refresh. A broken session is ended; a working one is left alone.
+      if (response.status === 401 && getApps().length) {
+        try { await getAuth(getApp()).currentUser?.getIdToken(true); } catch (err) { await endIfBroken(err); }
+      }
       // Invite-only deployment (ALLOWED_EMAILS): tell the person once, clearly, instead of a wall of failed requests.
       if (response.status === 403) {
         try {

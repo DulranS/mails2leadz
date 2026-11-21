@@ -41,6 +41,7 @@ export default function AdminPage() {
   return (
     <main className="max-w-6xl mx-auto p-3 sm:p-6 space-y-4">
       <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Operator console</h1>
+      <p className="text-sm"><a className="text-indigo-600 dark:text-indigo-300 underline" href="/admin/partners">Software partners and payouts</a></p>
       {note && <p className="text-sm text-amber-700 dark:text-amber-300">{note}</p>}
       <section className={card} aria-label="Configuration check">
         <h2 className="font-semibold text-gray-900 dark:text-white">Configuration</h2>

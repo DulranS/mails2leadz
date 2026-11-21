@@ -1,3 +1,11 @@
+## Pass 351 - broken sign-in sessions end instead of failing silently
+- app/components/AuthFetch.js: when the Firebase token cannot be refreshed because the account was deleted, disabled or revoked, the session is signed out. Before, every request went out without a token, the server refused each one, the data screens filled with permission errors, and the app still showed the person as signed in. A refused request (401) is now checked with a forced token refresh first; a working session is left alone. Network errors do not end the session.
+
+## Pass 350 - fixes from the live logs
+- lib/redis.js: REDIS_URL is cleaned up (the redis-cli -u prefix, quotes, spaces) and a value that is still not a redis:// address disables Redis instead of failing the build. The URL is never logged. This fixes the build error "Invalid URL" on /api/accounting/[system].
+- firestore.indexes.json: added sent_emails userId ASC + sentAt DESC (the list-sent-leads query needs it; the log showed FAILED_PRECONDITION). Deploy with firebase deploy --only firestore:indexes.
+- app/api/open-day/route.js: stopped calling the browser-side reply check without a Gmail token, which always failed and logged an error on every open. The scheduled cron route still checks replies with the stored token.
+
 ## Pass 349: partner screen, statement link, sign-up capture, yearly prices; contract list brought up to date
 
 - **Added.** Operator screen at /admin/partners: add a partner (code issued automatically), set active, paused or ended, see what each is owed per currency, record a payment, copy the statement link.
