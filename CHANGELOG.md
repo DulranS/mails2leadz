@@ -1,3 +1,7 @@
+## Pass 359 - customers page no longer crashes before sign-in finishes (22 Nov 2026)
+- The customers page read user.uid while the user was still null, which threw "Cannot read properties of null (reading 'uid')" and showed the error boundary. The custom-fields editor and the expanded customer's custom-field values now render only once there is a user (app/customers/page.js).
+- Same guard on the business page's marketing-spend panel is not needed: that block already sits inside a loading and user check. The CRM page returns early without a user.
+- Checks: the three pages parse; profit-hours test passes.
 ## Pass 358 - profit view counts the hours on the time log first (21 Nov 2026)
 - The profit view used the typed "hours spent" figure for a customer and ignored the time log. The logged hours for a customer now win when there are any; the typed figure is used only when nothing is logged for that customer (lib/profit.js).
 - Tests: tests/profit-hours.test.mjs (2 checks: logged hours win over a typed figure; a typed figure is used when nothing is logged). Added to the npm test chain after profit.test.mjs. profit.test.mjs still passes (12 of 12 with the new file).

@@ -285,7 +285,7 @@ export default function CustomersPage() {
         <div className="flex justify-end">
           <button type="button" className="min-h-[44px] px-4 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white" onClick={() => downloadText("customers.csv", customersCsv({ deals, extraFields, defs: fieldDefs }))}>Download customers (CSV)</button>
         </div>
-        <CustomFieldsEditor db={db} uid={user.uid} defs={fieldDefs} onSaved={setFieldDefs} />
+        {user?.uid ? <CustomFieldsEditor db={db} uid={user.uid} defs={fieldDefs} onSaved={setFieldDefs} /> : null}
         <section className={card} aria-label="Public reviews">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Public reviews</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Paste the page where customers leave a public review (Google, Trustpilot, Facebook). Only happy, settled customers are asked. Asked {reviewStats.asked} · left {reviewStats.reviewed}.</p>
@@ -364,7 +364,7 @@ export default function CustomersPage() {
                   {isOpen && (
                     <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-gray-200 dark:border-gray-700 pt-4">
                       <div className="lg:col-span-2">
-                        <CustomFieldValues key={c.email} db={db} uid={user.uid} email={c.email} defs={fieldDefs} values={deals.find((d) => lower(d.email) === lower(c.email))?.customFields ?? extraFields[lower(c.email)]} onSaved={(clean) => { setDeals((prev) => prev.map((d) => (lower(d.email) === lower(c.email) ? { ...d, customFields: clean } : d))); setExtraFields((prev) => ({ ...prev, [lower(c.email)]: clean })); }} />
+                        {user?.uid ? <CustomFieldValues key={c.email} db={db} uid={user.uid} email={c.email} defs={fieldDefs} values={deals.find((d) => lower(d.email) === lower(c.email))?.customFields ?? extraFields[lower(c.email)]} onSaved={(clean) => { setDeals((prev) => prev.map((d) => (lower(d.email) === lower(c.email) ? { ...d, customFields: clean } : d))); setExtraFields((prev) => ({ ...prev, [lower(c.email)]: clean })); }} /> : null}
                       </div>
                       <div>
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Onboarding checklist</h3>
