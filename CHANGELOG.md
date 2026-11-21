@@ -1,3 +1,6 @@
+## Pass 359c - the dashboard logger skips AbortError too (22 Nov 2026)
+- app/dashboard/page.js logs every unhandled rejection as [UNHANDLED REJECTION]. It now skips AbortError, so the cancelled-request noise from pages like /bets stops there as well. Other rejections are still logged.
+
 ## Pass 359b - unhandled AbortError noise suppressed (22 Nov 2026)
 - A cancelled request or live listener (AbortError) reached the console as an unhandled rejection when a page closed or navigated. AbortNoise (mounted in app/layout.js) ignores that error type only. Other rejections still reach the console. Browser-extension messages (instantTrade, secureIframe) are not from this app.
 - Shipped-files manifest regenerated.

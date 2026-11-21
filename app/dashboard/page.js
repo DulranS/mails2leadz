@@ -11,6 +11,8 @@ if (typeof window !== "undefined") {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
+    // A cancelled request or listener (AbortError) is expected when a page closes; it is not a failure (pass 359c).
+    if (event.reason?.name === "AbortError") return;
     console.error("[UNHANDLED REJECTION]", event.reason);
   });
 }
