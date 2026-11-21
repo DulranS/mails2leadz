@@ -2277,3 +2277,32 @@ Not closed (decided or outside code):
 - The run itself was not exercised against a live HubSpot or Pipedrive account, and Firestore was not run here (the sandbox lacks the firebase package).
 
 Tests: tests/gap-close-347.test.mjs (16 checks, chained after 346). Updated the wording checks in gap-close-319 and gap-close-320 for the new return shape (same behaviour).
+
+
+## Pass 348: software referral (partner) programme
+
+| Item | Status | Reason or detail |
+|---|---|---|
+| Commission on referred subscriptions | Built | 20% of each paid invoice for 12 months from the first payment; env-tunable; ledger entries with fixed ids. |
+| Clawback on refund or dispute | Built | Proportional to the cumulative refund; disputes resolved from the charge to its invoice. |
+| Payouts recorded by the owner | Built | Refused above what is owed; minimum for eligibility. |
+| Operator API | Built | /api/admin/partners, admin-only, audited. |
+| Operator screen | Not built | The API exists; a screen is a UI pass. |
+| Partner statement and sign-in | Not built | Needs partner accounts and a separate login. |
+| Sign-up ?ref= capture | Not built on the page | /api/partners/referral exists; the page must send the code. |
+| Payment to partners through Stripe Connect | Not built | Money moves by the owner for now; Connect needs its own set-up. |
+| Tax on partner payments | Open | Sri Lankan withholding on service payments may apply; to confirm with an accountant. |
+
+
+## Pass 349: partner screen, statement link, sign-up capture, yearly prices
+
+| Item | Status | Reason or detail |
+|---|---|---|
+| Operator partner screen | Built | /admin/partners, audited API behind it. |
+| Partner statement | Built | Signed link, no sign-in; dates, kinds and amounts only. |
+| Sign-up referral capture | Built | Keeps the code on the device until the server accepts it. |
+| Annual prices | Built | Needs STRIPE_PRICE_*_YEARLY set in Stripe. |
+| Postmaster connector | Not built | Needs a Google OAuth client and verified domains, and gives no data below 50 users a day. Cannot be tested here. |
+| Usage or overage billing | Not built | Needs a pricing decision and metered Stripe prices. |
+| Automatic partner payouts (Stripe Connect) | Not built | Needs Connect set up in Stripe; payouts are recorded by hand. |
+| Tax on partner payments | Open | Possible withholding on service payments; to confirm with an accountant. |

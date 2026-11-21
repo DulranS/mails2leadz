@@ -1,12 +1,14 @@
 app/accept/[token]/page.js
 app/account/page.js
 app/admin/page.js
+app/admin/partners/page.js
 app/analytics/page.js
 app/api/accounting/[system]/callback/route.js
 app/api/accounting/[system]/route.js
 app/api/accounting/sync/route.js
 app/api/ad-spend/sync/route.js
 app/api/admin/operator-settings/route.js
+app/api/admin/partners/route.js
 app/api/admin/tenants/route.js
 app/api/agreements/accept/route.js
 app/api/agreements/invite/route.js
@@ -132,6 +134,8 @@ app/api/open-day/route.js
 app/api/ops-status/route.js
 app/api/outlook-calendar/callback/route.js
 app/api/outlook-calendar/route.js
+app/api/partners/referral/route.js
+app/api/partners/statement/route.js
 app/api/pay/route.js
 app/api/payments/webhook/route.js
 app/api/products/adjust/route.js
@@ -271,6 +275,7 @@ app/components/OutlookConnect.js
 app/components/PersonData.js
 app/components/PipelineAlerts.js
 app/components/PwaRegister.js
+app/components/ReferralCapture.js
 app/components/SalesTools.js
 app/components/SignalFeedsCard.js
 app/components/SignalsCard.js
@@ -740,6 +745,7 @@ lib/server/signals-io.js
 lib/server/signup.js
 lib/server/slack-connect.js
 lib/server/social.js
+lib/server/software-partners.js
 lib/server/statement.js
 lib/server/stock-hold.js
 lib/server/stripe.js
@@ -784,6 +790,7 @@ lib/site.js
 lib/slack.js
 lib/smart-followup-engine.js
 lib/social.js
+lib/software-partners.js
 lib/sops.js
 lib/speed-to-lead.js
 lib/statement-html.js

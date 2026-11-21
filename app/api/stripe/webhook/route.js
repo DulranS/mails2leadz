@@ -7,6 +7,7 @@ import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { getTenant, writeTenant } from '../../../../lib/server/tenant.js';
 import { applyStripeEvent } from '../../../../lib/billing-saas.js';
 import { billingConfigured, verifyWebhook, priceToPlan } from '../../../../lib/server/stripe.js';
+import { recordPartnerEvent } from '../../../../lib/server/software-partners.js';
 
 export const maxDuration = 30;
 const reply = (status, body) => NextResponse.json(body, { status, headers: NO_STORE });
@@ -32,7 +33,10 @@ export async function POST(request) {
     const tenant = await getTenant(db, uid);
     const { patch, reason } = applyStripeEvent(tenant, event, { priceToPlan: priceToPlan() });
     if (patch) await writeTenant(db, uid, { userId: uid, ...patch });
-    return reply(200, { received: true, applied: !!patch, ...(reason ? { reason } : {}) });
+    // The software referral ledger (pass 348): a paid invoice books the partner's share; a refund or dispute takes it back.
+    // A failure here returns 500 so Stripe retries; the entries have fixed ids, so a retry books nothing twice.
+    const partnerLedger = await recordPartnerEvent(db, event, { uid, tenant });
+    return reply(200, { received: true, applied: !!patch, ...(reason ? { reason } : {}), ...(partnerLedger.skipped ? {} : { partnerLedger }) });
   } catch (e) {
     console.error('[stripe webhook]', event?.type, e?.message);
     return reply(500, { error: 'Could not apply the event.' }); // Stripe will retry

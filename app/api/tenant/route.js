@@ -10,7 +10,7 @@ import { saasEnabled, PAID_PLANS } from '../../../lib/tenant.js';
 import { computeOnboarding } from '../../../lib/onboarding.js';
 import { sanitizeKit } from '../../../lib/sales-kit.js';
 import { ANGLE_IDS } from '../../../lib/angles.js';
-import { billingConfigured, cancelSubscriptionNow } from '../../../lib/server/stripe.js';
+import { billingConfigured, cancelSubscriptionNow, priceForPlan } from '../../../lib/server/stripe.js';
 
 const reply = (status, body) => NextResponse.json(body, { status, headers: NO_STORE });
 const HOUR = 3600000;
@@ -56,7 +56,7 @@ export async function GET(request) {
   return reply(200, {
     saas: ent.saas, mode: ent.mode, plan: ent.plan, planLabel: ent.planLabel, status: ent.status, reason: ent.reason, message: ent.message, warning: ent.warning,
     trialDaysLeft: ent.trialDaysLeft, limits: ent.limits, features: ent.features,
-    billing: { configured: ent.saas && billingConfigured(), plans: PAID_PLANS, hasCustomer: !!hasCustomer },
+    billing: { configured: ent.saas && billingConfigured(), plans: PAID_PLANS, yearlyPlans: PAID_PLANS.filter((x) => !!priceForPlan(x, process.env, 'year')), hasCustomer: !!hasCustomer },
     onboarding,
   });
 }

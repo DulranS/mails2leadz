@@ -20,20 +20,21 @@ Status words mean exactly this: **Built** (in the code, tested) · **Not yet bui
 | Abuse and safety | Per-account request brake, per-account AI caps, public-endpoint spam checks and limits, opt-out/Lost/bounce suppression, acceptable-use terms, ability to suspend. |
 | Data rights | Self-service export and delete (including the subscription and the Gmail key). |
 | Shared cache | With `REDIS_URL` set, account standing (plan, trial, suspension) is shared by every server instance, so a change applies everywhere at once. Without it, each instance keeps a short memory cache. Nothing breaks either way. |
+| Partner (referral) programme | Outside partners get a referral code. A company that enters it is linked to the partner; the partner earns a share of each paid invoice (default 20% for 12 months from the company's first payment), clawed back on refunds and disputes, and paid by the owner once above the minimum. Terms via PARTNER_TERMS_JSON. Operator screen at /admin/partners. Partners get a signed statement link (no sign-in). Sign-up captures ?ref=. |
 | Legal pages | Terms and Privacy switch to subscription wording and list Stripe when `SAAS_MODE=on`. **Templates, not legal advice: have a lawyer review before selling.** |
 
 ## Not yet built (in order of how much it would matter)
 1. **Per-customer sending set-up.** Customers send from their own Gmail. Fine for low volume; a customer who wants to send at scale needs their own domain, authentication records and warm-up, which the app does not manage.
 2. **Load and capacity testing.** Never done. Do it before announcing; the per-account limits and the Firebase/hosting plan decide the ceiling.
 3. **Monitoring and alerting** beyond the health endpoint and the operator console; **scheduled database backups** (runbook in OPERATIONS.md; you must switch them on).
-4. Usage-based/overage billing, annual plans, SSO, public API, white-label domains.
+4. Usage-based/overage billing, SSO, public API, white-label domains. (Annual plans: built in pass 349, needs yearly Stripe prices.)
 
 ## Consciously left out
 - Integrations with compliance-based systems (consent-management platforms, audit/attestation tooling, identity-verification services), as instructed. The app records opt-outs and honours them; it does not certify any customer's campaign as lawful.
 - Automatic replies to prospects, scraping or automating social networks (LinkedIn, Instagram, TikTok), buying lead lists, and bulk broadcasts to many past customers. (Built and capped on purpose: opt-in Autosend of the day's drafts, scheduled posting through the owner's own Zapier/Make/Buffer hook, per-customer review and feedback asks, and the built-in lead finder on public OpenStreetMap data.)
 
 ## Not applicable now
-- Marketplace listings, reseller/partner programmes, multi-region hosting.
+- Marketplace listings, multi-region hosting. (Partner programme: built in pass 348, see the Built table.)
 
 ## Outside our control (decide before the first paying customer)
 - **Google's rules for the Gmail permissions.** The app asks customers for Gmail *send* and *read* access. Google puts those under its sensitive/restricted-scope rules: an unverified app is capped at 100 users with a warning screen, and restricted scopes can require a security assessment. **Check the current rules in the Google Cloud console**: they change and sources differ. For our own use this does not matter; for selling it is the single biggest external gate and can take weeks.

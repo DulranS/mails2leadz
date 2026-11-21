@@ -4,6 +4,7 @@ import './globals.css';
 import ExtensionCleaner from './components/ExtensionCleaner';
 import AuthFetch from './components/AuthFetch';
 import AccessNotice from './components/AccessNotice';
+import ReferralCapture from './components/ReferralCapture';
 import ConnectionBanner from './components/ConnectionBanner';
 import { ThemeProvider } from './components/ui/ThemeProvider';
 import { NotificationProvider } from './components/ui/NotificationProvider';
@@ -46,7 +47,7 @@ export default function RootLayout({ children }) {
                 <AuthProvider>
                   <ExtensionCleaner />
                   <AuthFetch />
-                  <AccessNotice />
+                  <AccessNotice /><ReferralCapture />
                   <ConnectionBanner />
                   <PwaRegister /><AppShell><DayStart /><CommandPalette />{children}</AppShell>
                 </AuthProvider>

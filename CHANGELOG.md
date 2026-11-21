@@ -1,3 +1,22 @@
+## Pass 349: partner screen, statement link, sign-up capture, yearly prices; contract list brought up to date
+
+- **Added.** Operator screen at /admin/partners: add a partner (code issued automatically), set active, paused or ended, see what each is owed per currency, record a payment, copy the statement link.
+- **Added.** Partner statement at /api/partners/statement?token=…: a signed link (PARTNER_LINK_SECRET, 16 characters or more), no sign-in. It shows dates, kinds and amounts, never the companies brought, and is marked noindex.
+- **Added.** Sign-up capture: a company that arrives with ?ref=CODE is linked to that partner once it is signed in; the code is kept on the device until the server accepts it or refuses it for good.
+- **Added.** Yearly prices: STRIPE_PRICE_STARTER_YEARLY and STRIPE_PRICE_GROWTH_YEARLY map to the same plans; the account screen offers "yearly" only for plans that have a yearly price.
+- **Fixed.** The SaaS contract test had drifted from the public routes (accounting callbacks, balancr/events, chat were missing from its lists). Its lists now match, and both contracts were re-checked against every route file.
+- **Open.** The SaaS test needs the stripe package to run, which is not installed in this sandbox. Its contract logic was re-run here without it and passes.
+- **Tests.** tests/gap-close-348.test.mjs (29 checks). The shipped file list was regenerated (839 files).
+
+## Pass 348: software referral (partner) programme
+
+- **Added.** An outside partner gets a referral code. A company that enters the code (on its account, before its first paid invoice) is linked to that partner. The partner earns a share of each paid invoice from that company: 20% by default, for 12 months from the company's first payment. Terms can be changed with PARTNER_TERMS_JSON (kept within limits).
+- **Added.** Refunds and disputes take the commission back in proportion. A repeat event for the same total books nothing new. Each entry has a fixed id, so a Stripe retry never books twice.
+- **Added.** The owner pays partners by hand and records each payment; a payment above what is owed is refused. A partner is owed money per currency, and is marked eligible above the minimum (50.00 by default).
+- **Added.** The Stripe webhook books the ledger after it applies the subscription change (a failure returns 500, so Stripe retries). Operator API at /api/admin/partners (ADMIN_EMAILS only), every change written to admin_audit. Referral capture at /api/partners/referral.
+- **Open.** No partner-facing statement page or sign-in for partners; no screen for the operator yet (the API is there); the sign-up page does not yet read the ?ref= code (the route is there). Stripe, tax on partner payments and the terms of the programme need a lawyer and an accountant before any live payout.
+- **Tests.** tests/gap-close-348.test.mjs (22 checks), added to the npm test chain. The shipped file list was regenerated (836 files).
+
 ## Pass 347: CRM sync log
 
 - **Added.** Each CRM action on a deal is recorded with its reason: created (matched an existing contact by email, or a new one), sent, pulled, skipped (no usable email) or failed (the error). Kept on settings/crm: the last 50 entries from the latest run that did something.
