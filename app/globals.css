@@ -1,192 +1,362 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind v4 ignores tailwind.config.js, so `darkMode: 'class'` there did nothing and every dark: style followed the OS
+   setting while the theme toggle changed a class nothing listened to. This makes dark: follow the .dark class that
+   ThemeProvider sets, so the toggle and the page always agree. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  --secondary: #1e293b;
+  --light: #f8fafc;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #e2e8f0;
+  --card-bg: #ffffff;
+}
+
+/* Dark mode variables */
+.dark {
+  --primary: #60a5fa;
+  --primary-dark: #3b82f6;
+  --secondary: #f1f5f9;
+  --light: #0f172a;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --border: #334155;
+  --card-bg: #1e293b;
+}
 
 * {
   box-sizing: border-box;
 }
 
-/* Self-hosted webfonts for the app's three type tokens (display/body/mono —
-   see tailwind.config.ts); the actual @font-face rules are pulled in via
-   @fontsource imports in app/layout.tsx. System stacks remain as the
-   fallback chain for the instant before the webfont paints and for any
-   environment where, for some reason, the font failed to load.
-
-   - Space Grotesk (display): a squarish, slightly geometric grotesque with
-     a distinctive monocular "g" and confident, wide-set numerals — reads
-     as sharp and current on a wordmark/headline without tipping into
-     novelty. This is the closest thing the app has to a "brand" font.
-   - Inter: the workhorse body face — near-neutral, disambiguates lookalike
-     characters (1/l/I, 0/O) cleanly, and holds up at the small sizes a
-     dense financial UI actually uses.
-   - JetBrains Mono (mono/tabular): built for figures — true fixed-width
-     digits with a slashed zero, so columns of money actually line up and
-     $0 is never mistaken for $O. */
-:root {
-  --font-display: "Space Grotesk", -apple-system, "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, Roboto, Arial, sans-serif;
-  --font-body: "Inter", -apple-system, "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, Roboto, Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Consolas, "Liberation Mono", Menlo, monospace;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.animate-toast-in {
-  animation: toast-in 0.18s ease-out;
-}
-
-/* Single entrance moment for the landing-page hero's statement preview —
-   deliberately not reused as a generic "fade everything in" pattern
-   elsewhere on the page. */
-@keyframes statement-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.animate-statement-in {
-  animation: statement-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-@keyframes bar-fill {
-  from {
-    width: 0%;
-  }
-}
-.animate-bar-fill {
-  animation: bar-fill 0.9s 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-html,
-body {
-  background-color: #0b0e14;
-  color: #e8e6e1;
-  width: 100%;
-}
-/* Guards against any single wide element (a table, a long unbroken
-   string) forcing the whole page to scroll sideways — every internal
-   x-scroll region opts in explicitly via overflow-x-auto instead.
-   html uses hidden; body uses clip, NOT hidden: overflow-x:hidden on both
-   turns body into its own scroll container, which silently stops a
-   position:sticky header (the landing page's) from ever sticking. */
 html {
-  overflow-x: hidden;
-}
-body {
-  overflow-x: clip;
+  scroll-behavior: smooth;
 }
 
 body {
-  font-family: var(--font-body), system-ui, sans-serif;
-  /* iOS bumps font size on rotate/zoom by default ("text inflation"),
-     which can throw off layouts that were sized for the stated font-size.
-     The app is already responsive on its own terms, so this is turned off
-     in favor of predictable rendering. */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background-color: var(--light);
+  color: var(--secondary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Momentum scrolling for horizontally-scrollable regions (tables, the
-   mobile bottom nav) on iOS Safari — without this, dragging them feels
-   sticky/laggy compared to native scroll views. */
-.scroll-touch {
+/* Enhanced responsive design */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  body {
+    font-size: 15px;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Focus styles */
+.focus-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-in-out;
+}
+
+/* Loading spinner */
+.spinner {
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Gradient backgrounds */
+.gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  min-height: 150px;
+  transition: border-color 0.2s;
+}
+
+@media (max-width: 640px) {
+  .textarea {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    min-height: 120px;
+  }
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+  border-radius: 20px;
+  font-size: 0.875rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.1875rem 0.625rem;
+  }
+}
+
+.file-upload {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+@media (max-width: 640px) {
+  .file-upload {
+    padding: 1.5rem;
+  }
+}
+
+.file-upload:hover {
+  border-color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.progress-container {
+  height: 8px;
+  background-color: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: var(--primary);
+  transition: width 0.3s ease;
+}
+
+/* Mobile-First Responsive Utilities */
+@media (max-width: 640px) {
+  .mobile-hidden {
+    display: none;
+  }
+  
+  .mobile-full {
+    width: 100%;
+  }
+  
+  .mobile-center {
+    text-align: center;
+  }
+}
+
+@media (min-width: 641px) {
+  .sm-hidden {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) {
+  .md-hidden {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg-hidden {
+    display: none;
+  }
+}
+
+/* Touch-friendly interactions */
+@media (hover: none) and (pointer: coarse) {
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  input, textarea, select {
+    min-height: 44px;
+  }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus indicators for accessibility */
+.btn:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Loading states */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive tables */
+.responsive-table {
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Respect the iPhone/Android gesture-bar safe area so the fixed bottom nav
-   and its content never sit underneath it. */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-::selection {
-  background-color: #d9a441;
-  color: #0b0e14;
-}
-
-/* Financial figures always use tabular (monospace-width) numerals so columns
-   of numbers align vertically — this is the app's one signature detail. */
-.num {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
-}
-
-/* Custom thin scrollbar for the app shell */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #262c3a;
-  border-radius: 8px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3a4256;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-html {
-  /* Clears the sticky landing header so #pricing / #faq headings land in view. */
-  scroll-padding-top: 5rem;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+@media (max-width: 640px) {
+  .responsive-table {
+    margin: 0 -1rem;
+    padding: 0 1rem;
   }
 }
 
-/* Keyboard focus ring. Mouse and touch users never see it (:focus-visible),
-   but anyone tabbing through a form or the admin panel gets a clear amber
-   outline on buttons, links and dropdowns instead of nothing. Text inputs
-   keep their own border-colour focus style (focus:outline-none in ui.tsx). */
-a:focus-visible,
-button:focus-visible,
-summary:focus-visible,
-select:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid #d9a441;
-  outline-offset: 2px;
-  border-radius: 6px;
+/* Modal responsiveness */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
 }
 
-/* Ruled paper behind the landing hero: faint horizontal lines that
-   fade out toward the bottom. Lives on its own absolutely-positioned layer so
-   the mask never touches the hero's content. */
-.ruled-paper {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 47px,
-    rgba(58, 66, 86, 0.45) 47px,
-    rgba(58, 66, 86, 0.45) 48px
-  );
-  -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+@media (max-width: 640px) {
+  .modal {
+    padding: 0.5rem;
+  }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    border-radius: 8px;
+    max-height: 95vh;
+  }
 }

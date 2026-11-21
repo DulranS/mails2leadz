@@ -1,100 +1,136 @@
 {
   "indexes": [
     {
-      "collectionGroup": "sales",
+      "collectionGroup": "deals",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdByUid",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "stage",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "estimates",
+      "collectionGroup": "sent_emails",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdByUid",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "date",
-          "order": "DESCENDING"
+          "fieldPath": "abTest",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "leads",
+      "collectionGroup": "sent_emails",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "createdByUid",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
+          "fieldPath": "replyIntent",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "trialRequests",
+      "collectionGroup": "sent_emails",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "email",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
+        {
+          "fieldPath": "sentAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sent_emails",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "to",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sentAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sent_emails",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "phone",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sms_sent",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "to",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sentAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "follow_up_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
         {
           "fieldPath": "status",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "completedAt",
+          "order": "ASCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "leads",
+      "collectionGroup": "suppressions",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "ownerUid",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "requests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "createdByUid",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "incidents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "createdByUid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
         }
       ]
     }
