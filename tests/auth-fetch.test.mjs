@@ -20,3 +20,14 @@ const d = await out(mk('{"error":"x"}', 400, 'application/json'));
 assert.equal(d.body.error, 'x'); console.log('JSON passes through untouched');
 const e = await readable(mk(null, 204)); assert.equal(e.status, 204); console.log('204 untouched');
 console.log('all ok');
+
+// Session rule: a token error ends the session unless it is a network or rate-limit error that can clear by itself.
+const pm = src.match(/const TRANSIENT_TOKEN_ERRORS = [\s\S]*?\n\}\n/);
+assert.ok(pm, 'isBrokenSessionError() not found');
+const isBroken = new Function(`${pm[0].replace('export function', 'function')}; return isBrokenSessionError;`)();
+for (const code of ['auth/user-token-expired', 'auth/invalid-refresh-token', 'auth/internal-error', 'auth/user-not-found', 'auth/user-disabled', 'auth/invalid-user-token', 'auth/user-token-revoked'])
+  assert.equal(isBroken({ code }), true, code);
+for (const code of ['auth/network-request-failed', 'auth/too-many-requests']) assert.equal(isBroken({ code }), false, code);
+assert.equal(isBroken(new Error('boom')), false, 'a plain error is not a session error');
+assert.equal(isBroken(undefined), false);
+console.log('session rule ok');

@@ -7,7 +7,7 @@ import { isAdminMode } from '../../../lib/server-firestore.js';
 import { getDb, uidFromRequest, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { signState } from '../../../lib/server/token-vault.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
-import { OFFLINE_SCOPE, SEND_SCOPE, offlineConfigured, redirectUriFor, oauthClient, loadConnection, removeConnection } from '../../../lib/server/gmail-offline.js';
+import { OFFLINE_SCOPE, SEND_SCOPE, offlineConfigured, offlineMissing, redirectUriFor, oauthClient, loadConnection, removeConnection } from '../../../lib/server/gmail-offline.js';
 
 const reply = (status, body) => NextResponse.json(body, { status, headers: NO_STORE });
 
@@ -18,6 +18,7 @@ export async function GET(request) {
   const c = available ? await loadConnection(getDb(), uid) : null;
   return reply(200, {
     available,
+    missing: available ? [] : offlineMissing(isAdminMode()), // names only, so the page can say what to set
     redirectUri: available ? redirectUriFor(request) : null,
     connected: !!c && c.status === 'ok',
     canSend: !!c && c.status === 'ok' && c.canSend === true,

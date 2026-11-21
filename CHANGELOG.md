@@ -1,3 +1,17 @@
+## Pass 354 - Gmail setup status names what is missing
+- Finding: the variables are read on the server (lib/server-firestore.js, lib/server/gmail-offline.js, lib/server/token-vault.js), never in the browser. The Account page only shows what GET /api/gmail-offline reports. The browser cannot see the secrets and does not need to.
+- The Gmail status is "available" only when all of these are true on the server: FIREBASE_SERVICE_ACCOUNT_JSON loads, NEXT_PUBLIC_GOOGLE_CLIENT_ID is set, GOOGLE_CLIENT_SECRET is set, and TOKEN_ENC_KEY is 64 hex characters. The old message did not name NEXT_PUBLIC_GOOGLE_CLIENT_ID, the one most often missed.
+- lib/server/gmail-offline.js: offlineMissing(databaseReady) returns the names of what is missing (never the values). app/api/gmail-offline/route.js returns it as "missing". app/account/page.js shows the names.
+- tests/gmail-missing.test.mjs: 6 checks on the real source.
+- Likely causes on Vercel, in order: (1) no new deployment after the variables were added (Vercel applies new variables only to a new deployment); (2) set for Preview or Development but not Production; (3) NEXT_PUBLIC_GOOGLE_CLIENT_ID missing; (4) the service-account JSON pasted in a damaged form (the server logs say which); (5) TOKEN_ENC_KEY not exactly 64 hex characters.
+- The route /api/preflight does not exist in this codebase. The connection check is /api/system-check (signed in only; the Account page and the connection banner use it).
+
+## Pass 353 - any token failure ends the broken session
+- Cause (from the browser log): the Firebase token could not be refreshed (securetoken 400), so requests went out with no token and /api/today, /api/open-day and /api/day/open returned 401. The sign-out rule in AuthFetch.js only covered a fixed list of codes, so this failure was not in it and the app stayed "signed in" with no token.
+- app/components/AuthFetch.js: any Firebase auth/ error from getting a token now ends the session, except auth/network-request-failed and auth/too-many-requests (those clear on their own). After sign-out the sign-in screen shows, and a fresh sign-in gets a new token.
+- tests/auth-fetch.test.mjs: checks the rule on the real source (new codes, transient codes, plain errors).
+- Not fixed here: why the refresh is rejected. The response body of the securetoken 400 (Network tab, Preview) names the reason (for example TOKEN_EXPIRED, USER_NOT_FOUND, INVALID_REFRESH_TOKEN). Also check that NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID on Vercel are the same Firebase project as the sign-in.
+
 ## Pass 351 - broken sign-in sessions end instead of failing silently
 - Hotfix (same pass): the broken-session code list in AuthFetch.js had lost its quotes, which threw "auth is not defined" when the app loaded. Restored and checked by evaluating the list.
 - app/components/AuthFetch.js: when the Firebase token cannot be refreshed because the account was deleted, disabled or revoked, the session is signed out. Before, every request went out without a token, the server refused each one, the data screens filled with permission errors, and the app still showed the person as signed in. A refused request (401) is now checked with a forced token refresh first; a working session is left alone. Network errors do not end the session.

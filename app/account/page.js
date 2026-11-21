@@ -79,7 +79,7 @@ export default function AccountPage() {
   const [team, setTeam] = useState({ members: [], busy: false, msg: "", ok: false });
   const [hook, setHook] = useState({ url: "", busy: false, msg: "", ok: false });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
-  const [gm, setGm] = useState({ loading: true, available: false, connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
+  const [gm, setGm] = useState({ loading: true, available: false, missing: [], connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [tn, setTn] = useState({ loading: true, saas: false, busy: "", msg: "" }); // plan / billing state (SaaS mode only)
   const [termsDays, setTermsDays] = useState("");
   const [taxRate, setTaxRate] = useState("");
@@ -203,13 +203,10 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/gmail-offline");
       const d = await res.json().catch(() => ({}));
-      setGm((g) => ({ ...g, loading: false, available: !!d.available, connected: !!d.connected, canSend: !!d.canSend, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
+      setGm((g) => ({ ...g, loading: false, available: !!d.available, missing: Array.isArray(d.missing) ? d.missing : [], connected: !!d.connected, canSend: !!d.canSend, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
     } catch { setGm((g) => ({ ...g, loading: false })); }
   };
   useEffect(() => {
-      console.log(`TOKEN_ENC_KEY: ${process.env.TOKEN_ENC_KEY}`);
-  console.log(`FIREBASE_SERVICE_ACCOUNT_JSON: ${process.env.FIREBASE_SERVICE_ACCOUNT_JSON}`);
-  console.log(`GOOGLE_CLIENT_SECRET : ${process.env.GOOGLE_CLIENT_SECRET }`);
     if (!user?.uid) return;
     refreshGmail();
     const r = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gmail") : "";
@@ -673,7 +670,7 @@ export default function AccountPage() {
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white">Replies checked for you <span className="text-xs font-normal text-gray-500">· Gmail, even when you are away</span></h2>
           <p className="text-xs text-gray-500 mt-1">Connect once and the app looks for replies every night: opt-outs are recorded, positive replies move the deal forward, and the dashboard tells you what happened while you were away. By default it can only <b>read</b> your mail: it can never send, delete or change anything. If you want Autopilot to <b>send</b> your prepared emails, invoices and reminders for you, connect with automatic sending instead (the extra permission is only to send). The saved access is encrypted, and you can disconnect (which revokes it) at any time.</p>
-          {!gm.available && !gm.loading && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not set up on the server yet: it needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY (see the deployment guide).</p>}
+          {!gm.available && !gm.loading && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Not set up on the server yet. Missing: {gm.missing.length ? gm.missing.join(", ") : "unknown"}. Set them in Vercel for the Production environment, then redeploy (a new deployment is needed before the server sees them).</p>}
           {gm.available && !gm.connected && gm.redirectUri && <p className="text-xs text-gray-500 mt-2">One-time setup in Google Cloud (Credentials → your OAuth client → Authorized redirect URIs): <code className="break-all select-all">{gm.redirectUri}</code>. Also publish the OAuth consent screen (&quot;In production&quot;): while it says &quot;Testing&quot;, Google ends this access after 7 days.</p>}
           {gm.expired && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Gmail access expired{gm.lastError ? `: ${gm.lastError}` : ""} Connect again.</p>}
           {gm.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{gm.msg}</p>}
