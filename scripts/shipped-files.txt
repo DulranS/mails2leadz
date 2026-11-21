@@ -118,6 +118,7 @@ app/api/invoices/refund-manual/route.js
 app/api/invoices/return/route.js
 app/api/invoices/send/route.js
 app/api/invoices/ship/route.js
+app/api/invoices/void/route.js
 app/api/kpis/route.js
 app/api/lead-inbox/ingest/route.js
 app/api/lead-inbox/jobs/route.js
@@ -125,6 +126,7 @@ app/api/lead-inbox/key/route.js
 app/api/list-sent-leads/route.js
 app/api/list-whatsapp-contacts/route.js
 app/api/listings/shopify/sync/route.js
+app/api/loyalty/earn/route.js
 app/api/loyalty/route.js
 app/api/make-call/route.js
 app/api/mark-replied/route.js

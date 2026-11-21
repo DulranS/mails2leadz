@@ -54,11 +54,12 @@ const records = {
   'google._domainkey.example.com': ['v=DKIM1; k=rsa; p=MIIB'],
 };
 const seen = [];
-const report = await checkSenderDomain('example.com', { lookup: async (name) => { seen.push(name); return records[name] || []; } });
+const offBlocklist = { blocklist: async () => ({ known: true, addresses: [] }) }; // keep this test offline (v357 adds a DNS blocklist lookup)
+const report = await checkSenderDomain('example.com', { ...offBlocklist, lookup: async (name) => { seen.push(name); return records[name] || []; } });
 assert.equal(report.status, 'ready', 'a fully set up domain is ready');
 assert.equal(report.checks.find((c) => c.id === 'dkim').selector, 'google', 'the DKIM selector is reported');
 assert.ok(seen.includes('_dmarc.example.com'), 'DMARC is looked up at _dmarc');
-const none2 = await checkSenderDomain('empty.example.org', { lookup: async () => [] });
+const none2 = await checkSenderDomain('empty.example.org', { ...offBlocklist, lookup: async () => [] });
 assert.equal(none2.status, 'missing', 'an unconfigured domain is reported as missing');
 
 console.log('sender-auth tests: all passed');

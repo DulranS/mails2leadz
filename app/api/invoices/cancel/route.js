@@ -6,6 +6,7 @@ import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { doc } from '../../../../lib/server-firestore.js';
 import { runTx } from '../../../../lib/server/tx.js';
 import { releaseStock } from '../../../../lib/server/stock-hold.js';
+import { restorePoints } from '../../../../lib/server/loyalty.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 
@@ -33,10 +34,11 @@ export async function POST(request) {
       if (inv.status === 'paid' || Number(inv.amountPaid) > 0) return { error: manual ? 'This invoice has been paid. Stock from a paid invoice made by hand is put back with a stock adjustment.' : 'This order has been paid, so it is returned, not cancelled.', status: 409 };
       const holds = manual ? inv.manualStockTaken.map((h) => ({ ...h, tracked: true })) : (inv.holdReleasedAt ? [] : (Array.isArray(inv.stockHolds) ? inv.stockHolds : []));
       tx.update(ref, { status: 'void', cancelledAt: new Date().toISOString(), voidReason: 'Cancelled by the owner before payment', holdReleasedAt: new Date().toISOString() });
-      return { holds };
+      return { holds, pointsUsed: Number(inv.loyaltyPointsUsed) || 0, email: inv.email || '' };
     });
     if (result.error) return json({ error: result.error }, result.status || 409);
     await releaseStock(db, uid, result.holds).catch(() => ({}));
+    if (result.pointsUsed > 0) await restorePoints(db, uid, result.email, result.pointsUsed).catch(() => ({}));
     return json({ ok: true, stockReturned: result.holds.filter((h) => h.tracked).length });
   } catch (e) {
     console.error('[invoices/cancel] failed:', String(e?.message || '').slice(0, 120));

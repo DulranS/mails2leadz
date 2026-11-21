@@ -13,7 +13,7 @@ import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
 import { computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeBilling, computeUnbilled, buildInvoiceWrite, canRemind, dunningLevel, DEFAULT_PAYMENT_TERMS_DAYS } from "../../lib/billing.js";
-import { recordPaymentPatch } from "../../lib/billing.js";
+import { recordPaymentPatch, balanceOf } from "../../lib/billing.js";
 import { setOnboardingStep } from "../../lib/deal-extras.js";
 import { updateDealExtras } from "../../lib/deal-client.js";
 import { makeMoney, currencySymbol, normalizeCurrency } from "../../lib/currency.js";
@@ -107,7 +107,7 @@ function Bar({ value, max, label, right, color = "bg-blue-600" }) {
   );
 }
 
-const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "", stockProduct: "", stockQty: "1", chargeCurrency: "", saleLines: "" };
+const EMPTY_FORM = { email: "", businessName: "", amount: "", number: "", note: "", issuedAt: "", termsDays: "", stockProduct: "", stockQty: "1", chargeCurrency: "", saleLines: "", redeemPoints: "" };
 
 export default function BillingPage() {
   const { user, ready: authReady } = useAuthUser();
@@ -120,6 +120,7 @@ export default function BillingPage() {
   const [settings, setSettings] = useState(snap0?.settings || {});
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [loyaltyBalance, setLoyaltyBalance] = useState(null); // { email, points } for the customer on the invoice form
   // The products to choose from when the invoice form is open (for product lines that take stock off the shelf).
   const [catalog, setCatalog] = useState([]);
   useEffect(() => {
@@ -133,6 +134,16 @@ export default function BillingPage() {
     })();
   }, [showForm, user]);
   const [saving, setSaving] = useState("");
+  // The customer's points balance, read once a full email address is typed (the server answers for this owner only).
+  useEffect(() => {
+    const email = form.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { setLoyaltyBalance(null); return undefined; }
+    let cancelled = false;
+    fetch(`/api/loyalty?email=${encodeURIComponent(email)}`).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled) setLoyaltyBalance(j && typeof j.points === "number" ? { email, points: j.points } : null); })
+      .catch(() => { if (!cancelled) setLoyaltyBalance(null); });
+    return () => { cancelled = true; };
+  }, [form.email]);
   const [draft, setDraft] = useState(null); // { invoice, to, title, subject, body, source, note }
   const [filter, setFilter] = useState("open"); // open | paid | all
 
@@ -198,7 +209,7 @@ export default function BillingPage() {
         chargeCurrency: form.chargeCurrency, fxRate: fxRateFor(form.chargeCurrency),
       });
       if (!r.ok) { setError(r.error); return; }
-      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ saleLines: form.saleLines, email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, chargeCurrency: form.chargeCurrency, stockLines: form.stockProduct ? [{ productId: form.stockProduct.split("|")[0], variantId: form.stockProduct.split("|")[1] || "", quantity: Number(form.stockQty) || 1 }] : [], issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
+      const saved = await fetch("/api/invoices/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ redeemPoints: form.redeemPoints, saleLines: form.saleLines, email: form.email, businessName: form.businessName, amount: form.amount, number: form.number, note: form.note, chargeCurrency: form.chargeCurrency, stockLines: form.stockProduct ? [{ productId: form.stockProduct.split("|")[0], variantId: form.stockProduct.split("|")[1] || "", quantity: Number(form.stockQty) || 1 }] : [], issuedAt: form.issuedAt ? new Date(`${form.issuedAt}T12:00:00Z`).toISOString() : "", termsDays: form.termsDays !== "" ? form.termsDays : terms }) });
       const savedData = await saved.json().catch(() => ({}));
       if (!saved.ok) { setError(savedData.error || "Could not save the invoice. Please try again."); return; }
       r.write.number = savedData.number;
@@ -211,11 +222,12 @@ export default function BillingPage() {
     finally { setSaving(""); }
   };
 
-  const patchInvoice = async (inv, changes, message) => {
+  const patchInvoice = async (inv, changes, message, after) => {
     setSaving(inv.id); setError(""); setNotice("");
     try {
       await setDoc(doc(db, "invoices", inv.id), changes, { merge: true });
       if (message) setNotice(message);
+      if (after) after();
       await load();
     } catch { setError("Could not save that change."); }
     finally { setSaving(""); }
@@ -243,7 +255,9 @@ export default function BillingPage() {
     finally { setSaving(""); }
   };
   const takeStock = (inv, settled) => fetch("/api/stock/payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceId: inv.id, saleLines: inv.saleLines || "", assumePaid: settled === true }) }).then((x) => x.json()).then((j) => { if (j && j.shortfalls && j.shortfalls.length) setNotice(`Stock: ${j.shortfalls.map((x) => `${x.name} (${x.reason})`).join(", ")}.`); }).catch(() => {});
-  const markPaid = (inv) => { takeStock(inv, true); return patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`); };
+  // Points for a payment recorded by hand (the card webhook does this for card payments). Called only after the payment is saved.
+  const earnFor = (invoiceId, amount) => fetch("/api/loyalty/earn", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceId, amount }) }).catch(() => {});
+  const markPaid = (inv) => { takeStock(inv, true); return patchInvoice(inv, { status: "paid", paidAt: new Date().toISOString() }, `Marked paid: ${money2(inv.amount)} from ${inv.businessName || inv.email}.`, () => earnFor(inv.id, balanceOf(inv))); };
   const reopen = (inv) => patchInvoice(inv, { status: "open", paidAt: null, amountPaid: 0 }, "Invoice reopened.");
   const recordPart = (inv) => {
     const raw = window.prompt(`How much did ${inv.businessName || inv.email} pay? (still owed: ${money2(inv.amount)})`);
@@ -251,9 +265,22 @@ export default function BillingPage() {
     const r = recordPaymentPatch(inv, Number(raw), new Date());
     if (!r.ok) { setError(r.error); return; }
     if (r.settled) takeStock(inv, true);
-    patchInvoice(inv, r.patch, r.settled ? `Settled: ${money2(Number(raw))} received.` : `Part payment recorded. ${money2(r.balance)} still owed.`);
+    patchInvoice(inv, r.patch, r.settled ? `Settled: ${money2(Number(raw))} received.` : `Part payment recorded. ${money2(r.balance)} still owed.`, () => earnFor(inv.id, Math.round(Number(raw) * 100) / 100));
   };
-  const voidInvoice = (inv) => { if (window.confirm("Void this invoice? It stops counting as money owed.")) patchInvoice(inv, { status: "void" }, "Invoice voided."); };
+  // Voiding goes through the server: it gives back any points the invoice used, and refuses a part-paid invoice (refund that first).
+  const voidInvoice = (inv) => {
+    if (!window.confirm("Void this invoice? It stops counting as money owed.")) return;
+    setSaving(inv.id); setError(""); setNotice("");
+    fetch("/api/invoices/void", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceId: inv.id }) })
+      .then(async (res) => {
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) { setError(j.error || "Could not void that invoice."); return; }
+        setNotice(j.pointsReturned ? `Invoice voided. ${j.pointsReturned} points went back to the customer.` : "Invoice voided.");
+        await load();
+      })
+      .catch(() => setError("Could not void that invoice."))
+      .finally(() => setSaving(""));
+  };
 
   const askForDraft = async (inv) => {
     setSaving(inv.id); setError(""); setNotice("");
@@ -356,6 +383,10 @@ export default function BillingPage() {
               </label>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Amount ({currencySymbol(currency)})
                 <input required type="number" min="0.01" step="0.01" inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={field} />
+              </label>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Points to use (100 points = 1 unit off)
+                <input type="number" min="0" step="1" inputMode="numeric" value={form.redeemPoints} onChange={(e) => setForm({ ...form, redeemPoints: e.target.value })} className={field} placeholder="0" />
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">{loyaltyBalance && loyaltyBalance.email === form.email.trim() ? `Balance: ${loyaltyBalance.points} points` : "The balance shows once a customer email is entered"}</span>
               </label>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Charge the customer in
                 <select value={form.chargeCurrency} onChange={(e) => setForm({ ...form, chargeCurrency: e.target.value })} className={field}>

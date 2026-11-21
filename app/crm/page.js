@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { offeredCurrencies } from "../../lib/currency.js";
+import { offeredCurrencies, makeMoney, normalizeCurrency } from "../../lib/currency.js";
+import { billingSummaryByEmail } from "../../lib/billing.js";
 import PipelineAlerts from "../components/PipelineAlerts.js";
 import LiveVoice from "../components/LiveVoice.js";
 import CallSummary from "../components/CallSummary.js";
@@ -21,7 +22,7 @@ import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { stale, put } from "../../lib/swr-cache.js";
-import { getSentEmails, getContacts, getDeals, getPendingFollowUps, getSettingsDoc } from "../../lib/client-data.js";
+import { getSentEmails, getContacts, getDeals, getInvoices, getPendingFollowUps, getSettingsDoc } from "../../lib/client-data.js";
 import { pickBusinessName, NO_NAME_LABEL } from "../../lib/lead-name.js";
 
 // Import Firebase functions
@@ -109,13 +110,14 @@ export default function CRMPage() {
 
     try {
       // Shared, cached reads (the same copies Business, Customers and Billing use): coming back to this page costs no new downloads.
-      const [sentSnap, contactsSnap, dealsSnap, taskSnap, settingsSnap, teamSnap] = await Promise.all([
+      const [sentSnap, contactsSnap, dealsSnap, taskSnap, settingsSnap, teamSnap, invoicesSnap] = await Promise.all([
         getSentEmails(db, user.uid),
         getContacts(db, user.uid).catch(() => ({ docs: [] })),
         getDeals(db, user.uid),
         getPendingFollowUps(db, user.uid).catch(() => ({ docs: [] })),
         getSettingsDoc(db, user.uid, "business").catch(() => null),
         getSettingsDoc(db, user.uid, "team").catch(() => null),
+        getInvoices(db, user.uid).catch(() => ({ docs: [] })),
       ]);
 
       // ONE row per lead (several emails to the same person used to show as duplicate rows).
@@ -196,6 +198,9 @@ export default function CRMPage() {
       let defaultDealValue = 1000;
       if (settingsSnap?.exists?.() && Number(settingsSnap.data().avgDealValue) > 0) defaultDealValue = Number(settingsSnap.data().avgDealValue);
       const currencyOptions = offeredCurrencies(settingsSnap?.exists?.() ? settingsSnap.data() : {});
+      // What each customer owes, for the Billing column (in the business currency).
+      const bizCurrency = normalizeCurrency(settingsSnap?.exists?.() ? settingsSnap.data().currency : "");
+      const billingByEmail = billingSummaryByEmail((invoicesSnap?.docs || []).map((d) => ({ _id: d.id, ...d.data() })), { money: makeMoney(bizCurrency) });
 
       const leads = [...byEmail.values()].map((lead) => {
         const seen = new Set();
@@ -234,7 +239,7 @@ export default function CRMPage() {
       });
 
       const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
-      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealCurrencies, currencyOptions, dealQual, dealOwners, dealLost, team, defaultDealValue };
+      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealCurrencies, currencyOptions, billingByEmail, dealQual, dealOwners, dealLost, team, defaultDealValue };
       put(`${user.uid}|page|crm`, next);
       setData(next);
     } catch (error) {
@@ -479,6 +484,7 @@ export default function CRMPage() {
         dealValues={data.dealValues}
         dealCurrencies={data.dealCurrencies}
         currencyOptions={data.currencyOptions}
+        billingByEmail={data.billingByEmail || {}}
         dealQual={data.dealQual}
         dealOwners={data.dealOwners}
         dealLost={data.dealLost}

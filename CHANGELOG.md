@@ -1,3 +1,33 @@
+## Pass 357 - sending domain checked against the Spamhaus blocklist (last closable gap from the sales research)
+- Account > Sender check now also looks up the sending domain on the Spamhaus Domain Block List (a DNS lookup of <domain>.dbl.spamhaus.org; no mail is sent). It shows Listed, Clear or Unknown beside the SPF, DKIM and DMARC checks.
+- Unknown is shown when the check cannot run from here: a timeout, a server error, or a refused query (Spamhaus often refuses public resolvers). That is not a failure, and it never shows as Clear.
+- Informational only: the send gate is unchanged (it still blocks only missing SPF or DMARC).
+- Files: lib/sender-auth.js (evaluateBlocklist, DBL_LABELS), lib/server/sender-auth.js (blocklistLookup; checkSenderDomain runs it in parallel with the other lookups), app/account/page.js (one row).
+- Tests: tests/sender-blocklist.test.mjs, added to the npm test chain. tests/sender-auth.test.mjs passes an offline blocklist mock, so it does not touch DNS.
+- Left out on purpose (decisions, not oversights): journey steps that branch on opens or clicks (the app keeps no open data, and the privacy notice mentions no tracking pixel; adding one is a product and privacy decision); a cap on emails per company per day (no Gmail or Yahoo rule sets one, and a default would block legitimate multi-contact sends).
+- Not run here: a live lookup. Check on a real domain that the row appears. Unknown is expected from some hosts.
+- shipped-files.txt regenerated; release-files passes.
+
+## Pass 356 - pipeline billing column and points on the customers list (last closable gaps)
+- Pipeline (CRM table): new Billing column per lead: "Owed" (amber), "Overdue" (red), "Paid" (green) or "No invoice". Uses the invoices already in the account; void invoices are left out; each invoice counts only what is still owed. The business currency is used for the amounts. lib/billing.js: billingSummaryByEmail (pure, tested).
+- Customers list: each customer shows its points balance ("· 120 points") when above zero. One request for all visible rows: GET /api/loyalty?emails=… (up to 100 addresses, owner only, answers {balances}). The single-address form (?email=) is unchanged.
+- Card and hand payments: the card webhook now records what it earned on the invoice (loyaltyEarnedAmount), so a reopened card-paid invoice cannot earn twice by hand (pass 355 left this open).
+- Files: lib/billing.js, app/api/loyalty/route.js, app/crm/page.js, app/components/CRM.js, app/customers/page.js, app/api/payments/webhook/route.js (pass 355).
+- Tests: tests/pipeline-billing.test.mjs (summary checked directly: overdue, owed, part payment, marked-paid, void, case of email; plus source checks). Added to the npm test chain with gmail-missing and loyalty-wiring (which were missing from it). shipped-files.txt regenerated (841 files).
+- Not run here: Firebase, the browser and the build. Check on a real account: a customer with an overdue invoice shows "Overdue" in the pipeline; a customer with points shows them on the customers list.
+
+## Pass 355 - loyalty points finished (redeem on the invoice, give back on void, earn on hand payments)
+Gaps found in the docs (GAP_STATUS pass 160) and checked in the code. Most other items listed as open there were already built later; checked before touching anything.
+- **Redeem on the invoice form (was server-only).** Billing invoice form: "Points to use (100 points = 1 unit off)" with the customer's balance once a full email is typed (GET /api/loyalty, owner only). The server still checks the balance and the amount.
+- **Points come back on void (was lost).** The invoice remembers the points it used (loyaltyPointsUsed). New POST /api/invoices/void: voids an open or overdue invoice and returns those points. Refused for a paid invoice (record a refund) and a part-paid invoice (refund that part first). The Billing page's Void button now uses this route. The old client-side void wrote the status directly and could not return points.
+- **Cancelled hand-made orders give points back too** (app/api/invoices/cancel).
+- **Points for payments recorded by hand (was card-only).** Mark paid and part payments call new POST /api/loyalty/earn after the payment is saved. Points are earned on the amount actually received, at the owner's rate.
+- **No double earning.** Each invoice keeps loyaltyEarnedAmount: the card webhook and the hand route both add to it, and the route refuses anything above the invoice amount. Reopening and re-marking an invoice cannot earn twice.
+- Not done: the balance on the customers list (needs one bulk read; a request per row would be wasteful). Pipeline payment status on each deal (partly shown elsewhere).
+- Files: lib/server/loyalty.js (restorePoints), app/api/invoices/{create,cancel,void}/route.js, app/api/loyalty/earn/route.js, app/api/payments/webhook/route.js, app/billing/page.js.
+- Tests: tests/loyalty-wiring.test.mjs (source checks + syntax of 7 files), tests/gmail-missing.test.mjs (from pass 354) and the auth-fetch session rule are now in the npm test chain. shipped-files.txt regenerated (841 files); release-files passes (imports and named exports checked).
+- Not run here: Firebase (no packages in this sandbox), the browser, and the build. Test on a real account: create an invoice with points, void it (balance returns), mark a payment by hand (points appear once).
+
 ## Pass 354 - Gmail setup status names what is missing
 - Finding: the variables are read on the server (lib/server-firestore.js, lib/server/gmail-offline.js, lib/server/token-vault.js), never in the browser. The Account page only shows what GET /api/gmail-offline reports. The browser cannot see the secrets and does not need to.
 - The Gmail status is "available" only when all of these are true on the server: FIREBASE_SERVICE_ACCOUNT_JSON loads, NEXT_PUBLIC_GOOGLE_CLIENT_ID is set, GOOGLE_CLIENT_SECRET is set, and TOKEN_ENC_KEY is 64 hex characters. The old message did not name NEXT_PUBLIC_GOOGLE_CLIENT_ID, the one most often missed.

@@ -113,6 +113,17 @@ export default function CustomersPage() {
   const tabList = data.customers.filter((c) => (filter === "all" ? true : filter === "action" ? c.health === "at_risk" || c.health === "attention" : c.health === filter));
   // Custom-field filters (pass 341): the owner's values for each customer, from the deal or, with no deal, from the saved values by email.
   const list = applyCustomFilters(tabList, fieldDefs, customFilters, (c) => deals.find((d) => lower(d.email) === lower(c.email))?.customFields ?? extraFields[lower(c.email)] ?? {});
+  // Points balances for the customers on screen: one request (up to 100 addresses).
+  const [points, setPoints] = useState({});
+  const visibleEmails = list.slice(0, 100).map((c) => c.email).join(",");
+  useEffect(() => {
+    if (!visibleEmails || !user?.uid) return undefined;
+    let cancelled = false;
+    fetch(`/api/loyalty?emails=${encodeURIComponent(visibleEmails)}`).then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j && j.balances && typeof j.balances === "object") setPoints(j.balances); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [visibleEmails, user?.uid]);
   const counts = { action: data.atRisk.count + data.attention.count, onboarding: data.customers.filter((c) => c.health === "onboarding").length, healthy: data.customers.filter((c) => c.health === "healthy").length, all: data.total };
 
   // Save an extras change and patch it into local state, so ticking boxes feels instant (no full reload).
@@ -331,7 +342,7 @@ export default function CustomersPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full ${h.cls}`}>{h.label}</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{stageLabel(c.stage, workMode)}</span>
                       </div>
-                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.lifetimeValue > 0 ? ` · paid to date ${money(c.lifetimeValue)}` : ""}{c.estimated ? " (estimate)" : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
+                      <div className="truncate text-xs text-gray-500 dark:text-gray-400">{c.email} · {money(c.value)}{c.lifetimeValue > 0 ? ` · paid to date ${money(c.lifetimeValue)}` : ""}{c.estimated ? " (estimate)" : ""}{points[lower(c.email)] > 0 ? ` · ${points[lower(c.email)]} points` : ""}{c.recurringMonthly > 0 ? ` · ${money(c.recurringMonthly)}/month` : ""} · won {c.daysSinceWon ?? "?"} days ago</div>
                       {c.reasons.length > 0 && <ul className="mt-1 text-xs text-gray-700 dark:text-gray-200 list-disc pl-4">{c.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                       <div className="mt-2 flex items-center gap-2">
                         <div className="h-2 w-32 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(c.onboarding.pct * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Onboarding progress"><div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.onboarding.pct * 100}%` }} /></div>

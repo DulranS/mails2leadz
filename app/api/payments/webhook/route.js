@@ -55,7 +55,10 @@ export async function POST(request) {
       return reply({ received: true, review: true });
     }
     await updateDoc(ref, r.patch);
-    await earnLoyalty(db, uid, invoice, Number(r.baseAmount ?? Number(s.amount_total) / 100));
+    const gotBase = Number(r.baseAmount ?? Number(s.amount_total) / 100);
+    await earnLoyalty(db, uid, invoice, gotBase);
+    // Record what was earned on this invoice, so a hand-recorded payment cannot earn the same amount again (see /api/loyalty/earn).
+    await updateDoc(ref, { loyaltyEarnedAmount: Math.round(((Number(invoice.loyaltyEarnedAmount) || 0) + gotBase) * 100) / 100 }).catch(() => ({}));
     await emitWebhook(db, uid, 'payment.received', { invoiceId: invoice.id, number: invoice.number || '', customerEmail: invoice.email, amount: Number(r.baseAmount ?? Number(s.amount_total) / 100), status: r.patch.status });
     if (invoice.bookingId && r.patch.status === 'paid') {
       const { confirmPaidBooking } = await import('../../../../lib/server/booking-confirm.js');

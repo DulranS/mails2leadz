@@ -34,6 +34,7 @@ export const CRM = ({
   dealQual = {},
   dealOwners = {},
   dealLost = {},
+  billingByEmail = {},
   team = [],
   defaultDealValue = 1000,
   onUpdateLead,
@@ -224,6 +225,17 @@ export const CRM = ({
           )}
         </label>
       ),
+    },
+    {
+      key: "billing",
+      hideOnMobile: true, // below 1360px the Billing column is hidden with the other detail columns
+      label: "Billing",
+      render: (value, lead) => {
+        const b = billingByEmail[lead.email];
+        if (!b) return <span className="text-xs text-gray-400 dark:text-gray-500">No invoice</span>;
+        const tone = b.tone === "red" ? "text-red-600 dark:text-red-400" : b.tone === "amber" ? "text-amber-700 dark:text-amber-300" : "text-green-700 dark:text-green-400";
+        return <span className={`text-xs font-medium ${tone}`}>{b.text}</span>;
+      },
     },
     {
       key: "actions",

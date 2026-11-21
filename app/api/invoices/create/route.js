@@ -96,6 +96,7 @@ export async function POST(request) {
     if (!r.write.number) r.write.number = await nextInvoiceNumber(db, uid);
     r.write.manualStockTaken = taken.filter((h) => h.tracked).map((h) => ({ productId: h.productId, variantId: h.variantId || '', quantity: h.quantity, tracked: true }));
     r.write.saleLines = String(body?.saleLines || '').slice(0, 300);
+    r.write.loyaltyPointsUsed = loyaltyUse?.ok ? loyaltyUse.pointsUsed : 0; // returned if the invoice is voided before payment
     const ref = await addInvoiceWithCredit(db, uid, r.write);
     if (loyaltyUse?.ok) await spendPoints(db, uid, body?.email, loyaltyUse.pointsUsed).catch(() => ({}));
     return json({ ok: true, id: ref.id, number: r.write.number, dueAt: r.write.dueAt, stockTaken: taken.filter((h) => h.tracked).length });

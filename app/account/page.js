@@ -876,6 +876,11 @@ export default function AccountPage() {
                   {!c.ok && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{c.example}</p>}
                 </div>
               ))}
+              {senderReport.blocklist && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                  <p className="text-sm text-gray-800 dark:text-gray-100"><span className={senderReport.blocklist.status === "listed" ? "text-red-700 dark:text-red-300 font-medium" : senderReport.blocklist.status === "clear" ? "text-green-700 dark:text-green-300 font-medium" : "text-gray-600 dark:text-gray-300 font-medium"}>{senderReport.blocklist.status === "listed" ? "Listed" : senderReport.blocklist.status === "clear" ? "Clear" : "Unknown"}</span> Blocklist (Spamhaus): {senderReport.blocklist.message}</p>
+                </div>
+              )}
               {senderReport.notes?.map((n) => <p key={n} className="text-xs text-gray-500 dark:text-gray-400">{n}</p>)}
             </div>
           )}
