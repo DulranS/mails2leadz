@@ -1,132 +1,1184 @@
 rules_version = '2';
 
-// Every customer can only see and change their own data. A team member invited by the owner works inside the owner's data with a
-// role (see "Team logins" below); the original owner-only rules are kept in firestore.rules.v31-owner-only for rollback.
-// Server API routes use the Firebase Admin SDK, which bypasses these rules, so the
-// browser never needs broader access than this.
+// ---------------------------------------------------------------------------
+// This is the actual security boundary for the app — everything the client
+// (lib/permissions.ts, contexts/DataContext.tsx) does to hide buttons or
+// skip a subscription is UX, not enforcement. If a rule and the client
+// disagree, the rule wins and the person just sees a failed write.
+//
+// Data model
+//   users/{businessId}/...            — every business's data, unchanged
+//                                        from the single-user version. The
+//                                        business's uid IS the owner's uid.
+//   users/{businessId}/members/{uid}  — one doc per person with access.
+//                                        The single source of truth for
+//                                        "what can this uid do here" — role,
+//                                        active/removed. Every rule below
+//                                        reads this, never anything else,
+//                                        for a permission decision.
+//   users/{businessId}/invites/{id}   — pending invitations, created by the
+//                                        owner, accepted by the invitee.
+//   memberships/{uid}                 — a top-level pointer, one per
+//                                        person, written once and never
+//                                        updated: { businessId }. Exists
+//                                        purely so a freshly signed-in
+//                                        client can find its own business
+//                                        with a single doc read by uid.
+//                                        Carries no role — role always
+//                                        comes from the members doc above,
+//                                        so there is exactly one place a
+//                                        role can be wrong, and it isn't
+//                                        this one.
+//
+// Role matrix (mirrors lib/permissions.ts — keep both in sync)
+//   owner   — full read/write on everything in their business. Only the
+//             owner can manage the team, change settings, view the audit
+//             log, delete a record, or correct a saved cash count /
+//             receivable payment / payable payment after the fact.
+//   manager — create/update on the operational collections (products,
+//             purchases, purchase orders, sales, expenses, variable costs,
+//             capital entries, loans, cash counts, receivable payments).
+//             No delete anywhere. No access to employees/payroll, team
+//             management, settings, or the audit log.
+//   staff   — create-only on sales, cash counts, receivable payments, and
+//             time entries (can also clock themselves out of a running time
+//             entry, and nothing else about it), and only ever able to read
+//             the ones they created themselves.
+//             Read-only on `catalog` (a cost-stripped product mirror) and
+//             `meta/settings`. No access to anything else, including the
+//             real `products`/`purchases` collections that carry cost
+//             data — that's the mechanism that keeps a till-level employee
+//             from ever being able to see, let alone alter, a margin.
+//   accountant — READ-ONLY. Reads what a manager reads (the books: sales, purchases,
+//             bills, payments, assets, loans, reports' source data) and nothing else:
+//             no payroll, team, audit log, notifications or AI. It appears only in read
+//             rules (via canReadBooks) and is excluded from every "any active member
+//             can create" rule (via isOwnerOrOperatingMember).
+// ---------------------------------------------------------------------------
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
-
-    // The server's own identity when it runs WITHOUT a service-account key ("server login", DEPLOYMENT_GUIDE.md): paste the
-    // Firebase Authentication user id (UID) of the dedicated server user between the quotes, then republish these rules.
-    // Left as it is, it matches nobody, so the rules stay exactly as locked down as before.
-    function isServer() { return request.auth != null && request.auth.uid == 'PASTE_SERVER_USER_UID_HERE'; }
-    function uid() { return request.auth.uid; }
-
-    // A document belongs to the caller if it says so, or its id is "<uid>_<something>".
-    function ownsExisting(docId) {
-      return signedIn() && (
-        resource.data.get('userId', '') == uid() ||
-        resource.data.get('createdBy', '') == uid() ||
-        docId.matches('^' + uid() + '_.*')
-      );
-    }
-    function ownsNew(docId) {
-      return signedIn() && (
-        request.resource.data.get('userId', '') == uid() ||
-        request.resource.data.get('createdBy', '') == uid() ||
-        docId.matches('^' + uid() + '_.*')
-      );
+    function signedIn() {
+      return request.auth != null;
     }
 
-    // ---- Team logins -------------------------------------------------------------------------------------------------------
-    // A person invited to someone's workspace signs in with their OWN account. The server records them in the owner's roster at
-    // users/{owner}/team_access/{member} (server-written; nobody can add themselves). These rules look for that record, so removing a
-    // person ends their access at once. A 'manager' may read and write the owner's data; a 'viewer' may only read. The owner's own
-    // access above is unchanged and is checked first.
-    function teamOf(ownerId) {
-      return signedIn() && ownerId is string && ownerId != '' &&
-        exists(/databases/$(database)/documents/users/$(ownerId)/team_access/$(request.auth.uid));
-    }
-    function teamWrites(ownerId) {
-      return teamOf(ownerId) &&
-        get(/databases/$(database)/documents/users/$(ownerId)/team_access/$(request.auth.uid)).data.get('role', 'viewer') == 'manager';
-    }
-    function membersRead(docId) {
-      return teamOf(resource.data.get('userId', '')) || teamOf(resource.data.get('createdBy', '')) || teamOf(docId.split('_')[0]);
-    }
-    function membersWrite(docId) {
-      return teamWrites(resource.data.get('userId', '')) || teamWrites(resource.data.get('createdBy', '')) || teamWrites(docId.split('_')[0]);
-    }
-    function membersCreate(docId) {
-      return teamWrites(request.resource.data.get('userId', '')) || teamWrites(request.resource.data.get('createdBy', '')) || teamWrites(docId.split('_')[0]);
-    }
-    // A member may change a document but never hand it to a different owner.
-    function membersUpdate(docId) {
-      return membersWrite(docId) && (
-        request.resource.data.get('userId', '') == resource.data.get('userId', '') &&
-        request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
-      );
+    function isOwner(businessId) {
+      return signedIn() && request.auth.uid == businessId;
     }
 
-    // The dedicated server user (server login) may read and write everything. Nobody else gets anything from this.
-    match /{document=**} {
-      allow read, write: if isServer();
+    function memberDoc(businessId) {
+      return get(/databases/$(database)/documents/users/$(businessId)/members/$(request.auth.uid));
     }
 
-    // Everything under users/{uid}/... (settings, follow-up tasks, notes, contacts)
-    match /users/{userId} {
-      allow read, write: if signedIn() && uid() == userId;
-      allow read: if teamOf(userId);
-      match /{sub=**} {
-        allow read, write: if signedIn() && uid() == userId;
+    function isActiveMember(businessId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(businessId)/members/$(request.auth.uid))
+        && memberDoc(businessId).data.active == true;
+    }
+
+    function myRole(businessId) {
+      return memberDoc(businessId).data.role;
+    }
+
+    function isManager(businessId) {
+      return isActiveMember(businessId) && myRole(businessId) == 'manager';
+    }
+
+    function isStaff(businessId) {
+      return isActiveMember(businessId) && myRole(businessId) == 'staff';
+    }
+
+    // The bookkeeper / accountant / auditor login. READ-ONLY: it appears in read rules via
+    // canReadBooks() below and in NO create/update/delete rule anywhere in this file. Because it is
+    // an active member, it must also be kept out of the rules that say "any active member can
+    // create" (sales, estimates, leads, customers, cash counts, payments, time entries) - those use
+    // isOwnerOrOperatingMember() instead of isOwnerOrActiveMember().
+    function isAccountant(businessId) {
+      return isActiveMember(businessId) && myRole(businessId) == 'accountant';
+    }
+
+    // Who can READ the books: owner, manager, and the view-only accountant.
+    function canReadBooks(businessId) {
+      return isOwnerOrManager(businessId) || isAccountant(businessId);
+    }
+
+    // Owner + Manager are treated identically almost everywhere — see the
+    // module comment above for why the hard line in this app is Staff vs.
+    // everyone else, not a three-way split.
+    function isOwnerOrManager(businessId) {
+      return isOwner(businessId) || isManager(businessId);
+    }
+
+    function isOwnerOrActiveMember(businessId) {
+      return isOwner(businessId) || isActiveMember(businessId);
+    }
+
+    // Owner, manager or staff - every active member EXCEPT the view-only accountant. Use this (not
+    // isOwnerOrActiveMember) on anything that creates or changes a record.
+    function isOwnerOrOperatingMember(businessId) {
+      return isOwner(businessId) || isManager(businessId) || isStaff(businessId);
+    }
+
+    // The ONE shared sandbox behind the "Try it now" button (meta/account.publicDemo, written only
+    // by the server — see lib/demoServer.ts). Every stranger signs in to the same business, so what
+    // one does is what the next sees. In it, nothing can be DELETED and the settings and team can't
+    // be changed; creating and editing ordinary records still works, which is what makes it a demo.
+    // These guards only ever ADD a condition (&& !isPublicDemo) to rules that already existed, so
+    // they can deny more but never allow more. For a business with no account doc (the common case)
+    // exists() is false and the guard is a no-op.
+    function salesLocked(businessId) {
+      return exists(/databases/$(database)/documents/users/$(businessId)/meta/settings)
+        && get(/databases/$(database)/documents/users/$(businessId)/meta/settings).data.issuedSalesLocked == true;
+    }
+
+    function isPublicDemo(businessId) {
+      return exists(/databases/$(database)/documents/users/$(businessId)/meta/account)
+        && 'publicDemo' in get(/databases/$(database)/documents/users/$(businessId)/meta/account).data
+        && get(/databases/$(database)/documents/users/$(businessId)/meta/account).data.publicDemo == true;
+    }
+
+    // A record's own createdByUid must match whoever is writing it — used
+    // on every create in the operational collections so nobody can log an
+    // entry and attribute it to somebody else.
+    function createdBySelf() {
+      return request.resource.data.createdByUid == request.auth.uid;
+    }
+
+    // ------------------------------------------------------------------
+    // memberships/{uid} — the bootstrapping pointer. See module comment.
+    // ------------------------------------------------------------------
+    match /memberships/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      // The ONLY client-side way to get a pointer is accepting a pending
+      // invite, validated against the exact invite being claimed (id, status,
+      // email). A brand-new business (businessId == uid) can no longer be
+      // created from a browser: it used to be, which let anyone who signed
+      // up through Firebase's public API own a free business and skip the
+      // trial/approval pipeline. New businesses are now created server-side
+      // by app/api/admin/provision (Admin SDK bypasses these rules).
+      allow create: if signedIn() && request.auth.uid == uid &&
+        request.resource.data.inviteId is string &&
+        get(/databases/$(database)/documents/users/$(request.resource.data.businessId)/invites/$(request.resource.data.inviteId)).data.status == 'pending' &&
+        get(/databases/$(database)/documents/users/$(request.resource.data.businessId)/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email.lower();
+
+      // Never updated — role/business assignment for a given uid is
+      // immutable once set. Leaving a business or being removed is handled
+      // by deactivating the members doc, not by touching this pointer.
+      allow update: if false;
+      // (Not for the shared demo: a visitor deleting its pointer would lock the next one out.)
+      allow delete: if signedIn() && request.auth.uid == uid && !isPublicDemo(resource.data.businessId);
+
+      // The businesses this login has joined besides the one above (lib/activeBusiness.ts). A bookmark only: access to a
+      // business is always decided by the member record inside it, never by this. So the one thing checked on creating a
+      // link is that the person really is an active member there. Never edited; the person may remove their own.
+      match /linked/{linkedBusinessId} {
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid &&
+          get(/databases/$(database)/documents/users/$(linkedBusinessId)/members/$(uid)).data.active == true;
+        allow update: if false;
+        allow delete: if signedIn() && request.auth.uid == uid && !isPublicDemo(linkedBusinessId);
       }
     }
 
-    // Team members inside the owner's workspace. Never the roster (team_access), never the enquiry / ingest keys, and never the owner's
-    // money-and-people records: salaries and payroll, loans, assets, bills, contracts and what is paid to partners.
-    match /users/{userId}/settings/{docName} {
-      allow read: if teamOf(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
-      allow write: if teamWrites(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
-    }
-    match /users/{userId}/{coll}/{rest=**} {
-      allow read: if teamOf(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
-      allow write: if teamWrites(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
-    }
+    // ------------------------------------------------------------------
+    // A business's data, rooted at the owner's uid.
+    // ------------------------------------------------------------------
+    match /users/{businessId} {
+      // The owner's own top-level doc (created at signup) isn't otherwise
+      // used by the app, but harmless to let the owner read/write it.
+      allow read, write: if isOwner(businessId);
 
-    // Collections the signed-in user reads and writes directly from the browser.
-    match /{coll}/{docId} {
-      allow read: if coll in [
-          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
-          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
-          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
-          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'lead_inbox', 'suppressions',
-          'draft_queue', 'autopilot_users', 'autosend_log', 'inbound_enquiries', 'reply_notices', 'finder_jobs'
-        ] && (ownsExisting(docId) || membersRead(docId));
-      allow delete: if coll in [
-          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
-          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
-          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
-          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'lead_inbox', 'suppressions',
-          'draft_queue', 'autopilot_users', 'autosend_log', 'inbound_enquiries', 'reply_notices', 'finder_jobs'
-        ] && (ownsExisting(docId) || membersWrite(docId));
+      match /meta/settings {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow write: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
 
-      // 'suppressions' (opt-outs), 'draft_queue' (prepared drafts), 'autopilot_users', 'autosend_log' (how many emails Autosend sent per day) and 'inbound_enquiries' (public form submissions) and 'reply_notices', 'finder_jobs' (the lead finder's queue: the server fetches from it, so no browser may edit it), 'tenants' (plan standing) and 'admin_audit' (operator actions) are deliberately NOT in the create/update lists below: only the server writes them.
-      allow create: if coll in [
-          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
-          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
-          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
-          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'lead_inbox'
-        ] && (ownsNew(docId) || membersCreate(docId));
+      // Tax-invoice counter (v324, lib/invoiceNumber.ts). Advanced in the same transaction as the sale it numbers. It only goes up.
+      match /meta/invoiceCounter {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId) && !isPublicDemo(businessId)
+          && request.resource.data.keys().hasOnly(['last'])
+          && request.resource.data.last is int
+          && (resource == null || request.resource.data.last >= resource.data.last);
+        allow delete: if false;
+      }
 
-      // Updates may not hand the document to somebody else.
-      allow update: if coll in [
-          'deals', 'sent_emails', 'contacted_companies', 'campaigns', 'calls', 'sms_sent',
-          'whatsapp_sent', 'whatsapp_contacts', 'replies', 'manual_contact_status',
-          'contact_history', 'company_research', 'ai_smart_outreach', 'sent_leads',
-          'send_time_optimization', 'clicks', 'ab_results', 'daily_metrics', 'backups',
-          'scheduled_followups', 'targets', 'contacts', 'sms_qualifications', 'invoices', 'lead_inbox'
-        ] && ((ownsExisting(docId) && ownsNew(docId)) || membersUpdate(docId));
+      // Monthly revenue/expense targets (see MonthlyBudget/Budgets in
+      // lib/types.ts) — a planning tool, not a financial record like sales
+      // or expenses, so Owner and Manager share read/write here the same
+      // way they already share manage:loans/manage:capital.
+      match /meta/budgets {
+        allow read: if canReadBooks(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
 
-      // AI usage is written only by the server and is READ-ONLY for users. Letting a user
-      // delete these docs would let them reset their own daily/monthly AI spend caps.
-      // (They hold only counts and cost, no personal content, and are kept on account deletion.)
-      allow read: if coll in ['ai_usage', 'ai_usage_daily', 'ai_usage_monthly'] && (ownsExisting(docId) || membersRead(docId));
+      // Platform-level suspend/reactivate switch AND manual billing record
+      // (see AccountStatus in lib/types.ts) — deliberately NOT
+      // owner-writable, either half of it. The whole point is a lever the
+      // platform holds and a non-paying business can't undo or backdate on
+      // itself, so unlike every other doc under users/{businessId} this
+      // one has no client write path at all. It's only ever written by
+      // app/api/admin/* using the Admin SDK, which bypasses these rules
+      // entirely. Read access matches meta/settings so the app shell can
+      // gate the whole business, owner included, the moment this flips.
+      match /meta/account {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow write: if false;
+      }
+
+      // The manual-billing payment history (amount, method, reference per payment).
+      // Written only by the admin billing route (Admin SDK, bypasses rules). Only
+      // the owner can read it — Managers and Staff have no need to see what the
+      // business pays for the software, and a bank reference can be sensitive.
+      match /meta/billingHistory {
+        allow read: if isOwner(businessId);
+        allow write: if false;
+      }
+
+      // A tiny daily health summary (lib/healthSnapshot.ts): seven plain numbers and a date, written by the owner's own
+      // app so the operator's account list can show who needs a call. Owner-only, like the billing history above; the
+      // operator reads it through the admin route (Admin SDK, bypasses these rules).
+      match /meta/healthSnapshot {
+        allow read: if isOwner(businessId);
+        allow write: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Price history: appended with every price change (in the same write as the change). Never edited or removed by a client.
+      // Accruals: a cost incurred in one month and billed later. Read with the books (they change the monthly profit). Written by the owner
+      // or manager only; once written an accrual is never edited, and it is removed only while its months are open.
+      match /accruals/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId) && createdBySelf();
+        allow update: if false;
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Improvements raised from feedback and the team: an owner and a day for each. Owner or manager; removed by the owner only.
+      match /improvements/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Alternative suppliers for products bought from one supplier, with their quotes. Owner or manager; removed by the owner only.
+      match /supplierAlternatives/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Reporting lines and named deputies for the team. Owner or manager only.
+      match /orgLinks/{docId} {
+        allow read, write: if isOwnerOrManager(businessId);
+      }
+
+      // Obligations calendar: filings, returns and renewals, with their next due day. Owner or manager; removed by the owner only.
+      match /obligations/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Sustainability and community log (v255): measured figures, written by the owner or manager; removed by the owner only.
+      match /sustainabilityEntries/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Contract register (v249): contracts with suppliers, customers, landlords and staff. Owner or manager; removed by the owner only.
+      match /contracts/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Group consolidation (v248): each business's monthly summary for its group (readable by anyone who may read its books, so an owner or manager
+      // of two businesses can add them together), the group's members, and the transfers between them. Written by an owner or manager.
+      match /groupSnapshots/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if false;
+      }
+      match /groups/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+      match /intercompany/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Recruiting: candidates for a role, and where each one is. Owner or manager only; a candidate's record is removed only by the owner.
+      match /candidates/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Head office's record of the sites allowed to send it royalty statements. It holds a hash of each site's key, never the key.
+      match /royaltyInboxSites/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Royalty statements sent by sites: written by the server only (the sending route), read and confirmed by the owner or manager. A
+      // confirmation changes only its status and the income it booked.
+      match /royaltyStatements/{docId} {
+        allow read: if isOwnerOrManager(businessId);
+        allow create: if false;
+        allow update: if isOwnerOrManager(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt', 'incomeRecordedName']);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /priceHistory/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId);
+        allow update, delete: if false;
+      }
+
+      match /products/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Cost-stripped product mirror — this is what Staff reads instead of
+      // `products`. Only Owner/Manager ever write it (DataContext keeps it
+      // in sync alongside every product create/update/delete).
+      match /catalog/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
+
+      match /purchases/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /purchaseOrders/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Sales are the one collection every role can create into. Editing
+      // or deleting one — even your own — is Owner/Manager only: that's
+      // the specific rule that makes "log it low, correct it later"
+      // impossible for Staff, on purpose.
+      match /sales/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        // Issued-sales lock (Settings > Issued sales): when on, only the project and note may change, and nothing is deleted.
+        // v326: any operating member may give a number to a sale saved offline (numberPending), and nothing else changes.
+        allow update: if (isOwnerOrManager(businessId)
+          && (!salesLocked(businessId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['projectId', 'notes'])))
+          || (isOwnerOrOperatingMember(businessId) && resource.data.numberPending == true
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['invoiceNo', 'numberPending']));
+        // v324: a numbered invoice cannot be deleted (its number must stay in sequence); correct it with a return.
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId) && !salesLocked(businessId) && !('invoiceNo' in resource.data);
+      }
+
+      // Estimates — pre-sale quotes. Same trust line as sales: any active
+      // member can read their own / create one, but editing, deleting, or
+      // converting one to real Sale rows is Owner/Manager territory
+      // (convertEstimateToInvoice runs as an update on this doc plus
+      // creates in /sales, so it's covered by the update rule here and the
+      // create rule above).
+      match /estimates/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Leads/pipeline — pre-sale tracking for "outreach → follow-up →
+      // closing" (see Lead in lib/types.ts), upstream of the Customer
+      // directory below: a Customer only exists once someone's actually
+      // bought something, but plenty of outreach never gets that far and
+      // still needs tracking so it isn't silently dropped. Same
+      // create/read pattern as estimates just above, for the same
+      // reason — Staff routinely does the outreach/follow-up calls
+      // themselves, so they can log a new lead, but moving it through
+      // stages (and deleting one) stays Owner/Manager, same as
+      // estimates' accept/convert actions.
+      match /leads/{docId} {
+        // Staff read the leads they created and the leads assigned to them (v175).
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid)
+          || (isStaff(businessId) && resource.data.ownerUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwnerOrManager(businessId)
+          || (isStaff(businessId)
+              && (resource.data.createdByUid == request.auth.uid || resource.data.ownerUid == request.auth.uid)
+              // Staff can log contacts and move a sequence on. They cannot change stage, value, owner, notes or
+              // contact details, and they cannot clear an opt-out (doNotContact can go from false to true, never back).
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                   ['contacts', 'firstContactedAt', 'lastContactedAt', 'sequence', 'nextFollowUpDate', 'doNotContact'])
+              && (request.resource.data.get('doNotContact', false) == true || resource.data.get('doNotContact', false) == false));
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Customer directory — a name/contact lookup, not a financial record,
+      // so every active role can read it (Staff needs it for the sale-form
+      // autocomplete) and create a new entry (meeting a first-time customer
+      // shouldn't require finding an Owner/Manager). Editing an existing
+      // entry's contact info is Owner/Manager only, same trust line as
+      // everything else Staff can add but not later alter. A credit limit and an
+      // acquisition cost are owner/manager decisions, so a Staff-created entry
+      // may not carry either (otherwise Staff could add a same-named duplicate
+      // with a generous limit).
+      match /customers/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf()
+          && (isOwnerOrManager(businessId) || !request.resource.data.keys().hasAny(['creditLimit', 'cac', 'collectorUid', 'collectorName']));
+        // Choosing who chases a customer is the Owner's call: a Manager can edit everything else on the record.
+        allow update: if isOwnerOrManager(businessId)
+          && (isOwner(businessId) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['collectorUid', 'collectorName']));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Supplier/vendor directory — same lightweight name/contact pattern as
+      // customers above, but Owner/Manager only throughout (not Staff):
+      // Purchases and Bills, the only places a supplier name is ever used,
+      // are already Owner/Manager-only, so Staff has no read or write need
+      // here either.
+      match /suppliers/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId) && createdBySelf();
+        allow update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Recurring invoice schedules (retainer/repeat billing) — Owner/Manager
+      // only, same trust line as editing/deleting a Sale directly, since a
+      // schedule silently creates real invoices on its own each cycle.
+      match /recurringInvoices/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Ledger adjustments — stock/money movements that are neither a
+      // Purchase nor a Sale. Same trust boundary as the records they sit
+      // next to: saleReturns/discounts mirror sales (isOwnerOrManager to
+      // create/update, owner to delete — see the "editing a sale" comment
+      // above for why this is never Staff), stockAdjustments mirrors
+      // purchases/products.
+      match /saleReturns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Goods sent back to a supplier — the purchase-side mirror of saleReturns,
+      // same trust line (Owner/Manager create, Owner delete). It moves stock,
+      // what you owe and profit, so never Staff.
+      match /supplierReturns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Goods out with a partner, their reported sales and settlements. Money owed to a partner, so Owner/Manager only, like returns.
+      match /consignments/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Licences and permits (expiry watch), trade-ins taken in, supplier price-protection claims. Owner/Manager record; Books readers read.
+      match /businessRecords/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /discounts/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Lost sales logged when something was out of stock: a memo that never touches stock or the books, so the
+      // trust line is the same as stockAdjustments (Owner/Manager write, Owner delete).
+      match /stockOuts/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Playbook: written procedures and contract dates. Text and dates only; nothing in the books reads it. Same trust line
+      // as stockOuts: whoever reads the books reads it, Owner/Manager write, only the Owner deletes (never in the public demo).
+      // ---- v176: operations (lib/operations.ts). Nothing here posts to the books or moves stock. ----
+
+      // Spend requests, expense claims and shift changes. Staff see their own; Owner and Manager see all and decide.
+      match /requests/{docId} {
+        allow read: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        // Decide (Owner and Manager; the limit is checked in the app, lib/operations.ts), or the person who asked withdraws a
+        // still-pending request. Nothing else changes once it is decided.
+        allow update: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId)
+              && resource.data.createdByUid == request.auth.uid
+              && resource.data.status == 'pending'
+              && request.resource.data.status == 'cancelled'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt']));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Written procedures the team must read. Owner and Manager write them. Every operating member (not the accountant) can
+      // confirm they have read the current version: the only thing they may change is their own entry under acks.
+      match /procedures/{docId} {
+        allow read: if isActiveMember(businessId);
+        allow create: if isOwnerOrManager(businessId);
+        allow update: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acks'])
+              && request.resource.data.get('acks', {}).diff(resource.data.get('acks', {})).affectedKeys().hasOnly([request.auth.uid]));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Licences, insurance, certificates, training, leases and contracts with expiry dates. Readable by whoever reads the books.
+      match /compliance/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Incidents and near misses. Anyone who works in the business can report one and see their own; Owner and Manager see all.
+      match /incidents/{docId} {
+        allow read: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Equipment and vehicles. Everyone active can read; Owner and Manager set items up; staff may log a service done
+      // (the dates, distance, note and cost on the item), and nothing else.
+      match /maintenance/{docId} {
+        allow read: if isActiveMember(businessId);
+        allow create: if isOwnerOrManager(businessId);
+        allow update: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastDoneDate', 'lastDoneKm', 'currentKm', 'log', 'updatedAt']));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // KPIs with targets and their readings. Readable by whoever reads the books; Owner and Manager record them.
+      match /kpis/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Performance reviews and goals. Owner and Manager only: neither staff nor the accountant can read them.
+      match /reviews/{docId} {
+        allow read: if isOwnerOrManager(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Risks: owner and manager only (the register is for deciding what to guard against, not for the floor).
+      match /risks/{docId} {
+        allow read, create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Quality checks: everyone who works in the business logs checks and reads them; the owner or a manager closes corrective actions.
+      match /qualityChecks/{docId} {
+        allow read: if isActiveMember(businessId);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Business log: competitors and objectives are for the owner and manager. Correspondence and inspections are for the team:
+      // anyone who works in the business can log a correspondence and see the inspections; an inspection is recorded done by
+      // updating its last-done day only.
+      match /businessLog/{docId} {
+        allow read: if isOwnerOrManager(businessId)
+          || (isActiveMember(businessId) && resource.data.kind in ['correspondence', 'inspection', 'waitlist', 'backorder', 'handover']);
+        allow create: if (isOwnerOrManager(businessId)
+            || (isOwnerOrOperatingMember(businessId) && request.resource.data.kind in ['correspondence', 'waitlist', 'backorder', 'handover']))
+          && createdBySelf();
+        // The team moves an inspection, a waitlist entry or a backorder along: only its last-done day or its status changes.
+        allow update: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId)
+              && resource.data.kind in ['inspection', 'waitlist', 'backorder']
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastDoneOn', 'status', 'updatedAt']));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Web orders: queued by the order API (server only, through the lead API key). The owner or manager matches lines to products,
+      // then confirms (records the sales) or declines. A status change is all a client may write here.
+      match /webOrders/{docId} {
+        allow read: if isOwnerOrManager(businessId);
+        allow create: if false;
+        allow update: if isOwnerOrManager(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedAt', 'decidedByName', 'lines', 'deliveredOn', 'driverName', 'area', 'startedAt', 'finishedAt', 'promisedDate', 'customerAddress']);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /playbook/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Supplier credit movements (deposits, credit used on a bill, credit refunded). They move the balance sheet and
+      // can settle a payable, so the trust line is the same as supplierReturns: Owner/Manager write, Owner delete.
+      match /supplierCredits/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Customer deposits (money taken in advance, used on an invoice, refunded). They move cash and the balance sheet and
+      // can settle a receivable, so the trust line is the same as supplierCredits: Owner/Manager write, Owner delete.
+      match /reviewMarks/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /customerDeposits/{docId} {
+        allow read: if canReadBooks(businessId);
+        // Staff may only sell a gift card at the counter: a new received entry carrying a card code, made by them.
+        allow create: if isOwnerOrManager(businessId)
+          || (isStaff(businessId)
+              && request.resource.data.kind == "received"
+              && request.resource.data.giftCardCode is string
+              && request.resource.data.amount > 0
+              && request.resource.data.createdByUid == request.auth.uid);
+        allow update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /stockAdjustments/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Locations — name-only tags for where stock/transactions physically
+      // sit (see Location in lib/types.ts). Every active role can read the
+      // list (Staff needs it for the location picker on a Sale), but only
+      // Owner/Manager can create or rename one. Delete is Owner-only and,
+      // per DataContext.deleteLocation, only ever attempted for a Location
+      // with zero transactions against it (a branch added by mistake) — a
+      // Location with real history gets deactivated (`active: false`)
+      // instead, never deleted, since years of historical
+      // Purchase/Sale/StockAdjustment docs reference it via locationId.
+      match /locations/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Stock transfers — inventory moved between two Locations. Same trust
+      // line as stockAdjustments (Owner/Manager only): it changes what a
+      // physical stock count should show, same category of action.
+      // Deliberately no update/delete rule — DataContext never edits or
+      // removes one once logged, it's a movement record, not a draft.
+      match /stockTransfers/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId);
+      }
+
+      // Opening balances: what customers already owed the business (and what it
+      // already owed suppliers) on the day it started using the app. Owner/
+      // Manager read and create, same audience as purchases and supplier
+      // payments. No update rule on purpose — the amount feeds owner's capital
+      // on the Balance Sheet, so a wrong one is deleted (Owner only) and
+      // re-entered rather than edited in place.
+      match /openingBalances/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId) && createdBySelf();
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // One lock doc per (schedule, calendar day) a recurring invoice was
+      // generated for — see generateInvoiceForSchedule in DataContext for
+      // why this exists (prevents two tabs/a stale page from double-billing
+      // the same schedule on the same day). Never read back by the UI;
+      // write-only bookkeeping.
+      match /recurringInvoiceRuns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId);
+      }
+
+      // Recurring, itemized expense templates ("Operations") and their
+      // per-period draft occurrences — see the RecurringExpenseTemplate doc
+      // comment in lib/types.ts. Same trust line as expenses/purchases.
+      // recurringExpenseRuns mirrors recurringInvoiceRuns immediately
+      // above: a write-once lock doc, never read back by the client.
+      match /recurringExpenseTemplates/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /recurringExpenseOccurrences/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /recurringExpenseRuns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId);
+      }
+
+      match /expenses/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Bank reconciliation lines — manually entered or CSV-imported from
+      // the person's own bank export. No bank-feed integration reads or
+      // writes this collection; it's exactly as trusted/untrusted as any
+      // other owner/manager-entered record.
+      match /bankStatementLines/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /variableCosts/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /capitalEntries/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Self-reported payments to the tax authority — see the TaxPayment
+      // doc comment in lib/types.ts. Same Owner/Manager write, Owner-only
+      // delete shape as capitalEntries: this is a real liability-affecting
+      // record, not an operational log line a Staff account should touch.
+      match /taxPayments/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /loans/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Contingent liabilities and commitments (v329): a memo for the balance sheet, never added to totals. Same trust line as loans.
+      match /contingencies/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Personal data requests (v332): who asked to see, correct, erase or withdraw consent, and the deadline. Same trust line as the books.
+      match /dataRequests/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Payroll. Owner only, full stop — not even Manager.
+      match /employees/{docId} {
+        allow read, write: if isOwner(businessId);
+      }
+
+      // Customer support log: complaints, questions, refund and warranty requests. Text and dates only; nothing in the
+      // books reads it. Same trust line as the playbook: whoever reads the books reads it, Owner/Manager write, only the
+      // Owner deletes (never in the public demo).
+      match /supportCases/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Customer feedback: 0 to 10 answers to "would you recommend us?". Read by whoever reads the books, written by owner or manager.
+      match /feedback/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Delegation: tasks handed to team members or outside freelancers. Read by whoever reads the books; Owner/Manager write;
+      // only the Owner deletes (never in the public demo). Nothing here is posted to the books.
+      match /tasks/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Bookings: appointments and reservations. Any active member can see the day's bookings (front desk), and staff can book
+      // and move them (they serve the customer); only Owner/Manager can delete one. Non-financial: a deposit is recorded, not posted.
+      // Jobs (work orders): the front desk and the workshop open and move them, like tabs. Only Owner/Manager delete.
+      match /workOrders/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /tabs/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Outside-service keys: the owner alone reads or changes them, and the public demo never does.
+      match /integrations/{providerId} {
+        allow read: if isOwner(businessId);
+        allow create, update, delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /shifts/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      match /bookings/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Ticketed events: read by every active member (the front desk sells tickets); written by the operating team.
+      match /events/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Shipments: goods on their way, by reference, with proof of delivery. Any active member can see them (receiving staff and
+      // the people chasing a delivery), Owner, Manager and Staff can record each stage, and only Owner/Manager can delete one.
+      match /shipments/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Rentals: things rented out, returns, deposits and damage. The books' trust line: owner and manager write, accountant reads.
+      match /rentals/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Cheque register: cheques received and issued, including post-dated ones. A memo beside the books, so the books' trust
+      // line: owner and manager write, accountant reads. Staff never see it (it shows what customers owe and what is written out).
+      match /cheques/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Mileage log: business trips by vehicle. A memo beside the books (it posts nothing): owner and manager write, accountant reads.
+      match /mileage/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Memberships: prepaid included hours that bookings draw down. A memo (the fee is an ordinary sale): the front desk uses it, so it
+      // is readable by owner, manager and accountant and written by owner and manager; staff do not see it.
+      match /memberships/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Farm batches: animals or crops from stocking to harvest, with the daily log inside. Read by every active member, written by the
+      // operating team (whoever works the tanks logs the feed and losses). It posts nothing to the books. Deleted by owner and manager.
+      match /farmBatches/{docId} {
+        allow read: if isOwnerOrActiveMember(businessId);
+        allow create, update: if isOwnerOrOperatingMember(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Leave records: who was away and for how many days. A payroll-adjacent record, so owner only, same as employees.
+      match /leaveRecords/{docId} {
+        allow read, write: if isOwner(businessId);
+      }
+
+      // Weekly lessons-learned journal. Personal reflection tool, owner only.
+      match /journalEntries/{docId} {
+        allow read, write: if isOwner(businessId);
+      }
+
+      // Opportunity/venture scoring — ranks hypothetical ventures against
+      // each other, owner only (same trust boundary as employees/settings:
+      // strategic, not operational).
+      match /opportunities/{docId} {
+        allow read, write: if isOwner(businessId);
+      }
+
+      // End-of-shift cash reconciliation. Every active role can log one for
+      // themselves; whoever counted it can never edit it afterward — see
+      // the CashCount doc comment in lib/types.ts for why that's the
+      // anti-theft point. The one exception is the Owner, who can correct a
+      // genuine data-entry mistake (a typo'd amount, wrong date) without
+      // having to delete and lose the record — same trust boundary as
+      // deleting one, just also allowing update now instead of forcing a
+      // destroy-and-recreate for something as small as a typo.
+      match /cashCounts/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Cash taken out of the till for a small spend (v292). Every active role writes its own; Owner and Manager read all of them.
+      // A payout cannot be created already linked to an expense (that would drop it from the cash count). Once an owner or manager
+      // books it as an expense, the only change allowed is setting that link, so the record cannot be quietly rewritten afterward.
+      match /tillPayouts/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf()
+          && !('expenseId' in request.resource.data);
+        allow update: if isOwner(businessId)
+          || (isOwnerOrManager(businessId)
+              && !('expenseId' in resource.data)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expenseId']));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Clock in/out records. Every active role can create one for
+      // themselves; Owner/Manager can also create one on someone else's
+      // behalf (backfilling a missed clock-in) or correct any entry. The
+      // one thing a Staff member can still do after saving their own entry
+      // is clock out of it — but that update may touch `clockOut` and
+      // nothing else, and only once, so the running duration on record can
+      // never be quietly stretched or shrunk after the fact.
+      match /timeEntries/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.memberUid == request.auth.uid);
+        allow create: if isOwnerOrManager(businessId)
+          || (isOwnerOrOperatingMember(businessId) && createdBySelf() && request.resource.data.memberUid == request.auth.uid);
+        allow update: if isOwnerOrManager(businessId) || (
+          isOwnerOrOperatingMember(businessId)
+          && resource.data.memberUid == request.auth.uid
+          && !resource.data.keys().hasAny(['clockOut'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clockOut'])
+        );
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Payments collected against a credit sale. Same shape as sales:
+      // anyone active can create one (for a sale they can see); only Owner
+      // can edit or delete one afterward, to correct a mis-keyed amount,
+      // date, or method.
+      match /receivablePayments/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Bad-debt write-offs against a credit sale — see ReceivableWriteOff
+      // in lib/types.ts. Owner/Manager only (unlike receivablePayments
+      // above, Staff never records one — deciding a debt is uncollectible
+      // is a business-level call, not a cash-handling one); only Owner can
+      // reverse one, same trust line as bankStatementLines below.
+      match /receivableWriteOffs/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwnerOrManager(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Team membership records — the authoritative role/active source
+      // every function above reads. Owner manages the roster; the one
+      // exception is a person creating their own doc at invite-acceptance
+      // time, validated against the specific pending invite they're
+      // claiming.
+      match /members/{uid} {
+        allow read: if isOwner(businessId) || (signedIn() && request.auth.uid == uid);
+        allow create: if !isPublicDemo(businessId) && (isOwner(businessId) || (
+          signedIn() && request.auth.uid == uid &&
+          request.resource.data.inviteId is string &&
+          get(/databases/$(database)/documents/users/$(businessId)/invites/$(request.resource.data.inviteId)).data.status == 'pending' &&
+          get(/databases/$(database)/documents/users/$(businessId)/invites/$(request.resource.data.inviteId)).data.email == request.auth.token.email.lower() &&
+          get(/databases/$(database)/documents/users/$(businessId)/invites/$(request.resource.data.inviteId)).data.role == request.resource.data.role &&
+          request.resource.data.active == true
+        ));
+        allow update: if isOwner(businessId) && !isPublicDemo(businessId);
+        allow delete: if false; // access is revoked via active:false, never by deleting the record
+      }
+
+      match /invites/{inviteId} {
+        // The owner sees the whole list; anyone else can only ever read
+        // the one invite that names their own email — enough to complete
+        // the join flow, nothing more.
+        allow read: if isOwner(businessId)
+          || (signedIn() && resource.data.email == request.auth.token.email.lower());
+        allow create: if isOwner(businessId) && !isPublicDemo(businessId);
+        // Owner can revoke; the invitee can only flip their own pending
+        // invite to accepted, nothing else about it.
+        allow update: if !isPublicDemo(businessId) && (isOwner(businessId) || (
+          signedIn() &&
+          resource.data.email == request.auth.token.email.lower() &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status == 'accepted'
+        ));
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Append-only activity trail. Every active member can write an entry
+      // describing their own action; nobody, including the owner, can
+      // change or remove one afterward. Only the owner can read it.
+      match /auditLog/{docId} {
+        allow read: if isOwner(businessId);
+        allow create: if isOwnerOrOperatingMember(businessId) && request.resource.data.byUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // Reminders/alerts surfaced in the notifications page. Owner/Manager
+      // only, same as everywhere else `manage:notifications` gates the
+      // client (see lib/permissions.ts) — Staff has no notifications UI.
+      match /notifications/{docId} {
+        allow read, write: if isOwnerOrManager(businessId);
+      }
+
+      // Payments recorded against an outstanding purchase (supplier owed
+      // money). Same shape as receivablePayments: anyone active can create
+      // one; only Owner can edit or delete one afterward.
+      match /payablePayments/{docId} {
+        allow read: if canReadBooks(businessId)
+          || (isStaff(businessId) && resource.data.createdByUid == request.auth.uid);
+        allow create: if isOwnerOrOperatingMember(businessId) && createdBySelf();
+        allow update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Payments recorded against an unpaid, one-off Expense (a general
+      // bill — rent, a contractor invoice, an employee pay run, a utility
+      // bill). Owner/Manager only, not Staff — unlike payablePayments
+      // above, because the underlying expenses collection itself is
+      // Owner/Manager only (see /expenses above); Staff has no read access
+      // to the bill this would be a payment against.
+      match /billPayments/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId) && createdBySelf();
+        allow update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Fixed assets (machinery, vehicles, equipment) for depreciation
+      // tracking. Owner/Manager only, matching `manage:fixedAssets` in
+      // lib/permissions.ts.
+      match /fixedAssets/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
+
+      // Securities and other investments the business holds (lib/investments.ts). Owner writes only,
+      // matching `manage:investments`: these decide where the business's capital sits. Managers and
+      // accountants can read them because the Balance Sheet and cash flow they already see include them.
+      match /securities/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+      match /investmentTxns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Money the business has lent out (lib/lending.ts): the loans and the repayments / write-offs recorded
+      // against them. Owner writes only, matching `manage:investments`. Managers and accountants can read them
+      // because the Balance Sheet, P&L and cash flow they already see include them.
+      match /lentLoans/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+      match /lentLoanTxns/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create, update: if isOwner(businessId);
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // The collections diary: one line per call, message or visit to someone who owes the business money (see
+      // lib/collections.ts). Owner and Manager write it; the accountant reads it; Staff never see it. A line is
+      // never edited, only (by the Owner) deleted, because a diary is only worth keeping if it says what happened.
+      match /collectionNotes/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow create: if isOwnerOrManager(businessId) && createdBySelf();
+        allow update: if false;
+        allow delete: if isOwner(businessId) && !isPublicDemo(businessId);
+      }
+
+      // Job/project costing. Owner/Manager only, matching `manage:projects`
+      // in lib/permissions.ts — Staff never sees cost or margin data
+      // anywhere else in this app, and a project's whole point is
+      // margin-against-quote, so it stays behind the same line.
+      match /projects/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
+      match /projectCostSegments/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
+      // Progress-billing schedule lines for a project (deposit, milestone
+      // payments, final payment). Same trust boundary as the rest of
+      // project costing — Owner/Manager only.
+      match /projectMilestones/{docId} {
+        allow read: if canReadBooks(businessId);
+        allow write: if isOwnerOrManager(businessId);
+      }
+
+      // AI Assistant. Owner/Manager only — same trust boundary as
+      // Reports/Profitability/projects: the assistant answers questions
+      // over cost/margin data Staff never sees elsewhere, so it stays
+      // behind the same line rather than getting its own narrower rule.
+      //
+      // Messages are created server-side only (app/api/ai/chat's use of
+      // the Admin SDK bypasses these rules entirely) — a client can never
+      // write a message doc into existence, so nothing fabricated as
+      // "from the assistant" can be injected into a session's history.
+      // The one client update allowed is flipping a proposal's own
+      // confirmed/discarded status (see ProposedEntryCard / updateProposalStatus
+      // in contexts/AiAssistantContext.tsx) once the user has actually
+      // acted on it in the UI — restricted to the `proposals` field only,
+      // so a client can never alter the assistant's stored reply text,
+      // role, or timestamp on a message it can already read.
+      match /aiChatSessions/{sessionId} {
+        allow read: if isOwnerOrManager(businessId);
+        allow update: if isOwnerOrManager(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title']);
+        allow delete: if false; // server-only, see /api/ai/sessions — cascades to messages
+        allow create: if false; // created by the server (Admin SDK) on first message
+
+        match /messages/{messageId} {
+          allow read: if isOwnerOrManager(businessId);
+          allow create, delete: if false; // server-only
+          allow update: if isOwnerOrManager(businessId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['proposals']);
+        }
+      }
+
+      // Long-term memory notes — small, user-visible, user-deletable.
+      // Written by the server when the assistant calls remember_note;
+      // the client can read the list and delete a note it disagrees with,
+      // but can't fabricate one directly.
+      match /aiMemory/{noteId} {
+        allow read: if isOwnerOrManager(businessId);
+        allow delete: if isOwnerOrManager(businessId) && !isPublicDemo(businessId);
+        allow create, update: if false; // server-only
+      }
     }
   }
 }

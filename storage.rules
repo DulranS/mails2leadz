@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Mirrors the ownership model in firestore.rules: businessId IS the
+// owner's uid, so only the signed-in owner can upload/replace/delete the
+// logo stored at logos/{businessId}/logo.png. Read is left open — a
+// getDownloadURL() link already carries its own access token regardless
+// of these rules (that's how the print/invoice views load the image
+// without the viewer being signed in), so restricting read here wouldn't
+// add real protection, only friction. Nothing else lives in this bucket.
+service firebase.storage {
+  match /b/{bucket}/o {
+    //
+    // ONE fixed file name. The app only ever writes logo.png (lib/logoUpload.ts), and this used to
+    // accept ANY file name under the folder — so a signed-in free account could upload as many 5 MB
+    // images as it liked under random names, each at a public URL. Pinning the name makes a
+    // re-upload overwrite the one file, and caps a business's storage at a single logo.
+    // Receipts (v332): one file per receipt under a random id. The owner, or an active manager, may add or replace one (the same people who
+    // may write expenses). Anyone who can read the books may read one. The type and size are checked here as well as in the app.
+    match /receipts/{businessId}/{receiptId} {
+      allow read: if request.auth != null
+                  && (request.auth.uid == businessId
+                      || firestore.exists(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid)));
+      allow write: if request.auth != null
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+                   && (request.auth.uid == businessId
+                       || (firestore.exists(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid))
+                           && firestore.get(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid)).data.active == true
+                           && firestore.get(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid)).data.role == 'manager'));
+      allow delete: if request.auth != null
+                    && (request.auth.uid == businessId
+                        || (firestore.exists(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid))
+                            && firestore.get(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid)).data.active == true
+                            && firestore.get(/databases/(default)/documents/users/$(businessId)/members/$(request.auth.uid)).data.role == 'manager'));
+    }
+
+    match /logos/{businessId}/logo.png {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && request.auth.uid == businessId
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && request.auth.uid == businessId;
+    }
+  }
+}

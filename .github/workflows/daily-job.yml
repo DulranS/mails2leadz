@@ -1,0 +1,18 @@
+# Runs the daily business job (reminders, recurring items, the digest) from GitHub's scheduler, for a host that cannot run its own timer.
+# Needs two repository secrets: CRON_SECRET (the same value as on the site, at least 16 characters) and SITE_URL (for example https://yourapp.example.com).
+name: Daily business job
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC every day
+  workflow_dispatch: {}
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the daily job
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/daily"
