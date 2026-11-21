@@ -207,6 +207,9 @@ export default function AccountPage() {
     } catch { setGm((g) => ({ ...g, loading: false })); }
   };
   useEffect(() => {
+      console.log(`TOKEN_ENC_KEY: ${process.env.TOKEN_ENC_KEY}`);
+  console.log(`FIREBASE_SERVICE_ACCOUNT_JSON: ${process.env.FIREBASE_SERVICE_ACCOUNT_JSON}`);
+  console.log(`GOOGLE_CLIENT_SECRET : ${process.env.GOOGLE_CLIENT_SECRET }`);
     if (!user?.uid) return;
     refreshGmail();
     const r = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gmail") : "";
