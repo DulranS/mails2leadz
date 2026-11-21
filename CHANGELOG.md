@@ -1,3 +1,7 @@
+## Pass 359b - unhandled AbortError noise suppressed (22 Nov 2026)
+- A cancelled request or live listener (AbortError) reached the console as an unhandled rejection when a page closed or navigated. AbortNoise (mounted in app/layout.js) ignores that error type only. Other rejections still reach the console. Browser-extension messages (instantTrade, secureIframe) are not from this app.
+- Shipped-files manifest regenerated.
+
 ## Pass 359 - customers page no longer crashes before sign-in finishes (22 Nov 2026)
 - The customers page read user.uid while the user was still null, which threw "Cannot read properties of null (reading 'uid')" and showed the error boundary. The custom-fields editor and the expanded customer's custom-field values now render only once there is a user (app/customers/page.js).
 - Same guard on the business page's marketing-spend panel is not needed: that block already sits inside a loading and user check. The CRM page returns early without a user.

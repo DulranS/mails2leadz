@@ -228,6 +228,7 @@ app/bookings/page.js
 app/breaches/page.js
 app/business/page.js
 app/candidates/page.js
+app/components/AbortNoise.js
 app/components/AccessNotice.js
 app/components/AppShell.js
 app/components/AuthFetch.js
