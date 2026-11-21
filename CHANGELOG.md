@@ -1,4 +1,5 @@
 ## Pass 351 - broken sign-in sessions end instead of failing silently
+- Hotfix (same pass): the broken-session code list in AuthFetch.js had lost its quotes, which threw "auth is not defined" when the app loaded. Restored and checked by evaluating the list.
 - app/components/AuthFetch.js: when the Firebase token cannot be refreshed because the account was deleted, disabled or revoked, the session is signed out. Before, every request went out without a token, the server refused each one, the data screens filled with permission errors, and the app still showed the person as signed in. A refused request (401) is now checked with a forced token refresh first; a working session is left alone. Network errors do not end the session.
 
 ## Pass 350 - fixes from the live logs

@@ -14,7 +14,7 @@ import { callMayWrite } from '../../lib/api-writes.js';
 // Its token cannot be refreshed, so every request goes out without a valid token, each is refused, and the data screens fill with
 // permission errors while the app still shows the person as signed in. Such a session is ended here, so the sign-in screen shows instead.
 // Network errors do not end the session.
-const BROKEN_SESSION = new Set([auth/user-token-expired, auth/user-not-found, auth/user-disabled, auth/invalid-user-token, auth/user-token-revoked]);
+const BROKEN_SESSION = new Set(['auth/user-token-expired', 'auth/user-not-found', 'auth/user-disabled', 'auth/invalid-user-token', 'auth/user-token-revoked']);
 async function endIfBroken(err) {
   if (!BROKEN_SESSION.has(err?.code) || !getApps().length) return false;
   try { await signOut(getAuth(getApp())); } catch { /* already signed out */ }
