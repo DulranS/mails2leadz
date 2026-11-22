@@ -8,7 +8,7 @@ import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { OPEN_STAGES, normalizeStage } from "../../lib/deal-utils.js";
 import { loadByOwner, OWNER_KEY } from "../../lib/assignment.js";
-import { quotaProgress } from "../../lib/quota";
+import { quotaProgress } from "../../lib/quota.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";

@@ -17,7 +17,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { dealDocId, buildDealWrite, normalizeStage, daysQuiet } from "../../lib/deal-utils.js";
-import { STAGE_ALERT_STAGES } from "../../lib/stage-alert";
+import { STAGE_ALERT_STAGES } from "../../lib/stage-alert.js";
 import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";

@@ -1,3 +1,9 @@
+## Pass 368c - build fix: explicit .js import extensions (23 Nov 2026)
+- Fixed: the owners page and the CRM page import lib/quota.js and lib/stage-alert.js with the .js extension, like the rest of the project. The build reported both as unresolved without it.
+- Not in this build: a _stale/ folder of old copies. Do not upload it; it is not part of the app.
+- Tests: quota, stage-alert, stage-watch, check-replies-async, manual-lead-country (all pass). Parse check on the changed pages and routes passes.
+- Not run here: the Next build itself and a deploy. Confirm after deploying.
+
 ## Pass 368 - stage alerts for every change, within 15 minutes (23 Nov 2026)
 - New: /api/cron/stage-watch, called every 15 minutes by a free scheduler. It finds deals changed since its last run and alerts on those that sit in Proposal, Negotiation or a won stage. It covers changes made anywhere, not only in the app.
 - It answers 202 at once and works in the background, so a 30-second scheduler timeout is not a problem.
