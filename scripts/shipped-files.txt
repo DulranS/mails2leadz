@@ -65,6 +65,7 @@ app/api/cron/daily-ops/route.js
 app/api/cron/pipeline/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
+app/api/cron/stage-watch/route.js
 app/api/customer-links/route.js
 app/api/day/open/route.js
 app/api/deal-activity/route.js
@@ -75,6 +76,7 @@ app/api/deals/assignees/route.js
 app/api/deals/auto-assign/route.js
 app/api/deals/owner-settings/route.js
 app/api/deals/route.js
+app/api/deals/stage-alert/route.js
 app/api/draft-queue/route.js
 app/api/email-debug/route.js
 app/api/esign/route.js
@@ -573,6 +575,7 @@ lib/promo-tx.js
 lib/promo.js
 lib/push.js
 lib/quick-links.js
+lib/quota.js
 lib/quote-core.js
 lib/quote-economics.js
 lib/quote-followup.js
@@ -800,6 +803,8 @@ lib/social.js
 lib/software-partners.js
 lib/sops.js
 lib/speed-to-lead.js
+lib/stage-alert.js
+lib/stage-watch.js
 lib/statement-html.js
 lib/statement-token.js
 lib/statement.js

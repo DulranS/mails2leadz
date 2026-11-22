@@ -1,9 +1,10 @@
-## Pass 368c - build fix and Devin UI kept (23 Nov 2026)
-- Fixed: the owners page and the CRM page import lib/quota.js and lib/stage-alert.js with the .js extension, like the rest of the project. The build reported both as unresolved without it.
-- Base: this build is the full project as you sent it, including the Devin UI changes (AppShell, Button, Card, Sidebar, globals.css, landing page). Only the two import lines were changed.
-- Not included: the _stale/ folder of old copies.
-- Checked here: every relative import in app, lib, components and hooks resolves; every JS/JSX file parses; the five pass-368 tests pass. The Next build itself was not run here.
-
+## Pass 368c - build fix: new files were moved aside by the build (23 Nov 2026)
+- Cause: the prebuild cleanup (scripts/remove-retired-files.mjs) moves any source file that is not in scripts/shipped-files.txt into _stale/. The new stage-alert, stage-watch and quota modules and the two new stage routes were not in the list, so the build could not find them.
+- Fixed: they are now in the manifest (npm run manifest, 5 files added). Nothing else changed in the list, and the release-files test passes.
+- Fixed: the owners and CRM pages import lib/quota.js and lib/stage-alert.js with the .js extension, like the rest of the project.
+- Kept: the Devin UI changes (AppShell, Button, Card, Sidebar, globals.css, landing page).
+- Not included: the _stale/ folder and the leftover files from older releases. The cleanup step would move these aside anyway.
+- Checked here: all 1,171 files resolve their imports, the release-files test passes (5 of 5), the five pass-368 tests pass, and the changed files parse. The Next build itself was not run here.
 ## Pass 368 - stage alerts for every change, within 15 minutes (23 Nov 2026)
 - New: /api/cron/stage-watch, called every 15 minutes by a free scheduler. It finds deals changed since its last run and alerts on those that sit in Proposal, Negotiation or a won stage. It covers changes made anywhere, not only in the app.
 - It answers 202 at once and works in the background, so a 30-second scheduler timeout is not a problem.
