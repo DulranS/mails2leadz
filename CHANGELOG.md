@@ -1,3 +1,30 @@
+## Pass 366 - reply check answers at once; faster replies with a free scheduler (23 Nov 2026)
+- The reply-check route (app/api/cron/check-replies) checks the secret and the setup, returns 202 Accepted at once, and runs the check in after(). A scheduler with a 30-second timeout (for example cron-job.org) no longer logs a failure while the check runs. The result goes to the server log.
+- The check itself is unchanged: same batches, same deadline, same notices. The secret is still required, and a wrong secret is still refused before any work is scheduled.
+- DEPLOYMENT_GUIDE.md: a new section on a free scheduler that calls the route every 15 to 30 minutes. The daily Vercel job stays as a backup.
+- Tests: tests/check-replies-async.test.mjs (new, passes); tests/cron-schedule.test.mjs passes. tests/proxy.test.mjs and tests/saas.test.mjs were already failing because the packages next and stripe are not installed in this sandbox.
+- Not run here: a deploy, a live scheduler call, and a check that the scheduler can send the Authorization header (cron-job.org's FAQ does not say; confirm it in its settings).
+
+## Pass 365 - country code on manual leads (23 Nov 2026)
+- Add a lead now takes an optional two-letter country code (for example LK, GB or DE). It is saved on the deal, the same field an enquiry sets, so consent rules and owner routing use it. Blank keeps the old behaviour: the email's domain decides.
+- A value that is not two letters is not saved, so a country name cannot be stored as a code.
+- Already in the app, no change: the breach register's Schedule I items (pass 345), and the consent rules for EU and UK markets (pass 339).
+- Tests: tests/manual-lead-country.test.mjs (new, all pass). Deal tests pass (deal-stage, deals). Full run: 501 tests, 464 pass; the 37 files that fail each report a package that is not installed in this sandbox (for example firebase or papaparse). No real failures found.
+- Not run here: a browser check of the Add a lead form.
+
+## Pass 364 - two daily jobs scheduled within the Vercel Hobby limits (23 Nov 2026)
+- vercel.json and vercel.daily.json now run two jobs once a day: the reply check (00:30 UTC) and the overnight draft preparation (01:30 UTC). Hobby allows cron jobs once a day, up to 100 per project (Vercel docs, July 2026). Neither job sends e-mail: check-replies cannot send, and prepare-drafts only writes drafts and is switched on per customer.
+- Auto-send, broadcasts and the other jobs are not scheduled: they send e-mail or contact other platforms, so their times are the owner's choice.
+- Max duration stays 300s, which is Hobby's limit with Fluid compute (Vercel docs).
+- tests/cron-schedule.test.mjs: the daily timetable runs only the two safe jobs, once a day; vercel.json matches it; hourly stays empty; no e-mail job is on any timetable (4/4).
+- Not run here: a live cron run (needs CRON_SECRET set on Vercel) and a Next build.
+
+## Pass 363 - schedule switch refuses an empty timetable; deployment guide matches the shipped schedule (23 Nov 2026)
+- scripts/use-schedule.mjs: "npm run schedule:daily" and "schedule:hourly" used to copy an empty timetable over vercel.json and remove nothing visibly. They now refuse, say which file is empty, and leave vercel.json unchanged.
+- DEPLOYMENT_GUIDE.md: the Gmail reply check and the overnight drafts no longer say that vercel.json schedules them. As shipped nothing runs on a timer (pass 266): the owner's day work runs when the owner opens the app.
+- Not changed, by decision: the timetables stay empty. Adding entries means choosing send times for automatic e-mail, so it is the owner's call.
+- Not run here: a Next build (no package installs in this sandbox).
+
 ## Pass 362 - new customers counted once for acquisition cost (22 Nov 2026)
 - Acquisition cost (CAC) counted every paying email in the last 12 months as a new customer, so repeat buyers counted as new each year, and a customer with both a paid invoice and a won deal counted twice. Acquisition cost was understated.
 - Now a customer counts once, from their first paid invoice or first won deal, and only if that falls in the last 12 months. A deal with no email counts as its own customer.

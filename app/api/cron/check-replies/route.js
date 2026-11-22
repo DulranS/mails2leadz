@@ -1,7 +1,9 @@
 // app/api/cron/check-replies/route.js - the unattended reply check: for every owner who connected read-only Gmail, find new replies,
 // record opt-outs, move deals forward on positive replies (the same logic as pressing "Check replies"), and leave a short
 // "while you were away" notice. Called by the host's scheduler with "Authorization: Bearer <CRON_SECRET>". It cannot send anything.
-import { NextResponse } from 'next/server';
+// Pass 366: the check is answered at once (202) and the work runs in after(), so a scheduler with a 30-second timeout
+// (for example cron-job.org) does not log a timeout while the check is still running.
+import { NextResponse, after } from 'next/server';
 import { collection, getDocs, query, where, setDoc, doc, isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
 import { offlineConfigured, accessTokenFor, patchConnection } from '../../../../lib/server/gmail-offline.js';
@@ -27,14 +29,8 @@ async function notice(db, uid, data) {
   await setDoc(doc(db, 'reply_notices', `${uid}_${now.getTime()}`), { userId: uid, createdAt: now.toISOString(), seen: false, type: 'replies', ...data });
 }
 
-export async function GET(request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return NextResponse.json({ error: 'CRON_SECRET is not set on the server.' }, { status: 503, headers: NO_STORE });
-  const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
-  if (!m || !safeEqual(m[1].trim(), secret)) return NextResponse.json({ error: 'Not allowed.' }, { status: 401, headers: NO_STORE });
-  if (!isAdminMode() || !offlineConfigured()) return NextResponse.json({ error: 'Needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' }, { status: 503, headers: NO_STORE });
-
-  const db = getDb();
+// The whole check, for every connected owner. Runs after the response has been sent; its result goes to the server log.
+async function runReplyCheck(db, secret) {
   const deadline = Date.now() + 270000;
   const conns = await getDocs(query(collection(db, 'gmail_offline'), where('status', '==', 'ok')));
   const summary = { owners: conns.docs.length, checked: 0, replies: 0, expired: 0, failed: 0 };
@@ -74,5 +70,19 @@ export async function GET(request) {
       console.error('[cron check-replies] owner failed:', uid, e?.message);
     }
   }
-  return NextResponse.json({ success: true, ...summary }, { headers: NO_STORE });
+  console.log('[cron check-replies] done', JSON.stringify(summary));
+  return summary;
+}
+
+export async function GET(request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return NextResponse.json({ error: 'CRON_SECRET is not set on the server.' }, { status: 503, headers: NO_STORE });
+  const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
+  if (!m || !safeEqual(m[1].trim(), secret)) return NextResponse.json({ error: 'Not allowed.' }, { status: 401, headers: NO_STORE });
+  if (!isAdminMode() || !offlineConfigured()) return NextResponse.json({ error: 'Needs FIREBASE_SERVICE_ACCOUNT_JSON, GOOGLE_CLIENT_SECRET and TOKEN_ENC_KEY.' }, { status: 503, headers: NO_STORE });
+
+  const db = getDb();
+  // Answer at once; the check itself runs after the response, within this function's maxDuration.
+  after(() => runReplyCheck(db, secret).catch((e) => console.error('[cron check-replies] run failed:', e?.message)));
+  return NextResponse.json({ accepted: true, startedAt: new Date().toISOString() }, { status: 202, headers: NO_STORE });
 }

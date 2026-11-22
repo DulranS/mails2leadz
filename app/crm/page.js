@@ -264,6 +264,7 @@ export default function CRMPage() {
       value: changes.value,
       lostReason: changes.lostReason,
       source: changes.source,
+      country: changes.country,
       qualification: changes.qualification,
       ownerId: changes.ownerId,
       touch: changes.touch,
@@ -416,7 +417,7 @@ export default function CRMPage() {
   };
 
   // Add a lead that did not come from cold email (referral, inbound, walk-in...).
-  const handleAddLead = async ({ email, businessName, stage, value, source }) => {
+  const handleAddLead = async ({ email, businessName, stage, value, source, country }) => {
     if (!user?.uid || !db) return false;
     const e = norm(email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
@@ -424,7 +425,7 @@ export default function CRMPage() {
       return false;
     }
     try {
-      await writeDeal(e, { stage: stage || "qualified", value, source, businessName: String(businessName || "").trim() || undefined });
+      await writeDeal(e, { stage: stage || "qualified", value, source, country, businessName: String(businessName || "").trim() || undefined });
       await loadCRMData();
       addNotification("Lead added", "success");
       return true;

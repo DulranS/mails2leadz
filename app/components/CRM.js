@@ -50,7 +50,7 @@ export const CRM = ({
   const [showAdd, setShowAdd] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
-  const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
+  const [addForm, setAddForm] = useState({ email: "", businessName: "", stage: "qualified", value: "", source: "referral", country: "" });
   const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [closing, setClosing] = useState({ busy: false, error: "", draft: null });
@@ -652,7 +652,7 @@ export const CRM = ({
             setAdding(false);
             if (ok) {
               setShowAdd(false);
-              setAddForm({ email: "", businessName: "", stage: "qualified", value: "", source: "referral" });
+              setAddForm({ email: "", businessName: "", stage: "qualified", value: "", source: "referral", country: "" });
             }
           }}
           className="space-y-4"
@@ -685,6 +685,12 @@ export const CRM = ({
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
             </label>
           </div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Country code (optional, for example LK, GB or DE)
+            <input type="text" maxLength={2} value={addForm.country} onChange={(e) => setAddForm({ ...addForm, country: e.target.value.replace(/[^a-z]/gi, "").toUpperCase() })}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+            <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">Used for consent rules and routing. Leave blank to use the email's domain.</span>
+          </label>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             Where did they come from?
             <select value={addForm.source} onChange={(e) => setAddForm({ ...addForm, source: e.target.value })}

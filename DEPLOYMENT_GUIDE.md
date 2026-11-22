@@ -37,11 +37,11 @@ Replies are normally found when you press Check replies. This makes it happen ev
 2. Google Cloud console → APIs & Services → Credentials → your OAuth client → **Authorized redirect URIs**: add `https://YOUR-DOMAIN/api/gmail-offline/callback` (Account → "Replies checked for you" shows the exact address).
 3. OAuth consent screen: keep the `gmail.readonly` scope and set the publishing status to **In production**. While it says **Testing**, Google ends the saved access after **7 days** (the app then shows "Gmail access expired" and asks to reconnect). A production app that Google has not verified shows an "unverified app" warning on connect; that is normal for your own mailbox. **Check Google's current rules in the console:** sources differ on when verification becomes mandatory, and it is Google's decision, not ours.
 4. **Republish the Firestore rules** (`reply_notices` is new; `gmail_offline` is deliberately not readable from any browser).
-5. Schedule: `vercel.json` runs the reply check at 00:30 UTC and the drafts at 01:30 UTC, so overnight drafts already know who replied. Vercel's free plan allows daily jobs only; for a more frequent check (a hot reply found within hours is worth money) use Vercel Pro or an outside scheduler that calls `GET /api/cron/check-replies` with the header `Authorization: Bearer <CRON_SECRET>`.
+5. Schedule: the shipped `vercel.json` runs the reply check at 00:30 UTC and the overnight drafts at 01:30 UTC, once a day, which Vercel Hobby allows. Neither job sends e-mail, and both need `CRON_SECRET` set (Vercel sends it). The owner's day work still runs when the owner opens the app. Auto-send and broadcasts are not scheduled, because they send e-mail: their times are your choice (add them to `vercel.daily.json`, then run `npm run schedule:daily`). For a check more often than daily, use Vercel Pro (`npm run schedule:hourly`, once `vercel.hourly.json` has entries) or an outside scheduler that calls `GET /api/cron/check-replies` with the header `Authorization: Bearer <CRON_SECRET>`.
 6. Test once: Account → Connect Gmail (read-only) → reply to one of your own emails from another address → `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/check-replies` → open the dashboard: the "While you were away" note appears and the deal moves.
 
 ## Drafts prepared overnight (optional)
-- Set `CRON_SECRET` to a long random string. `vercel.json` schedules `/api/cron/prepare-drafts` daily at 01:30 UTC and Vercel sends the secret itself. On another host, call `GET /api/cron/prepare-drafts` once a day with the header `Authorization: Bearer <CRON_SECRET>`.
+- Set `CRON_SECRET` to a long random string. `vercel.json` runs `/api/cron/prepare-drafts` daily at 01:30 UTC and Vercel sends the secret itself (see step 5). On another host, call `GET /api/cron/prepare-drafts` once a day with the header `Authorization: Bearer <CRON_SECRET>`.
 - Needs `FIREBASE_SERVICE_ACCOUNT_JSON` and an AI key. **Republish the Firestore rules** (`draft_queue` and `autopilot_users` are new).
 - Each customer switches it on in Account → "Drafts prepared overnight". The job only writes drafts: it never sends and needs no Gmail access.
 - Test it once: Account → **Prepare now**, then open the dashboard: the "drafts ready for your review" banner appears. To test the schedule itself: `curl -H "Authorization: Bearer $CRON_SECRET" https://your-domain.com/api/cron/prepare-drafts`.
@@ -70,7 +70,7 @@ What keeps your Gmail safe (all enforced on every run, and tested): a daily cap 
 Notes:
 - The first invoice to a customer is never automatic (it may include a setup fee). Only customers already invoiced once, with a monthly amount set on the Customers page, get the next one, about a month later. Reminders are the fixed friendly/firm/final wording, at most 3 per invoice, never more than every 3 days.
 - Posting to social networks is still one tap: each network needs its own approved developer app. The app writes, schedules and tracks the posts.
-- Vercel's Hobby plan allows daily cron jobs only. The shipped `vercel.json` runs every job once a day (broadcasts 09:15 UTC, reassignment 05:40 UTC, the rest as listed above). A cron can run up to an hour late, so the times leave room for that. A paid plan may run more often; that is optional, not required.
+- The shipped `vercel.json` runs two jobs once a day: the reply check and the draft preparation (step 5). The owner's day work runs when the owner opens the app, and shared work (due broadcasts, untouched-lead rerouting) runs once a day by whoever opens first. Hobby accounts get once-a-day jobs; a cron can run up to an hour late. A paid plan may run more often; that is optional.
 - Test once: `curl -H "Authorization: Bearer $CRON_SECRET" https://YOUR-APP/api/cron/daily-ops` and the same for `/api/cron/autosend` (inside your window, with drafts waiting). The reply lists what was sent and why anything stopped.
 
 ## Publishing posts automatically (optional)
@@ -201,3 +201,13 @@ Before switching on Apollo or TikTok, check their current API documentation: the
 
 - Set the commission percentage in Account. It appears in the monthly digest on the first of each month.
 
+
+## Faster reply checks (optional, free)
+
+The Vercel Hobby plan runs the reply check once a day. To check replies more often, point any free scheduler at the same route every 15 to 30 minutes:
+
+- URL: `https://<your-domain>/api/cron/check-replies`
+- Method: GET
+- Header: `Authorization: Bearer <CRON_SECRET>` (the same value as the server's CRON_SECRET)
+
+The route answers `202 Accepted` at once and runs the check in the background, so a scheduler with a 30-second timeout does not log a failure. The result is written to the server log, not the response. Keep the daily Vercel job as a backup. Before you rely on the scheduler, confirm it can send a custom Authorization header.
