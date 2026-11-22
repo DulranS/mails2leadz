@@ -525,6 +525,7 @@ lib/logger.js
 lib/loyalty.js
 lib/mailbox-verify.js
 lib/manual-stock.js
+lib/market-share.js
 lib/marketing.js
 lib/meeting-brief.js
 lib/membership.js

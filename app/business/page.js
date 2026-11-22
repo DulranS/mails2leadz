@@ -9,6 +9,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { db, auth } from "../../lib/firebase-client.js";
 import { computeBusinessMetrics } from "../../lib/business-metrics.js";
+import { marketShare } from "../../lib/market-share.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeCashCycle, supplierDays } from "../../lib/cash-cycle.js";
 import MarketingSpendPanel from "../components/MarketingSpendPanel";
@@ -768,6 +769,16 @@ export default function BusinessValuePage() {
           </Card>
         )}
 
+        {!loading && ownerView && (() => {
+          const share = marketShare({ ownRevenue: m.past.wonRevenue12m, marketSize: raw.settings?.marketSize });
+          return (
+            <Card title="Market share (last 12 months)">
+              <p className="text-sm text-gray-700 dark:text-gray-200">{share.reason === "no_market" ? "Type your market size on the Account page (the total yearly revenue of the market you sell into) to see your share." : share.reason === "no_revenue" ? "No won revenue in the last 12 months yet." : `Your won revenue over the last 12 months is ${share.sharePct}% of the market size you typed.`}</p>
+              {share.reason === "over_market" && <p className="text-xs text-red-700 dark:text-red-300 mt-1">Your won revenue is more than the market size you typed. Check the figure.</p>}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">The market size is your own estimate. Nothing is fetched for it.</p>
+            </Card>
+          );
+        })()}
         {!loading && ownerView && (
           <Card title="Profit (last 90 days)">
             {profit.ready ? (

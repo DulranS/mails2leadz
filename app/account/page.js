@@ -64,6 +64,7 @@ export default function AccountPage() {
   const [cashLoaded, setCashLoaded] = useState({ value: "", asOf: "" });
   const [linesText, setLinesText] = useState("");
   const [monthlyGoal, setMonthlyGoal] = useState("");
+  const [marketSize, setMarketSize] = useState(""); // the yearly revenue of the market you sell into, typed by you (market share on Business)
   const [currency, setCurrency] = useState("USD");
   const [usdRate, setUsdRate] = useState("");
   const [fxText, setFxText] = useState("");
@@ -114,6 +115,7 @@ export default function AccountPage() {
         if (d.cashOnHand !== undefined && d.cashOnHand !== null) { setCashOnHand(String(d.cashOnHand)); setCashLoaded({ value: String(d.cashOnHand), asOf: d.cashAsOf || "" }); }
         if (Array.isArray(d.businessLines)) setLinesText(d.businessLines.join("\n"));
         if (d.monthlyGoal) setMonthlyGoal(String(d.monthlyGoal));
+        if (d.marketSize) setMarketSize(String(d.marketSize));
         if (d.currency) setCurrency(normalizeCurrency(d.currency));
         if (d.usdRate) setUsdRate(String(d.usdRate));
         if (d.slackWebhookUrl) setSlackUrl(String(d.slackWebhookUrl));
@@ -361,6 +363,7 @@ export default function AccountPage() {
         cashOnHand: cashOnHand === "" ? null : Math.max(0, Math.min(1e12, Number(cashOnHand) || 0)),
         cashAsOf: cashOnHand === "" ? null : (cashOnHand === cashLoaded.value && cashLoaded.asOf ? cashLoaded.asOf : new Date().toISOString()),
         monthlyGoal: Math.max(0, Number(monthlyGoal) || 0),
+        marketSize: Math.max(0, Math.min(1e12, Number(marketSize) || 0)),
         currency: normalizeCurrency(currency),
         usdRate: Number(usdRate) > 0 ? Number(usdRate) : 1,
         fxDisplay: fx,
@@ -603,6 +606,7 @@ export default function AccountPage() {
             {currency !== "USD" && <div className="sm:col-span-2"><label className={label} htmlFor="fx">1 US dollar = how many {currency}? <span className="text-xs font-normal text-gray-500">(optional)</span></label><input id="fx" type="number" min="0" inputMode="decimal" className={field} value={usdRate} onChange={(e) => setUsdRate(e.target.value)} placeholder="e.g. 300" /><p className="text-xs text-gray-500 mt-1">The AI provider bills in US dollars. This converts that small cost so your ROI is in {currency}. Leave empty to count it 1:1.</p></div>}
             <div><label className={label} htmlFor="adv">Typical deal value ({currencySymbol(currency)})</label><input id="adv" type="number" min="0" inputMode="decimal" className={field} value={avgDealValue} onChange={(e) => setAvgDealValue(e.target.value)} placeholder="1000" /><p className="text-xs text-gray-500 mt-1">Used for deals where you haven't set a value.</p></div>
             <div className="sm:col-span-2"><label className={label} htmlFor="mg">Monthly revenue goal ({currencySymbol(currency)})</label><input id="mg" type="number" min="0" inputMode="decimal" className={field} value={monthlyGoal} onChange={(e) => setMonthlyGoal(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">Shows your progress and what is still missing, on the Business Value page.</p></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="ms">Market size per year ({currencySymbol(currency)}, optional)</label><input id="ms" type="number" min="0" inputMode="decimal" className={field} value={marketSize} onChange={(e) => setMarketSize(e.target.value)} placeholder="optional" /><p className="text-xs text-gray-500 mt-1">The total yearly revenue of the market you sell into, as your own estimate. Used for your market share on the Business Value page.</p></div>
             <div><label className={label} htmlFor="mc">What you pay per month ({currencySymbol(currency)})</label><input id="mc" type="number" min="0" inputMode="decimal" className={field} value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} placeholder="0" /><p className="text-xs text-gray-500 mt-1">This tool + email/SMS tools. Used for ROI.</p></div>
             <div className="sm:col-span-2"><span className={label}>Is your year uneven? <span className="text-xs font-normal text-gray-500">(optional: tourism, events, weddings, education, farming)</span></span>
               <p className="text-xs text-gray-500 mb-2">For each month, how busy it usually is compared with an average month: 100 is average, 50 is half as busy, 200 is twice as busy. Leave a month empty for average. Business Value then warns before a quiet or a busy stretch, and learns the pattern by itself after a year of sales.</p>
