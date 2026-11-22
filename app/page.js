@@ -35,45 +35,49 @@ const accessHref = CONTACT_EMAIL
   ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} access`)}&body=${encodeURIComponent('Hi, I would like to try it. My business: \nMy Google account email: ')}`
   : null;
 
-const btn = 'inline-flex min-h-[44px] items-center justify-center rounded-xl px-6 py-3 font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
-const section = 'mx-auto max-w-5xl px-4 py-12 sm:px-6';
-const h2 = 'text-2xl font-bold text-white';
+const btn = 'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-5 py-2.5 font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 hover:bg-opacity-90 active:scale-[0.98]';
+const section = 'mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20';
+const h2 = 'text-2xl sm:text-3xl font-semibold text-white tracking-tight';
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-200">
-      <header className="sticky top-0 z-10 border-b border-gray-800 bg-gray-900/90 backdrop-blur">
-        <nav aria-label="Main" className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <span className="text-lg font-bold text-white">{APP_NAME}</span>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            <a href="#how" className="min-h-[44px] inline-flex items-center hover:text-white">How it works</a>
-            <a href="#features" className="min-h-[44px] inline-flex items-center hover:text-white">Features</a>
-            <a href="#control" className="min-h-[44px] inline-flex items-center hover:text-white">You decide</a>
-            <Link href="/dashboard" className={`${btn} px-4 py-2 border border-gray-600 text-white hover:bg-gray-700`}>Sign in</Link>
+    <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-gray-200">
+      <header className="sticky top-0 z-10 border-b border-gray-800/50 bg-slate-950/80 backdrop-blur-md">
+        <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <span className="text-xl font-semibold text-white tracking-tight">{APP_NAME}</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium">
+            <a href="#how" className="min-h-[44px] inline-flex items-center text-gray-400 hover:text-white transition-colors">How it works</a>
+            <a href="#features" className="min-h-[44px] inline-flex items-center text-gray-400 hover:text-white transition-colors">Features</a>
+            <a href="#control" className="min-h-[44px] inline-flex items-center text-gray-400 hover:text-white transition-colors">You decide</a>
+            <Link href="/dashboard" className={`${btn} bg-blue-600 text-white hover:bg-blue-500 px-4 py-2`}>Sign in</Link>
           </div>
         </nav>
       </header>
 
-      <section className="mx-auto max-w-5xl px-4 pb-14 pt-12 sm:px-6 sm:pt-20">
-        <p className="text-sm font-medium uppercase tracking-wide text-blue-300">Sales, marketing and deals</p>
-        <h1 className="mt-3 max-w-3xl text-3xl font-bold leading-tight text-white sm:text-5xl">Find, reach and close customers, and know what each part earns.</h1>
-        <p className="mt-5 max-w-2xl text-base text-gray-300 sm:text-lg">{APP_DESCRIPTION}</p>
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link href="/dashboard" className={`${btn} bg-blue-600 text-white hover:bg-blue-700`}>Sign in with Google</Link>
-          {accessHref ? <a href={accessHref} className={`${btn} border border-blue-500 text-blue-300 hover:bg-blue-900/30`}>Request access</a> : null}
-          <a href="#how" className={`${btn} border border-gray-600 text-white hover:bg-gray-700`}>See how it works</a>
+      <section className="mx-auto max-w-6xl px-4 pb-20 pt-16 sm:px-6 sm:pt-24 lg:pt-32">
+        <div className="max-w-3xl">
+          <p className="text-sm font-semibold uppercase tracking-widest text-blue-400 mb-4">Sales, marketing and deals</p>
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-white tracking-tight mb-6">
+            Find, reach and close customers, and know what each part earns.
+          </h1>
+          <p className="text-lg sm:text-xl text-gray-400 leading-relaxed mb-8 max-w-2xl">{APP_DESCRIPTION}</p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link href="/dashboard" className={`${btn} bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25`}>Sign in with Google</Link>
+            {accessHref ? <a href={accessHref} className={`${btn} border border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white`}>Request access</a> : null}
+            <a href="#how" className={`${btn} border border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white`}>See how it works</a>
+          </div>
         </div>
       </section>
 
       <section id="how" className={section}>
         <h2 className={h2}>How it works</h2>
-        <ol className="mt-6 grid gap-4 sm:grid-cols-2">
+        <ol className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((s) => (
-            <li key={s.n} className="flex gap-4 rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
-              <span aria-hidden="true" className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">{s.n}</span>
+            <li key={s.n} className="flex gap-4 rounded-xl border border-gray-800 bg-gray-800/40 p-5 hover:border-gray-700 hover:bg-gray-800/60 transition-all duration-200">
+              <span aria-hidden="true" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-600 text-sm font-semibold text-white">{s.n}</span>
               <div>
-                <h3 className="font-semibold text-white">{s.title}</h3>
-                <p className="mt-1 text-sm text-gray-400">{s.text}</p>
+                <h3 className="font-medium text-white text-base">{s.title}</h3>
+                <p className="mt-1.5 text-sm text-gray-400 leading-relaxed">{s.text}</p>
               </div>
             </li>
           ))}
@@ -82,56 +86,56 @@ export default function Home() {
 
       <section id="features" className={section}>
         <h2 className={h2}>What it does</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {GROUPS.map((g) => (
-            <div key={g.title} className="rounded-2xl border border-gray-700 bg-gray-800/60 p-5">
-              <h3 className="font-semibold text-white">{g.title}</h3>
-              <ul className="mt-3 space-y-2 text-sm text-gray-300">
-                {g.points.map((p) => <li key={p} className="flex gap-2"><span aria-hidden="true" className="text-blue-400">•</span><span>{p}</span></li>)}
+            <div key={g.title} className="rounded-xl border border-gray-800 bg-gray-800/40 p-5 hover:border-gray-700 hover:bg-gray-800/60 transition-all duration-200">
+              <h3 className="font-medium text-white text-base">{g.title}</h3>
+              <ul className="mt-3 space-y-2 text-sm text-gray-400">
+                {g.points.map((p) => <li key={p} className="flex gap-2 leading-relaxed"><span aria-hidden="true" className="text-blue-400">•</span><span>{p}</span></li>)}
               </ul>
             </div>
           ))}
         </div>
-        <p className="mt-6 text-sm text-gray-400">Every outside tool is one click away. Press Ctrl+K (Cmd+K on Mac), or use Search, to jump to any screen or tool.</p>
+        <p className="mt-8 text-sm text-gray-500 text-center">Every outside tool is one click away. Press Ctrl+K (Cmd+K on Mac), or use Search, to jump to any screen or tool.</p>
       </section>
 
       <section id="control" className={section}>
-        <div className="rounded-2xl border border-blue-700/50 bg-blue-900/20 p-6 sm:p-8">
+        <div className="rounded-xl border border-blue-900/30 bg-blue-950/30 p-6 sm:p-8">
           <h2 className={h2}>You decide what runs</h2>
-          <p className="mt-2 text-sm text-gray-300">Lead finding, scoring, follow-up timing, reminders and reports run on their own. These stay off until you switch them on:</p>
-          <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+          <p className="mt-3 text-sm text-gray-400 leading-relaxed">Lead finding, scoring, follow-up timing, reminders and reports run on their own. These stay off until you switch them on:</p>
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
             {SWITCHED_OFF.map((c) => (
-              <li key={c} className="flex gap-3 text-sm text-gray-200"><span aria-hidden="true" className="text-blue-400">✓</span><span>{c}</span></li>
+              <li key={c} className="flex gap-3 text-sm text-gray-300"><span aria-hidden="true" className="text-blue-400">✓</span><span className="leading-relaxed">{c}</span></li>
             ))}
           </ul>
-          <p className="mt-5 text-sm text-gray-300">On by default, and never sent: an invoice draft for each won deal. You review it and send it yourself.</p>
+          <p className="mt-6 text-sm text-gray-400 leading-relaxed">On by default, and never sent: an invoice draft for each won deal. You review it and send it yourself.</p>
         </div>
       </section>
 
       <section className={section} aria-labelledby="not-included">
         <h2 id="not-included" className={h2}>What is not included, and why</h2>
-        <dl className="mt-6 grid gap-4 sm:grid-cols-3">
+        <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {NOT_INCLUDED.map((n) => (
-            <div key={n.label} className="rounded-2xl border border-gray-700 bg-gray-800/40 p-5">
-              <dt className="font-semibold text-white">{n.label}</dt>
-              <dd className="mt-2 text-sm text-gray-400">{n.text}</dd>
+            <div key={n.label} className="rounded-xl border border-gray-800 bg-gray-800/40 p-5 hover:border-gray-700 hover:bg-gray-800/60 transition-all duration-200">
+              <dt className="font-medium text-white text-base">{n.label}</dt>
+              <dd className="mt-2 text-sm text-gray-400 leading-relaxed">{n.text}</dd>
             </div>
           ))}
         </dl>
       </section>
 
-      <section className="mx-auto max-w-5xl px-4 pb-16 pt-6 text-center sm:px-6">
+      <section className="mx-auto max-w-6xl px-4 pb-20 pt-12 text-center sm:px-6">
         <h2 className={h2}>Ready to see your pipeline?</h2>
-        <Link href="/dashboard" className={`${btn} mt-6 bg-blue-600 text-white hover:bg-blue-700`}>Sign in with Google</Link>
-        {CONTACT_EMAIL ? <p className="mt-5 text-sm text-gray-400">Questions? <a className="text-blue-400 underline" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p> : null}
+        <Link href="/dashboard" className={`${btn} mt-8 bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/25`}>Sign in with Google</Link>
+        {CONTACT_EMAIL ? <p className="mt-6 text-sm text-gray-500">Questions? <a className="text-blue-400 hover:text-blue-300 underline underline-offset-4 transition-colors" href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a></p> : null}
       </section>
 
-      <footer className="border-t border-gray-800 px-4 py-6 text-center text-xs text-gray-500">
-        <nav aria-label="Legal" className="mb-2 flex justify-center gap-4">
-          <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy</Link>
-          <Link href="/terms" className="underline-offset-4 hover:underline">Terms</Link>
+      <footer className="border-t border-gray-800 px-4 py-8 text-center text-sm text-gray-500">
+        <nav aria-label="Legal" className="mb-4 flex justify-center gap-6">
+          <Link href="/privacy" className="hover:text-gray-300 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center">Privacy</Link>
+          <Link href="/terms" className="hover:text-gray-300 transition-colors min-h-[44px] min-w-[44px] inline-flex items-center">Terms</Link>
         </nav>
-        © {new Date().getFullYear()} {APP_NAME}
+        <p>© {new Date().getFullYear()} {APP_NAME}</p>
       </footer>
     </main>
   );
