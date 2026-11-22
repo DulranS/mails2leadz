@@ -111,8 +111,8 @@ export async function POST(request) {
       const write = buildDealWrite({ uid, email: e.email, stage: 'new', businessName: e.company || e.name || '', source: isReferralSrc(e.src) ? 'referral' : 'inbound', sourceDetail: e.src || 'form' });
       if (e.intake) write.qualification = { ...intakeToQualification(e.intake), updatedAt: now.toISOString() }; // what they said fills budget, authority and timeline
       write.inboundAt = now.toISOString();
-      write.contactBasis = contactBasisFor({ email: e.email }).basis; // why we hold this contact: recorded when they enquire, not inferred later
-      write.contactPurpose = contactPurposeFor({ email: e.email }); // what we hold it for, recorded with the basis
+      write.contactBasis = contactBasisFor({ email: e.email, country: e.country }).basis; // why we hold this contact: recorded when they enquire, not inferred later
+      write.contactPurpose = contactPurposeFor({ email: e.email, country: e.country }); // what we hold it for, recorded with the basis (the country they chose, when given, beats the address)
       if (e.country) write.country = e.country; // the buyer's country, for routing to the right owner
       if (e.size) write.companySize = e.size; // the company size band, for routing
       if (e.campaign) write.campaign = String(e.campaign).trim().toLowerCase().slice(0, 60); // first touch: the campaign that brought them, for ROAS

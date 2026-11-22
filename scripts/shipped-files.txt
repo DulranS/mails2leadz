@@ -87,6 +87,7 @@ app/api/get-daily-count/route.js
 app/api/get-thread/route.js
 app/api/gmail-offline/callback/route.js
 app/api/gmail-offline/route.js
+app/api/gmail-postmaster/route.js
 app/api/go-live/route.js
 app/api/health/route.js
 app/api/help/publish/route.js
@@ -482,6 +483,7 @@ lib/format.js
 lib/funnel.js
 lib/ga4.js
 lib/gift-cards.js
+lib/gmail-scopes.js
 lib/gmail-text.js
 lib/go-live.js
 lib/google-customer-match.js
@@ -558,6 +560,7 @@ lib/plan.js
 lib/post-sale.js
 lib/post-webhook.js
 lib/postage.js
+lib/postmaster.js
 lib/pptx-deck.js
 lib/preflight.js
 lib/pricing.js

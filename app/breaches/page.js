@@ -8,7 +8,7 @@ import { addDoc, collection, deleteDoc, doc, getDocs, limit, query, updateDoc } 
 import { db } from "../../lib/firebase-client.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
-import { AUTHORITY_HOURS, DATA_AFFECTED, DATA_AFFECTED_LABELS, BREACH_STATE_LABELS, authorityDueAt, breachesNeedingAttention, breachAgeDays, peopleNoticePending, sanitizeBreach } from "../../lib/breach-register.js";
+import { AUTHORITY_HOURS, DATA_AFFECTED, DATA_AFFECTED_LABELS, BREACH_STATE_LABELS, RISK_LEVELS, RISK_LEVEL_LABELS, authorityDueAt, breachesNeedingAttention, breachAgeDays, missingSchedule1, peopleNoticePending, riskAdvice, sanitizeBreach } from "../../lib/breach-register.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
@@ -16,7 +16,7 @@ const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium bg-blue-600 text-w
 const small = "min-h-[36px] px-3 rounded-lg text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white";
 const nowLocal = () => { const d = new Date(Date.now() + 5.5 * 3600000); return d.toISOString().slice(0, 16); }; // Sri Lanka time for the form
 const today = () => new Date().toISOString().slice(0, 10);
-const EMPTY = { title: "", discoveredAt: nowLocal(), dataAffected: "unknown", peopleAffected: "", description: "", containment: "", notes: "" };
+const EMPTY = { title: "", discoveredAt: nowLocal(), dataAffected: "unknown", peopleAffected: "", description: "", containment: "", notes: "", dataCategories: "", recordsAffected: "", likelyConsequences: "", riskLevel: "unknown", dpoContact: "", certifiedBy: "" };
 
 function dueText(b) {
   const due = authorityDueAt(b);
@@ -81,7 +81,13 @@ export default function BreachRegisterPage() {
     }
   };
 
-  const recordAuthority = (id) => patch(id, { authorityNotifiedOn: today() }, "Could not record that date. Try again.");
+  const recordAuthority = (id) => {
+    // v350: the draft's Schedule I items still blank for this breach. The owner can still record the date; this only asks first.
+    const row = rows?.find((r) => r.id === id);
+    const blank = row ? missingSchedule1(row) : [];
+    if (blank.length > 0 && typeof window !== "undefined" && !window.confirm(`Still blank in the draft's Authority notice: ${blank.join(", ")}. Record the Authority date anyway?`)) return;
+    return patch(id, { authorityNotifiedOn: today() }, "Could not record that date. Try again.");
+  };
   const recordPeople = (id) => patch(id, { peopleNotifiedOn: today() }, "Could not record that date. Try again.");
   const close = (id) => patch(id, { status: "closed", closedOn: today() }, "Could not close that breach. Try again.");
 
@@ -122,6 +128,19 @@ export default function BreachRegisterPage() {
           </div>
           <label className="block text-sm text-gray-700 dark:text-gray-200">What happened<textarea className={field} rows={3} value={form.description} maxLength={2000} required onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label className="block text-sm text-gray-700 dark:text-gray-200">What was done to contain it<textarea className={field} rows={2} value={form.containment} maxLength={1000} onChange={(e) => setForm({ ...form, containment: e.target.value })} /></label>
+          <p className="text-xs text-gray-600 dark:text-gray-300">The DPA draft asks for the items below in the Authority notice. Fill them as you can; the register lists what is still blank.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-gray-700 dark:text-gray-200">Categories of personal data (e.g. names, bank details)<input className={field} maxLength={500} value={form.dataCategories} onChange={(e) => setForm({ ...form, dataCategories: e.target.value })} /></label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Number of records affected (if known)<input className={field} type="number" min="0" value={form.recordsAffected} onChange={(e) => setForm({ ...form, recordsAffected: e.target.value })} /></label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Risk decision
+              <select className={field} value={form.riskLevel} onChange={(e) => setForm({ ...form, riskLevel: e.target.value })}>
+                {RISK_LEVELS.map((k) => <option key={k} value={k}>{RISK_LEVEL_LABELS[k]}</option>)}
+              </select>
+            </label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Contact for the Authority (your DPO or you)<input className={field} maxLength={300} value={form.dpoContact} onChange={(e) => setForm({ ...form, dpoContact: e.target.value })} /></label>
+            <label className="text-sm text-gray-700 dark:text-gray-200">Certified by (name)<input className={field} maxLength={200} value={form.certifiedBy} onChange={(e) => setForm({ ...form, certifiedBy: e.target.value })} /></label>
+          </div>
+          <label className="block text-sm text-gray-700 dark:text-gray-200">Likely consequences for the people affected<textarea className={field} rows={2} value={form.likelyConsequences} maxLength={1000} onChange={(e) => setForm({ ...form, likelyConsequences: e.target.value })} /></label>
           <button type="submit" className={btn} disabled={saving}>{saving ? "Saving..." : "Log breach"}</button>
         </form>
 
@@ -146,7 +165,10 @@ export default function BreachRegisterPage() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700 text-gray-900 dark:text-white">
                 {list.map((r) => (
                   <tr key={r.id}>
-                    <td className="py-2 pr-3">{r.title}<span className="block text-xs text-gray-600 dark:text-gray-300">{r.description}</span></td>
+                    <td className="py-2 pr-3">{r.title}<span className="block text-xs text-gray-600 dark:text-gray-300">{r.description}</span>
+                      <span className="block text-xs text-gray-600 dark:text-gray-300 mt-1">{riskAdvice(r)}</span>
+                      {missingSchedule1(r).length > 0 ? <span className="block text-xs text-amber-700 dark:text-amber-400 mt-1">Still blank for the Authority notice: {missingSchedule1(r).join(", ")}</span> : null}
+                    </td>
                     <td className="py-2 pr-3 whitespace-nowrap text-xs">{r.discoveredOn}{breachAgeDays(r, today()) !== null ? <span className="block text-gray-600 dark:text-gray-300">{breachAgeDays(r, today())} days ago</span> : null}</td>
                     <td className="py-2 pr-3 text-xs">{DATA_AFFECTED_LABELS[r.dataAffected] || DATA_AFFECTED_LABELS.unknown}</td>
                     <td className="py-2 pr-3 text-xs">{r.peopleAffected ?? "Not known"}</td>

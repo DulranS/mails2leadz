@@ -44,6 +44,10 @@ export default function AccountPage() {
   const [senderReport, setSenderReport] = useState(null);
   const [complaintDelivered, setComplaintDelivered] = useState("");
   const [complaintCount, setComplaintCount] = useState("");
+  const [pmDomain, setPmDomain] = useState("");
+  const [pmBusy, setPmBusy] = useState(false);
+  const [pmMsg, setPmMsg] = useState("");
+  const [pmReport, setPmReport] = useState(null);
   const [eraseEmail, setEraseEmail] = useState("");
   const [eraseConfirm, setEraseConfirm] = useState("");
   const [eraseBusy, setEraseBusy] = useState(false);
@@ -79,7 +83,7 @@ export default function AccountPage() {
   const [team, setTeam] = useState({ members: [], busy: false, msg: "", ok: false });
   const [hook, setHook] = useState({ url: "", busy: false, msg: "", ok: false });
   const [inq, setInq] = useState({ loading: true, available: true, key: "", busy: false, msg: "", src: "instagram", custom: "" });
-  const [gm, setGm] = useState({ loading: true, available: false, missing: [], connected: false, canSend: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
+  const [gm, setGm] = useState({ loading: true, available: false, missing: [], connected: false, canSend: false, canPostmaster: false, expired: false, email: "", lastCheckAt: "", lastError: "", redirectUri: "", busy: false, msg: "" });
   const [tn, setTn] = useState({ loading: true, saas: false, busy: "", msg: "" }); // plan / billing state (SaaS mode only)
   const [termsDays, setTermsDays] = useState("");
   const [taxRate, setTaxRate] = useState("");
@@ -203,7 +207,7 @@ export default function AccountPage() {
     try {
       const res = await fetch("/api/gmail-offline");
       const d = await res.json().catch(() => ({}));
-      setGm((g) => ({ ...g, loading: false, available: !!d.available, missing: Array.isArray(d.missing) ? d.missing : [], connected: !!d.connected, canSend: !!d.canSend, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
+      setGm((g) => ({ ...g, loading: false, available: !!d.available, missing: Array.isArray(d.missing) ? d.missing : [], connected: !!d.connected, canSend: !!d.canSend, canPostmaster: !!d.canPostmaster, expired: !!d.expired, email: d.email || "", lastCheckAt: d.lastCheckAt || "", lastError: d.lastError || "", redirectUri: d.redirectUri || "" }));
     } catch { setGm((g) => ({ ...g, loading: false })); }
   };
   useEffect(() => {
@@ -213,10 +217,11 @@ export default function AccountPage() {
     const text = { connected: "Gmail connected: replies will be checked for you overnight.", denied: "You did not give access, so nothing was connected.", no_refresh: "Google did not hand over long-term access. Remove this app at myaccount.google.com/permissions and connect again.", scope: "Read-only access was not granted. Connect again and tick the Gmail box.", unavailable: "Not set up on the server yet.", error: "Could not connect. Please try again." }[r || ""];
     if (text) setGm((g) => ({ ...g, msg: text }));
   }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
-  const connectGmail = async (withSend = false) => {
+  // withSend / withPostmaster ask Google for that extra permission; pass the grants already held so asking for one never drops another.
+  const connectGmail = async (withSend = false, withPostmaster = false) => {
     setGm((g) => ({ ...g, busy: true, msg: "" }));
     try {
-      const res = await fetch("/api/gmail-offline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withSend: withSend === true }) });
+      const res = await fetch("/api/gmail-offline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ withSend: withSend === true, withPostmaster: withPostmaster === true }) });
       const d = await res.json().catch(() => ({}));
       if (res.ok && d.url) { window.location.href = d.url; return; }
       setGm((g) => ({ ...g, busy: false, msg: d.error || "Could not start the connection." }));
@@ -227,6 +232,23 @@ export default function AccountPage() {
     setGm((g) => ({ ...g, busy: true, msg: "" }));
     try { await fetch("/api/gmail-offline", { method: "DELETE" }); setGm((g) => ({ ...g, busy: false, connected: false, canSend: false, expired: false, msg: "Disconnected. The saved access was revoked and deleted." })); } catch { setGm((g) => ({ ...g, busy: false, msg: "Could not reach the server." })); }
   };
+
+  // Google's own spam rate for one domain, read with the owner's Postmaster grant over the last 28 days (ending yesterday: Google's daily figures arrive a day late).
+  // Shown only: Autosend keeps checking the owner's typed counts.
+  const readPostmaster = async () => {
+    setPmBusy(true); setPmMsg(""); setPmReport(null);
+    const to = new Date(Date.now() - 86400000);
+    const from = new Date(to.getTime() - 27 * 86400000);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    try {
+      const res = await fetch("/api/gmail-postmaster", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domain: pmDomain, from: iso(from), to: iso(to) }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) setPmReport(d);
+      else setPmMsg(d.error || "Could not read the spam rate.");
+    } catch { setPmMsg("Could not reach the server."); }
+    setPmBusy(false);
+  };
+  const pmFmt = (n) => String(Number(Number(n).toPrecision(4)));
 
   // Enquiry form: one write-only key; links are tagged with where they are shared so we learn which channel brings business.
   const refreshInbound = async () => {
@@ -674,14 +696,15 @@ export default function AccountPage() {
           {gm.available && !gm.connected && gm.redirectUri && <p className="text-xs text-gray-500 mt-2">One-time setup in Google Cloud (Credentials → your OAuth client → Authorized redirect URIs): <code className="break-all select-all">{gm.redirectUri}</code>. Also publish the OAuth consent screen (&quot;In production&quot;): while it says &quot;Testing&quot;, Google ends this access after 7 days.</p>}
           {gm.expired && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Gmail access expired{gm.lastError ? `: ${gm.lastError}` : ""} Connect again.</p>}
           {gm.msg && <p className="text-xs text-gray-600 dark:text-gray-300 mt-2" role="status">{gm.msg}</p>}
-          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.canSend ? " · automatic sending allowed" : " · read-only"}{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
+          {gm.connected && <p className="text-sm text-gray-800 dark:text-gray-100 mt-2">Connected: <b>{gm.email}</b>{gm.canSend ? " · automatic sending allowed" : " · read-only"}{gm.canPostmaster ? " · Postmaster spam rate allowed" : ""}{gm.lastCheckAt ? ` · last checked ${new Date(gm.lastCheckAt).toLocaleString()}` : " · first check tonight"}</p>}
           {gm.connected && (
             <label className="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 min-h-[44px] mt-1"><input type="checkbox" className="h-5 w-5" checked={ap.settings.autoReplyCheck !== false} disabled={!ap.available || ap.busy === "save"} onChange={(e) => saveAutopilot({ autoReplyCheck: e.target.checked })} />Check for replies for me every night</label>
           )}
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
             {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={() => connectGmail(true)} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{gm.busy ? "Opening Google…" : gm.expired ? "Reconnect Gmail with automatic sending" : "Connect Gmail with automatic sending"}</button>}
             {!gm.connected && <button type="button" disabled={gm.busy || gm.loading || !gm.available} onClick={() => connectGmail(false)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">{gm.expired ? "Reconnect read-only" : "Connect read-only"}</button>}
-            {gm.connected && !gm.canSend && <button type="button" disabled={gm.busy} onClick={() => connectGmail(true)} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Add automatic sending</button>}
+            {gm.connected && !gm.canSend && <button type="button" disabled={gm.busy} onClick={() => connectGmail(true, gm.canPostmaster)} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">Add automatic sending</button>}
+            {gm.connected && !gm.canPostmaster && <button type="button" disabled={gm.busy} onClick={() => connectGmail(gm.canSend, true)} className="min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Allow Postmaster spam rate</button>}
             {gm.connected && <button type="button" disabled={gm.busy} onClick={disconnectGmail} className="min-h-[44px] px-4 rounded-lg text-sm border border-red-300 text-red-700 dark:text-red-300 disabled:opacity-50">Disconnect</button>}
           </div>
         </section>
@@ -884,6 +907,29 @@ export default function AccountPage() {
               {senderReport.notes?.map((n) => <p key={n} className="text-xs text-gray-500 dark:text-gray-400">{n}</p>)}
             </div>
           )}
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">
+          <h2 className="font-semibold text-gray-900 dark:text-white">Spam rate from Google</h2>
+          {gm.connected && gm.canPostmaster ? (
+            <>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Reads the spam rate Google measures for a domain you have verified in Postmaster Tools, over the last 28 days. It only shows the figure. Autosend keeps checking your typed counts against the 0.3% line.</p>
+              <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                <input type="text" inputMode="url" placeholder="example.com" value={pmDomain} onChange={(e) => setPmDomain(e.target.value)} aria-label="Domain in Google Postmaster Tools" className="flex-1 min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" />
+                <button type="button" disabled={!pmDomain.trim() || pmBusy} onClick={readPostmaster} className="min-h-[44px] px-4 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50">{pmBusy ? "Reading..." : "Read spam rate"}</button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Connect Gmail above, then allow Postmaster Tools access to read the spam rate Google measures for your domain.</p>
+          )}
+          {pmMsg && <p role="status" className="text-sm text-red-700 dark:text-red-300 mt-2">{pmMsg}</p>}
+          {pmReport && pmReport.summary && (
+            <div className="mt-3 space-y-1">
+              <p className="text-sm text-gray-900 dark:text-white">The latest spam rate Google reports for {pmReport.domain} is <b>{pmFmt(pmReport.summary.latest.value)}</b>{pmReport.summary.latest.date ? ` (${pmReport.summary.latest.date})` : ""}. Average over {pmReport.summary.days} day{pmReport.summary.days === 1 ? "" : "s"}: <b>{pmFmt(pmReport.summary.average)}</b>.</p>
+              <p className="text-xs text-gray-600 dark:text-gray-300">{pmReport.unitNote}</p>
+            </div>
+          )}
+          {pmReport && !pmReport.summary && <p className="text-sm text-gray-900 dark:text-white mt-3">Google has no spam-rate figures for {pmReport.domain} in the last 28 days.</p>}
         </section>
 
         <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5">

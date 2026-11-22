@@ -6,7 +6,8 @@ import { google } from 'googleapis';
 import { isAdminMode } from '../../../../lib/server-firestore.js';
 import { getDb } from '../../../../lib/server/route-helpers.js';
 import { verifyState } from '../../../../lib/server/token-vault.js';
-import { offlineConfigured, redirectUriFor, oauthClient, saveConnection, OFFLINE_SCOPE, SEND_SCOPE } from '../../../../lib/server/gmail-offline.js';
+import { offlineConfigured, redirectUriFor, oauthClient, saveConnection } from '../../../../lib/server/gmail-offline.js';
+import { grantedScopes } from '../../../../lib/gmail-scopes.js';
 
 const back = (request, status) => NextResponse.redirect(new URL(`/account?gmail=${status}`, request.nextUrl.origin));
 
@@ -22,12 +23,13 @@ export async function GET(request) {
     const client = oauthClient(redirectUriFor(request));
     const { tokens } = await client.getToken(code);
     if (!tokens.refresh_token) return back(request, 'no_refresh'); // Google only issues one on a fresh consent
-    if (!String(tokens.scope || '').includes(OFFLINE_SCOPE)) return back(request, 'scope');
+    const granted = grantedScopes(tokens.scope); // what Google actually granted: the owner can untick some on its screen
+    if (!granted.offline) return back(request, 'scope');
     client.setCredentials(tokens);
     const profile = await google.gmail({ version: 'v1', auth: client }).users.getProfile({ userId: 'me' });
     const email = String(profile.data.emailAddress || '').toLowerCase();
     if (!email) return back(request, 'error');
-    await saveConnection(getDb(), uid, { email, refreshToken: tokens.refresh_token, canSend: String(tokens.scope || '').includes(SEND_SCOPE) });
+    await saveConnection(getDb(), uid, { email, refreshToken: tokens.refresh_token, canSend: granted.send, canPostmaster: granted.postmaster });
     return back(request, 'connected');
   } catch (e) {
     console.error('[gmail-offline callback]', e?.message); // never log tokens or the code

@@ -95,7 +95,7 @@ t('every enquiry records its purpose next to its basis (spec 9.3)', () => {
   assert.equal(contactPurposeFor({ email: 'ops@acme.co' }), 'enquiry_and_marketing', 'business address: marketing allowed under the B2B basis');
   assert.equal(contactPurposeFor({ email: 'a@gmail.com', marketingConsent: true, consentSource: 'form' }), 'enquiry_and_marketing');
   const src = fs.readFileSync('app/api/inbound/route.js', 'utf8');
-  assert.ok(src.includes('write.contactPurpose = contactPurposeFor({ email: e.email })'));
+  assert.ok(src.includes('write.contactPurpose = contactPurposeFor({ email: e.email, country: e.country })')); // the chosen country is passed (opt-in-country test)
 });
 
 console.log(`\n${n} passed`);

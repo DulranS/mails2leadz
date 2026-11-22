@@ -40,7 +40,7 @@ t('recorded consent with a source makes the basis consent; an invoice makes it c
 
 t('a new enquiry records its contact basis when the deal is created', () => {
   const src = fs.readFileSync('app/api/inbound/route.js', 'utf8');
-  assert.ok(src.includes("write.contactBasis = contactBasisFor({ email: e.email }).basis"));
+  assert.ok(src.includes("write.contactBasis = contactBasisFor({ email: e.email, country: e.country }).basis")); // the chosen country is passed too (opt-in-country test)
 });
 
 console.log(`\n${n} passed`);
