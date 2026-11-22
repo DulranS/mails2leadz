@@ -1,3 +1,9 @@
+## Pass 362 - new customers counted once for acquisition cost (22 Nov 2026)
+- Acquisition cost (CAC) counted every paying email in the last 12 months as a new customer, so repeat buyers counted as new each year, and a customer with both a paid invoice and a won deal counted twice. Acquisition cost was understated.
+- Now a customer counts once, from their first paid invoice or first won deal, and only if that falls in the last 12 months. A deal with no email counts as its own customer.
+- Logic: lib/kpi-economics.js. Tests: tests/kpi-new-customers.test.mjs (8), added to the npm test chain. Existing tests money-and-feedback and paid-vs-signed still pass.
+- Not run here: the full npm test chain (packages missing in this sandbox) and a Next build. Check Acquisition cost on a deployed account with a repeat buyer.
+
 ## Pass 361 - market share on Business Value (22 Nov 2026)
 - Business Value page: a "Market share (last 12 months)" card shows your won revenue over the last 12 months as a share of a market size you type in on the Account page ("Market size per year", optional). The size is your own estimate; nothing is fetched. Revenue above the size typed is flagged.
 - Won revenue for the last 12 months is a new additive figure (wonRevenue12m in lib/business-metrics.js). The six-month series the charts use is unchanged.
