@@ -17,6 +17,7 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { dealDocId, buildDealWrite, normalizeStage, daysQuiet } from "../../lib/deal-utils.js";
+import { STAGE_ALERT_STAGES } from "../../lib/stage-alert.js";
 import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
 import { createFollowUpTask } from "../../lib/firebase-operations.js";
@@ -318,6 +319,10 @@ export default function CRMPage() {
         dealStages: { ...prev.dealStages, [e]: write.stage },
         dealValues: write.valueIsEstimate === false && write.value > 0 ? { ...prev.dealValues, [e]: write.value } : prev.dealValues,
       }));
+      if (updates.stage && STAGE_ALERT_STAGES.includes(normalizeStage(updates.stage))) {
+        // Pass 367: a stage that needs the next step alerts at once. The route checks the deal is still in that stage.
+        fetch("/api/deals/stage-alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: e, stage: write.stage }) }).catch(() => {});
+      }
       addNotification(updates.value !== undefined ? "Value saved" : "Stage updated", "success");
     } catch (error) {
       console.error("Error updating lead:", error);

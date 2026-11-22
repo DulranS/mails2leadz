@@ -211,3 +211,13 @@ The Vercel Hobby plan runs the reply check once a day. To check replies more oft
 - Header: `Authorization: Bearer <CRON_SECRET>` (the same value as the server's CRON_SECRET)
 
 The route answers `202 Accepted` at once and runs the check in the background, so a scheduler with a 30-second timeout does not log a failure. The result is written to the server log, not the response. Keep the daily Vercel job as a backup. Before you rely on the scheduler, confirm it can send a custom Authorization header.
+
+## Stage alerts within 15 minutes, for every change (optional, free)
+
+The stage-alert route covers moves made in the app at once. To cover moves made anywhere else (webhooks, imports, other tools), point the same free scheduler at this route every 15 minutes:
+
+- URL: `https://<your-domain>/api/cron/stage-watch`
+- Method: GET
+- Header: `Authorization: Bearer <CRON_SECRET>`
+
+The route answers `202 Accepted` at once and works in the background. It alerts on deals that moved into Proposal, Negotiation or a won stage since its last run, once per deal, stage and day. Its last run is kept in `system_state/stage_watch`.

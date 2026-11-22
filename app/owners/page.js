@@ -8,6 +8,7 @@ import { useAuthUser } from "../components/AuthProvider";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { OPEN_STAGES, normalizeStage } from "../../lib/deal-utils.js";
 import { loadByOwner, OWNER_KEY } from "../../lib/assignment.js";
+import { quotaProgress } from "../../lib/quota.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -31,7 +32,7 @@ export default function OwnersPage() {
       setDeals(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       const res = await fetch("/api/deals/assignees");
       const data = await res.json().catch(() => ({}));
-      if (res.ok) { setOwners(data.owners || []); setPrefs(Object.fromEntries((data.owners || []).map((o) => [o.key, { away: o.away, maxOpen: o.maxOpen ?? "", territories: (o.territories || []).join(", "), industries: (o.industries || []).join(", "), sizes: (o.sizes || []).join(", ") }]))); }
+      if (res.ok) { setOwners(data.owners || []); setPrefs(Object.fromEntries((data.owners || []).map((o) => [o.key, { away: o.away, maxOpen: o.maxOpen ?? "", quota: o.quota ?? "", territories: (o.territories || []).join(", "), industries: (o.industries || []).join(", "), sizes: (o.sizes || []).join(", ") }]))); }
       setError("");
     } catch (e) { console.error(e); setError("Could not load the deals."); }
   }, [user]);
@@ -40,6 +41,7 @@ export default function OwnersPage() {
   const open = useMemo(() => deals.filter((d) => OPEN_STAGES.includes(normalizeStage(d.stage))), [deals]);
   const unowned = open.filter((d) => !d.assignedTo);
   const load_ = useMemo(() => loadByOwner(owners, open), [owners, open]);
+  const progress = useMemo(() => Object.fromEntries(quotaProgress({ owners, deals, now: Date.now() }).map((r) => [r.key, r])), [owners, deals]);
   const labelOf = (key) => owners.find((o) => o.key === key)?.label || (key === OWNER_KEY ? "You (owner)" : "A former team member");
 
   const run = async (fn) => { setBusy(true); setError(""); setNotice(""); try { await fn(); } catch (e) { console.error(e); setError("Something went wrong. Try again."); } finally { setBusy(false); } };
@@ -51,7 +53,7 @@ export default function OwnersPage() {
 
   const savePref = (key) => run(async () => {
     const p = prefs[key] || {};
-    const r = await post("/api/deals/owner-settings", { key, away: !!p.away, maxOpen: p.maxOpen, territories: p.territories, industries: p.industries, sizes: p.sizes });
+    const r = await post("/api/deals/owner-settings", { key, away: !!p.away, maxOpen: p.maxOpen, quota: p.quota, territories: p.territories, industries: p.industries, sizes: p.sizes });
     if (!r.ok) { setError(r.data.error || "Could not save."); return; }
     setNotice("Saved."); await load();
   });
@@ -89,6 +91,10 @@ export default function OwnersPage() {
                 <input className={`${field} sm:col-span-2`} placeholder="Company sizes: 1-10, 11-50, 51-200, 201+" aria-label="Company sizes" value={prefs[o.key]?.sizes ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], sizes: e.target.value } })} />
                 <input className={`${field} sm:col-span-2`} placeholder="Industries, e.g. software" aria-label="Industries" value={prefs[o.key]?.industries ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], industries: e.target.value } })} />
                 <button type="button" disabled={busy} onClick={() => savePref(o.key)} className={`${btn} sm:col-span-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Save</button>
+                <div className="sm:col-span-12 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <label className="flex items-center gap-2">Monthly target<input className={`${field} w-32`} type="number" min="1" placeholder="No target" value={prefs[o.key]?.quota ?? ""} onChange={(e) => setPrefs({ ...prefs, [o.key]: { ...prefs[o.key], quota: e.target.value } })} aria-label={`Monthly target for ${o.label}`} /></label>
+                  <span>{progress[o.key]?.quota ? `Won this month: ${progress[o.key].won} of ${progress[o.key].quota} (${progress[o.key].pct}%)` : "No target set."}</span>
+                </div>
               </li>
             ))}
           </ul>

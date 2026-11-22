@@ -129,7 +129,7 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 ## Not built
 
 - **Project management (tasks and milestones per project).** Supports delivery of won work more than sales. Not built. The time-entry log is per customer (Pass 148).
-- **Feeding the time log into the profit view.** Not built: the profit view still reads one hours figure per customer.
+- **Feeding the time log into the profit view.** Built (checked 23 Nov 2026, pass 366): app/business/page.js passes the time log to computeProfit through loggedByEmail, and the owner's logged hours replace the single hours figure per customer.
 - **Per-campaign approval for autosend.** Built per account, not per campaign: the owner approves once, before the first send (Pass 146). A campaign-level approval is not built.
 - **Enrichment beyond deals.** Apollo enriches deals (Pass 146); leads in the inbox and contacts are not enriched yet.
 - **TikTok lead generation.** Not built: same pattern as Google and Meta lead forms; it needs its own keys.
@@ -137,7 +137,7 @@ Nothing has been run against live accounts. Every external service (Gmail, Strip
 - **Google Ads lead-form extension, native.** Not built: the same pattern as Meta Lead Ads can be added; it needs its own webhook and keys.
 - **Native sync with Google Sheets, Shopify orders, HubSpot or Pipedrive.** Not built natively. The outgoing webhooks (Zapier, Make) cover pushing deal and booking events to these tools; reading orders or deals back in is not built.
 - **Several Meta Pages or owners on one deployment.** Not built: Meta Lead Ads serves one Page and one owner per deployment.
-- **A per-change trigger.** Not built: an alert is raised when the pipeline check runs, not the moment a stage changes. On Vercel Pro that check runs hourly (one command, `npm run schedule:hourly`); on Hobby it runs daily.
+- **A per-change trigger.** Built (passes 367 and 368): a move into proposal, negotiation or a won stage alerts at once when made in the app. Changes made anywhere else alert within 15 minutes once the free scheduler calls /api/cron/stage-watch. On Vercel Pro that check runs hourly (one command, `npm run schedule:hourly`); on Hobby it runs daily.
 
 Each item says what is missing and why. None of them can be closed from inside the app alone.
 
@@ -206,9 +206,9 @@ Mapped against the framework's 35 activity areas and its routes to market. Statu
 |---|---|---|---|
 | 1 | Market research and intelligence | Partly built | Lead finder, buying-signal feeds, segmentation. Market sizing and competitor price research are not observable by the app. |
 | 2 | Strategy and planning | Partly built | Campaign and content planning. Go-to-market documents are not built. |
-| 3 | Product and service marketing | Partly built | Storefront products and service bookings. Product bundles are not built. |
+| 3 | Product and service marketing | Partly built | Storefront products and service bookings. Product bundles are built (checked 23 Nov 2026: lib/bundles.js, products page and sales tools). |
 | 4 | Brand management | Not built | Brand identity and guidelines are design work outside the app. |
-| 5 | Pricing and promotions | Partly built | Discount codes, price floors, currency choice. Quantity price breaks and tiers are not built. |
+| 5 | Pricing and promotions | Partly built | Discount codes, price floors, currency choice. Quantity price breaks are built (up to five per product, checked 23 Nov 2026: products page and the shop). Other tiers are not. |
 | 6 | Digital marketing | Partly built | Email, SMS, WhatsApp, content plan, posting. SEO tooling is not built. |
 | 7 | Paid advertising | Partly built | Ad spend import, ROAS, hashed audiences (Meta, Google, TikTok). Campaign creation stays in the ad platforms. |
 | 8 | Content and creative | Partly built | Content plan and AI drafts. Photography, video and design production are not built. |
@@ -219,19 +219,19 @@ Mapped against the framework's 35 activity areas and its routes to market. Statu
 | 13 | Trade and shopper marketing | Not applicable now | Retail merchandising and in-store promotions do not fit this scope. |
 | 14 | Partnership and affiliate | Built | Partners, referral asks, buy links. |
 | 15 | Campaigns and automation | Built | Sequences, triggers, broadcasts, journeys. |
-| 16 | Sales strategy and planning | Partly built | Weighted forecast and pipeline. Quotas are not built. |
+| 16 | Sales strategy and planning | Partly built | Weighted forecast and pipeline. Quotas are built (pass 367): a monthly target per person on the Owners page, with won value and share of target this month (lib/quota.js). |
 | 17 | Lead management | Built | Capture, scoring with negatives, routing, nurture, follow-ups. |
 | 18 | CRM and pipeline | Built | Deals, stages, lost reasons, pipeline alerts. |
 | 19 | Inbound sales | Built | Enquiries, bookings, quotes. |
 | 20 | Outbound sales | Partly built | Email and AI phone calls. Manual cold calling is not a feature. |
 | 21 | Sales execution and closing | Built | Demos through bookings, quotes with milestones, typed-name acceptance. Negotiation stays manual. |
-| 22 | Bidding and tenders | Not built | Tender notices are watched through buying signals. Writing bids is not built. |
+| 22 | Bidding and tenders | Not built | Tender notices are watched through buying signals. AI bid drafts are built (checked 23 Nov 2026: BidDraft component and the bids draft route). |
 | 23 | Channel and distribution | Partly built | Partners and buy links. Distributor and reseller management is not built. |
 | 24 | Retail and transactional | Partly built | Storefront, bookings, subscriptions. Point-of-sale hardware does not apply. |
 | 25 | E-commerce and marketplaces | Partly built | Storefront, abandoned basket, back-in-stock. Third-party marketplace listings are not built. |
 | 26 | Business development | Not built | Partnership sourcing is judgement work the app does not automate. |
 | 27 | Account management | Built | Customers, renewals, relationship records. |
-| 28 | Retention and expansion | Partly built | Renewals, win-back, reactivation, referrals. Loyalty programmes are not built. |
+| 28 | Retention and expansion | Partly built | Renewals, win-back, reactivation, referrals. Loyalty programmes are built (checked 23 Nov 2026: lib/loyalty.js, used on three pages). |
 | 29 | Sales enablement | Partly built | Sales kit, SOPs, templates. Training materials are not built. |
 | 30 | Sales operations | Built | Team routing, team statistics, commission on won deals (Pass 155). |
 | 31 | Customer intelligence | Partly built | Segments and purchase history. Lifetime value per customer is not built. |

@@ -1,3 +1,28 @@
+## Pass 368 - stage alerts for every change, within 15 minutes (23 Nov 2026)
+- New: /api/cron/stage-watch, called every 15 minutes by a free scheduler. It finds deals changed since its last run and alerts on those that sit in Proposal, Negotiation or a won stage. It covers changes made anywhere, not only in the app.
+- It answers 202 at once and works in the background, so a 30-second scheduler timeout is not a problem.
+- It moves its watermark only after the work is done. A full page of changes resumes from its last deal, so nothing is skipped. One alert per deal, stage and day.
+- It skips owners whose plan does not include pipeline alerts (featureAllowed, same rule as the reply check).
+- The register is updated: the per-change trigger is built, with the 15-minute limit stated.
+- Decided, not split: the AutoLeads dashboard (one 11,600-line component). Splitting it would change how the page is built and cannot be checked here. The benefit is maintainability only, so it stays as it is.
+- Tests: tests/stage-watch.test.mjs (new, passes).
+- Not run here: a deploy, a live scheduler call, and a check that the watermark moves forward.
+
+## Pass 367b - immediate alert when a deal moves to a stage that needs the next step (23 Nov 2026)
+- New: moving a deal in the CRM to Proposal, Negotiation, or a won stage (won, delivery, retention or expansion) raises a pipeline alert and a push at once, instead of waiting for the scheduled check.
+- The route (app/api/deals/stage-alert) checks that the deal is still in that stage, and creates one alert per deal, per stage, per day.
+- Covers changes made in the app. Changes made elsewhere (webhooks, imports) still wait for the scheduled check. The register is updated to say so.
+- Tests: tests/stage-alert.test.mjs (new, passes). Quota, deal, deal-stage and country tests pass (5 of 5). The CRM page JSX parses.
+- Not run here: a deploy, a live push, and a browser check of the CRM stage change.
+
+## Pass 367 - monthly sales targets per person (23 Nov 2026)
+- New: each person on the Owners page can have a monthly target. The page shows how much they have won this month and the share of the target reached.
+- A won deal counts when its stage is won, it is assigned to that person, and its closed date is in the month. Months are read in UTC, so a deal closed in the first hours of a month in Sri Lanka can fall in the month before.
+- The target is kept on the owner settings (lib/server/owner-settings.js), and a bad or negative target is ignored.
+- Register: "Quotas are not built" corrected to built.
+- Tests: tests/quota.test.mjs (new, passes). Assignment, owner, deal and deal-stage tests pass (5 of 5). The Owners page JSX parses.
+- Not run here: a deploy and a browser check of the Owners page.
+
 ## Pass 366 - reply check answers at once; faster replies with a free scheduler (23 Nov 2026)
 - The reply-check route (app/api/cron/check-replies) checks the secret and the setup, returns 202 Accepted at once, and runs the check in after(). A scheduler with a 30-second timeout (for example cron-job.org) no longer logs a failure while the check runs. The result goes to the server log.
 - The check itself is unchanged: same batches, same deadline, same notices. The secret is still required, and a wrong secret is still refused before any work is scheduled.
