@@ -35,7 +35,7 @@ const accessHref = CONTACT_EMAIL
   ? `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`${APP_NAME} access`)}&body=${encodeURIComponent('Hi, I would like to try it. My business: \nMy Google account email: ')}`
   : null;
 
-const btn = 'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-5 py-2.5 font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 hover:bg-opacity-90 active:scale-[0.98]';
+const btn = 'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-5 py-2.5 font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 active:scale-[0.98]';
 const section = 'mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20';
 const h2 = 'text-2xl sm:text-3xl font-semibold text-white tracking-tight';
 

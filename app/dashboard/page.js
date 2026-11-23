@@ -3762,6 +3762,8 @@ function DashboardComponent() {
     contactedCompanies: false,
     dailyCount: false,
   });
+  // Set once a CSV (or a Lead Inbox hand-off) has filled the contact list. The timed database load must not replace it.
+  const csvLoadedRef = useRef(false);
 
   const loadSentLeads = async () => {
     if (isLoadingRef.current.sentLeads || !user?.uid) return;
@@ -3871,6 +3873,8 @@ function DashboardComponent() {
   // ============================================================================
   const loadWhatsAppContacts = async () => {
     if (isLoadingRef.current.whatsappContacts || !user?.uid) return;
+    // A CSV or Lead Inbox list is already on screen: keep it. This load runs on a timer after sign-in and would replace it.
+    if (csvLoadedRef.current) return;
     isLoadingRef.current.whatsappContacts = true;
 
     try {
@@ -6068,6 +6072,7 @@ function DashboardComponent() {
       }
 
       setValidWhatsApp(validPhoneContacts.length);
+      csvLoadedRef.current = true;
       setWhatsappLinks(validPhoneContacts);
       setLeadScores(newLeadScores);
       setCsvContent(normalizedContent);

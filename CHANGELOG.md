@@ -1,3 +1,9 @@
+## Pass 368e - the Multi-Channel list keeps a CSV or Lead Inbox list (23 Nov 2026)
+- Cause: a timer 10 seconds after sign-in loads the saved contacts from the database and replaces the contact list. A list loaded from the Lead Inbox or a CSV right after the page opens was replaced when the timer fired. The second time, the timer had already run, so the list stayed.
+- Fixed: once a CSV or Lead Inbox list is on screen, the timed database load leaves it alone.
+- Fixed: the landing page button used hover:bg-opacity-90, a Tailwind v3 class that does nothing in v4. The guard test (ui-guards) caught it. The class is removed; the look is unchanged.
+- Not run here: the dashboard in a browser, and the Next build. Test: load a CSV from the Lead Inbox, wait 15 seconds, open Multi-Channel and check the contacts.
+
 ## Pass 368d - a paused CSV import continues instead of blocking the next one (23 Nov 2026)
 - Cause: a CSV import left its job marked "running" when the step paused (the daily website allowance, or a step that timed out). The next import was refused with "A search is still running", and the preview stayed on screen. The unread businesses from the first file were never queued.
 - Fixed: a paused import (not a search) now carries its unread businesses into the next import. Each business is queued once, and the job never takes more than the import limit (500).
