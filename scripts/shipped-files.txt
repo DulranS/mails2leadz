@@ -21,6 +21,7 @@ app/api/ai-insights/route.js
 app/api/ai-reply-assist/route.js
 app/api/ai-smart-outreach/route.js
 app/api/ai-targets/route.js
+app/api/assistant/route.js
 app/api/audit/route.js
 app/api/auth/callback/route.js
 app/api/automation-control/route.js
@@ -224,6 +225,7 @@ app/api/whatsapp/send/route.js
 app/api/worker-queue/route.js
 app/app-keys/page.js
 app/assets/page.js
+app/assistant/page.js
 app/audit/page.js
 app/bets/page.js
 app/billing/page.js
@@ -377,6 +379,7 @@ lib/apiResponse.js
 lib/apollo.js
 lib/app-routes.js
 lib/assignment.js
+lib/assistant.js
 lib/attribution.js
 lib/audit-rules.js
 lib/automation-control.js

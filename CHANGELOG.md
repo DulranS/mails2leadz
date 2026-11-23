@@ -1,3 +1,11 @@
+## Pass 376 - AI sales assistant (23 Nov 2026)
+- New: Assistant (sidebar, Today). Ask about your own pipeline in plain words: open value, what is in each stage, the biggest open deals, the quiet ones (no activity for 14 days or more), and the last 30 days' wins and losses with reasons. The earlier part of the chat is sent with each question, so follow-ups work.
+- Read only: the assistant sends no email, moves no deal and writes no record. It answers from a snapshot of your deals, and says when the data does not answer the question.
+- Limits: every answer goes through the existing AI path, so the daily call cap (100 per user), the monthly AI budget ($5 per user, AI_MONTHLY_BUDGET_USD) and the plan check apply. The assistant also allows 60 questions an hour per owner. A question that is refused says why.
+- Route: POST /api/assistant (signed-in owner, same tenant guard as the deal routes). Model tier: fast.
+- Tests: tests/assistant.test.mjs (11 cases, added to npm test). Imports checked across all 1,180 files. The manifest is regenerated (856 shipped files).
+- Not run here: the assistant in a browser, and the model answers (no AI key in this sandbox). Check the first few answers against the CRM before relying on them.
+
 ## Pass 368g - merge duplicate leads (23 Nov 2026)
 - New: "Possible duplicates" on a lead. A lead is a possible duplicate when another email has the same phone, the same website, or the same business name (ignoring case and punctuation). "Merge into this lead" combines the two.
 - Merge: the kept lead takes the further-along stage (a win wins), the owner's value (or the duplicate's if blank), joined notes and tags, the owner's qualification answers (blanks filled from the duplicate), and a joined committee. The duplicate's deal record is deleted, and its email is kept in mergedFrom so its outreach history shows under the kept lead.
