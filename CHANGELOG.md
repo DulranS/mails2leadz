@@ -1,3 +1,10 @@
+## Pass 384 - handover: missing settings documented (23 Nov 2026)
+- Docs only, no app change. ENV_CONFIG.md now lists the settings the code reads but the page did not: BALANCR_EVENT_SECRET, PARTNER_LINK_SECRET, PARTNER_TERMS_JSON, FINDER_DAILY_SEARCHES, FINDER_DAILY_SITES, NEXT_PUBLIC_APP_URL, GOOGLE_APPLICATION_CREDENTIALS, and the settings the hosting platform sets itself.
+- Checked: every setting the code reads is now listed. The ones the hosting platform sets are marked as such.
+## Pass 383 - lead import test brought up to date (23 Nov 2026)
+- No app change. The lead-import test still expected a second import to be refused while an earlier import was running. Since the paused-import fix (see the paused-import entry above), a running import is not a search: a second import carries on into it, and only a running search is refused. The test now checks that behaviour, and that a useless file is still refused.
+- Checked: tests/lead-import.test.mjs passes 7 of 7. The other AutoLeads test files were run: 298 pass. The rest need packages the sandbox cannot install (stripe, googleapis, next, twilio and others), or a database for the AI key check, so they still need a run in the real repo with npm install.
+
 ## Pass 382 - assistant speaks in plain words (23 Nov 2026)
 - Fix: the Assistant's answers quoted internal names such as "biggestOpen list" and "pipeline data". The instructions now tell it to use plain words ("your pipeline", "open deals", "the deal") and never to mention internal names, files or JSON.
 - Nothing else changes: the same three kinds of change, the same Confirm step, the same limits.

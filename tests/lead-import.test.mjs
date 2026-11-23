@@ -107,10 +107,11 @@ await t('an import is queued with no map request, websites are read, leads (even
   assert.equal('candidates' in publicJob(deps.mem.job), false);
 });
 
-await t('importing the same list again finds nothing new; importing while a search is running is refused; a useless file is refused', async () => {
+await t('importing the same list again finds nothing new; a second import joins a running import; a useless file is refused', async () => {
   const deps = memoryDeps(); const ctx = makeCtx(SITE);
   await startImport(null, 'u2', { label: 'x', rows: SCRAPE }, { deps });
-  await assert.rejects(() => startImport(null, 'u2', { label: 'y', rows: SCRAPE }, { deps }), (e) => e.code === 'JOB_RUNNING');
+  // A running IMPORT is not a search: a second import carries on into it (CHANGELOG, paused-import fix), so it is not refused.
+  await startImport(null, 'u2', { label: 'y', rows: SCRAPE }, { deps });
   await runStep(null, 'u2', { ctx, deps, deadline: Date.now() + 60000 });
   const again = await startImport(null, 'u2', { label: 'x', rows: SCRAPE }, { deps });
   assert.equal(again.status, 'done');
