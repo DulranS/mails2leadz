@@ -82,8 +82,8 @@ service cloud.firestore {
       allow write: if teamWrites(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
     }
     match /users/{userId}/{coll}/{rest=**} {
-      allow read: if teamOf(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
-      allow write: if teamWrites(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts']);
+      allow read: if teamOf(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts', 'audit', 'assistantChats']);
+      allow write: if teamWrites(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts', 'audit', 'assistantChats']);
     }
 
     // Collections the signed-in user reads and writes directly from the browser.

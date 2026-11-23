@@ -1,3 +1,10 @@
+## Pass 385 - database rules: audit log and assistant chats are server-only (23 Nov 2026)
+- Fix: the team rule let team members read and write any sub-collection that was not on its exclusion list. The audit log and the assistant's saved chats were not on it, so a team member could write to them straight from the browser. Both are now excluded, like the other server-only collections.
+- Effect on the app: none for the owner. The server routes that read and write these collections use the server's own access, which the rules do not restrict. The browser does not read them directly.
+- Effect on the assistant: a team member could previously have written a fake assistant message with a proposed change. Each change still needs the owner's Confirm, and the server still checks it, but the message itself is now closed to browsers.
+- Checked: tests/rules-team.test.mjs (its pinned rule text updated), tests/gap-close-348.test.mjs and tests/server-login.test.mjs pass. Not checked against a live Firestore in the sandbox.
+- Needs deploying: firestore.rules must be deployed to the live Firebase project for this to take effect.
+
 ## Pass 384 - handover: missing settings documented (23 Nov 2026)
 - Docs only, no app change. ENV_CONFIG.md now lists the settings the code reads but the page did not: BALANCR_EVENT_SECRET, PARTNER_LINK_SECRET, PARTNER_TERMS_JSON, FINDER_DAILY_SEARCHES, FINDER_DAILY_SITES, NEXT_PUBLIC_APP_URL, GOOGLE_APPLICATION_CREDENTIALS, and the settings the hosting platform sets itself.
 - Checked: every setting the code reads is now listed. The ones the hosting platform sets are marked as such.
