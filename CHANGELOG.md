@@ -1,3 +1,8 @@
+## Pass 382 - assistant speaks in plain words (23 Nov 2026)
+- Fix: the Assistant's answers quoted internal names such as "biggestOpen list" and "pipeline data". The instructions now tell it to use plain words ("your pipeline", "open deals", "the deal") and never to mention internal names, files or JSON.
+- Nothing else changes: the same three kinds of change, the same Confirm step, the same limits.
+- Checked: the rules tests (tests/assistant.test.mjs) and the release and UI checks. Not yet re-run in the live app.
+
 ## Pass 381 - assistant proposes changes, owner confirms (23 Nov 2026)
 - New: the Assistant can carry out three kinds of change, but only after the owner confirms each one: move a deal to an open stage, set a deal's value, or add a note to a deal.
 - Each proposed change is shown as a card with Confirm and Not now. Nothing changes until Confirm. The assistant never sends email, WhatsApp or calls, never closes, wins or deletes a deal, and cannot change anything else.
