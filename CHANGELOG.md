@@ -1,3 +1,10 @@
+## Pass 368d - a paused CSV import continues instead of blocking the next one (23 Nov 2026)
+- Cause: a CSV import left its job marked "running" when the step paused (the daily website allowance, or a step that timed out). The next import was refused with "A search is still running", and the preview stayed on screen. The unread businesses from the first file were never queued.
+- Fixed: a paused import (not a search) now carries its unread businesses into the next import. Each business is queued once, and the job never takes more than the import limit (500).
+- Unchanged: a search that is still running is still refused, because a new queue would replace it. A finished import that is loaded again still says every business was already imported.
+- Tests: tests/import-resume.test.mjs (5 cases, added to npm test). The new test fails on the old code and passes on the new. Finder tests pass.
+- Not run here: a live import against Firestore, and the Next build.
+
 ## Pass 368c - build fix: new files were moved aside by the build (23 Nov 2026)
 - Cause: the prebuild cleanup (scripts/remove-retired-files.mjs) moves any source file that is not in scripts/shipped-files.txt into _stale/. The new stage-alert, stage-watch and quota modules and the two new stage routes were not in the list, so the build could not find them.
 - Fixed: they are now in the manifest (npm run manifest, 5 files added). Nothing else changed in the list, and the release-files test passes.
