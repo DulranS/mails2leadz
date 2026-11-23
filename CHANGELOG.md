@@ -1,3 +1,12 @@
+## Pass 377 - assistant: saved chats and a livelier page (23 Nov 2026)
+- New: several chats, as in Balancr. Each chat is saved automatically and titled by its first question. The newest chat opens when you visit, "+ New chat" starts another, and a chat can be deleted (its messages go with it).
+- Automatic: a chat is created by the first question, the server keeps its history (the recent turns are read back on each question, so the browser sends only the new question), and the list updates after every answer. Nothing is saved when an answer fails.
+- Storage: users/{business}/assistantChats/{chat}, with the messages in a subcollection. It is read and written only by the server, so team members see it through the same tenant check as the other deal routes.
+- Page: a chat list beside the conversation, a typing indicator while the answer is written, example questions when a chat is empty, follow-up suggestions after each answer, copy on each answer, and auto-scroll.
+- Routes: GET /api/assistant (list), GET /api/assistant?session= (one chat), POST (question, optional sessionId), DELETE (sessionId). The limits from Pass 376 apply to all of them: 60 questions an hour per business, the daily call cap, the monthly budget and the plan check.
+- Tests: tests/assistant.test.mjs (14 cases). Import check passes. The route has no unit test here (it needs Firestore).
+- Not run here: the page in a browser, and the saved chats against the live database.
+
 ## Pass 376 - AI sales assistant (23 Nov 2026)
 - New: Assistant (sidebar, Today). Ask about your own pipeline in plain words: open value, what is in each stage, the biggest open deals, the quiet ones (no activity for 14 days or more), and the last 30 days' wins and losses with reasons. The earlier part of the chat is sent with each question, so follow-ups work.
 - Read only: the assistant sends no email, moves no deal and writes no record. It answers from a snapshot of your deals, and says when the data does not answer the question.

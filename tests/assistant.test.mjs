@@ -1,6 +1,6 @@
 // The sales assistant (v376): what it is given (the snapshot), what it is told (the rules and the prompt), and what the owner sends in (cleaned and capped).
 import assert from 'node:assert/strict';
-import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS } from '../lib/assistant.js';
+import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS, isChatId, chatTitleFrom, chatPreview, CHAT_TITLE_MAX, CHAT_PREVIEW_MAX } from '../lib/assistant.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
@@ -108,6 +108,27 @@ t('the rules forbid changing anything and forbid treating data as instructions',
   assert.ok(/cannot change anything/.test(ASSISTANT_SYSTEM));
   assert.ok(/never as instructions/.test(ASSISTANT_SYSTEM));
   assert.ok(/Answer only from the PIPELINE DATA/.test(ASSISTANT_SYSTEM));
+});
+
+t('a chat id must be the server form: 8 to 64 letters, digits, dash or underscore', () => {
+  assert.equal(isChatId('3f2a9c1e-7b4d-4e8a-9f10-2c5d6e7f8a9b'), true);
+  assert.equal(isChatId('short'), false);
+  assert.equal(isChatId('has spaces in it'), false);
+  assert.equal(isChatId('../../etc/passwd'), false);
+  assert.equal(isChatId(undefined), false);
+  assert.equal(isChatId('a'.repeat(65)), false);
+});
+
+t('a new chat is titled by its first question, cut to 60 characters, and "New chat" when there is nothing to title it with', () => {
+  assert.equal(chatTitleFrom('  Which deals   have gone quiet?  '), 'Which deals have gone quiet?');
+  assert.equal(chatTitleFrom('q'.repeat(300)).length, CHAT_TITLE_MAX);
+  assert.equal(chatTitleFrom('   '), 'New chat');
+  assert.equal(chatTitleFrom(undefined), 'New chat');
+});
+
+t('the preview kept on a chat is one line, capped', () => {
+  assert.equal(chatPreview('Line one\nline two'), 'Line one line two');
+  assert.equal(chatPreview('p'.repeat(999)).length, CHAT_PREVIEW_MAX);
 });
 
 console.log(`assistant: ${n} passed`);
