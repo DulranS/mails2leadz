@@ -205,9 +205,9 @@ export default function AssistantPage() {
 
   return (
     <DashboardLayout title="Assistant" subtitle="Ask about your pipeline in plain words. It reads your deals and answers. It changes nothing.">
-      <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:h-[calc(100dvh-10rem)] md:grid-cols-[260px_minmax(0,1fr)]">
         {/* Chat list */}
-        <aside className={`${card} min-w-0 w-full p-3 flex flex-col min-h-[180px] md:min-h-[560px]`} aria-label="Your chats">
+        <aside className={`${card} min-w-0 w-full p-3 flex flex-col min-h-[180px] md:min-h-0 md:h-full`} aria-label="Your chats">
           <button
             type="button"
             onClick={newChat}
@@ -216,7 +216,7 @@ export default function AssistantPage() {
             + New chat
           </button>
 
-          <div className="mt-3 flex-1 space-y-1 overflow-y-auto max-h-[420px] md:max-h-none pr-1">
+          <div className="mt-3 flex-1 min-h-0 space-y-1 overflow-y-auto max-h-[420px] md:max-h-none pr-1">
             {listLoading && [0, 1, 2].map((i) => (
               <div key={i} className="h-12 rounded-xl bg-gray-100 dark:bg-gray-700 animate-pulse" />
             ))}
@@ -250,7 +250,7 @@ export default function AssistantPage() {
         </aside>
 
         {/* Conversation */}
-        <section className={`${card} min-w-0 w-full flex flex-col min-h-[460px] md:min-h-[560px] overflow-hidden`}>
+        <section className={`${card} min-w-0 w-full flex flex-col min-h-[460px] md:min-h-0 md:h-full overflow-hidden`}>
           <header className="flex min-w-0 items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
             <div className="min-w-0 flex items-center gap-3">
               <Avatar role="assistant" />
@@ -263,7 +263,7 @@ export default function AssistantPage() {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4" aria-live="polite">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 space-y-4" aria-live="polite">
             {chatLoading && (
               <div className="space-y-3">
                 {[0, 1].map((i) => <div key={i} className="h-14 w-2/3 rounded-2xl bg-gray-100 dark:bg-gray-700 animate-pulse" />)}

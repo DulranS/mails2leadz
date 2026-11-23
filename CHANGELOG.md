@@ -1,3 +1,8 @@
+## Pass 379 - assistant: desktop layout (23 Nov 2026)
+- Fix: on a desktop screen the chat list and the conversation were fixed at 560 px tall, which left an empty band under them and put the composer in the middle of the screen. They now fill the height under the top bar: the chat list sits beside the conversation, the messages scroll inside the conversation, and the composer stays at the bottom.
+- Phone layout is unchanged (checked at 320, 360, 390 and 430 px: no sideways scrolling).
+- Checked: rendered in Chromium with the app's Tailwind (v4) at 1916 x 942 and at phone widths. Not checked in the live app.
+
 ## Pass 378 - assistant: phone layout fix (23 Nov 2026)
 - Fix: on a phone the Assistant page was wider than the screen (the chat list previews and the composer pushed the page out). The page now stays within the screen width: single column on phones, long words break inside the answers, the composer and chat list can shrink. The placeholder is shorter so it fits on one line.
 - Checked: rendered in Chromium with the app's Tailwind (v4) and a mocked API, at 320, 360, 390 and 430 px. The v377 page measured 905 px wide on a 390 px screen; the fixed page measures exactly the screen width at every size tested.
