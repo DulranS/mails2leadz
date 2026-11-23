@@ -1,3 +1,16 @@
+## Pass 381 - assistant proposes changes, owner confirms (23 Nov 2026)
+- New: the Assistant can carry out three kinds of change, but only after the owner confirms each one: move a deal to an open stage, set a deal's value, or add a note to a deal.
+- Each proposed change is shown as a card with Confirm and Not now. Nothing changes until Confirm. The assistant never sends email, WhatsApp or calls, never closes, wins or deletes a deal, and cannot change anything else.
+- Limits: at most 5 proposed changes per answer, and only for deals already in this pipeline. A change to a closed (won or lost) deal is refused when confirmed; reopen the deal in the app first. A change that was already handled cannot be confirmed twice.
+- Each confirmed change is recorded in the audit log as "assistant.applied". The entry carries no customer email address.
+- Checked: 25 unit tests on the rules (tests/assistant.test.mjs), and 10 checks of the confirm route run in Node against an in-memory stand-in for Firestore (confirm applies, second confirm refused, closed deal refused, reject, value, note, deal gone, bad decision, empty answer). Those route checks are a sandbox harness and are not in the repo. Page parses and the UI guards pass.
+- Not checked: the live app and live Firestore, and the proposal cards in a browser.
+
+## Pass 380 - search button bottom-right on phones (23 Nov 2026)
+- Change: the round search button on phones (the screen finder) moves from the bottom-left to the bottom-right corner.
+- The Assistant's composer leaves room on phones for that button, so the Send button is never covered. Desktop is unchanged (the button is shown on phones only).
+- Checked: rendered in Chromium at 320, 390 and 430 px. The button does not overlap Send, and there is no sideways scrolling.
+
 ## Pass 379 - assistant: desktop layout (23 Nov 2026)
 - Fix: on a desktop screen the chat list and the conversation were fixed at 560 px tall, which left an empty band under them and put the composer in the middle of the screen. They now fill the height under the top bar: the chat list sits beside the conversation, the messages scroll inside the conversation, and the composer stays at the bottom.
 - Phone layout is unchanged (checked at 320, 360, 390 and 430 px: no sideways scrolling).

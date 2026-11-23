@@ -46,6 +46,29 @@ function Avatar({ role, initial }) {
   );
 }
 
+const STATUS_TEXT = { done: "Done", rejected: "Not made", failed: "Could not be made" };
+
+// One proposed change: what it does, and Confirm or Not now until the owner decides.
+function ActionCard({ a, busy, onDecide }) {
+  const tone = a.status === "done" ? "text-green-700 dark:text-green-300" : a.status === "failed" ? "text-red-700 dark:text-red-300" : "text-gray-500 dark:text-gray-400";
+  return (
+    <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-3 py-2.5 dark:border-indigo-500/40 dark:bg-indigo-500/10">
+      <p className="break-words text-sm font-medium text-gray-900 dark:text-gray-100">{a.summary}</p>
+      {a.type === "add_note" && a.text && <p className="mt-1 whitespace-pre-wrap break-words text-xs text-gray-600 dark:text-gray-300">Note: {a.text}</p>}
+      {a.status === "proposed" ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" disabled={busy} onClick={() => onDecide("confirm")} className="min-h-[40px] rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white disabled:opacity-50">Confirm</button>
+          <button type="button" disabled={busy} onClick={() => onDecide("reject")} className="min-h-[40px] rounded-lg border border-gray-300 px-3 text-sm text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">Not now</button>
+        </div>
+      ) : (
+        <p className={`mt-1 break-words text-xs font-medium ${tone}`}>
+          {STATUS_TEXT[a.status] || a.status}{a.status === "failed" && a.reason ? `: ${a.reason}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AssistantPage() {
   const { user, ready } = useAuthUser();
   const initial = String(user?.displayName || user?.email || "You").trim().charAt(0).toUpperCase() || "Y";
@@ -140,7 +163,7 @@ export default function AssistantPage() {
         setMessages((m) => [
           ...m,
           { id: `o${stamp}`, role: "owner", text: q, createdAt: stamp },
-          { id: `a${stamp}`, role: "assistant", text: j.answer || "No answer came back. Try asking again.", createdAt: stamp + 1 },
+          { id: j.messageId || `a${stamp}`, role: "assistant", text: j.answer || "No answer came back. Try asking again.", createdAt: stamp + 1, actions: Array.isArray(j.actions) ? j.actions : [], rejected: Array.isArray(j.rejected) ? j.rejected : [] },
         ]);
         if (!activeId && j.sessionId) setActiveId(j.sessionId);
         loadList();
@@ -176,6 +199,29 @@ export default function AssistantPage() {
       loadList();
     } catch {
       setError("Could not reach the server. Check your connection.");
+    }
+  };
+
+  const decide = async (messageId, actionId, decision) => {
+    if (!activeId || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/assistant", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: activeId, messageId, actionId, decision }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if ((res.ok || res.status === 409) && j.action) {
+        setMessages((ms) => ms.map((m) => (m.id !== messageId ? m : { ...m, actions: (m.actions || []).map((a) => (a.id === actionId ? j.action : a)) })));
+      } else {
+        setError(j.error || "That change could not be updated.");
+      }
+    } catch {
+      setError("Could not reach the server. Check your connection.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -304,6 +350,19 @@ export default function AssistantPage() {
                       : "rounded-bl-md border border-gray-200 bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"}`}>
                     {m.text}
                   </div>
+                  {m.role === "assistant" && Array.isArray(m.actions) && m.actions.length > 0 && (
+                    <div className="mt-2 w-full space-y-2">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Nothing changes until you confirm.</p>
+                      {m.actions.map((a) => (
+                        <ActionCard key={a.id} a={a} busy={busy} onDecide={(d) => decide(m.id, a.id, d)} />
+                      ))}
+                    </div>
+                  )}
+                  {m.role === "assistant" && Array.isArray(m.rejected) && m.rejected.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-xs text-amber-700 dark:text-amber-300">
+                      {m.rejected.map((r, i) => <li key={i} className="break-words">{r}</li>)}
+                    </ul>
+                  )}
                   {m.role === "assistant" && (
                     <button type="button" onClick={() => copy(m.id, m.text)} className="mt-1 min-h-[32px] px-2 text-xs text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-300 opacity-70 md:opacity-0 md:group-hover:opacity-100">
                       {copied === m.id ? "Copied" : "Copy"}
@@ -343,7 +402,7 @@ export default function AssistantPage() {
 
           <form
             onSubmit={(e) => { e.preventDefault(); send(input); }}
-            className="border-t border-gray-100 dark:border-gray-700 p-3 flex items-end gap-2 min-w-0"
+            className="border-t border-gray-100 dark:border-gray-700 p-3 pr-20 md:pr-3 flex items-end gap-2 min-w-0"
           >
             <label htmlFor="assistant-question" className="sr-only">Your question</label>
             <textarea

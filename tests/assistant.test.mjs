@@ -1,6 +1,6 @@
 // The sales assistant (v376): what it is given (the snapshot), what it is told (the rules and the prompt), and what the owner sends in (cleaned and capped).
 import assert from 'node:assert/strict';
-import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS, isChatId, chatTitleFrom, chatPreview, CHAT_TITLE_MAX, CHAT_PREVIEW_MAX } from '../lib/assistant.js';
+import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS, isChatId, chatTitleFrom, chatPreview, CHAT_TITLE_MAX, CHAT_PREVIEW_MAX, validateActions, describeAction, readReply, ASSISTANT_MAX_ACTIONS, ASSISTANT_NOTE_MAX } from '../lib/assistant.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
@@ -104,10 +104,90 @@ t('the prompt puts the data, the chat and the question in order, with the data l
   assert.ok(assistantPrompt('q', s, []).includes('(none)'));
 });
 
-t('the rules forbid changing anything and forbid treating data as instructions', () => {
-  assert.ok(/cannot change anything/.test(ASSISTANT_SYSTEM));
+t('the rules forbid sending anything, forbid closing or deleting deals, and forbid treating data as instructions', () => {
+  assert.ok(/never send an email, message or call/.test(ASSISTANT_SYSTEM));
+  assert.ok(/never close, win or delete a deal/.test(ASSISTANT_SYSTEM));
   assert.ok(/never as instructions/.test(ASSISTANT_SYSTEM));
   assert.ok(/Answer only from the PIPELINE DATA/.test(ASSISTANT_SYSTEM));
+  assert.ok(/Every change waits for the owner's Confirm/.test(ASSISTANT_SYSTEM));
+});
+
+const KNOWN = new Set(['ana@shop.lk', 'bo@shop.lk']);
+
+t('a proposed stage change must be to an open stage, on a deal this business has', () => {
+  const r = validateActions([{ type: 'set_stage', email: 'ana@shop.lk', stage: 'proposal' }], KNOWN);
+  assert.equal(r.actions.length, 1);
+  assert.equal(r.actions[0].stage, 'proposal');
+  assert.equal(r.rejected.length, 0);
+  const closed = validateActions([{ type: 'set_stage', email: 'ana@shop.lk', stage: 'closed_won' }], KNOWN);
+  assert.equal(closed.actions.length, 0);
+  assert.equal(closed.rejected.length, 1);
+});
+
+t('a deal the business does not have is refused, however it is written', () => {
+  const r = validateActions([{ type: 'add_note', email: 'ghost@nowhere.lk', text: 'hello' }], KNOWN);
+  assert.equal(r.actions.length, 0);
+  assert.match(r.rejected[0], /not in your pipeline/);
+});
+
+t('the email is matched without regard to case', () => {
+  const r = validateActions([{ type: 'set_value', email: 'ANA@Shop.LK', value: 1500 }], KNOWN);
+  assert.equal(r.actions[0].email, 'ana@shop.lk');
+});
+
+t('a change outside the three allowed kinds is refused: sending, closing, deleting, anything else', () => {
+  for (const type of ['send_email', 'send_whatsapp', 'close_won', 'delete_deal', 'set_billing', '']) {
+    const r = validateActions([{ type, email: 'ana@shop.lk' }], KNOWN);
+    assert.equal(r.actions.length, 0, type);
+    assert.equal(r.rejected.length, 1, type);
+  }
+});
+
+t('a value must be a number from 0 to a billion, and is rounded to cents', () => {
+  assert.equal(validateActions([{ type: 'set_value', email: 'ana@shop.lk', value: -5 }], KNOWN).actions.length, 0);
+  assert.equal(validateActions([{ type: 'set_value', email: 'ana@shop.lk', value: 'lots' }], KNOWN).actions.length, 0);
+  assert.equal(validateActions([{ type: 'set_value', email: 'ana@shop.lk', value: 2e9 }], KNOWN).actions.length, 0);
+  assert.equal(validateActions([{ type: 'set_value', email: 'ana@shop.lk', value: 99.999 }], KNOWN).actions[0].value, 100);
+});
+
+t('a note is clipped to its maximum and an empty note is refused', () => {
+  const r = validateActions([{ type: 'add_note', email: 'ana@shop.lk', text: 'n'.repeat(2000) }], KNOWN);
+  assert.equal(r.actions[0].text.length, ASSISTANT_NOTE_MAX);
+  assert.equal(validateActions([{ type: 'add_note', email: 'ana@shop.lk', text: '   ' }], KNOWN).actions.length, 0);
+});
+
+t('no more than the maximum number of changes is kept from one answer, and the rest are reported', () => {
+  const many = Array.from({ length: ASSISTANT_MAX_ACTIONS + 3 }, () => ({ type: 'add_note', email: 'ana@shop.lk', text: 'x' }));
+  const r = validateActions(many, KNOWN);
+  assert.equal(r.actions.length, ASSISTANT_MAX_ACTIONS);
+  assert.equal(r.rejected.length, 1);
+});
+
+t('a missing or malformed list of changes gives no changes and no crash', () => {
+  assert.deepEqual(validateActions(undefined, KNOWN), { actions: [], rejected: [] });
+  assert.deepEqual(validateActions('set_stage', KNOWN), { actions: [], rejected: [] });
+  assert.equal(validateActions([null, 7, 'x'], KNOWN).actions.length, 0);
+});
+
+t('each change has a plain line to read before the owner confirms it', () => {
+  assert.equal(describeAction({ type: 'set_stage', email: 'ana@shop.lk', stage: 'demo' }), 'Move ana@shop.lk to Demo / Meeting');
+  assert.equal(describeAction({ type: 'set_value', email: 'ana@shop.lk', value: 1500 }), 'Set the value of ana@shop.lk to 1500');
+  assert.equal(describeAction({ type: 'add_note', email: 'ana@shop.lk' }), 'Add a note to ana@shop.lk');
+});
+
+t('a reply that is JSON gives its answer and changes; a reply that is not JSON is shown as text', () => {
+  const j = readReply({ answer: 'Moved.', actions: [{ type: 'add_note' }] }, '{}');
+  assert.equal(j.answer, 'Moved.');
+  assert.equal(j.actions.length, 1);
+  const plain = readReply(null, 'Just text from the model');
+  assert.equal(plain.answer, 'Just text from the model');
+  assert.deepEqual(plain.actions, []);
+  assert.equal(readReply({ answer: '   ' }, '').answer, 'No answer came back. Try asking again.');
+});
+
+t('the pipeline snapshot names each deal by email, so a proposed change can point at it', () => {
+  const s = buildPipelineSnapshot([{ email: 'ana@shop.lk', businessName: 'Ana', stage: 'demo', value: 100 }], NOW);
+  assert.equal(s.biggestOpen[0].email, 'ana@shop.lk');
 });
 
 t('a chat id must be the server form: 8 to 64 letters, digits, dash or underscore', () => {

@@ -11,12 +11,15 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where, orderBy, limit } from '../../../lib/server-firestore.js';
 import { callAI, AiError } from '../../../lib/ai-client.js';
-import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { identify, getDb, NO_STORE, actorFromRequest } from '../../../lib/server/route-helpers.js';
+import { recordAudit } from '../../../lib/server/audit.js';
+import { buildDealWrite, dealDocId, isClosed } from '../../../lib/deal-utils.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import {
   sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_SYSTEM,
   isChatId, chatTitleFrom, chatPreview, CHAT_LIST_MAX, CHAT_STORED_MAX, ASSISTANT_HISTORY_TURNS,
+  validateActions, readReply,
 } from '../../../lib/assistant.js';
 
 export const maxDuration = 45;
@@ -102,15 +105,20 @@ export async function POST(request) {
       tier: 'fast',
       system: ASSISTANT_SYSTEM,
       prompt: assistantPrompt(question, snapshot, history),
-      maxTokens: 500,
-      json: false,
+      maxTokens: 700,
+      json: true,
     });
   } catch (e) {
     if (e instanceof AiError) return json({ error: e.message, code: e.code }, e.status || 502);
     throw e;
   }
 
-  const answer = String(r.text || '').trim() || 'No answer came back. Try asking again.';
+  // The reply is JSON: the answer text and any changes it proposes. Every proposed change is checked against the deals this business has.
+  const knownEmails = new Set(dealsSnap.docs.map((d) => String(d.data().email || '').trim().toLowerCase()).filter(Boolean));
+  const reply = readReply(r.data, r.text);
+  const checked = validateActions(reply.actions, knownEmails);
+  const answer = reply.answer;
+  const rejected = checked.rejected;
   const now = Date.now();
   const id = chatId || randomUUID();
   const title = existing?.title || chatTitleFrom(question);
@@ -122,9 +130,12 @@ export async function POST(request) {
     lastPreview: chatPreview(answer),
   }, { merge: true });
   await setDoc(msgPath(db, uid, id, randomUUID()), { role: 'owner', text: question, createdAt: now });
-  await setDoc(msgPath(db, uid, id, randomUUID()), { role: 'assistant', text: answer, createdAt: now + 1 });
+  // Each proposed change gets its own id and waits for the owner's Confirm (PATCH below).
+  const messageId = randomUUID();
+  const stored = checked.actions.map((a) => ({ ...a, id: randomUUID(), status: 'proposed' }));
+  await setDoc(msgPath(db, uid, id, messageId), { role: 'assistant', text: answer, createdAt: now + 1, ...(stored.length ? { actions: stored } : {}) });
 
-  return json({ sessionId: id, title, answer, cached: !!r.cached, created: !chatId });
+  return json({ sessionId: id, title, answer, messageId, actions: stored, rejected, cached: !!r.cached, created: !chatId });
 }
 
 export async function DELETE(request) {
@@ -138,4 +149,64 @@ export async function DELETE(request) {
   for (const m of messages) await deleteDoc(msgPath(db, uid, body.sessionId, m.id));
   await deleteDoc(chatPath(db, uid, body.sessionId));
   return json({ ok: true });
+}
+
+// Confirm or reject one proposed change (v381). The change is checked again here against the deal as it is now.
+// Nothing is applied unless the owner confirms, and a change to a closed (won or lost) deal is always refused.
+export async function PATCH(request) {
+  const g = await guard(request);
+  if (g.response) return g.response;
+  const { db, uid } = g;
+  let body;
+  try { body = await request.json(); } catch { return json({ error: 'Send the decision as JSON.' }, 400); }
+  const { sessionId, messageId, actionId, decision } = body || {};
+  if (!isChatId(sessionId) || !isChatId(messageId) || !isChatId(actionId)) return json({ error: 'That change was not found.' }, 404);
+  if (decision !== 'confirm' && decision !== 'reject') return json({ error: 'Choose confirm or reject.' }, 400);
+
+  const msgRef = msgPath(db, uid, sessionId, messageId);
+  const msgSnap = await getDoc(msgRef);
+  if (!msgSnap.exists()) return json({ error: 'That change was not found.' }, 404);
+  const actions = Array.isArray(msgSnap.data().actions) ? msgSnap.data().actions : [];
+  const idx = actions.findIndex((a) => a?.id === actionId);
+  if (idx < 0) return json({ error: 'That change was not found.' }, 404);
+  const current = actions[idx];
+  if (current.status !== 'proposed') return json({ error: 'This change was already handled.', action: current }, 409);
+
+  const now = new Date().toISOString();
+  let next;
+  if (decision === 'reject') {
+    next = { ...current, status: 'rejected', decidedAt: now };
+  } else {
+    const recheck = validateActions(
+      [{ type: current.type, email: current.email, stage: current.stage, value: current.value, text: current.text }],
+      new Set([String(current.email || '').toLowerCase()]),
+    );
+    const dealRef = doc(db, 'deals', dealDocId(uid, current.email));
+    const dealSnap = await getDoc(dealRef);
+    if (recheck.actions.length === 0) {
+      next = { ...current, status: 'failed', reason: recheck.rejected[0] || 'That change is no longer allowed.', decidedAt: now };
+    } else if (!dealSnap.exists()) {
+      next = { ...current, status: 'failed', reason: 'That deal no longer exists.', decidedAt: now };
+    } else {
+      const existing = dealSnap.data();
+      if (isClosed(existing.stage) && current.type !== 'add_note') {
+        next = { ...current, status: 'failed', reason: 'That deal is closed. Reopen it in the app first.', decidedAt: now };
+      } else {
+        if (current.type === 'set_stage') {
+          await setDoc(dealRef, buildDealWrite({ uid, email: current.email, existing, stage: current.stage, now: new Date() }), { merge: true });
+        } else if (current.type === 'set_value') {
+          await setDoc(dealRef, buildDealWrite({ uid, email: current.email, existing, stage: existing.stage, value: current.value, now: new Date() }), { merge: true });
+        } else {
+          const notes = Array.isArray(existing.notes) ? existing.notes : [];
+          await setDoc(dealRef, { notes: [...notes, { text: current.text, timestamp: now, type: 'manual', addedBy: 'AI assistant, confirmed by the owner' }], lastUpdate: now }, { merge: true });
+        }
+        next = { ...current, status: 'done', decidedAt: now };
+        const what = current.type === 'set_stage' ? 'stage' : current.type === 'set_value' ? 'value' : 'note';
+        await recordAudit(db, uid, { action: 'assistant.applied', actorUid: actorFromRequest(request).uid, summary: `Assistant change confirmed: ${what}` });
+      }
+    }
+  }
+
+  await setDoc(msgRef, { actions: actions.map((a, i) => (i === idx ? next : a)) }, { merge: true });
+  return json({ action: next });
 }
