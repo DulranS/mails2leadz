@@ -1,3 +1,8 @@
+## Pass 378 - assistant: phone layout fix (23 Nov 2026)
+- Fix: on a phone the Assistant page was wider than the screen (the chat list previews and the composer pushed the page out). The page now stays within the screen width: single column on phones, long words break inside the answers, the composer and chat list can shrink. The placeholder is shorter so it fits on one line.
+- Checked: rendered in Chromium with the app's Tailwind (v4) and a mocked API, at 320, 360, 390 and 430 px. The v377 page measured 905 px wide on a 390 px screen; the fixed page measures exactly the screen width at every size tested.
+- Not checked: the real app at those widths (the sandbox has no live database or the full app).
+
 ## Pass 377 - assistant: saved chats and a livelier page (23 Nov 2026)
 - New: several chats, as in Balancr. Each chat is saved automatically and titled by its first question. The newest chat opens when you visit, "+ New chat" starts another, and a chat can be deleted (its messages go with it).
 - Automatic: a chat is created by the first question, the server keeps its history (the recent turns are read back on each question, so the browser sends only the new question), and the list updates after every answer. Nothing is saved when an answer fails.

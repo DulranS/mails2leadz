@@ -205,9 +205,9 @@ export default function AssistantPage() {
 
   return (
     <DashboardLayout title="Assistant" subtitle="Ask about your pipeline in plain words. It reads your deals and answers. It changes nothing.">
-      <div className="grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[260px_minmax(0,1fr)]">
         {/* Chat list */}
-        <aside className={`${card} p-3 flex flex-col min-h-[180px] md:min-h-[560px]`} aria-label="Your chats">
+        <aside className={`${card} min-w-0 w-full p-3 flex flex-col min-h-[180px] md:min-h-[560px]`} aria-label="Your chats">
           <button
             type="button"
             onClick={newChat}
@@ -229,7 +229,7 @@ export default function AssistantPage() {
               const active = c.id === activeId;
               return (
                 <div key={c.id} className={`group relative rounded-xl transition ${active ? "bg-indigo-50 dark:bg-indigo-500/15 ring-1 ring-indigo-300 dark:ring-indigo-500/40" : "hover:bg-gray-50 dark:hover:bg-gray-700/60"}`}>
-                  <button type="button" onClick={() => openChat(c.id)} className="block w-full min-h-[44px] px-3 py-2 pr-9 text-left">
+                  <button type="button" onClick={() => openChat(c.id)} className="block w-full min-w-0 min-h-[44px] px-3 py-2 pr-9 text-left">
                     <span className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100">{c.title || "New chat"}</span>
                     <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
                       {c.lastPreview ? c.lastPreview : "No answer yet"} · {timeAgo(c.updatedAt)}
@@ -250,12 +250,12 @@ export default function AssistantPage() {
         </aside>
 
         {/* Conversation */}
-        <section className={`${card} flex flex-col min-h-[460px] md:min-h-[560px] overflow-hidden`}>
-          <header className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
+        <section className={`${card} min-w-0 w-full flex flex-col min-h-[460px] md:min-h-[560px] overflow-hidden`}>
+          <header className="flex min-w-0 items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700 px-4 py-3">
             <div className="min-w-0 flex items-center gap-3">
               <Avatar role="assistant" />
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{activeTitle}</h2>
+                <h2 className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{activeTitle}</h2>
                 <p className="truncate text-xs text-gray-500 dark:text-gray-400">
                   {busy ? "Looking at your deals..." : "Reads your deals as they are now"}
                 </p>
@@ -298,7 +298,7 @@ export default function AssistantPage() {
               <div key={m.id} className={`flex gap-3 ${m.role === "owner" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && <Avatar role="assistant" />}
                 <div className={`group max-w-[85%] sm:max-w-[75%] ${m.role === "owner" ? "items-end" : "items-start"} flex flex-col`}>
-                  <div className={`whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+                  <div className={`whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
                     m.role === "owner"
                       ? "rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
                       : "rounded-bl-md border border-gray-200 bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"}`}>
@@ -343,7 +343,7 @@ export default function AssistantPage() {
 
           <form
             onSubmit={(e) => { e.preventDefault(); send(input); }}
-            className="border-t border-gray-100 dark:border-gray-700 p-3 flex items-end gap-2"
+            className="border-t border-gray-100 dark:border-gray-700 p-3 flex items-end gap-2 min-w-0"
           >
             <label htmlFor="assistant-question" className="sr-only">Your question</label>
             <textarea
@@ -357,8 +357,8 @@ export default function AssistantPage() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
               }}
-              placeholder="Ask about your deals, value or follow-ups..."
-              className="max-h-32 min-h-[44px] flex-1 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:ring-indigo-500/30"
+              placeholder="Ask about your deals..."
+              className="max-h-32 min-h-[44px] w-full min-w-0 flex-1 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:ring-indigo-500/30"
             />
             <button
               type="submit"
