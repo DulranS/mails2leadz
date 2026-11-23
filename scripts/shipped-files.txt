@@ -74,6 +74,7 @@ app/api/deal-watch/route.js
 app/api/deals/assign/route.js
 app/api/deals/assignees/route.js
 app/api/deals/auto-assign/route.js
+app/api/deals/merge/route.js
 app/api/deals/owner-settings/route.js
 app/api/deals/route.js
 app/api/deals/stage-alert/route.js
@@ -518,6 +519,7 @@ lib/lead-finder-categories.js
 lib/lead-finder.js
 lib/lead-import.js
 lib/lead-inbox.js
+lib/lead-merge.js
 lib/lead-name.js
 lib/lead-scoring-engine.js
 lib/lifecycle.js

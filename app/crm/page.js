@@ -121,11 +121,19 @@ export default function CRMPage() {
         getInvoices(db, user.uid).catch(() => ({ docs: [] })),
       ]);
 
+      // A merged-away email (mergedFrom on the kept deal) shows its outreach under the lead it was merged into.
+      const aliasOf = new Map();
+      dealsSnap.docs.forEach((d) => {
+        const kept = norm(d.data().email);
+        (Array.isArray(d.data().mergedFrom) ? d.data().mergedFrom : []).forEach((m) => { if (norm(m) && kept) aliasOf.set(norm(m), kept); });
+      });
+
       // ONE row per lead (several emails to the same person used to show as duplicate rows).
       const byEmail = new Map();
       sentSnap.docs.forEach((d) => {
         const x = d.data();
-        const email = norm(x.to || x.recipientEmail);
+        const rawEmail = norm(x.to || x.recipientEmail);
+        const email = aliasOf.get(rawEmail) || rawEmail;
         if (!email) return;
         const sentAt = toIso(x.sentAt) || toIso(x.createdAt);
         const prev = byEmail.get(email);
@@ -421,6 +429,30 @@ export default function CRMPage() {
     }
   };
 
+  // Merge a duplicate lead into the one the owner keeps. The route combines the two deals and keeps the duplicate's history visible.
+  const handleMergeLead = async (dropEmail, keepEmail) => {
+    if (!user?.uid) return false;
+    const drop = norm(dropEmail);
+    const keep = norm(keepEmail);
+    if (!drop || !keep || drop === keep) return false;
+    if (!window.confirm(`Merge ${drop} into ${keep}? The two leads become one. This cannot be undone from the app.`)) return false;
+    try {
+      const res = await fetch("/api/deals/merge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keepEmail: keep, dropEmail: drop }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body.ok) {
+        addNotification(body.error || "Could not merge those leads", "error");
+        return false;
+      }
+      addNotification("Leads merged", "success");
+      await loadCRMData();
+      return true;
+    } catch (error) {
+      console.error("Error merging leads:", error);
+      addNotification("Could not merge those leads", "error");
+      return false;
+    }
+  };
+
   // Add a lead that did not come from cold email (referral, inbound, walk-in...).
   const handleAddLead = async ({ email, businessName, stage, value, source, country }) => {
     if (!user?.uid || !db) return false;
@@ -497,6 +529,7 @@ export default function CRMPage() {
         team={data.team}
         defaultDealValue={data.defaultDealValue}
         onUpdateLead={handleUpdateLead}
+        onMergeLead={handleMergeLead}
         onAddNote={handleAddNote}
         onScheduleFollowUp={handleScheduleFollowUp}
         onAddLead={handleAddLead}

@@ -9,7 +9,8 @@ import { stageLabel } from "../../lib/work-mode.js";
 import { useWorkMode } from "./useWorkMode";
 import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
 import { NO_NAME_LABEL } from "../../lib/lead-name.js";
-import { QUAL_FIELDS, qualificationSummary } from "../../lib/deal-extras.js";
+import { QUAL_FIELDS, qualificationSummary, COMMITTEE_ROLES, COMMITTEE_MAX, committeeGaps } from "../../lib/deal-extras.js";
+import { findDuplicatesOf } from "../../lib/lead-merge.js";
 import DraftModal from "./DraftModal";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
@@ -38,6 +39,7 @@ export const CRM = ({
   team = [],
   defaultDealValue = 1000,
   onUpdateLead,
+  onMergeLead,
   onAddNote,
   onScheduleFollowUp,
   onAddLead,
@@ -530,6 +532,83 @@ export const CRM = ({
                     ))}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Four quick answers show which deals deserve your time. They do not change your forecast.</p>
+                </div>
+              );
+            })()}
+
+            {/* Possible duplicates: the same phone, website or business name under another email. Merging keeps one lead. */}
+            {(() => {
+              const dups = findDuplicatesOf(selectedLead, leads);
+              if (!dups.length) return null;
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Possible duplicates</label>
+                  <ul className="space-y-2">
+                    {dups.map(({ lead, reasons }) => (
+                      <li key={lead.email} className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <span className="min-w-0 break-all">
+                          {lead.email} <span className="text-xs text-gray-500 dark:text-gray-400">({reasons.join(", ")})</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onMergeLead?.(lead.email, selectedLead.email)}
+                          className="px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 min-h-[36px]"
+                        >
+                          Merge into this lead
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
+
+            {/* Buying committee: who else decides. A B2B deal needs a champion and an economic buyer. */}
+            {(() => {
+              const q = qualificationSummary(selectedLead.qualification);
+              const committee = q.answers.committee || [];
+              const gaps = committeeGaps(committee);
+              const save = (next) => onUpdateLead?.(selectedLead.email, { qualification: { ...q.answers, committee: next } });
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Buying committee</label>
+                    <span className={`text-xs ${gaps.length ? "text-amber-700 dark:text-amber-300" : "text-gray-600 dark:text-gray-300"}`}>
+                      {gaps.length ? `Still to map: ${gaps.join(", ")}` : "Champion and economic buyer mapped"}
+                    </span>
+                  </div>
+                  {committee.map((m, i) => (
+                    <div key={i} className="flex flex-wrap gap-2 mb-2">
+                      <input
+                        value={m.name}
+                        onChange={(e) => save(committee.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                        placeholder="Name"
+                        aria-label="Committee member name"
+                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      />
+                      <select
+                        value={m.role}
+                        onChange={(e) => save(committee.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))}
+                        aria-label="Committee member role"
+                        className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      >
+                        {COMMITTEE_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => save(committee.filter((_, j) => j !== i))}
+                        className="px-3 py-2 text-sm text-red-700 dark:text-red-300"
+                        aria-label="Remove committee member"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {committee.length < COMMITTEE_MAX && (
+                    <button type="button" onClick={() => save([...committee, { name: "", role: "other" }])} className="text-sm text-blue-700 dark:text-blue-300 underline">
+                      + Add a person
+                    </button>
+                  )}
                 </div>
               );
             })()}

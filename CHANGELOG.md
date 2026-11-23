@@ -1,3 +1,17 @@
+## Pass 368g - merge duplicate leads (23 Nov 2026)
+- New: "Possible duplicates" on a lead. A lead is a possible duplicate when another email has the same phone, the same website, or the same business name (ignoring case and punctuation). "Merge into this lead" combines the two.
+- Merge: the kept lead takes the further-along stage (a win wins), the owner's value (or the duplicate's if blank), joined notes and tags, the owner's qualification answers (blanks filled from the duplicate), and a joined committee. The duplicate's deal record is deleted, and its email is kept in mergedFrom so its outreach history shows under the kept lead.
+- Route: POST /api/deals/merge (same auth and tenant guard as the other deal routes).
+- Limits: the merged-away email's other records (tasks, invoices, timeline entries) stay keyed to that email. They are not moved.
+- Tests: tests/lead-merge.test.mjs (11 cases, added to npm test).
+- Not run here: the merge in a browser, and the Next build.
+
+## Pass 368f - stage aging per stage, and the buying committee (23 Nov 2026)
+- Stage aging: a deal is now flagged when it sits too long in its own stage (new and contacted 7 days, qualified, demo and proposal 14 days, negotiation 21 days). It was one 14-day rule for every stage. The existing "no movement" check is unchanged.
+- Buying committee: each deal's qualification now holds a list of people with a role (champion, economic buyer, legal or procurement, other), up to 8. The deal card shows which of champion and economic buyer are still unmapped. Blank rows are kept until you fill them in.
+- Tests: tests/stage-aging-committee.test.mjs (10 cases, added to npm test). Existing tests for these modules pass (customers, deal-stage, business-metrics, feedback, recurring, work-mode).
+- Not run here: the CRM card in a browser, and the Next build. Test: open a deal in Proposal for 15 days (flagged), add a committee person, reload.
+
 ## Pass 368e - the Multi-Channel list keeps a CSV or Lead Inbox list (23 Nov 2026)
 - Cause: a timer 10 seconds after sign-in loads the saved contacts from the database and replaces the contact list. A list loaded from the Lead Inbox or a CSV right after the page opens was replaced when the timer fired. The second time, the timer had already run, so the list stayed.
 - Fixed: once a CSV or Lead Inbox list is on screen, the timed database load leaves it alone.
