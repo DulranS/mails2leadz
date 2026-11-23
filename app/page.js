@@ -10,7 +10,7 @@ const STEPS = [
 ];
 
 const GROUPS = [
-  { title: 'Find and reach', points: ['Weekly lead searches on Google Places', 'Forms, ads, storefront, inbox and missed calls in one place', 'Journeys you send one step at a time', 'Events with RSVPs, waiting lists and reminders', 'Birthdays, for people who agreed to hear from you'] },
+  { title: 'Find and reach', points: ['Weekly lead searches on Google Places, with your own Places key, and daily searches of free open map data', 'Forms, ads, storefront, inbox and missed calls in one place', 'Journeys you send one step at a time', 'Events with RSVPs, waiting lists and reminders', 'Birthdays, for people who agreed to hear from you'] },
   { title: 'Sell and follow up', points: ['Pipeline, stages and a quarter forecast', 'A battle card before each call, built from your catalogue', 'Deals and customers at risk, with early warnings', 'Proposals, quotes and electronic signature', 'Packages, a pricing check and a walk-away minimum', 'Booking no-shows flagged to rebook'] },
   { title: 'Buy and resell', points: ['UK company checks and undervalued eBay listings', 'Sold-price comparables and resale margins', 'Sale readiness for your own business', 'A price watch on the listing feeds you choose, flagging undervalued new listings'] },
   { title: 'Support, stock and grow', points: ['One support queue with two-hour targets and a reliability score', 'A catalogue of products, services, packages and offers, with stock and end dates', 'Waiting lists for sold-out items and full events', 'Your own Facebook Page and Instagram, published only when you approve', 'Balancr: the operations app, sharing leads, deal stages and invoice payments'] },

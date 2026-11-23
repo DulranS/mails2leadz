@@ -1,3 +1,6 @@
+## Pass 386 - landing page: lead search claim made accurate (23 Nov 2026)
+- Fix: the landing page said weekly lead searches run on Google Places. They do, but only when the owner connects their own Google Places key. The line now says so, and mentions the free daily map search (OpenStreetMap).
+- Checked: the other feature claims on the landing page were matched against code (battle cards, forecast, e-signature, walk-away minimum, UK company checks, eBay price watch, waiting lists, support targets, Instagram/Facebook publishing, Stripe Connect), and the pipeline stage names match. Balancr's landing page prices and trial length come from one shared file, so they match. Balancr's landing page makes no pipeline claims.
 ## Pass 385 - database rules: audit log and assistant chats are server-only (23 Nov 2026)
 - Fix: the team rule let team members read and write any sub-collection that was not on its exclusion list. The audit log and the assistant's saved chats were not on it, so a team member could write to them straight from the browser. Both are now excluded, like the other server-only collections.
 - Effect on the app: none for the owner. The server routes that read and write these collections use the server's own access, which the rules do not restrict. The browser does not read them directly.
