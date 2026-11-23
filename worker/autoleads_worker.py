@@ -802,7 +802,34 @@ def detect_tech_stack(html_lower: str, generator: str = "") -> Set[str]:
 # SCORING
 # ----------------------------------------------------------------------------
 
-def calculate_lead_score(row: Dict[str, Any]) -> int:
+# Diaspora priority (Pass 387). A business abroad with a Sri Lankan marker is the most likely to become a deal, so it gets extra
+# points. A business in Sri Lanka is not diaspora, whatever its name. Same rule as lib/lead-finder.js (isDiasporaLead).
+DIASPORA_BOOST = 12
+SRI_LANKA_PLACE = re.compile(r"\b(sri lanka|colombo|kandy|galle|jaffna|negombo|kurunegala|matara|trincomalee|batticaloa|anuradhapura|ratnapura|nuwara eliya|gampaha|kalutara|moratuwa|dehiwala|mount lavinia|puttalam|vavuniya|ampara|badulla|kegalle)\b", re.I)
+SRI_LANKAN_MARKER = re.compile(r"\b(sri lanka|sri lankan|lanka|ceylon|sinhala|sinhalese|colombo|kandy|jaffna|galle|negombo)\b", re.I)
+
+
+def is_diaspora_lead(row: Dict[str, Any]) -> bool:
+    """True for a lead with a Sri Lankan marker that is not in Sri Lanka (its address or a .lk website says so)."""
+    import urllib.parse as _up
+    website = clean_text(row.get("website"))
+    host = ""
+    if website:
+        try:
+            host = (_up.urlparse(website if "://" in website else "https://" + website).hostname or "").lower()
+        except ValueError:
+            host = ""
+        host = host[4:] if host.startswith("www.") else host
+    if host.endswith(".lk"):
+        return False
+    address = clean_text(row.get("address"))
+    if SRI_LANKA_PLACE.search(address):
+        return False
+    text = " ".join([clean_text(row.get(k)) for k in ("business_name", "category", "search_query", "address")] + [host])
+    return bool(SRI_LANKAN_MARKER.search(text))
+
+
+def calculate_lead_score(row: Dict[str, Any], diaspora: bool = False) -> int:
     score = 0.0
     email = clean_text(row.get("email_primary"))
     phone = clean_text(row.get("phone_primary"))
@@ -824,6 +851,8 @@ def calculate_lead_score(row: Dict[str, Any]) -> int:
         score += 5
     if sum(bool(x) for x in (email, phone, company_li, dm, contact)) >= 4:
         score += 3
+    if diaspora:
+        score += DIASPORA_BOOST
     return min(100, int(round(score)))
 
 
@@ -1409,7 +1438,7 @@ def initial_row_defaults(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def finalise_scores(out: Dict[str, Any]) -> None:
-    out["lead_quality_score"] = str(calculate_lead_score(out))
+    out["lead_quality_score"] = str(calculate_lead_score(out, diaspora=is_diaspora_lead(out)))
     out["contact_confidence"] = calculate_confidence(out)
     out["best_contact_method"] = best_contact(out)
 

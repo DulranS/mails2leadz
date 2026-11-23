@@ -84,7 +84,6 @@ const Nav = React.memo(function Nav({ open, onToggle }) {
   const pathname = usePathname();
   const main = NAV_ITEMS.filter((i) => i.group !== 'More');
   const more = NAV_ITEMS.filter((i) => i.group === 'More');
-  const moreHasCurrent = more.some((i) => i.href === pathname);
   return (
     <Sidebar isOpen={open} onToggle={onToggle}>
       {main.map((item, i) => (
@@ -96,7 +95,7 @@ const Nav = React.memo(function Nav({ open, onToggle }) {
         </div>
       ))}
       {more.length > 0 && (
-        <details open={moreHasCurrent} className="mt-6 px-2">
+        <details open className="mt-6 px-2">
           <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 min-h-[44px] flex items-center hover:text-gray-700 dark:hover:text-gray-300 transition-colors">More</summary>
           <div className="mt-1">
             {more.map((item) => (
