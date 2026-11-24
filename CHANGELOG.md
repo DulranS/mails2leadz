@@ -1,3 +1,8 @@
+## Pass 393 - Account page no longer tells people to run the Python worker (24 Nov 2026)
+- Fix: the Lead inbox connection on the Account page said the autopilot is a script on your computer and gave a python autoleads_worker.py setup command. Both are replaced: the server runs the lead finder and queued searches, and the key is only for another tool that sends leads to the inbox. The page shows the ingest address and the Bearer header.
+- Fix: the Big search header comment no longer mentions the worker. Comments only, no behaviour change.
+- Checked: the suite passes 306 of 320 files; the 14 that fail need packages missing from the sandbox. release-files passes 5 of 5. The two edited files parse.
+
 ## Pass 392 - the last Python-parity gaps closed (24 Nov 2026)
 - New: a search asks the map at most 80 times, as the Python worker did. When the budget runs out the search is marked partial and the next search of the same thing resumes where it stopped (lib/server/lead-finder-io.js, MAP_REQUESTS_PER_SEARCH).
 - New: the nightly daily run sends the owner's webhook message when a nightly search adds leads or does not finish (sendNightlyNotice in lib/server/lead-finder-job.js, nightlyNoticeText in lib/server/notify-owner.js). Nothing is sent when no address is set or nothing was added.

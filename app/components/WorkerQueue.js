@@ -1,6 +1,6 @@
 "use client";
-// "Big search": queue a big, slow search from the app; AutoLeads runs it on its servers and the leads land in the Lead Inbox
-// (python autoleads_worker.py pull), runs it, and delivers the leads to this inbox. Nothing is ever sent from here.
+// "Big search": queue a big, slow search from the app. The server runs it itself (lib/server/worker-queue-runner.js) and the leads
+// land in the Lead Inbox. Nothing is ever sent from here.
 import React, { useCallback, useEffect, useState } from "react";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";

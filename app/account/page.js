@@ -819,7 +819,7 @@ export default function AccountPage() {
 
         <section className={card}>
           <h2 className="font-semibold text-gray-900 dark:text-white">Lead inbox connection <span className="text-xs font-normal text-gray-500">· for the lead autopilot</span></h2>
-          <p className="text-xs text-gray-500 mt-1">The autopilot is a script on your computer that finds and checks new businesses on a schedule. This key lets it drop them in your Lead Inbox. It can only add leads to your inbox: it cannot read your data or send anything.</p>
+          <p className="text-xs text-gray-500 mt-1">AutoLeads runs the lead finder and your queued searches on its own servers, so you do not need a script on your computer. Use this key only if another tool should drop leads into your Lead Inbox. The key can only add leads: it cannot read your data or send anything.</p>
           {!inboxKey.adminMode && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">The server is not connected to the database with a service account yet (FIREBASE_SERVICE_ACCOUNT_JSON), so the inbox connection is switched off.</p>}
           {inboxKey.error && <p role="alert" className="text-xs text-red-600 dark:text-red-300 mt-2">{inboxKey.error}</p>}
           {inboxKey.fresh && (
@@ -827,9 +827,9 @@ export default function AccountPage() {
               <p className="text-xs text-green-900 dark:text-green-200">Copy this key now. It is shown once.</p>
               <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{inboxKey.fresh}</code>
               <button type="button" onClick={() => navigator.clipboard?.writeText(inboxKey.fresh)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy key</button>
-              <p className="text-xs text-green-900 dark:text-green-200 mt-3">Easiest way to connect the worker: paste this in a terminal inside the worker folder, then answer the questions.</p>
-              <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{`python autoleads_worker.py setup --app-url ${typeof window !== "undefined" ? window.location.origin : ""} --ingest-key ${inboxKey.fresh}`}</code>
-              <button type="button" onClick={() => navigator.clipboard?.writeText(`python autoleads_worker.py setup --app-url ${window.location.origin} --ingest-key ${inboxKey.fresh}`)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy setup command</button>
+              <p className="text-xs text-green-900 dark:text-green-200 mt-3">For the other tool, send each lead to this address with the key as a Bearer token:</p>
+              <code className="block mt-1 break-all text-xs text-gray-900 dark:text-white select-all">{`POST ${typeof window !== "undefined" ? window.location.origin : ""}/api/lead-inbox/ingest   Authorization: Bearer <key>`}</code>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(`Authorization: Bearer ${inboxKey.fresh}`)} className="mt-2 min-h-[44px] px-4 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200">Copy authorization header</button>
             </div>
           )}
           <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:items-center">
