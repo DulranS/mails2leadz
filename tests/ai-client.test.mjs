@@ -23,7 +23,17 @@ await t('no key -> clear 503, not a crash', async () => {
   delete process.env.OPENAI_API_KEY; delete process.env.ANTHROPIC_API_KEY; delete process.env.CLAUDE_API_KEY;
   await assert.rejects(callAI({ uid: 'u', feature: 'x', system: 's', prompt: 'p' }), (e) => e instanceof AiError && e.code === 'AI_NOT_CONFIGURED' && e.status === 503);
 });
-await t('daily cap blocks BEFORE spending money; identical request is served from cache', async () => {
+await t('no database -> no keys at all, even when provider keys sit in the environment (deliberate)', async () => {
+  process.env.OPENAI_API_KEY = 'k-env-should-not-be-used';
+  await assert.rejects(callAI({ uid: 'u2', feature: 'x', system: 's', prompt: 'p' }), (e) => e.code === 'AI_NOT_CONFIGURED');
+  delete process.env.OPENAI_API_KEY;
+});
+// The tests below need a live database: keys, the daily cap and the monthly usage all live there. They run only when
+// AUTOLEADS_LIVE_DB_TEST=1 is set against a test project; otherwise they are reported as skipped, not passed.
+const LIVE = process.env.AUTOLEADS_LIVE_DB_TEST === '1';
+if (!LIVE) console.log('  skipped - callAI behaviour tests (cap, provider calls, fallback, model names): need a live database, set AUTOLEADS_LIVE_DB_TEST=1');
+const liveT = (name, fn) => (LIVE ? t(name, fn) : Promise.resolve());
+await liveT('daily cap blocks BEFORE spending money; identical request is served from cache', async () => {
   process.env.OPENAI_API_KEY = 'k'; process.env.AI_DAILY_CALL_LIMIT = '2';
   let calls = 0;
   globalThis.fetch = async () => { calls++; return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '{"ok":true}' } }], usage: { prompt_tokens: 100, completion_tokens: 50 } }) }; };
@@ -48,7 +58,7 @@ await t('DeepSeek is the default provider when its key is set; others become bac
   assert.equal(aiConfig().provider, 'openai');
   delete process.env.AI_PROVIDER; delete process.env.OPENAI_API_KEY;
 });
-await t('DeepSeek call: thinking off, JSON mode on, cached input billed at the cache price', async () => {
+await liveT('DeepSeek call: thinking off, JSON mode on, cached input billed at the cache price', async () => {
   for (const k of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
   process.env.DEEPSEEK_API_KEY = 'd'; process.env.AI_DAILY_CALL_LIMIT = '50';
   let sent;
@@ -61,7 +71,7 @@ await t('DeepSeek call: thinking off, JSON mode on, cached input billed at the c
   // 200 miss * 0.3 + 800 hit * 0.006 + 100 out * 1.2 = 60 + 4.8 + 120 = 184.8 per 1M
   assert.ok(Math.abs(r.costUsd - 184.8 / 1e6) < 1e-9, String(r.costUsd));
 });
-await t('falls back to the next provider when the first one is down', async () => {
+await liveT('falls back to the next provider when the first one is down', async () => {
   for (const k of ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
   process.env.DEEPSEEK_API_KEY = 'd'; process.env.OPENAI_API_KEY = 'o';
   const hosts = [];
@@ -75,7 +85,7 @@ await t('falls back to the next provider when the first one is down', async () =
   assert.equal(r.model, 'gpt-4o-mini');
   assert.equal(r.data.ok, 2);
 });
-await t('retries once without "thinking" if the model rejects the field', async () => {
+await liveT('retries once without "thinking" if the model rejects the field', async () => {
   for (const k of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY', 'AI_PROVIDER']) delete process.env[k];
   process.env.DEEPSEEK_API_KEY = 'd';
   const bodies = [];
@@ -88,7 +98,7 @@ await t('retries once without "thinking" if the model rejects the field', async 
   assert.equal(bodies.length, 2); assert.equal('thinking' in bodies[1], false);
   assert.equal(r.data.ok, 3);
 });
-await t('DeepSeek: an unknown model name falls back to another current name, remembers it, and bills at the Flash rate', async () => {
+await liveT('DeepSeek: an unknown model name falls back to another current name, remembers it, and bills at the Flash rate', async () => {
   process.env.DEEPSEEK_API_KEY = 'dk'; delete process.env.AI_PROVIDER; delete process.env.AI_MODEL_FAST_DEEPSEEK; process.env.AI_DAILY_CALL_LIMIT = '50';
   const seen = [];
   globalThis.fetch = async (_u, init) => {
@@ -104,7 +114,7 @@ await t('DeepSeek: an unknown model name falls back to another current name, rem
   await callAI({ uid: 'fb', feature: 'f', system: 's', prompt: 'x2' });
   assert.deepEqual(seen, ['deepseek-v4-flash']);        // remembered: no wasted failed call
 });
-await t('DeepSeek: other errors (bad key, outage) are not retried with other model names', async () => {
+await liveT('DeepSeek: other errors (bad key, outage) are not retried with other model names', async () => {
   const seen = [];
   globalThis.fetch = async (_u, init) => { seen.push(JSON.parse(init.body).model); return { ok: false, status: 401, json: async () => ({ error: { message: 'bad key' } }) }; };
   await assert.rejects(callAI({ uid: 'fb2', feature: 'f', system: 's', prompt: 'y' }), (e) => e.code === 'AI_AUTH');

@@ -1,6 +1,6 @@
 // The sales assistant (v376): what it is given (the snapshot), what it is told (the rules and the prompt), and what the owner sends in (cleaned and capped).
 import assert from 'node:assert/strict';
-import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS, isChatId, chatTitleFrom, chatPreview, CHAT_TITLE_MAX, CHAT_PREVIEW_MAX, validateActions, describeAction, readReply, ASSISTANT_MAX_ACTIONS, ASSISTANT_NOTE_MAX } from '../lib/assistant.js';
+import { ASSISTANT_SYSTEM, sanitizeQuestion, sanitizeHistory, buildPipelineSnapshot, assistantPrompt, ASSISTANT_QUESTION_MAX, ASSISTANT_TURN_MAX, ASSISTANT_HISTORY_TURNS, isChatId, chatTitleFrom, chatPreview, CHAT_TITLE_MAX, CHAT_PREVIEW_MAX, validateActions, describeAction, readReply, ASSISTANT_MAX_ACTIONS, ASSISTANT_NOTE_MAX, ASSISTANT_OPEN_DEALS_MAX } from '../lib/assistant.js';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log('  ok -', name); };
@@ -188,6 +188,21 @@ t('a reply that is JSON gives its answer and changes; a reply that is not JSON i
 t('the pipeline snapshot names each deal by email, so a proposed change can point at it', () => {
   const s = buildPipelineSnapshot([{ email: 'ana@shop.lk', businessName: 'Ana', stage: 'demo', value: 100 }], NOW);
   assert.equal(s.biggestOpen[0].email, 'ana@shop.lk');
+});
+
+t('the snapshot lists every open deal by email, so a proposed change can name any open deal, and says when the list is cut short', () => {
+  const deals = Array.from({ length: 205 }, (_, i) => deal({ name: `o${i}`, stage: 'qualified', value: i + 1 }));
+  deals.push(deal({ name: 'won', stage: 'closed_won', value: 99999, closedAt: new Date(NOW - DAY).toISOString() }));
+  const s = buildPipelineSnapshot(deals, NOW);
+  assert.equal(s.openDeals.length, ASSISTANT_OPEN_DEALS_MAX);
+  assert.equal(s.openDealsListed, ASSISTANT_OPEN_DEALS_MAX);
+  assert.equal(s.openDeals[0].email, 'o204@shop.lk');
+  assert.equal(s.openDeals[0].value, 205);
+  assert.ok(!s.openDeals.some((d) => d.email === 'won@shop.lk'));
+  const small = buildPipelineSnapshot([deal({ name: 'only', stage: 'demo', value: 40 })], NOW);
+  assert.deepEqual(small.openDeals, [{ email: 'only@shop.lk', stage: 'Demo / Meeting', value: 40 }]);
+  assert.equal(small.openDealsListed, 1);
+  assert.ok(ASSISTANT_SYSTEM.includes('openDeals list'));
 });
 
 t('a chat id must be the server form: 8 to 64 letters, digits, dash or underscore', () => {
