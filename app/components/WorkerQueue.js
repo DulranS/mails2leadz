@@ -1,12 +1,12 @@
 "use client";
-// "Run on my computer": queue a big, slow search from the app; the Python worker on your own computer picks it up
+// "Big search": queue a big, slow search from the app; AutoLeads runs it on its servers and the leads land in the Lead Inbox
 // (python autoleads_worker.py pull), runs it, and delivers the leads to this inbox. Nothing is ever sent from here.
 import React, { useCallback, useEffect, useState } from "react";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
 const input = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-white";
-const LABEL = { queued: "Waiting for your computer", running: "Running on your computer", done: "Finished", failed: "Did not finish", cancelled: "Cancelled" };
+const LABEL = { queued: "Waiting to start", running: "Running now", done: "Finished", failed: "Did not finish", cancelled: "Cancelled" };
 
 async function call(method, body) {
   const res = await fetch("/api/worker-queue", { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -24,7 +24,13 @@ export default function WorkerQueue({ enabled = true, onFinished }) {
   const [open, setOpen] = useState(false);
 
   const refresh = useCallback(async () => {
-    try { setItems((await call("GET")).requests || []); setError(""); } catch (e) { setError(e.message); }
+    try {
+      let list = (await call("GET")).requests || [];
+      // Waiting or running requests are worked on by the server, one time-boxed step per refresh, while this page is open.
+      if (list.some((i) => i.status === "queued" || i.status === "running")) list = (await call("POST", { action: "run" })).requests || list;
+      setItems(list);
+      setError("");
+    } catch (e) { setError(e.message); }
   }, []);
 
   useEffect(() => {
@@ -57,15 +63,15 @@ export default function WorkerQueue({ enabled = true, onFinished }) {
   if (!enabled) return null;
   const waiting = items.filter((i) => i.status === "queued" || i.status === "running").length;
   return (
-    <section className={card} aria-label="Run on my computer">
+    <section className={card} aria-label="Big search">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="w-full min-h-[44px] flex items-center justify-between text-left">
-        <span className="text-base font-semibold text-gray-900 dark:text-white">Big search? Run it on my computer{waiting ? ` (${waiting} waiting)` : ""}</span>
+        <span className="text-base font-semibold text-gray-900 dark:text-white">Big search? Queue it{waiting ? ` (${waiting} waiting)` : ""}</span>
         <span className="text-sm text-gray-500 dark:text-gray-400">{open ? "Hide" : "Show"}</span>
       </button>
       {open && (
         <div className="mt-3 space-y-4">
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            For a large area or a slow crawl. Queue it here, then on your computer double-click <b>worker/run.bat</b> and choose <b>5</b> (or run <code>python autoleads_worker.py pull</code>). The worker does the search and the leads land in this inbox. It needs the one-time worker setup in START_HERE.
+            For a large area or a slow crawl. AutoLeads runs it on its own servers, a little at a time while this page is open, and the leads land in your Lead Inbox. Nothing to install on your computer.
           </p>
           <form onSubmit={queue} className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <label className="block text-xs text-gray-600 dark:text-gray-300 sm:col-span-2">What kind of business
@@ -82,7 +88,7 @@ export default function WorkerQueue({ enabled = true, onFinished }) {
               {items.slice(0, 8).map((i) => (
                 <li key={i.id} className="py-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                   <span className="font-medium text-gray-900 dark:text-white">{i.query}{i.location ? ` in ${i.location}` : ""}</span>
-                  <span className="text-gray-600 dark:text-gray-300">{LABEL[i.status] || i.status}{i.stale ? " (the computer stopped; it will be offered again)" : ""}</span>
+                  <span className="text-gray-600 dark:text-gray-300">{LABEL[i.status] || i.status}{i.stale ? " (it stopped; it will be tried again)" : ""}</span>
                   {i.status === "done" && <span className="text-gray-600 dark:text-gray-300">{i.added} added, {i.skipped} already known</span>}
                   {i.status === "failed" && i.note && <span className="text-red-600 dark:text-red-300">{i.note}</span>}
                   {i.status === "queued" && <button type="button" disabled={busy} onClick={() => cancel(i.id)} className="ml-auto min-h-[44px] px-3 text-sm text-gray-600 dark:text-gray-300 underline">Cancel</button>}

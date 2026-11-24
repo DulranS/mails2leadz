@@ -236,6 +236,7 @@ export default function SupportAndKpis() {
               <Stat name="Lifetime value to cost" value={fmt(money.ltvToCac, "x")} hint="Aim for 3x or more" />
               <Stat name="Paid share of wins" value={fmt(money.channelMix.paidSharePct, "%")} hint={`${money.channelMix.organicWon} organic`} />
               <Stat name="New customers, 12 months" value={g(money.newCustomersLast12Months)} />
+              <Stat name="Repeat customers, 12 months" value={money.retentionPct === null || money.retentionPct === undefined ? "n/a" : `${money.retentionPct}%`} hint="Of customers who paid you in the last 12 months, the share who have paid more than once" />
               <Stat name="Paid so far, 12 months" value={g(money.paidRevenueLast12Months)} hint="Cash received. A signed deal is not money until it is paid." />
             </div>
             <div className={card}>

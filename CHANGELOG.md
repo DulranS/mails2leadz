@@ -1,3 +1,21 @@
+## Pass 391 - the server runs "Big search" itself; the Python worker is no longer needed (24 Nov 2026)
+- New: queued "Big search" requests are run by the server (lib/server/worker-queue-runner.js). One request at a time, using the same search as the in-app finder. A search the owner started in the app goes first. A request that hits today's allowance waits instead of failing.
+- New: the Big search page asks the server for a step every 30 seconds while a request is waiting or running. The daily sweep route /api/cron/worker-queue exists, but it is not scheduled (the owner's free-plan timetable is unchanged).
+- New: an optional webhook address on the Lead Finder page (Slack, Discord or ntfy, https only). A queued search that adds leads, or does not finish, sends a short message. The address is checked before each send (no private or local addresses), and a failed send never changes the result.
+- Fix: the Big search screen no longer tells the owner to run a worker on their computer.
+- Added: PYTHON-PARITY.md, which lists each Python worker command, where it runs now, and what is still different.
+- Checked: tests/worker-queue-runner.test.mjs 12 of 12, tests/notify-owner.test.mjs 6 of 6, tests/worker-queue.test.mjs passes, release-files and cron-schedule pass. The full suite passes 306 files; the 14 files that need packages missing from the sandbox are unchanged.
+- Not built yet: the daily-run webhook summary; matching the Python worker's per-search request cap.
+
+## Pass 390 - marketplace seller business model (24 Nov 2026)
+- New: "Marketplace seller (Amazon, Flipkart, Meesho)" is a business model. Choosing it shows four pieces of guidance: complete listings with search words, pricing after the platform's fee, the platform's own sponsored listings before outside ads, and asking for reviews and answering buyer questions within a day.
+- Checked: tests/marketplace-model.test.mjs passes 3 of 3. An unknown model still falls back to B2C.
+
+## Pass 389 - repeat customer share on the KPI panel (24 Nov 2026)
+- New: "Repeat customers, 12 months" on the KPI panel. It is the share of customers who paid you in the last twelve months and have paid you more than once. Paid invoices only, matched by email. Shows n/a until a customer has paid.
+- Limit: the repeat count uses all paid invoices, not only the last year. A customer who paid twice a long time ago still counts as repeat. The figure is a share, not a churn forecast.
+- Checked: tests/retention-share.test.mjs passes 6 of 6. The full suite passes 303 files; the 14 files that need packages missing from the sandbox are unchanged.
+
 ## Pass 388 - assistant can name every open deal; AI tests split by what they need (23 Nov 2026)
 - Fix: the assistant only knew the 10 biggest open deals and the 10 quietest. Asking it to change any other deal was refused as "not in your pipeline", even though the deal existed. The pipeline data now lists every open deal by email, stage and value, biggest first, up to 200. If the pipeline is bigger than that, the assistant says a deal missing from the list can only be changed in the app.
 - Fix: tests/ai-client.test.mjs asserted behaviour that the code deliberately does not do. A test now checks the real rule: with no database, no keys are used, even when a provider key is in the environment. The tests that need a live database (cap, provider calls, fallback, model names) are reported as skipped unless AUTOLEADS_LIVE_DB_TEST=1 is set against a test project. They no longer fail, and they no longer pass without running.

@@ -67,6 +67,7 @@ app/api/cron/pipeline/route.js
 app/api/cron/prepare-drafts/route.js
 app/api/cron/reassign/route.js
 app/api/cron/stage-watch/route.js
+app/api/cron/worker-queue/route.js
 app/api/customer-links/route.js
 app/api/day/open/route.js
 app/api/deal-activity/route.js
@@ -723,6 +724,7 @@ lib/server/meta-purchases.js
 lib/server/milestones.js
 lib/server/missed-call-reply.js
 lib/server/niche-evidence.js
+lib/server/notify-owner.js
 lib/server/open-day.js
 lib/server/open-track.js
 lib/server/operator-owner.js
@@ -788,6 +790,7 @@ lib/server/voice-agent.js
 lib/server/webhooks.js
 lib/server/whatsapp.js
 lib/server/work-mode.js
+lib/server/worker-queue-runner.js
 lib/server/worker-queue-store.js
 lib/server/workspace.js
 lib/service-account.js

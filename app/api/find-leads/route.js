@@ -10,6 +10,7 @@
 // POST { action: "privacy-delete", id }                 erase one sourced person on request (record, inbox lead, all mail stopped)
 // GET                                                  progress + nightly settings + today's allowance
 import { NextResponse, after } from 'next/server';
+import { cleanNotifyUrl } from '../../../lib/lead-finder.js';
 import { isAdminMode } from '../../../lib/server-firestore.js';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
@@ -68,6 +69,10 @@ export async function POST(request) {
       const patch = { enabled: body.enabled === true, searches: Array.isArray(body.searches) ? body.searches : [] };
       if (typeof body.autoFind === 'boolean') patch.autoFind = body.autoFind;
       if (typeof body.area === 'string') patch.area = body.area;
+      if (typeof body.notifyUrl === 'string') {
+        if (body.notifyUrl.trim() && !cleanNotifyUrl(body.notifyUrl)) return fail(422, 'The notification address must be a secure https address (Slack, Discord or ntfy).', 'BAD_URL');
+        patch.notifyUrl = cleanNotifyUrl(body.notifyUrl);
+      }
       let settings = await saveFinderSettings(db, uid, patch);
       // Turning auto-find on (or setting its area) fills the list now, not tomorrow night.
       if (needsAutoRefresh(settings)) settings = await refreshAutoSearches(db, uid, { settings, suggest: (u, area) => suggestTargets(db, u, area) });

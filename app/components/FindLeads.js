@@ -103,7 +103,7 @@ export function useLeadFinder({ enabled, onAdded }) {
     const cur = state.settings;
     try {
       setError("");
-      merge(await call("POST", { action: "settings", enabled: patch.enabled ?? cur.enabled, searches: cur.searches, autoFind: patch.autoFind ?? cur.autoFind, area: patch.area ?? cur.area }));
+      merge(await call("POST", { action: "settings", enabled: patch.enabled ?? cur.enabled, searches: cur.searches, autoFind: patch.autoFind ?? cur.autoFind, area: patch.area ?? cur.area, notifyUrl: patch.notifyUrl ?? cur.notifyUrl ?? "" }));
       return true;
     } catch (e) { setError(e.message); return false; }
   }, [state.settings]);
@@ -364,6 +364,8 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
         </label>
         <p className="text-xs text-gray-600 dark:text-gray-300">The app reads what you sell and your own results, suggests the kinds of business most likely to buy from you, and searches your area for them. New businesses land in your inbox for review. Nothing is sent. Describe your offer in Account first.</p>
         <input key={settings.area} className="mt-2 w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" defaultValue={settings.area} placeholder="Your area, for example Colombo, Sri Lanka" aria-label="Area to search" onBlur={(e) => { const v = e.target.value.trim(); if (v !== settings.area) finder.saveAuto({ area: v }); }} />
+        <label className="block text-xs text-gray-500 dark:text-gray-400 mt-3">Message me when a queued search finds leads or does not finish (optional: Slack, Discord or ntfy address, https only)</label>
+        <input key={`notify-${settings.notifyUrl || ""}`} className="mt-1 w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm" defaultValue={settings.notifyUrl || ""} placeholder="https://hooks.slack.com/..." aria-label="Message address for finished searches" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (settings.notifyUrl || "")) finder.saveAuto({ notifyUrl: v }); }} />
         {settings.autoNote && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Last update: {settings.autoNote}</p>}
       </div>
 
