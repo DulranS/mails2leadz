@@ -25,7 +25,7 @@ This table is the check: each command or feature, where it lives now, and what i
 ## What is still different
 
 - **Limits.** The map requests per search now match the Python worker (80). A search still reads up to 300 businesses, and it reads up to 4 pages per website where the Python worker went to crawl depth 3. A large or slow area can therefore still find fewer businesses than the Python worker did.
-- **When queued searches run.** They run while the Big search page is open (it asks the server for a step every 30 seconds). A daily sweep route exists at `/api/cron/worker-queue`, but it is not on the timetable: the free plan allows two scheduled jobs, and the owner chose those two. Adding it needs a decision.
+- **When queued searches run.** They run while the Big search page is open (it asks the server for a step every 30 seconds), and once a day at 02:30 by the daily sweep at `/api/cron/worker-queue` (scheduled in v393; Vercel's free plan allows up to 100 daily jobs). One daily run works each owner's queue for up to about four and a half minutes, so a large search can take several days to finish if the page stays closed.
 
 ## Files that must not be shared
 

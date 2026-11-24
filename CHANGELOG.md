@@ -1,3 +1,8 @@
+## Pass 394 - the queued-search sweep is scheduled (24 Nov 2026)
+- Decision: the sweep at /api/cron/worker-queue is the third daily job (02:30 server time). Vercel's current docs allow up to 100 daily cron jobs on the Hobby plan, so the earlier two-job limit was wrong. The sweep only reads queues and adds leads to the inbox, and sends no e-mail. vercel.json and vercel.daily.json match. tests/cron-schedule.test.mjs allows the sweep and expects three jobs.
+- Checked: tests/cron-schedule.test.mjs 4 of 4, release-files 5 of 5.
+- Not changed: the hourly timetable stays empty (it needs a paid plan).
+
 ## Pass 393 - Account page no longer tells people to run the Python worker (24 Nov 2026)
 - Fix: the Lead inbox connection on the Account page said the autopilot is a script on your computer and gave a python autoleads_worker.py setup command. Both are replaced: the server runs the lead finder and queued searches, and the key is only for another tool that sends leads to the inbox. The page shows the ingest address and the Bearer header.
 - Fix: the Big search header comment no longer mentions the worker. Comments only, no behaviour change.
