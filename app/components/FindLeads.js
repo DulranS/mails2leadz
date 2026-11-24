@@ -26,14 +26,14 @@ import DealScreen from "./DealScreen";
 import DealWatch from "./DealWatch";
 
 export function useLeadFinder({ enabled, onAdded }) {
-  const [state, setState] = useState({ job: { status: "idle" }, settings: { enabled: false, searches: [], next: 0 }, today: null, loaded: false });
+  const [state, setState] = useState({ job: { status: "idle" }, settings: { enabled: false, searches: [], next: 0 }, today: null, plan: null, loaded: false });
   const [running, setRunning] = useState(false); // this tab is currently working through a search
   const [error, setError] = useState("");
   const stop = useRef(false);
   const onAddedRef = useRef(onAdded);
   useEffect(() => { onAddedRef.current = onAdded; }, [onAdded]);
   // privacyOverdue: an array, or null when the server could not check (kept as null so the panel says so).
-  const merge = (d) => setState((s) => ({ ...s, job: d.job ?? s.job, settings: d.settings ?? s.settings, today: d.today ?? s.today, privacyOverdue: d.privacyOverdue !== undefined ? d.privacyOverdue : s.privacyOverdue, loaded: true }));
+  const merge = (d) => setState((s) => ({ ...s, job: d.job ?? s.job, settings: d.settings ?? s.settings, today: d.today ?? s.today, plan: d.plan ?? s.plan, privacyOverdue: d.privacyOverdue !== undefined ? d.privacyOverdue : s.privacyOverdue, loaded: true }));
 
   const refresh = useCallback(async () => {
     try { merge(await call("GET")); setError(""); } catch (e) { setError(e.message); setState((s) => ({ ...s, loaded: true })); }
@@ -148,7 +148,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
   const [briefBasis, setBriefBasis] = useState("");
   const [briefRows, setBriefRows] = useState(null); // { name, rows } once a candidate CSV is read in the browser
   const [briefError, setBriefError] = useState("");
-  const { job, settings, today, running, error } = finder;
+  const { job, settings, today, plan, running, error } = finder;
   const live = job.status === "running";
   const st = job.stats || {};
   const left = Object.entries(st.left || {}).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${LEFT_LABELS[k] || k}`);
@@ -373,7 +373,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
       <div className="mt-4"><DealWatch /></div>
 
       <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-        {today ? `Today: ${today.searches} of ${today.searchesPerDay} searches, ${today.sites} of ${today.sitesPerDay} websites. ` : ""}Map data © OpenStreetMap contributors (ODbL). Coverage differs by city: where the map is thin, import a list from Google Maps instead.
+        {today ? `Today: ${today.searches} of ${today.searchesPerDay} searches, ${today.sites} of ${today.sitesPerDay} websites. ` : ""}{plan ? `Plan: one search asks the map up to ${plan.mapRequestsPerSearch} times and keeps up to ${plan.businessesPerSearch} businesses; each website is read up to ${plan.pagesPerSite} pages. ${plan.searchesLeft} searches and ${plan.sitesLeft} websites left today. Nightly routine: ${plan.nightlyOn ? "on" : "off"}, ${plan.nightlySearches} saved search${plan.nightlySearches === 1 ? "" : "es"}. ` : ""}Map data © OpenStreetMap contributors (ODbL). Coverage differs by city: where the map is thin, import a list from Google Maps instead.
       </p>
     </section>
   );

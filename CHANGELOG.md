@@ -1,3 +1,10 @@
+## Pass 392 - the last Python-parity gaps closed (24 Nov 2026)
+- New: a search asks the map at most 80 times, as the Python worker did. When the budget runs out the search is marked partial and the next search of the same thing resumes where it stopped (lib/server/lead-finder-io.js, MAP_REQUESTS_PER_SEARCH).
+- New: the nightly daily run sends the owner's webhook message when a nightly search adds leads or does not finish (sendNightlyNotice in lib/server/lead-finder-job.js, nightlyNoticeText in lib/server/notify-owner.js). Nothing is sent when no address is set or nothing was added.
+- New: a plan preview on the Lead Finder page: map requests per search, businesses and pages per website, searches and websites left today, and the nightly routine's state (planPreview, returned by GET /api/find-leads).
+- Checked: tests/finder-plan-v392.test.mjs 6 of 6. tests/lead-finder.test.mjs, lead-finder-speed, auto-finder, finder-dry, worker-queue, worker-queue-runner, notify-owner and retention-share pass. release-files passes 5 of 5, and check-imports passes 1,189 files. The edited React and route files parse.
+- Not changed: the daily sweep for queued searches is still not scheduled (the owner's decision). PYTHON-PARITY.md lists the remaining differences.
+
 ## Pass 391 - the server runs "Big search" itself; the Python worker is no longer needed (24 Nov 2026)
 - New: queued "Big search" requests are run by the server (lib/server/worker-queue-runner.js). One request at a time, using the same search as the in-app finder. A search the owner started in the app goes first. A request that hits today's allowance waits instead of failing.
 - New: the Big search page asks the server for a step every 30 seconds while a request is waiting or running. The daily sweep route /api/cron/worker-queue exists, but it is not scheduled (the owner's free-plan timetable is unchanged).

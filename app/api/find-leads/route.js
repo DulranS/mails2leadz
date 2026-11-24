@@ -8,7 +8,7 @@
 // POST { action: "settings", enabled, searches }        the nightly routine (saved searches)
 // POST { action: "source-candidates", brief, rows, listSource, lawfulBasis }  screen a candidate list against a role brief
 // POST { action: "privacy-delete", id }                 erase one sourced person on request (record, inbox lead, all mail stopped)
-// GET                                                  progress + nightly settings + today's allowance
+// GET                                                  progress + nightly settings + today's allowance + plan preview
 import { NextResponse, after } from 'next/server';
 import { cleanNotifyUrl } from '../../../lib/lead-finder.js';
 import { isAdminMode } from '../../../lib/server-firestore.js';
@@ -16,7 +16,7 @@ import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js'
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { featureAllowed } from '../../../lib/tenant.js';
 import { defaultCtx, FinderError } from '../../../lib/server/lead-finder-io.js';
-import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, refreshAutoSearches, limits } from '../../../lib/server/lead-finder-job.js';
+import { startSearch, startImport, runStep, cancelJob, loadJob, publicJob, loadFinderSettings, saveFinderSettings, refreshAutoSearches, limits, planPreview } from '../../../lib/server/lead-finder-job.js';
 import { needsAutoRefresh } from '../../../lib/lead-finder.js';
 import { buyListGate } from '../../../lib/consent-rules.js';
 import { mapImportRows } from '../../../lib/lead-import.js';
@@ -37,7 +37,8 @@ const STATUS = { DAILY_LIMIT: 429, BAD_SEARCH: 422, AREA_NOT_FOUND: 422, AREA_TO
 async function overview(db, uid, { privacy = false } = {}) {
   const [job, settings] = await Promise.all([loadJob(db, uid), loadFinderSettings(db, uid)]);
   const used = job?.usage?.day === new Date().toISOString().slice(0, 10) ? job.usage : { searches: 0, sites: 0 };
-  const base = { job: publicJob(job), settings, today: { searches: used.searches || 0, sites: used.sites || 0, ...limits() } };
+  const today = { searches: used.searches || 0, sites: used.sites || 0 };
+  const base = { job: publicJob(job), settings, today: { ...today, ...limits() }, plan: planPreview(settings, today) };
   if (!privacy) return base;
   // null (not []) when the check itself failed, so the panel can say so.
   const privacyOverdue = await overdueFor(db, uid, new Date().toISOString().slice(0, 10)).catch(() => null);
