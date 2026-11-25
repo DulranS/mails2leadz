@@ -1,3 +1,12 @@
+## Pass 395 - opt-in markets: Australia, Canada and UAE; cold outreach gated at send time (24 Nov 2026)
+- Decision: a recorded Australian, Canadian or UAE country (or a .au, .ca or .ae address) is an opt-in market, like the EU and UK. This follows the buyer-market research: Australia's Spam Act requires consent, Canada's CASL requires consent unless there is a business relationship, and the UAE's PDPL is consent-based. Singapore and the US stay opt-out, with an unsubscribe link.
+- Enforced: cold outreach (first emails and follow-ups drafted by Prepare drafts) to an opt-in address is held at the send-time check in lib/server/queue-checks.js. The review window and Autosend both use that check. A cold draft has no recorded consent by definition, so it is held. Replies and existing customers are already excluded by the same check.
+- Already consent-based before this pass, unchanged: journey emails need a recorded agreement (lib/server/journey-send.js); broadcasts go only to confirmed subscribers and carry an unsubscribe link.
+- Changed: lib/consent-rules.js (OPT_IN_TLDS and the new coldOutreachAllowed); lib/server/queue-checks.js (one line in stillGood).
+- New: tests/opt-in-markets-v395.test.mjs (6 tests, all pass). With tests/opt-in-country.test.mjs and tests/consent-guard.test.mjs: 14 of 14 pass.
+- Effect to know about: drafts to UK, EU, Australian, Canadian and UAE addresses will no longer be ready to send. A consent-recording path for cold contacts does not exist, so this is a hold, not a route round it.
+- Not a legal opinion. Confirm the rules with a lawyer for each market.
+
 ## Pass 394 - the queued-search sweep is scheduled (24 Nov 2026)
 - Decision: the sweep at /api/cron/worker-queue is the third daily job (02:30 server time). Vercel's current docs allow up to 100 daily cron jobs on the Hobby plan, so the earlier two-job limit was wrong. The sweep only reads queues and adds leads to the inbox, and sends no e-mail. vercel.json and vercel.daily.json match. tests/cron-schedule.test.mjs allows the sweep and expects three jobs.
 - Checked: tests/cron-schedule.test.mjs 4 of 4, release-files 5 of 5.
