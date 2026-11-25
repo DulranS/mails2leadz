@@ -1,3 +1,14 @@
+## Pass 399 - referral share of wins on the marketing panel (26 Nov 2026)
+- New: "Referral share of wins" on the marketing spend panel: the share of won deals in the look-back window that came by referral (lib/marketing.js, referralSharePct). It is a proxy for word of mouth. Invitations sent are not tracked, so a true virality coefficient cannot be worked out. Shows n/a when there are no wins, not zero.
+- Not built: booking rate by lead source. Bookings are not linked to a lead or a source in the data model (checked: bookings are stored by user and date, with no lead or source reference), so the rate cannot be measured honestly. Website conversion rate, a true virality coefficient, and active user retention D7 and D30 are also not built, for the reasons in Pass 398.
+- Checks: tests/referral-share-v399.test.mjs (3/3), now in the npm test chain. The manifest is regenerated and tests/release-files passes.
+
+## Pass 398 - lead-to-pipeline conversion on the marketing panel (26 Nov 2026)
+- New: "Lead to pipeline" on the marketing spend panel, next to ROAS: of the deals on record, the share now at or beyond the qualified stage (lib/pipelineConversion.js). It uses each deal's stage today, because the app keeps no stage history.
+- Already in place: win rate, CAC and payback, LTV and LTV:CAC, churn and net revenue retention, ROAS (won value per 1 spent), NPS, runway, MRR, customer health, average won deal value (the AutoLeads version of average order value).
+- Not built, because the app holds no data for them: website conversion rate, virality coefficient, booking rate by lead source (no per-source contact count), and active user retention D7/D30 (no product usage records).
+- Checks: tests/lead-to-pipeline-v398.test.mjs (5/5), now the first step of npm test. The manifest is regenerated and tests/release-files passes. The changed panel parses; no full build in this sandbox.
+
 ## Pass 395 - opt-in markets: Australia, Canada and UAE; cold outreach gated at send time (24 Nov 2026)
 - Decision: a recorded Australian, Canadian or UAE country (or a .au, .ca or .ae address) is an opt-in market, like the EU and UK. This follows the buyer-market research: Australia's Spam Act requires consent, Canada's CASL requires consent unless there is a business relationship, and the UAE's PDPL is consent-based. Singapore and the US stay opt-out, with an unsubscribe link.
 - Enforced: cold outreach (first emails and follow-ups drafted by Prepare drafts) to an opt-in address is held at the send-time check in lib/server/queue-checks.js. The review window and Autosend both use that check. A cold draft has no recorded consent by definition, so it is held. Replies and existing customers are already excluded by the same check.

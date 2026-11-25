@@ -563,6 +563,7 @@ lib/pdf-text.js
 lib/pdl.js
 lib/phone.js
 lib/pipeline-alerts.js
+lib/pipelineConversion.js
 lib/pitch.js
 lib/places.js
 lib/plan.js

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, limit, query, setDoc } from "../../lib/client-firestore.js";
 import { db } from "../../lib/firebase-client.js";
 import { MARKETING_CHANNELS, MARKETING_LIMITS, computeMarketing, recentMonths, sanitizeSpend } from "../../lib/marketing.js";
+import { leadToPipeline } from "../../lib/pipelineConversion.js";
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -30,6 +31,7 @@ export default function MarketingSpendPanel({ uid, money, deals = [] }) {
   useEffect(() => { load(); }, [load]);
 
   const stats = useMemo(() => computeMarketing({ spend: rows, deals, months }), [rows, deals, months]);
+  const l2p = useMemo(() => leadToPipeline(deals), [deals]);
   const span = `${months} months`;
   const label = (id) => MARKETING_CHANNELS.find((c) => c.id === id)?.label || id;
   const shown = useMemo(() => [...rows].sort((a, b) => String(b.month).localeCompare(String(a.month))).slice(0, 40), [rows]);
@@ -77,6 +79,8 @@ export default function MarketingSpendPanel({ uid, money, deals = [] }) {
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per outbound win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.costPerOutboundWin === null ? "n/a" : fmt(stats.costPerOutboundWin)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">ROAS (won value per 1 spent)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.roas === null || stats.roas === undefined ? "n/a" : `${stats.roas}x`}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">ROAS inbound / outbound</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{(stats.inboundRoas ?? "n/a")} / {(stats.outboundRoas ?? "n/a")}</div></div>
+        <div title="Of the deals on record, the share now at or beyond the qualified stage. Uses each deal's stage today."><div className="text-xs text-gray-500 dark:text-gray-400">Lead to pipeline</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{l2p.ratePct === null ? "n/a" : `${l2p.ratePct}%`}</div><div className="text-[11px] text-gray-500 dark:text-gray-400">{l2p.inPipeline} of {l2p.total} deals qualified or beyond</div></div>
+        <div title="Share of won deals that came through a referral. A proxy for word of mouth: invitations sent are not tracked."><div className="text-xs text-gray-500 dark:text-gray-400">Referral share of wins</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.referralSharePct === null || stats.referralSharePct === undefined ? "n/a" : `${stats.referralSharePct}%`}</div></div>
       </div>
       {!stats.ready && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{stats.spend90 === 0 ? "Enter spend to see cost per win." : "Cost per win appears once you have won customers in these months."}</p>}
       {stats.ready && stats.partial && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Only {stats.monthsEntered} of the last {months} months have spend entered, so cost per win is overstated. Enter a 0 for months with no spend.</p>}
