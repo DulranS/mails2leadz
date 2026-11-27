@@ -1,12 +1,15 @@
 // app/api/contacts/export/route.js - a person's copy of their own data, downloaded as a file. Signed-in owner only.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { exportContactData } from '../../../../lib/server/contact-export.js';
 
 export async function POST(request) {
   const who = identify(request);
   if (who.response) return who.response;
+  const denied = requirePermission(request, 'exportData');
+  if (denied) return denied;
   const db = getDb();
   const g = await guardTenant(db, who.uid);
   if (g.response) return g.response;

@@ -331,15 +331,15 @@ export default function SalesTools() {
         </div>
       </Collapsible>
 
-      <Collapsible title="Journeys" hint="Steps you send, one at a time, from your list. Nothing is sent for you.">
-        <p className={note}>One step per line: "wait days | email or sms | message". Up to eight steps. A reply to a journey stops it for that person. Add "trigger: deal_won", "trigger: invoice_paid" or "trigger: ticket_resolved" to enrol people automatically when that happens. Their emails wait for you to confirm consent before anything is sent.</p>
+      <Collapsible title="Journeys" hint="Email steps you send from your list. Text and call steps become tasks for you. Nothing is dialled or texted for you.">
+        <p className={note}>One step per line. Email: "wait days | email | message". Text: "wait days | sms | draft" creates a text task for you, with the draft on it, and you send it from your own phone. Call: "wait days | call | note" creates a call task for you, with the note. Nothing is dialled or texted for you. Branch: "wait days | branch | if replied | yes 3 | no 4" waits, then goes to step 3 if the person replied, or step 4 if not. Write "end" instead of a step number to stop. A branch can only point forward to a later step. Up to eight steps. A reply stops a plain step for that person. Add "trigger: deal_won", "trigger: invoice_paid" or "trigger: ticket_resolved" to enrol people automatically when that happens. Emails, text tasks and call tasks wait for you to confirm consent first.</p>
         <div className={grid}>
           <Field id="j-name" text="Journey name"><input id="j-name" className={field} value={journeyName} onChange={(e) => setJourneyName(e.target.value)} /></Field>
           <Field id="j-enrol" text="Enrol these emails (comma or space separated)"><input id="j-enrol" className={field} value={enrolEmails} onChange={(e) => setEnrolEmails(e.target.value)} /></Field>
         </div>
         <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={enrolAgreed} onChange={(e) => setEnrolAgreed(e.target.checked)} /><span>These people have agreed to hear from me by email. Tick only if that is true; automatic sending (when switched on in Account) needs it.</span></label>
         <div className="mt-3 flex flex-wrap gap-2">{Object.entries(JOURNEY_PRESETS).map(([id, p]) => (<button key={id} type="button" className={secondary} onClick={() => { setJourneyName(p.name); setJourneyText(p.text); }}>Start from {p.name.toLowerCase()}</button>))}</div>
-        <textarea id="j-steps" className={`${field} mt-3`} rows={4} value={journeyText} onChange={(e) => setJourneyText(e.target.value)} placeholder={"0 | email | Thanks for getting in touch. Here is what we do.\n3 | email | Did you get a chance to look?"} />
+        <textarea id="j-steps" className={`${field} mt-3`} rows={4} value={journeyText} onChange={(e) => setJourneyText(e.target.value)} placeholder={"0 | email | Thanks for getting in touch. Here is what we do.\n3 | branch | if replied | yes 4 | no 3\n2 | call | Ask whether they had a chance to look.\n3 | email | Did you get a chance to look?"} />
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={primary} onClick={async () => { const r = await saveAction({ action: "save_journey", name: journeyName, text: journeyText }); setJourneyMsg(r.ok ? `Journey saved with ${r.steps} step${r.steps === 1 ? "" : "s"}.` : (r.error || "Could not save.")); loadManage(); }}>Save journey</button>
           {(manage?.journeys || []).map((j) => (
@@ -351,7 +351,7 @@ export default function SalesTools() {
           <ul className="mt-4 space-y-2">
             {manage.dueSteps.map((d) => (
               <li key={d.enrolmentId} className={card}>
-                <p className="text-sm font-medium">{d.journey}: step {d.stepIndex + 1} of {d.total} for {d.email} ({d.channel})</p>
+                <p className="text-sm font-medium">{d.journey}: step {d.stepIndex + 1} of {d.total} for {d.email} ({d.channel === "call" ? "call, to do by hand" : d.channel === "sms" ? "text, to do by hand" : d.channel})</p>
                 <p className={`mt-1 ${note}`}>{d.text}</p>
                 <button type="button" className={`${secondary} mt-2`} onClick={async () => { await saveAction({ action: "mark_step_sent", enrolmentId: d.enrolmentId }); loadManage(); }}>I have sent this step</button>
               </li>

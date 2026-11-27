@@ -9,7 +9,7 @@ import { leadToPipeline } from "../../lib/pipelineConversion.js";
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
 const field = "w-full min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
-const blank = (month) => ({ channel: MARKETING_CHANNELS[0].id, amount: "", month, note: "", campaign: "", recurring: false });
+const blank = (month) => ({ channel: MARKETING_CHANNELS[0].id, amount: "", month, note: "", campaign: "", recurring: false, impressions: "", clicks: "", reach: "" });
 const RANGES = [3, 6, 12]; // months the stats look back over
 
 export default function MarketingSpendPanel({ uid, money, deals = [] }) {
@@ -74,13 +74,17 @@ export default function MarketingSpendPanel({ uid, money, deals = [] }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Spent ({span})</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{fmt(stats.spend90)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Won ({span})</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.wins90}</div></div>
-        <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.blendedCostPerWin === null ? "n/a" : fmt(stats.blendedCostPerWin)}</div></div>
+        <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per win (CPA)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.blendedCostPerWin === null ? "n/a" : fmt(stats.blendedCostPerWin)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per inbound win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.costPerInboundWin === null ? "n/a" : fmt(stats.costPerInboundWin)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">Cost per outbound win</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.costPerOutboundWin === null ? "n/a" : fmt(stats.costPerOutboundWin)}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">ROAS (won value per 1 spent)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.roas === null || stats.roas === undefined ? "n/a" : `${stats.roas}x`}</div></div>
         <div><div className="text-xs text-gray-500 dark:text-gray-400">ROAS inbound / outbound</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{(stats.inboundRoas ?? "n/a")} / {(stats.outboundRoas ?? "n/a")}</div></div>
         <div title="Of the deals on record, the share now at or beyond the qualified stage. Uses each deal's stage today."><div className="text-xs text-gray-500 dark:text-gray-400">Lead to pipeline</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{l2p.ratePct === null ? "n/a" : `${l2p.ratePct}%`}</div><div className="text-[11px] text-gray-500 dark:text-gray-400">{l2p.inPipeline} of {l2p.total} deals qualified or beyond</div></div>
         <div title="Share of won deals that came through a referral. A proxy for word of mouth: invitations sent are not tracked."><div className="text-xs text-gray-500 dark:text-gray-400">Referral share of wins</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.referralSharePct === null || stats.referralSharePct === undefined ? "n/a" : `${stats.referralSharePct}%`}</div></div>
+        <div title="Spend per 1,000 times the ad was shown, from the entries that recorded impressions."><div className="text-xs text-gray-500 dark:text-gray-400">CPM (per 1,000 views)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.cpm === null || stats.cpm === undefined ? "n/a" : fmt(stats.cpm)}</div></div>
+        <div title="Spend per click, from the entries that recorded clicks."><div className="text-xs text-gray-500 dark:text-gray-400">Cost per click (CPC)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.cpc === null || stats.cpc === undefined ? "n/a" : fmt(stats.cpc)}</div></div>
+        <div title="Clicks as a share of impressions, for entries that recorded both."><div className="text-xs text-gray-500 dark:text-gray-400">Click-through rate (CTR)</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.ctrPct === null || stats.ctrPct === undefined ? "n/a" : `${stats.ctrPct}%`}</div></div>
+        <div title="Average times each person reached saw the ad. Reach is added up month by month, so this reads a little low over several months."><div className="text-xs text-gray-500 dark:text-gray-400">Ad frequency</div><div className="text-lg font-semibold text-gray-900 dark:text-white">{stats.adFrequency === null || stats.adFrequency === undefined ? "n/a" : `${stats.adFrequency}x`}</div></div>
       </div>
       {!stats.ready && <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{stats.spend90 === 0 ? "Enter spend to see cost per win." : "Cost per win appears once you have won customers in these months."}</p>}
       {stats.ready && stats.partial && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">Only {stats.monthsEntered} of the last {months} months have spend entered, so cost per win is overstated. Enter a 0 for months with no spend.</p>}
@@ -130,6 +134,18 @@ export default function MarketingSpendPanel({ uid, money, deals = [] }) {
         <input type="checkbox" className="h-5 w-5" checked={form.recurring === true} onChange={(e) => setForm({ ...form, recurring: e.target.checked })} />
         Same amount every month until I remove it (tools and subscriptions)
       </label>
+      <div className="mt-2 grid grid-cols-3 gap-2 sm:max-w-xl">
+        <label className="text-xs text-gray-600 dark:text-gray-300">Impressions (optional)
+          <input className={field} type="number" min="0" step="1" value={form.impressions} onChange={(e) => setForm({ ...form, impressions: e.target.value })} />
+        </label>
+        <label className="text-xs text-gray-600 dark:text-gray-300">Clicks (optional)
+          <input className={field} type="number" min="0" step="1" value={form.clicks} onChange={(e) => setForm({ ...form, clicks: e.target.value })} />
+        </label>
+        <label className="text-xs text-gray-600 dark:text-gray-300">Reach (optional)
+          <input className={field} type="number" min="0" step="1" value={form.reach} onChange={(e) => setForm({ ...form, reach: e.target.value })} />
+        </label>
+      </div>
+      <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">From the report in your ad platform for this month. Leave blank if you do not have them: nothing is guessed.</p>
       {error && <p className="text-xs text-red-600 dark:text-red-300 mt-2">{error}</p>}
 
       {shown.length > 0 && (

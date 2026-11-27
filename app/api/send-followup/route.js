@@ -1,6 +1,7 @@
 // app/api/send-followup/route.js
 import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, increment } from '../../../lib/server-firestore.js';
@@ -154,6 +155,8 @@ export async function POST(request) {
     // The verified user (set by proxy.js) wins over anything in the body.
     const who = identify(request, payload.userId);
     if (who.response) return who.response;
+    const denied = requirePermission(request, 'sendEmail');
+    if (denied) return denied;
     const userId = who.uid;
     // Approved AI/custom wording: plain strings only, bounded size.
     const customTemplates = Array.isArray(payload.customTemplates)

@@ -14,6 +14,7 @@ import { verifyIdToken, extractBearer } from './lib/server-auth.js';
 import { hasAccess, noAccessMessage } from './lib/access.js';
 import { makeLimiter } from './lib/rate-limit.js';
 import { routeAccess } from './lib/workspace-access.js';
+import { can, permissionsFor, requiredPermission } from './lib/roles.js';
 
 // /api/unsubscribe is public by design: recipients are not users. It is protected by a signed (HMAC) token instead.
 // /api/lead-inbox/ingest is called by the owner's autopilot script, not a browser: it authenticates itself with the owner's ingest key.
@@ -65,6 +66,7 @@ async function gate(request) {
   try { const { resolveWorkspace } = await import('./lib/server/workspace.js'); workspace = await resolveWorkspace(user.uid); } catch { workspace = null; }
   const tenantUid = workspace ? workspace.ownerUid : user.uid;
   const role = workspace ? workspace.role : 'owner';
+  const perms = permissionsFor(role, workspace?.perms); // the owner: all; a built-in role: its fixed list; a custom role: its own
 
   // Invite-only deployments (ALLOWED_EMAILS) check the person who signed up. Someone invited into a workspace is covered by the
   // owner, and anyone signed in may open an invite link (/api/team decides what they may do).
@@ -80,6 +82,8 @@ async function gate(request) {
 
   const allowed = routeAccess(role, request.method, pathname);
   if (!allowed.ok) return json(403, allowed.error, allowed.code);
+  const need = requiredPermission(request.method, pathname); // lib/roles.js: view, edit, send, export, settings or team
+  if (need && !can(perms, need)) return json(403, 'Your role does not allow this. Ask the owner to change it.', 'NO_PERMISSION');
 
   const claimed = searchParams.get('userId');
   if (claimed && claimed !== tenantUid) return json(403, 'You can only access your own data.');
@@ -104,9 +108,11 @@ async function gate(request) {
   headers.delete('x-user-email');
   headers.delete('x-actor-uid');
   headers.delete('x-actor-role');
+  headers.delete('x-actor-perms');
   headers.set('x-user-id', tenantUid);
   headers.set('x-actor-uid', user.uid);
   headers.set('x-actor-role', role);
+  headers.set('x-actor-perms', perms.join(','));
   headers.set('x-user-email', user.email || '');
   return NextResponse.next({ request: { headers } });
 }

@@ -72,7 +72,7 @@ const TopBar = React.memo(function TopBar({ onOpenMenu }) {
       </div>
       {workspace && !workspace.isOwner && (
         <div role="status" className="px-4 py-2 text-xs bg-amber-50/80 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 border-t border-amber-200/50 dark:border-amber-800/50 backdrop-blur-sm">
-          You are working in a shared workspace as a {workspace.role === 'viewer' ? 'viewer. You can look at everything but not change anything.' : 'manager.'}
+          You are working in a shared workspace as a {workspace.role === 'viewer' ? 'viewer. You can look at everything but not change anything.' : workspace.role === 'manager' ? 'manager.' : 'member with a custom role. You can only do what that role allows.'}
         </div>
       )}
     </div>

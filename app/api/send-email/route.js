@@ -1,6 +1,7 @@
 // app/api/send-email/route.js
 import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs } from '../../../lib/server-firestore.js';
@@ -185,6 +186,8 @@ export async function POST(request) {
     } = requestData;
     const who = identify(request, claimedUserId);
     if (who.response) return who.response;
+    const denied = requirePermission(request, 'sendEmail');
+    if (denied) return denied;
     const userId = who.uid;
     // A/B test with a decided winner (see lib/ab-winner.js): the winner goes to everyone, and the send is no longer a test.
     const abSnap = abTestMode ? await getDoc(doc(db, 'users', userId, 'settings', 'autopilot')).catch(() => null) : null;

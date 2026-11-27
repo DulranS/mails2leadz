@@ -17,6 +17,8 @@ import { DashboardLayout } from "../components/ui/DashboardLayout";
 import CRM from "../components/CRM";
 import LostReasonModal from "../components/ui/LostReasonModal";
 import { dealDocId, buildDealWrite, normalizeStage, daysQuiet } from "../../lib/deal-utils.js";
+import { sanitizePipelines, dealPipelineId, checkStageForDeal, stageOutcome, countDeals, moveDealToPipeline, DEFAULT_PIPELINE_ID } from "../../lib/pipelines.js";
+import PipelineSettings from "../components/PipelineSettings.js";
 import { STAGE_ALERT_STAGES } from "../../lib/stage-alert.js";
 import { sanitizeTeam } from "../../lib/team.js";
 import { useNotifications } from "../components/ui/NotificationProvider";
@@ -74,7 +76,7 @@ try {
 }
 
 const EMPTY_CRM = {
-  leads: [], contacts: {}, repliedLeads: {}, leadScores: {}, dealStages: {}, dealValues: {}, dealCurrencies: {}, currencyOptions: [], dealQual: {}, dealOwners: {}, dealLost: {}, team: [], defaultDealValue: 1000,
+  leads: [], contacts: {}, repliedLeads: {}, leadScores: {}, dealStages: {}, dealValues: {}, dealCurrencies: {}, currencyOptions: [], dealQual: {}, dealOwners: {}, dealLost: {}, team: [], defaultDealValue: 1000, pipelines: [], dealPipelines: {},
 };
 
 export default function CRMPage() {
@@ -169,12 +171,14 @@ export default function CRMPage() {
       const dealQual = {};
       const dealOwners = {};
       const dealLost = {}; // lost deals: why, and how long since the last contact (decides whether a revive draft is offered)
+      const dealPipelines = {}; // the pipeline each deal is in (default when it has no pipelineId)
       const nowMs = Date.now();
       dealsSnap.docs.forEach((d) => {
         const deal = d.data();
         const email = norm(deal.email);
         if (!email) return;
         dealStages[email] = normalizeStage(deal.stage);
+        dealPipelines[email] = dealPipelineId(deal);
         if (Number(deal.value) > 0 && deal.valueIsEstimate !== true) dealValues[email] = Number(deal.value);
         if (deal.chargeCurrency) dealCurrencies[email] = String(deal.chargeCurrency);
         if (Array.isArray(deal.notes)) dealNotes[email] = deal.notes;
@@ -248,7 +252,8 @@ export default function CRMPage() {
       });
 
       const team = teamSnap?.exists?.() ? sanitizeTeam(teamSnap.data().members) : [];
-      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealCurrencies, currencyOptions, billingByEmail, dealQual, dealOwners, dealLost, team, defaultDealValue };
+      const pipelines = sanitizePipelines(settingsSnap?.exists?.() ? settingsSnap.data().pipelines : null);
+      const next = { leads, contacts, repliedLeads, leadScores, dealStages, dealValues, dealCurrencies, currencyOptions, billingByEmail, dealQual, dealOwners, dealLost, team, defaultDealValue, pipelines, dealPipelines };
       put(`${user.uid}|page|crm`, next);
       setData(next);
     } catch (error) {
@@ -277,6 +282,9 @@ export default function CRMPage() {
       qualification: changes.qualification,
       ownerId: changes.ownerId,
       touch: changes.touch,
+      // A pipeline move (lib/pipelines.js moveDealToPipeline), and the custom won and lost stages, which close a deal like the default ones.
+      pipelineMove: changes.pipelineMove,
+      outcomeOf: (s) => stageOutcome(data.pipelines, s),
     });
     if (changes.notes) write.notes = changes.notes;
     if (Array.isArray(changes.tags)) write.tags = changes.tags;
@@ -288,10 +296,34 @@ export default function CRMPage() {
   const [lostPrompt, setLostPrompt] = useState(null);
   const handleUpdateLead = async (email, updates) => {
     if (!user?.uid || !db) return;
-    // Marking Lost: ask why first (one tap), unless already Lost or the reason is already known.
-    if (normalizeStage(updates.stage) === "closed_lost" && updates.stage !== undefined && !updates.lostReason && !updates.skipLostReason && normalizeStage(data.dealStages[norm(email)]) !== "closed_lost") {
+    // Marking Lost (a default or a custom lost stage): ask why first (one tap), unless already Lost or the reason is already known.
+    if (updates.stage !== undefined && stageOutcome(data.pipelines, updates.stage) === "lost" && !updates.lostReason && !updates.skipLostReason && stageOutcome(data.pipelines, data.dealStages[norm(email)]) !== "lost") {
       setLostPrompt({ email, updates });
       return;
+    }
+    // Moving a deal to another pipeline (lib/pipelines.js): it goes to that pipeline's first stage, and the move is logged on the deal.
+    if (updates.pipelineId !== undefined) {
+      const e = norm(email);
+      const moved = moveDealToPipeline(data.pipelines, { pipelineId: data.dealPipelines[e] }, updates.pipelineId);
+      if (!moved.ok) { addNotification(moved.error, "error"); return; }
+      try {
+        const { write } = await writeDeal(e, { pipelineMove: moved.pipelineMove });
+        setData((prev) => ({
+          ...prev,
+          dealStages: { ...prev.dealStages, [e]: write.stage },
+          dealPipelines: { ...prev.dealPipelines, [e]: write.pipelineId || DEFAULT_PIPELINE_ID },
+        }));
+        addNotification(`Moved to ${moved.toName}, at its first stage`, "success");
+      } catch (error) {
+        console.error("Error moving deal:", error);
+        addNotification("Could not move that deal", "error");
+      }
+      return;
+    }
+    // A deal moves only within its own pipeline (lib/pipelines.js). A stage of another pipeline is refused, with the reason.
+    if (updates.stage !== undefined) {
+      const check = checkStageForDeal(data.pipelines, { pipelineId: data.dealPipelines[norm(email)] }, updates.stage);
+      if (!check.ok) { addNotification(check.error, "error"); return; }
     }
     try {
       const e = norm(email);
@@ -454,6 +486,41 @@ export default function CRMPage() {
   };
 
   // Add a lead that did not come from cold email (referral, inbound, walk-in...).
+  // Pass 404: bulk stage or tag changes from the CRM list. The plan (lib/crm-bulk.js) has already checked each change; every deal is
+  // then written exactly as a single change would be, in batches of ten. Returns how many were saved and how many failed.
+  const handleBulkChanges = async (changes, kind) => {
+    if (!user?.uid || !db || !Array.isArray(changes) || changes.length === 0) return { done: 0, failed: 0 };
+    const saved = [];
+    let failed = 0;
+    for (let i = 0; i < changes.length; i += 10) {
+      const batch = changes.slice(i, i + 10);
+      const results = await Promise.allSettled(batch.map((c) => (kind === "stage" ? writeDeal(c.email, { stage: c.stage }) : writeDeal(c.email, { tags: c.tags }))));
+      results.forEach((r, j) => { if (r.status === "fulfilled") saved.push(batch[j]); else failed++; });
+    }
+    if (saved.length > 0) {
+      setData((prev) => {
+        if (kind === "stage") {
+          const dealStages = { ...prev.dealStages };
+          for (const c of saved) dealStages[c.email] = c.stage;
+          return { ...prev, dealStages };
+        }
+        const byEmail = new Map(saved.map((c) => [c.email, c.tags]));
+        return { ...prev, leads: prev.leads.map((l) => (byEmail.has(l.email) ? { ...l, tags: byEmail.get(l.email) } : l)) };
+      });
+      // A stage that needs the next step alerts at once, as a single move does.
+      if (kind === "stage") {
+        for (const c of saved) {
+          if (STAGE_ALERT_STAGES.includes(normalizeStage(c.stage))) {
+            fetch("/api/deals/stage-alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: c.email, stage: c.stage }) }).catch(() => {});
+          }
+        }
+      }
+    }
+    if (failed > 0) addNotification(`${failed} change${failed === 1 ? "" : "s"} could not be saved. Try again.`, "error");
+    else if (saved.length > 0) addNotification(`${saved.length} ${kind === "stage" ? "moved" : "updated"}`, "success");
+    return { done: saved.length, failed };
+  };
+
   const handleAddLead = async ({ email, businessName, stage, value, source, country }) => {
     if (!user?.uid || !db) return false;
     const e = norm(email);
@@ -472,6 +539,9 @@ export default function CRMPage() {
       return false;
     }
   };
+
+  // Deals per pipeline and per stage, so the settings can refuse a delete that would leave deals with no stage.
+  const dealCounts = countDeals(Object.keys(data.dealStages || {}).map((e) => ({ pipelineId: data.dealPipelines?.[e], stage: data.dealStages[e] })));
 
   if (loadingAuth) {
     return (
@@ -513,7 +583,12 @@ export default function CRMPage() {
       <p className="mx-4 mt-3 text-sm text-gray-600 dark:text-gray-300">Start here: what needs you today is at the top. Your leads and deals are below. Everything else is under More tools.</p>
       <SupportAndKpis />
       <PipelineAlerts db={db} uid={user.uid} />
+      <Collapsible title="Pipelines" hint="Your own pipelines and their stages. The default pipeline is fixed.">
+        <PipelineSettings db={db} uid={user.uid} pipelines={data.pipelines} dealCounts={dealCounts} onChange={(list) => setData((prev) => ({ ...prev, pipelines: list }))} />
+      </Collapsible>
       <CRM
+        pipelines={data.pipelines}
+        dealPipelines={data.dealPipelines}
         leads={data.leads}
         contacts={data.contacts}
         repliedLeads={data.repliedLeads}
@@ -535,6 +610,7 @@ export default function CRMPage() {
         onAddLead={handleAddLead}
         onRename={handleRename}
         onSaveTags={handleSaveTags}
+        onBulkChanges={handleBulkChanges}
       />
       <Collapsible title="More tools" hint="Voice, call summaries, click-to-call, tender drafts, deal sourcing and resale">
       <LiveVoice />

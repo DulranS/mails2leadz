@@ -19,6 +19,7 @@ export default function SitePage() {
   const [waitMsg, setWaitMsg] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [marketingOptIn, setMarketingOptIn] = useState(false); // v404: unticked by default; the order does not depend on it
   const [website, setWebsite] = useState("");
   const [delivery, setDelivery] = useState("collect");
   const [shipTo, setShipTo] = useState("");
@@ -110,7 +111,7 @@ export default function SitePage() {
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ k: key, name, email, website, items: basketItems(), delivery, shipTo, country, chargeCurrency: chargeCur }),
+        body: JSON.stringify({ k: key, name, email, website, items: basketItems(), delivery, shipTo, country, chargeCurrency: chargeCur, marketingOptIn }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setMessage(d.error || "Could not place the order."); return; }
@@ -231,6 +232,7 @@ export default function SitePage() {
                 )}
                 <label style={{ display: "block", marginBottom: 8 }}>Your name<input style={input} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="name" /></label>
                 <label style={{ display: "block", marginBottom: 8 }}>Your email<input style={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} autoComplete="email" /></label>
+                <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, fontSize: 14 }}><input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} style={{ marginTop: 3 }} /><span>Email me news and offers from this business. Optional: your order does not depend on it. I will confirm by email first, and I can unsubscribe at any time.</span></label>
                 <div style={honeypot} aria-hidden="true">
                   <label>Leave this empty<input tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} /></label>
                 </div>

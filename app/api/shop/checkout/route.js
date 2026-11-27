@@ -20,8 +20,10 @@ import { nextInvoiceNumber } from '../../../../lib/server/invoice-number.js';
 import { paymentsReady, payLinkFor } from '../../../../lib/server/payments.js';
 import { secretsFor, PAYMENT_NAMES } from '../../../../lib/server/integration-secrets.js';
 import { stopColdFollowUps } from '../../../../lib/server/inbound-stop.js';
+import { requestSignup } from '../../../../lib/server/signup.js';
 
 const json = (body, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
+const publicBase = () => String(process.env.NEXT_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
 // A customer may place a few orders in a quarter of an hour from one address; more than that is a loop or an attack.
 const limiter = makeLimiter({ limit: 10, windowMs: 900000 });
 
@@ -134,6 +136,11 @@ export async function POST(request) {
     }
     // An order is a clear sign of interest: a sales follow-up must not arrive after it.
     await stopColdFollowUps(db, uid, basket.email, 'ordered online').catch(() => {});
+    // Opt-in (v404): only a ticked box asks for marketing email. It goes through the same confirm-by-email step as the sign-up form,
+    // after the order is recorded, so an order never depends on it and a failure here does not fail the order.
+    if (basket.marketingOptIn) {
+      await requestSignup(db, uid, { email: basket.email, name: basket.name, source: 'checkout' }, { baseUrl: publicBase(), businessName: String(bs.businessName || '') }).catch(() => {});
+    }
     const cardReady = paymentsReady(await secretsFor(db, uid, PAYMENT_NAMES));
     const payLink = cardReady ? (payLinkFor(uid, ref.id) || '') : '';
     return json({

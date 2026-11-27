@@ -8,7 +8,8 @@ import { useRouter } from "next/navigation";
 import { setDoc, doc } from "../../lib/client-firestore.js";
 import { useAuthUser } from "../components/AuthProvider";
 import { stale, put } from "../../lib/swr-cache.js";
-import { getLeadInbox } from "../../lib/client-data.js";
+import { getLeadInbox, getSettingsDoc } from "../../lib/client-data.js";
+import { sanitizeDefinitions } from "../../lib/custom-fields.js";
 import { DashboardLayout } from "../components/ui/DashboardLayout";
 import { useLeadFinder, FindLeadsPanel } from "../components/FindLeads";
 import WorkerQueue from "../components/WorkerQueue";
@@ -80,6 +81,11 @@ export default function InboxPage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (user?.uid && !loading) put(`${user.uid}|page|inbox`, { leads }); }, [user?.uid, loading, leads]);
   const finder = useLeadFinder({ enabled: !!user, onAdded: () => load({ quiet: true }) });
+  const [customDefs, setCustomDefs] = useState([]); // the owner's custom fields, for the import preview (pass 405)
+  useEffect(() => {
+    if (!user?.uid || !db) return;
+    getSettingsDoc(db, user.uid, "custom_fields").then((s) => setCustomDefs(sanitizeDefinitions(s?.exists?.() ? s.data().fields : []))).catch(() => {});
+  }, [user?.uid]);
   const finderBusy = finder.running || finder.job.status === "running";
   const placeOk = place.trim().length >= 2;
 
@@ -148,7 +154,7 @@ export default function InboxPage() {
         {error && <div role="alert" className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 rounded-lg p-3 text-sm">{error}</div>}
         {notice && <div role="status" className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 rounded-lg p-3 text-sm">{notice}</div>}
 
-        <FindLeadsPanel finder={finder} place={place} setPlace={setPlace} />
+        <FindLeadsPanel finder={finder} place={place} setPlace={setPlace} customFieldDefs={customDefs} />
 
         <WorkerQueue enabled={!!user} onFinished={() => load({ quiet: true })} />
 

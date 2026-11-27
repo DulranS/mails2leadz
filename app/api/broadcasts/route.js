@@ -1,6 +1,7 @@
 // app/api/broadcasts/route.js - segments, draft broadcasts (approved by the owner before any send), consent records, and the campaign report. Signed-in owner only.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { makeLimiter } from '../../../lib/rate-limit.js';
 import { collection, getDocs, query, limit } from '../../../lib/server-firestore.js';
@@ -32,6 +33,8 @@ export async function POST(request) {
   if (body?.action === 'preview') return json({ ok: true, ...(await previewSegment(db, who.uid, filter)) });
   if (body?.action === 'draft') { const r = await createDraft(db, who.uid, { name: body.name, subject: body.subject, text: body.text, filter, channel: body.channel === 'sms' ? 'sms' : 'email' }); return json(r, r.ok ? 200 : 400); }
   if (body?.action === 'send') {
+    const denied = requirePermission(request, 'sendEmail');
+    if (denied) return denied;
     if (body.confirm !== 'SEND') return json({ error: 'Type SEND to approve this batch.' }, 400);
     const r = await sendDraft(db, who.uid, String(body.id || ''), { fromName: '' });
     return json(r, r.ok ? 200 : 400);

@@ -1,6 +1,7 @@
 // app/api/send-new-leads/route.js
 import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, query, where, getDocs, doc as fsDoc, updateDoc } from '../../../lib/server-firestore.js';
@@ -11,6 +12,7 @@ import { headerSafe, isBlockedContact, optOutFor, getSenderAddress } from '../..
 import { countToday } from '../../../lib/server/daily-count.js';
 import { cleanBusinessName } from '../../../lib/lead-name.js';
 import { nicheFields } from '../../../lib/niche.js';
+import { postalAddressProblem } from '../../../lib/server/unsubscribe.js';
 
 // ============================================================================
 // FIREBASE CONFIGURATION WITH ERROR HANDLING
@@ -167,6 +169,8 @@ export async function POST(request) {
     } = await request.json();
     const who = identify(request, claimedUserId);
     if (who.response) return who.response;
+    const denied = requirePermission(request, 'sendEmail');
+    if (denied) return denied;
     const userId = who.uid;
     
     if (!userId || !accessToken || !recipients || !Array.isArray(recipients)) {
@@ -231,7 +235,10 @@ export async function POST(request) {
     let failedCount = 0;
     let skippedCount = 0;
     const senderAddress = await getSenderAddress(db, userId); // postal address for the footer, read once per request
-    
+    // v402: cold email needs the owner's postal address on file (CAN-SPAM, CASL, Spam Act guidance). No address, no send.
+    const addressProblem = postalAddressProblem(senderAddress);
+    if (addressProblem) return NextResponse.json({ error: addressProblem }, { status: 422 });
+
     for (const recipient of recipientsToSend) {
       const email = recipient.email.trim().toLowerCase();
       const businessName = cleanBusinessName(recipient.business_name || recipient.business, { website: recipient.website, email }) || 'Contact';

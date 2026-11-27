@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { collection, doc, getDoc, setDoc } from '../../../lib/server-firestore.js';
 import { identify, getDb, NO_STORE } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { automationSummary } from '../../../lib/automation-control.js';
 import { operatorEnv } from '../../../lib/server/operator-settings.js';
@@ -19,6 +20,8 @@ export async function GET(request) {
 export async function POST(request) {
   const who = identify(request);
   if (who.response) return who.response;
+  const denied = requirePermission(request, 'changeSettings');
+  if (denied) return denied;
   const db = getDb();
   const g = await guardTenant(db, who.uid);
   if (g.response) return g.response;

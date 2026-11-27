@@ -50,6 +50,7 @@ app/api/calls/summarise/route.js
 app/api/case-studies/route.js
 app/api/chat/route.js
 app/api/check-replies/route.js
+app/api/companies/route.js
 app/api/connect/callback/route.js
 app/api/connect/start/route.js
 app/api/contacts/erase/route.js
@@ -235,6 +236,7 @@ app/bookings/page.js
 app/breaches/page.js
 app/business/page.js
 app/candidates/page.js
+app/companies/page.js
 app/components/AbortNoise.js
 app/components/AccessNotice.js
 app/components/AppShell.js
@@ -276,6 +278,7 @@ app/components/IntakeUrls.js
 app/components/LeadTags.js
 app/components/LegalPage.js
 app/components/LiveVoice.js
+app/components/MarketingPlanPanel.js
 app/components/MarketingSpendPanel.js
 app/components/MemberAccount.js
 app/components/MembershipPanel.js
@@ -284,6 +287,7 @@ app/components/OpsStatusCard.js
 app/components/OutlookConnect.js
 app/components/PersonData.js
 app/components/PipelineAlerts.js
+app/components/PipelineSettings.js
 app/components/PwaRegister.js
 app/components/ReferralCapture.js
 app/components/SalesTools.js
@@ -398,6 +402,7 @@ lib/billing-saas.js
 lib/billing.js
 lib/birthdays.js
 lib/booking.js
+lib/brand-survey.js
 lib/brand.js
 lib/breach-register.js
 lib/broadcast.js
@@ -423,6 +428,7 @@ lib/client-data.js
 lib/client-firestore.js
 lib/cohorts.js
 lib/commissions.js
+lib/companies.js
 lib/competitor.js
 lib/config.js
 lib/connect.js
@@ -440,9 +446,11 @@ lib/corrective.js
 lib/credit-apply.js
 lib/credit-notes.js
 lib/credit-risk.js
+lib/crm-bulk.js
 lib/crm.js
 lib/cross-sell.js
 lib/currency.js
+lib/custom-field-import.js
 lib/custom-fields.js
 lib/customer-history-link.js
 lib/customer-links.js
@@ -511,8 +519,11 @@ lib/integrations.js
 lib/invoice-autosend.js
 lib/invoice-numbering.js
 lib/job-rules.js
+lib/journey-branch.js
 lib/journey-presets.js
+lib/journey-replies.js
 lib/journey-send.js
+lib/journey-tasks.js
 lib/journey-triggers.js
 lib/journey.js
 lib/kpi-economics.js
@@ -534,7 +545,9 @@ lib/loyalty.js
 lib/mailbox-verify.js
 lib/manual-stock.js
 lib/market-share.js
+lib/marketing-matrix.js
 lib/marketing.js
+lib/media-plan.js
 lib/meeting-brief.js
 lib/membership.js
 lib/meta-capi.js
@@ -564,9 +577,11 @@ lib/pdl.js
 lib/phone.js
 lib/pipeline-alerts.js
 lib/pipelineConversion.js
+lib/pipelines.js
 lib/pitch.js
 lib/places.js
 lib/plan.js
+lib/positioning.js
 lib/post-sale.js
 lib/post-webhook.js
 lib/postage.js
@@ -617,6 +632,7 @@ lib/review-asks.js
 lib/reviews.js
 lib/risk.js
 lib/roi-loop.js
+lib/roles.js
 lib/routine-owner.js
 lib/run-log-rules.js
 lib/runway.js
@@ -710,7 +726,9 @@ lib/server/integration-health.js
 lib/server/integration-secrets.js
 lib/server/invoice-number.js
 lib/server/job-log.js
+lib/server/journey-replies.js
 lib/server/journey-send.js
+lib/server/journey-tasks.js
 lib/server/journey-triggers.js
 lib/server/journeys.js
 lib/server/landregistry.js
@@ -772,6 +790,7 @@ lib/server/support-queue.js
 lib/server/support-reply.js
 lib/server/suppress.js
 lib/server/system-mail.js
+lib/server/task-reminders.js
 lib/server/tasks.js
 lib/server/team-store.js
 lib/server/template-vars.js
@@ -797,6 +816,7 @@ lib/server/workspace.js
 lib/service-account.js
 lib/service-health.js
 lib/setup-status.js
+lib/share-of-voice.js
 lib/shipping.js
 lib/shop-basket.js
 lib/shop.js
@@ -827,6 +847,7 @@ lib/switches.js
 lib/swr-cache.js
 lib/system-emails.js
 lib/tally-connect.js
+lib/task-reminders.js
 lib/task-rules.js
 lib/tax-rates.js
 lib/team.js

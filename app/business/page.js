@@ -13,6 +13,7 @@ import { marketShare } from "../../lib/market-share.js";
 import { computeRecurring, computeSubscriptionsDue } from "../../lib/recurring.js";
 import { computeCashCycle, supplierDays } from "../../lib/cash-cycle.js";
 import MarketingSpendPanel from "../components/MarketingSpendPanel";
+import MarketingPlanPanel from "../components/MarketingPlanPanel";
 import CohortPanel from "../components/CohortPanel";
 import OpsStatusCard from "../components/OpsStatusCard";
 import { computeOutlook, computeUnitEconomics } from "../../lib/outlook.js";
@@ -716,6 +717,9 @@ export default function BusinessValuePage() {
 
         {!loading && user?.uid && (
           <div className="mt-4 sm:mt-6"><MarketingSpendPanel uid={user.uid} money={money} deals={raw.deals} /></div>
+        )}
+        {!loading && user?.uid && (
+          <div className="mt-4 sm:mt-6"><MarketingPlanPanel uid={user.uid} money={money} /></div>
         )}
         {!loading && user?.uid && (
           <div className="mt-4 sm:mt-6"><CohortPanel /></div>

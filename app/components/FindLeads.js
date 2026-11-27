@@ -2,10 +2,13 @@
 // The in-app lead finder: one hook (talks to /api/find-leads) and one panel (the screen).
 // A search runs as many short requests ("steps"); this page keeps asking for the next step while it is open. Close the tab and the
 // nightly routine (if switched on) carries on. Nothing is ever sent from here: leads land in the Lead Inbox for you to review.
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import { mapImportRows, detectColumns, importLabel, IMPORT_MAX_ROWS } from "../../lib/lead-import.js";
 import { buyListGate } from "../../lib/consent-rules.js";
+import { suggestMapping, previewCustomImport } from "../../lib/custom-field-import.js";
+
+const FIELD_TYPE_NAME = { text: "text", number: "number", currency: "amount", date: "date", yesno: "yes or no", select: "choice" };
 
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
@@ -131,7 +134,7 @@ export function useLeadFinder({ enabled, onAdded }) {
 
 const pct = (job) => (job?.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : job?.status === "done" ? 100 : 0);
 
-export function FindLeadsPanel({ finder, place, setPlace }) {
+export function FindLeadsPanel({ finder, place, setPlace, customFieldDefs = [] }) {
   const [what, setWhat] = useState("");
   const [list, setList] = useState(null); // { name, rows, preview } once a file has been read in the browser
   const [listSource, setListSource] = useState("");
@@ -148,6 +151,9 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
   const [briefBasis, setBriefBasis] = useState("");
   const [briefRows, setBriefRows] = useState(null); // { name, rows } once a candidate CSV is read in the browser
   const [briefError, setBriefError] = useState("");
+  // Custom fields (pass 405): each field is matched to a column by its label, then every cell is checked. Shown before the import; the import itself is unchanged.
+  const customPreview = useMemo(() => (list && customFieldDefs.length ? previewCustomImport(list.rows, { mapping: list.customMapping || {}, defs: customFieldDefs }) : null), [list, customFieldDefs]);
+  const setCustomColumn = (key, header) => setList((prev) => ({ ...prev, customMapping: { ...prev.customMapping, [key]: header } }));
   const { job, settings, today, plan, running, error } = finder;
   const live = job.status === "running";
   const st = job.stats || {};
@@ -170,7 +176,7 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
         const preview = mapImportRows(rows, { label: importLabel(f.name) });
         const cols = detectColumns(res.meta?.fields || []);
         if (!cols.name) { setListError("No business name column found. Name one of the columns \"Business Name\", \"Name\" or \"Title\"."); return; }
-        setList({ name: f.name, rows: rows.slice(0, 2000), preview: { ...preview, columns: cols } });
+        setList({ name: f.name, rows: rows.slice(0, 2000), headers: res.meta?.fields || [], customMapping: suggestMapping(res.meta?.fields || [], customFieldDefs), preview: { ...preview, columns: cols } });
       },
       error: () => setListError("That file could not be read. Save it as CSV (UTF-8) and try again."),
     });
@@ -261,6 +267,28 @@ export function FindLeadsPanel({ finder, place, setPlace }) {
               {list.preview.stats.tooMany ? ` · ${list.preview.stats.tooMany} over the ${IMPORT_MAX_ROWS} limit (import them as a second file)` : ""}
             </p>
             <p className="text-xs text-gray-600 dark:text-gray-300">Using: {Object.entries(list.preview.columns).map(([k, v]) => `${k} = "${v}"`).join(", ")}</p>
+            {customPreview && (
+              <div className="rounded-md border border-gray-200 dark:border-gray-700 p-2 space-y-2">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">Your custom fields</p>
+                <p className="text-xs text-gray-600 dark:text-gray-300">Each field is matched to a column by its label. Check the match and the values below. This import does not save custom values yet, so they are checked only.</p>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {customFieldDefs.map((d) => (
+                    <label key={d.key} className="text-sm text-gray-700 dark:text-gray-200">{d.label} <span className="text-xs text-gray-500 dark:text-gray-400">({FIELD_TYPE_NAME[d.type] || d.type})</span>
+                      <select value={list.customMapping?.[d.key] || ""} onChange={(e) => setCustomColumn(d.key, e.target.value)} className={input}>
+                        <option value="">Not in this file</option>
+                        {list.headers.map((h, i) => <option key={`${i}-${h}`} value={h}>{h}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-800 dark:text-gray-100">
+                  {customPreview.stats.valuesKept} value{customPreview.stats.valuesKept === 1 ? "" : "s"} read{customPreview.stats.rejectedCells ? ` · ${customPreview.stats.rejectedCells} cell${customPreview.stats.rejectedCells === 1 ? "" : "s"} in ${customPreview.stats.rowsWithRejects} row${customPreview.stats.rowsWithRejects === 1 ? "" : "s"} rejected` : " · every mapped value fits its field"}
+                </p>
+                {customPreview.rows.filter((r) => r.rejected.length).slice(0, 5).map((r) => (
+                  <p key={r.index} className="text-xs text-amber-800 dark:text-amber-200">Row {r.index + 2}: {r.rejected.map((x) => `${x.label} "${x.raw}". ${x.reason}`).join(" ")}</p>
+                ))}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 pt-1">
               <button type="button" onClick={runImport} disabled={running || live || list.preview.stats.usable === 0} className={`${btn} bg-indigo-600 hover:bg-indigo-500 text-white`}>Read websites and add to my inbox</button>
               <button type="button" onClick={() => setList(null)} className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200`}>Cancel</button>

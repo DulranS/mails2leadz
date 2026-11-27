@@ -22,6 +22,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [viewer, setViewer] = useState(false);
+  const [remindOn, setRemindOn] = useState(false);
+  const [remindAvailable, setRemindAvailable] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,6 +34,8 @@ export default function TasksPage() {
         setTasks(Array.isArray(j.tasks) ? j.tasks : []);
         setOwners(Array.isArray(j.owners) ? j.owners : []);
         setSummary(j.summary || { overdue: 0, dueToday: 0, needsAttention: 0 });
+        setRemindOn(j.reminders?.on === true);
+        setRemindAvailable(j.reminders?.available !== false);
         setError("");
       } else setError(j.error || "Could not load tasks.");
     } catch {
@@ -83,6 +87,25 @@ export default function TasksPage() {
           {error ? <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
         </section>
 
+        <section className={card} aria-label="Daily email reminder">
+          <label className="flex items-start gap-3 min-h-[44px] cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5 shrink-0"
+              checked={remindOn}
+              disabled={viewer || !remindAvailable}
+              onChange={(e) => act({ action: "reminders", on: e.target.checked })}
+            />
+            <span className="text-sm text-gray-900 dark:text-white">
+              Email me a daily list of overdue and due-today tasks
+              <span className="block text-xs text-gray-600 dark:text-gray-300 mt-1">
+                Off unless you turn it on. At most one email a day, sent from your connected Gmail to your own address, and only when something is overdue or due today. Needs Gmail connected with permission to send.
+              </span>
+              {!remindAvailable ? <span className="block text-xs text-amber-700 dark:text-amber-300 mt-1">The server connection to the database is not set up, so this cannot be switched on yet.</span> : null}
+            </span>
+          </label>
+        </section>
+
         {!viewer ? (
           <form className={`${card} space-y-3`} onSubmit={add} aria-label="New task">
             <div>
@@ -117,6 +140,8 @@ export default function TasksPage() {
                 ) : null}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900 dark:text-white break-words">{t.title}</p>
+                  {t.kind === "sms" && t.draft ? <p className="mt-1 text-xs text-gray-700 dark:text-gray-300 break-words">Draft to send from your phone{t.phone ? ` to ${t.phone}` : " (no number on file)"}: {t.draft}</p> : null}
+                  {t.kind === "call" && t.note ? <p className="mt-1 text-xs text-gray-700 dark:text-gray-300 break-words">Note: {t.note}</p> : null}
                   <p className={`text-xs ${STATE_CLS[t.state] || ""}`}>{STATE_LABEL[t.state] || ""}{t.dueDate ? ` · ${t.dueDate}` : ""} · {label(t.assignedTo)}</p>
                 </div>
                 {!viewer ? (

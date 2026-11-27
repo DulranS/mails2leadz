@@ -1,6 +1,7 @@
 // app/api/deals/owner-settings/route.js - the owner sets who is away, how many open deals each person takes, and which territories they cover.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { ownersFor, saveOwnerSettings } from '../../../../lib/server/owner-settings.js';
 
@@ -11,6 +12,8 @@ export async function POST(request) {
   try { body = await request.json(); } catch { return json({ error: 'Send the request as JSON.' }, 400); }
   const who = identify(request, body?.userId);
   if (who.response) return who.response;
+  const denied = requirePermission(request, 'changeSettings');
+  if (denied) return denied;
   const db = getDb();
   const gate = await guardTenant(db, who.uid);
   if (gate.response) return gate.response;

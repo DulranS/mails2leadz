@@ -9,6 +9,7 @@ import { getEntitlement } from '../../../../lib/server/tenant.js';
 import { featureAllowed } from '../../../../lib/tenant.js';
 import { cronGate } from '../../../../lib/server/cron-auth.js';
 import { runLifecycleEmails } from '../../../../lib/server/lifecycle.js';
+import { runTaskReminders } from '../../../../lib/server/task-reminders.js';
 import { beginJob, endJob } from '../../../../lib/server/job-log.js';
 import { recordRun } from '../../../../lib/server/run-log.js';
 import { runRecord } from '../../../../lib/run-log-rules.js';
@@ -42,6 +43,8 @@ export async function GET(request) {
       await recordRun(db, uid, runRecord({ ok: false, notes: ['run_error'] }));
     }
   }
+  // Task reminders (pass 405): one email a day of overdue and due-today tasks, only for owners who switched it on. Never fails the jobs above.
+  try { summary.taskReminders = await runTaskReminders(db); } catch (e) { console.error('[cron daily-ops] task reminders failed:', e?.message); summary.taskReminders = { error: true }; }
   // Platform emails to the businesses that use this deployment (trial ending or ended, payment failed). SaaS mode with a mail
   // provider only; otherwise a no-op. Never lets a mail problem fail the owners' daily jobs above.
   try { summary.lifecycle = await runLifecycleEmails(db); } catch (e) { console.error('[cron daily-ops] lifecycle emails failed:', e?.message); summary.lifecycle = { error: true }; }

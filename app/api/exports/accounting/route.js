@@ -2,6 +2,7 @@
 // Signed-in owner only. Read-only: it changes nothing.
 import { NextResponse } from 'next/server';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { xeroInvoicesCsv, ledgerCsv } from '../../../../lib/accounting-export.js';
 import { loadAccountRecords } from '../../../../lib/server/statement.js';
@@ -12,6 +13,8 @@ const FORMATS = ['xero', 'ledger'];
 export async function GET(request) {
   const who = identify(request);
   if (who.response) return who.response;
+  const denied = requirePermission(request, 'exportData');
+  if (denied) return denied;
   const sp = new URL(request.url).searchParams;
   const format = sp.get('format') || '';
   const from = sp.get('from') || '';

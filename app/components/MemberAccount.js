@@ -4,8 +4,9 @@ import React, { useState } from "react";
 import { clearAll } from "../../lib/swr-cache.js";
 import { forgetWorkspace } from "../../lib/workspace-client.js";
 import { ROLES } from "../../lib/workspace-access.js";
+import TeamAccess from "./TeamAccess";
 
-export default function MemberAccount({ role, actorUid }) {
+export default function MemberAccount({ role, actorUid, canManageTeam = false }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const leave = async () => {
@@ -21,8 +22,9 @@ export default function MemberAccount({ role, actorUid }) {
   return (
     <section className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5 space-y-3">
       <h2 className="font-semibold text-gray-900 dark:text-white">You are working in a shared workspace</h2>
-      <p className="text-sm text-gray-700 dark:text-gray-200">Your role: <b>{ROLES[role]?.label || role}</b>. {ROLES[role]?.blurb}</p>
-      <p className="text-sm text-gray-600 dark:text-gray-300">Only the owner can change the plan, the team, keys, connections or delete the account. Everything else in the menu works for you{role === "viewer" ? ", except changing things, because you have view-only access" : ""}.</p>
+      <p className="text-sm text-gray-700 dark:text-gray-200">Your role: <b>{ROLES[role]?.label || "Custom role"}</b>. {ROLES[role]?.blurb || "Only what your role allows."}</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300">Only the owner can change the plan, keys, connections or delete the account. Everything else in the menu works for you{role === "viewer" ? ", except changing things, because you have view-only access" : ""}.</p>
+      {canManageTeam && <div className="pt-2 border-t border-gray-100 dark:border-gray-700"><TeamAccess /></div>}
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-300">{error}</p>}
       <button type="button" disabled={busy} onClick={leave} className="min-h-[44px] px-4 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 disabled:opacity-50">Leave this workspace</button>
     </section>

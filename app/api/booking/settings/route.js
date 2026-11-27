@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { identify, getDb, NO_STORE } from '../../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../../lib/server/tenant-guard.js';
 import { collection, doc, getDoc, getDocs, limit, query, setDoc, deleteDoc } from '../../../../lib/server-firestore.js';
 import { sanitizeService, sanitizeHours } from '../../../../lib/booking.js';
@@ -39,6 +40,8 @@ export async function POST(request) {
   try { body = await request.json(); } catch { return json({ error: 'Send the request as JSON.' }, 400); }
   const who = identify(request, body?.userId);
   if (who.response) return who.response;
+  const denied = requirePermission(request, 'changeSettings');
+  if (denied) return denied;
   const db = getDb();
   const gate = await guardTenant(db, who.uid);
   if (gate.response) return gate.response;

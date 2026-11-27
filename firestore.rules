@@ -40,9 +40,23 @@ service cloud.firestore {
       return signedIn() && ownerId is string && ownerId != '' &&
         exists(/databases/$(database)/documents/users/$(ownerId)/team_access/$(request.auth.uid));
     }
+    // Custom roles (lib/roles.js) carry their permissions on the same roster record ('perms'), so these rules read that one record.
+    // A manager keeps exactly what they had. A custom role gets only what its permissions say: 'edit' for the daily data, 'changeSettings'
+    // for the settings. Nothing else is granted, so a custom role with only 'view' stays read-only.
+    function seatOf(ownerId) {
+      return get(/databases/$(database)/documents/users/$(ownerId)/team_access/$(request.auth.uid)).data;
+    }
     function teamWrites(ownerId) {
-      return teamOf(ownerId) &&
-        get(/databases/$(database)/documents/users/$(ownerId)/team_access/$(request.auth.uid)).data.get('role', 'viewer') == 'manager';
+      return teamOf(ownerId) && (
+        seatOf(ownerId).get('role', 'viewer') == 'manager' ||
+        (seatOf(ownerId).get('role', 'viewer') == 'custom' && 'edit' in seatOf(ownerId).get('perms', []))
+      );
+    }
+    function teamWritesSettings(ownerId) {
+      return teamOf(ownerId) && (
+        seatOf(ownerId).get('role', 'viewer') == 'manager' ||
+        (seatOf(ownerId).get('role', 'viewer') == 'custom' && 'changeSettings' in seatOf(ownerId).get('perms', []))
+      );
     }
     function membersRead(docId) {
       return teamOf(resource.data.get('userId', '')) || teamOf(resource.data.get('createdBy', '')) || teamOf(docId.split('_')[0]);
@@ -77,9 +91,10 @@ service cloud.firestore {
 
     // Team members inside the owner's workspace. Never the roster (team_access), never the enquiry / ingest keys, and never the owner's
     // money-and-people records: salaries and payroll, loans, assets, bills, contracts and what is paid to partners.
+    // 'team_roles' (the custom role definitions) is server-only too, like the roster: a member must not be able to change a role.
     match /users/{userId}/settings/{docName} {
-      allow read: if teamOf(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
-      allow write: if teamWrites(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace']);
+      allow read: if teamOf(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace', 'team_roles']);
+      allow write: if teamWritesSettings(userId) && !(docName in ['ingest_key', 'inbound_key', 'workspace', 'team_roles']);
     }
     match /users/{userId}/{coll}/{rest=**} {
       allow read: if teamOf(userId) && !(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts', 'audit', 'assistantChats']);

@@ -10,7 +10,7 @@ import { CUSTOM_FIELD_TYPES, MAX_CUSTOM_FIELDS, sanitizeDefinitions, sanitizeCus
 const card = "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 sm:p-5";
 const field = "min-h-[44px] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm";
 const btn = "min-h-[44px] px-4 rounded-lg text-sm font-medium disabled:opacity-50";
-const TYPE_LABEL = { text: "Text", number: "Number", date: "Date", yesno: "Yes or no" };
+const TYPE_LABEL = { text: "Text", number: "Number", date: "Date", yesno: "Yes or no", select: "Choice from a list", currency: "Money amount" };
 
 // The owner's field list: set it up, change it, save it.
 export function CustomFieldsEditor({ db, uid, defs, onSaved }) {
@@ -22,7 +22,7 @@ export function CustomFieldsEditor({ db, uid, defs, onSaved }) {
     setSaving(true);
     setMsg("");
     try {
-      const fields = sanitizeDefinitions(draft);
+      const fields = sanitizeDefinitions(draft.map((r) => ({ label: r.label, type: r.type, options: String(r.options || "").split(",") })));
       await setDoc(doc(db, "users", uid, "settings", "custom_fields"), { fields, updatedAt: new Date().toISOString() }, { merge: true });
       onSaved(fields);
       setDraft(null);
@@ -40,7 +40,7 @@ export function CustomFieldsEditor({ db, uid, defs, onSaved }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-gray-900 dark:text-white">Your customer fields</p>
         {draft === null ? (
-          <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} onClick={() => setDraft(defs.map((d) => ({ label: d.label, type: d.type })))}>Edit fields</button>
+          <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} onClick={() => setDraft(defs.map((d) => ({ label: d.label, type: d.type, options: (d.options || []).join(", ") })))}>Edit fields</button>
         ) : null}
       </div>
       {draft === null ? (
@@ -55,11 +55,17 @@ export function CustomFieldsEditor({ db, uid, defs, onSaved }) {
               <select id={`cf-type-${i}`} className={field} value={row.type} onChange={(e) => setDraft(draft.map((r, j) => (j === i ? { ...r, type: e.target.value } : r)))}>
                 {CUSTOM_FIELD_TYPES.map((t) => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
               </select>
+              {row.type === "select" ? (
+                <>
+                  <label className="sr-only" htmlFor={`cf-opts-${i}`}>Choices</label>
+                  <input id={`cf-opts-${i}`} className={`${field} flex-1 min-w-[12rem]`} value={row.options ?? ""} placeholder="Choices, separated by commas (at least two)" onChange={(e) => setDraft(draft.map((r, j) => (j === i ? { ...r, options: e.target.value } : r)))} />
+                </>
+              ) : null}
               <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} onClick={() => setDraft(draft.filter((_, j) => j !== i))}>Remove</button>
             </div>
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
-            <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} disabled={draft.length >= MAX_CUSTOM_FIELDS} onClick={() => setDraft([...draft, { label: "", type: "text" }])}>Add field</button>
+            <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} disabled={draft.length >= MAX_CUSTOM_FIELDS} onClick={() => setDraft([...draft, { label: "", type: "text", options: "" }])}>Add field</button>
             <button type="button" className={`${btn} bg-teal-600 hover:bg-teal-500 text-white`} disabled={saving} onClick={save}>{saving ? "Saving..." : "Save fields"}</button>
             <button type="button" className={`${btn} border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white`} onClick={() => setDraft(null)}>Cancel</button>
           </div>
@@ -115,8 +121,13 @@ export function CustomFieldValues({ db, uid, email, defs, values, onSaved }) {
             <select id={`cfv-${email}-${r.key}`} className={field} value={vals[r.key] ?? ""} onChange={(e) => setVals({ ...vals, [r.key]: e.target.value })}>
               <option value="">Not set</option><option value="yes">Yes</option><option value="no">No</option>
             </select>
+          ) : r.type === "select" ? (
+            <select id={`cfv-${email}-${r.key}`} className={field} value={vals[r.key] ?? ""} onChange={(e) => setVals({ ...vals, [r.key]: e.target.value })}>
+              <option value="">Not set</option>
+              {(r.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
           ) : (
-            <input id={`cfv-${email}-${r.key}`} className={`${field} flex-1 min-w-[10rem]`} type={r.type === "number" ? "number" : r.type === "date" ? "date" : "text"} step={r.type === "number" ? "any" : undefined} maxLength={r.type === "text" ? 200 : undefined} value={vals[r.key] ?? ""} onChange={(e) => setVals({ ...vals, [r.key]: e.target.value })} />
+            <input id={`cfv-${email}-${r.key}`} className={`${field} flex-1 min-w-[10rem]`} type={r.type === "number" || r.type === "currency" ? "number" : r.type === "date" ? "date" : "text"} step={r.type === "number" || r.type === "currency" ? "any" : undefined} maxLength={r.type === "text" ? 200 : undefined} value={vals[r.key] ?? ""} onChange={(e) => setVals({ ...vals, [r.key]: e.target.value })} />
           )}
         </div>
       ))}

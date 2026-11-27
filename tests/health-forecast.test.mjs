@@ -26,7 +26,7 @@ t('the quarter forecast adds the wins so far to open deals weighted by stage, an
     { stage: 'proposal', value: 2000 },
     { stage: 'closed_lost', value: 500 },
   ];
-  const f = quarterForecast({ deals, monthlyTarget: 1000, now, probabilities: { proposal: 50 } });
+  const f = quarterForecast({ deals, monthlyTarget: 1000, now, probabilities: { proposal: 0.5 } }); // chances are fractions (0 to 1)
   assert.equal(f.wonThisQuarter, 1000);
   assert.equal(f.weightedOpen, 1000);
   assert.equal(f.expected, 2000);

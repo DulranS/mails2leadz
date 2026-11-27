@@ -432,7 +432,7 @@ export default function AccountPage() {
   // A team member sees a small page: who they work for, their role, and how to leave. Plan, team, keys and deleting the account
   // (everything below) belong to the owner, and the server and the database rules enforce that too.
   if (ready && user && workspace && !workspace.isOwner) {
-    return <DashboardLayout title="Account" subtitle="Your access to this workspace"><div className="space-y-4"><MemberAccount role={workspace.role} actorUid={raw?.uid} /></div></DashboardLayout>;
+    return <DashboardLayout title="Account" subtitle="Your access to this workspace"><div className="space-y-4"><MemberAccount role={workspace.role} actorUid={raw?.uid} canManageTeam={(workspace.permissions || []).includes("manageTeam")} /></div></DashboardLayout>;
   }
 
   if (ready && !user) {

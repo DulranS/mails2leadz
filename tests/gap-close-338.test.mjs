@@ -29,7 +29,7 @@ t('definitions: at most 10 fields, and the four types are the only ones', () => 
   const many = Array.from({ length: 14 }, (_, i) => ({ label: `Field ${i}`, type: 'text' }));
   assert.equal(sanitizeDefinitions(many).length, MAX_CUSTOM_FIELDS);
   assert.equal(MAX_CUSTOM_FIELDS, 10);
-  assert.deepEqual(CUSTOM_FIELD_TYPES, ['text', 'number', 'date', 'yesno']);
+  assert.deepEqual(CUSTOM_FIELD_TYPES, ['text', 'number', 'date', 'yesno', 'select', 'currency']);
 });
 
 t('values: each type is checked, and empty values are left out', () => {
@@ -130,7 +130,7 @@ t('the orders page reads the owner\'s orders and the invoices, then shows orderR
 
 t('the KPI route passes its window to the sales figures', () => {
   const src = fs.readFileSync('app/api/kpis/route.js', 'utf8');
-  assert.match(src, /salesKpis\(\{ deals, leads, targets, tickets: support\.tickets, \.\.\.salesWindow \}\)/);
+  assert.match(src, /salesKpis\(\{ deals: (figureDeals|deals), leads, targets, tickets: support\.tickets, \.\.\.salesWindow \}\)/);
   assert.match(src, /windowStart: range\.start, windowEnd: range\.end/);
 });
 

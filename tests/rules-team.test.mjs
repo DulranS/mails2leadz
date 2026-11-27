@@ -30,7 +30,7 @@ test('members never reach the roster, the keys, their pointer, or server-only re
   const r = code(rules);
   assert.ok(r.includes("!(coll in ['settings', 'team_access', 'employees', 'payroll_inputs', 'payroll_months', 'loans', 'assets', 'bills', 'contracts', 'partner_payouts', 'audit', 'assistantChats'])"));
   for (const hr of ['employees', 'payroll_inputs', 'loans', 'bills', 'contracts', 'partner_payouts', 'audit', 'assistantChats']) assert.ok(r.includes(`'${hr}'`), `${hr} must be kept from team members`);
-  assert.ok(r.includes("!(docName in ['ingest_key', 'inbound_key', 'workspace'])"));
+  assert.ok(r.includes("!(docName in ['ingest_key', 'inbound_key', 'workspace', 'team_roles'])"));
   for (const serverOnly of ['tenants', 'team_invites', 'system_mail_log', 'admin_audit', 'gmail_offline']) {
     assert.ok(!r.includes(`'${serverOnly}'`), `${serverOnly} must not be listed for any browser access`);
   }

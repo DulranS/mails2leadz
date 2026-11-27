@@ -4,7 +4,8 @@ import { Button } from "./ui/Button";
 import { DataTable } from "./ui/DataTable";
 import { Modal } from "./ui/Modal";
 import TagBox from "./TagBox";
-import { ALL_STAGES, normalizeStage, WON_STAGES, PIPELINE_STAGES } from "../../lib/deal-utils.js";
+import { ALL_STAGES, normalizeStage, PIPELINE_STAGES, pipelineOfStage } from "../../lib/deal-utils.js";
+import { findPipeline, DEFAULT_PIPELINE_ID, DEFAULT_PIPELINE, stageOutcome, isOpenCustomStage } from "../../lib/pipelines.js";
 import { stageLabel } from "../../lib/work-mode.js";
 import { useWorkMode } from "./useWorkMode";
 import { LEAD_SOURCES, REVIVABLE_REASONS, reviveCheck } from "../../lib/deal-utils.js";
@@ -12,16 +13,96 @@ import { NO_NAME_LABEL } from "../../lib/lead-name.js";
 import { QUAL_FIELDS, qualificationSummary, COMMITTEE_ROLES, COMMITTEE_MAX, committeeGaps } from "../../lib/deal-extras.js";
 import { findDuplicatesOf } from "../../lib/lead-merge.js";
 import DraftModal from "./DraftModal";
+import { planBulkStage, planBulkTags, selectedEmails, addView, removeView, parseViews, BULK_MAX } from "../../lib/crm-bulk.js";
+import { OPEN_STAGES } from "../../lib/deal-utils.js";
 
 // One stage vocabulary everywhere (same as the dashboard + Business Value page).
-const StageOptions = ({ mode }) =>
-  ALL_STAGES.map((st) => (
-    <option key={st} value={st}>
-      {stageLabel(st, mode)}
-    </option>
-  ));
+// With `stages` (a custom pipeline's stages), those are listed; otherwise the default pipeline's stages.
+// Saved views live in this browser only (localStorage). Any failure reads as "no saved views" and never breaks the list.
+const VIEWS_KEY = "autoleads.crmViews";
+function readStoredViews() {
+  try { return typeof window === "undefined" ? [] : parseViews(JSON.parse(window.localStorage.getItem(VIEWS_KEY) || "[]")); } catch { return []; }
+}
+function storeViews(list) {
+  try { if (typeof window !== "undefined") window.localStorage.setItem(VIEWS_KEY, JSON.stringify(list)); } catch { /* private window or blocked storage: the view lasts this visit */ }
+}
+
+const StageOptions = ({ mode, stages }) =>
+  stages
+    ? stages.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))
+    : ALL_STAGES.map((st) => (
+      <option key={st} value={st}>
+        {stageLabel(st, mode)}
+      </option>
+    ));
 
 import { whatsappLink, smsLink } from "../../lib/channel-drafts.js";
+
+// The stage board: one column per stage of the pipeline chosen (the default's fixed stages, or a custom pipeline's own stages).
+// Read-only. A deal moves with its stage menu in the table below, or its pipeline in the deal window.
+function PipelineBoard({ pipelines = [], dealPipelines = {}, dealStages = {}, dealValues = {}, leads = [] }) {
+  const [pid, setPid] = useState(DEFAULT_PIPELINE_ID);
+  const current = findPipeline(pipelines, pid) || DEFAULT_PIPELINE; // a pipeline deleted since it was picked falls back to the default
+  const names = useMemo(() => new Map(leads.map((l) => [l.email, l.company || l.email])), [leads]);
+  const byStage = useMemo(() => {
+    const m = new Map();
+    for (const email of Object.keys(dealStages)) {
+      if ((dealPipelines[email] || DEFAULT_PIPELINE_ID) !== current.id) continue;
+      m.set(dealStages[email], [...(m.get(dealStages[email]) || []), email]);
+    }
+    return m;
+  }, [dealStages, dealPipelines, current.id]);
+  const outcomeTag = (s) => (s.outcome === "won" ? "Won" : s.outcome === "lost" ? "Lost" : "Open");
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Board</h3>
+          {pipelines.length > 0 && (
+            <label className="text-sm text-gray-700 dark:text-gray-300">
+              Pipeline{" "}
+              <select
+                aria-label="Pipeline shown on the board"
+                value={current.id}
+                onChange={(e) => setPid(e.target.value)}
+                className="ml-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value={DEFAULT_PIPELINE_ID}>Default</option>
+                {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {current.stages.map((s) => {
+            const emails = byStage.get(s.id) || [];
+            const value = emails.reduce((a, e) => a + (Number(dealValues[e]) > 0 ? Number(dealValues[e]) : 0), 0);
+            return (
+              <div key={s.id} className="w-44 shrink-0 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-gray-900 dark:text-white" title={s.name}>{s.name}</span>
+                  <span className="shrink-0 text-xs text-gray-600 dark:text-gray-300">{outcomeTag(s)}</span>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  {emails.length} {emails.length === 1 ? "deal" : "deals"}{value > 0 ? `, ${Math.round(value).toLocaleString()} in value` : ""}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {emails.slice(0, 6).map((e) => (
+                    <li key={e} title={e} className="truncate rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs text-gray-800 dark:text-gray-100">{names.get(e) || e}</li>
+                  ))}
+                  {emails.length > 6 ? <li className="text-xs text-gray-500 dark:text-gray-400">and {emails.length - 6} more</li> : null}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Read-only. To move a deal, change its stage in the table, or its pipeline in the deal window.</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export const CRM = ({
   leads = [],
@@ -45,6 +126,9 @@ export const CRM = ({
   onAddLead,
   onRename,
   onSaveTags,
+  onBulkChanges,
+  pipelines = [],
+  dealPipelines = {},
 }) => {
   const workMode = useWorkMode();
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -56,6 +140,82 @@ export const CRM = ({
   const [adding, setAdding] = useState(false);
   const [showLeadModal, setShowLeadModal] = useState(false);
   const [closing, setClosing] = useState({ busy: false, error: "", draft: null });
+  // Pass 404: bulk actions on the list (lib/crm-bulk.js) and saved views (kept in this browser only).
+  const [picked, setPicked] = useState([]);
+  const [bulkStage, setBulkStage] = useState("");
+  const [bulkTag, setBulkTag] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [views, setViews] = useState(() => readStoredViews());
+  const [activeView, setActiveView] = useState("");
+  const [viewName, setViewName] = useState("");
+  const [viewMsg, setViewMsg] = useState("");
+  const tagsByEmail = useMemo(() => Object.fromEntries(leads.map((l) => [l.email, Array.isArray(l.tags) ? l.tags : []])), [leads]);
+  const bulkStages = useMemo(() => {
+    const first = picked[0];
+    const pid = first ? dealPipelines[first] || DEFAULT_PIPELINE_ID : DEFAULT_PIPELINE_ID;
+    const p = findPipeline(pipelines, pid);
+    return !p || p.isDefault ? null : p.stages.filter((s) => !s.outcome);
+  }, [picked, dealPipelines, pipelines]);
+  const bulkStageChoices = bulkStages ? bulkStages.map((s) => ({ value: s.id, label: s.name })) : OPEN_STAGES.map((s) => ({ value: s, label: stageLabel(s, workMode) }));
+
+  const applyBulkStage = async () => {
+    const plan = planBulkStage({ emails: picked, stage: bulkStage, dealPipelines, dealStages, pipelines });
+    if (!plan.ok) { setBulkMsg(plan.error); return; }
+    if (plan.changes.length === 0) { setBulkMsg("Those deals are already in that stage."); return; }
+    setBulkBusy(true);
+    const r = await onBulkChanges?.(plan.changes, "stage");
+    setBulkBusy(false);
+    setBulkMsg(`${r?.done || 0} moved${r?.failed ? `, ${r.failed} could not be saved` : ""}${plan.unchanged ? `, ${plan.unchanged} already there` : ""}.`);
+    if (r && r.failed === 0) setPicked([]);
+  };
+
+  const applyBulkTags = async (adding) => {
+    const plan = planBulkTags({ emails: picked, add: adding ? bulkTag : [], remove: adding ? [] : bulkTag, currentTags: tagsByEmail });
+    if (!plan.ok) { setBulkMsg(plan.error); return; }
+    if (plan.changes.length === 0) { setBulkMsg("Nothing to change for those deals."); return; }
+    setBulkBusy(true);
+    const r = await onBulkChanges?.(plan.changes, "tags");
+    setBulkBusy(false);
+    setBulkMsg(`${r?.done || 0} updated${r?.failed ? `, ${r.failed} could not be saved` : ""}${plan.capped ? `, ${plan.capped} over the tag limit` : ""}${plan.unchanged ? `, ${plan.unchanged} unchanged` : ""}.`);
+    if (r && r.failed === 0) setPicked([]);
+  };
+
+  const saveCurrentView = () => {
+    const r = addView(views, { name: viewName, search: searchTerm, filter });
+    if (!r.ok) { setViewMsg(r.error); return; }
+    setViews(r.list);
+    storeViews(r.list);
+    setActiveView(viewName.trim());
+    setViewName("");
+    setViewMsg("View saved in this browser.");
+  };
+
+  const applyView = (name) => {
+    const v = views.find((x) => x.name === name);
+    if (!v) { setActiveView(""); return; }
+    setSearchTerm(v.search);
+    setFilter(v.filter);
+    setActiveView(v.name);
+    setViewMsg("");
+  };
+
+  const deleteActiveView = () => {
+    const next = removeView(views, activeView);
+    setViews(next);
+    storeViews(next);
+    setActiveView("");
+    setViewMsg("View deleted.");
+  };
+  // The stages a deal can move to: its own pipeline's (undefined = the default pipeline's fixed stages).
+  const stagesFor = (email) => {
+    const pid = dealPipelines[email] || DEFAULT_PIPELINE_ID;
+    const p = findPipeline(pipelines, pid);
+    return !p || p.isDefault ? undefined : p.stages;
+  };
+  // The add form: the pipeline is the one its stage belongs to; picking a pipeline selects its first stage.
+  const addPipeline = pipelineOfStage(addForm.stage) || DEFAULT_PIPELINE_ID;
+  const addStages = addPipeline === DEFAULT_PIPELINE_ID ? undefined : findPipeline(pipelines, addPipeline)?.stages;
 
   // AI drafts for a deal (next-step email, proposal, or a re-engagement email for a lost deal). A draft only: it opens in the owner's own email app.
   const askDraft = async (kind, lead, titlePrefix) => {
@@ -139,6 +299,18 @@ export const CRM = ({
 
   const tableColumns = [
     {
+      key: "select",
+      label: "",
+      render: (value, lead) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${lead.email}`}
+          checked={picked.includes(lead.email)}
+          onChange={(e) => setPicked((prev) => (e.target.checked ? [...prev, lead.email] : prev.filter((x) => x !== lead.email)))}
+        />
+      ),
+    },
+    {
       key: "company",
       label: "Company",
       render: (value, lead) => (
@@ -181,7 +353,7 @@ export const CRM = ({
           onChange={(e) => onUpdateLead?.(lead.email, { stage: e.target.value })}
           className="text-xs md:text-sm max-w-[6.5rem] md:max-w-none border border-gray-300 dark:border-gray-600 rounded px-1 md:px-2 py-1 bg-white dark:bg-gray-700"
         >
-          <StageOptions mode={workMode} />
+          <StageOptions mode={workMode} stages={stagesFor(lead.email)} />
         </select>
       ),
     },
@@ -270,8 +442,9 @@ export const CRM = ({
     total: crmLeads.length,
     hot: crmLeads.filter((l) => l.score >= 75).length,
     replied: crmLeads.filter((l) => l.replied).length,
-    pipeline: crmLeads.filter((l) => PIPELINE_STAGES.includes(normalizeStage(l.stage))).length,
-    won: crmLeads.filter((l) => WON_STAGES.includes(normalizeStage(l.stage))).length,
+    // In pipeline: the default qualified-to-negotiation stages, and any open custom stage. Won: a won stage of any pipeline.
+    pipeline: crmLeads.filter((l) => PIPELINE_STAGES.includes(normalizeStage(l.stage)) || isOpenCustomStage(pipelines, l.stage)).length,
+    won: crmLeads.filter((l) => stageOutcome(pipelines, l.stage) === "won").length,
   };
 
   return (
@@ -341,6 +514,9 @@ export const CRM = ({
         </Card>
       </div>
 
+      {/* Board: one column per stage of the chosen pipeline */}
+      <PipelineBoard pipelines={pipelines} dealPipelines={dealPipelines} dealStages={dealStages} dealValues={dealValues} leads={leads} />
+
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
@@ -388,6 +564,32 @@ export const CRM = ({
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               No leads yet. Leads appear here automatically when you send outreach from the dashboard, or add one yourself (a referral, an inbound enquiry) with Add Lead.
             </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <select aria-label="Saved views" value={activeView} onChange={(e) => applyView(e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700">
+              <option value="">Saved views</option>
+              {views.map((v) => (<option key={v.name} value={v.name}>{v.name}</option>))}
+            </select>
+            {activeView && <Button size="sm" variant="secondary" onClick={deleteActiveView}>Delete view</Button>}
+            <input aria-label="Name this view" value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder="Name this view" className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700" />
+            <Button size="sm" variant="secondary" onClick={saveCurrentView} disabled={!viewName.trim()}>Save view</Button>
+            <Button size="sm" variant="secondary" onClick={() => setPicked(selectedEmails(filteredLeads.map((l) => l.email)).slice(0, BULK_MAX))}>Select shown</Button>
+            {viewMsg && <span role="status" className="text-xs text-gray-600 dark:text-gray-400">{viewMsg}</span>}
+          </div>
+          {picked.length > 0 && (
+            <div role="region" aria-label="Bulk actions" className="flex flex-wrap items-center gap-2 mb-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">{picked.length} selected</span>
+              <select aria-label="Move selected to stage" value={bulkStage} onChange={(e) => setBulkStage(e.target.value)} className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700">
+                <option value="">Move to stage</option>
+                {bulkStageChoices.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
+              </select>
+              <Button size="sm" onClick={applyBulkStage} disabled={!bulkStage || bulkBusy}>Move</Button>
+              <input aria-label="Tag for selected" value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} placeholder="Tag" className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 w-28" />
+              <Button size="sm" variant="secondary" onClick={() => applyBulkTags(true)} disabled={!bulkTag.trim() || bulkBusy}>Add tag</Button>
+              <Button size="sm" variant="secondary" onClick={() => applyBulkTags(false)} disabled={!bulkTag.trim() || bulkBusy}>Remove tag</Button>
+              <Button size="sm" variant="secondary" onClick={() => setPicked([])}>Clear</Button>
+              {bulkMsg && <span role="status" className="text-xs text-gray-700 dark:text-gray-300">{bulkMsg}</span>}
+            </div>
           )}
           <DataTable
             data={filteredLeads}
@@ -472,6 +674,25 @@ export const CRM = ({
               </div>
             </div>
 
+            {/* Pipeline: moving a deal to another pipeline puts it on that pipeline's first stage (logged on the deal) */}
+            {pipelines.length > 0 && (
+              <div>
+                <label htmlFor="deal-pipeline" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Pipeline
+                </label>
+                <select
+                  id="deal-pipeline"
+                  value={dealPipelines[selectedLead.email] || DEFAULT_PIPELINE_ID}
+                  onChange={(e) => onUpdateLead?.(selectedLead.email, { pipelineId: e.target.value })}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value={DEFAULT_PIPELINE_ID}>Default</option>
+                  {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Moving puts the deal on that pipeline&apos;s first stage. The move is logged on the deal.</p>
+              </div>
+            )}
+
             {/* Deal Stage */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -484,7 +705,7 @@ export const CRM = ({
                 }
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                <StageOptions mode={workMode} />
+                <StageOptions mode={workMode} stages={stagesFor(selectedLead.email)} />
               </select>
             </div>
 
@@ -750,11 +971,21 @@ export const CRM = ({
               className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {pipelines.length > 0 && (
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Pipeline
+                <select value={addPipeline} onChange={(e) => setAddForm({ ...addForm, stage: e.target.value === DEFAULT_PIPELINE_ID ? "qualified" : findPipeline(pipelines, e.target.value).stages[0].id })}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                  <option value={DEFAULT_PIPELINE_ID}>Default</option>
+                  {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+            )}
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Stage
               <select value={addForm.stage} onChange={(e) => setAddForm({ ...addForm, stage: e.target.value })}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                <StageOptions mode={workMode} />
+                <StageOptions mode={workMode} stages={addStages} />
               </select>
             </label>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

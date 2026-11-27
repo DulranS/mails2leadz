@@ -38,6 +38,7 @@ export default function SupportAndKpis() {
   const [kpi, setKpi] = useState(null);
   const [money, setMoney] = useState(null);
   const [forecast, setForecast] = useState(null);
+  const [pipelineForecasts, setPipelineForecasts] = useState([]); // open value and weighted forecast per custom pipeline (lib/pipelines.js)
   const [atRisk, setAtRisk] = useState([]);
   const [reps, setReps] = useState([]);
   const [credit, setCredit] = useState([]);
@@ -65,6 +66,7 @@ export default function SupportAndKpis() {
     cachedJson(`/api/kpis?months=${months}${range ? `&from=${range.from}&to=${range.to}` : ''}`, { fresh }).then((j) => {
       if (j.kpis) setKpi(j.kpis);
       if (j.forecast) setForecast(j.forecast);
+      if (Array.isArray(j.pipelineForecasts)) setPipelineForecasts(j.pipelineForecasts);
       if (j.atRisk) setAtRisk(j.atRisk);
       if (j.reps) setReps(j.reps);
       if (j.creditRisk) setCredit(j.creditRisk);
@@ -123,6 +125,21 @@ export default function SupportAndKpis() {
               <Stat name="Won this quarter" value={g(forecast.wonThisQuarter)} />
               <Stat name="Open, weighted by stage" value={g(forecast.weightedOpen)} />
               <Stat name="Deals at risk" value={atRisk.length} hint={atRisk.length ? "See below" : "None flagged"} />
+            </div>
+          ) : null}
+          {pipelineForecasts.length ? (
+            <div className="px-2 space-y-2" aria-label="Forecast by pipeline">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">Weighted forecast by pipeline</p>
+              <div className={grid}>
+                {pipelineForecasts.map((p) => (
+                  <div key={p.pipelineId} className={card}>
+                    <p className={note}>{p.name}</p>
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white">{g(p.weighted)} weighted</p>
+                    <p className={note}>{p.deals} open {p.deals === 1 ? "deal" : "deals"}, {g(p.value)} open value</p>
+                  </div>
+                ))}
+              </div>
+              <p className={note}>Weighted by each stage&apos;s chance. Custom stages use the default chance until you set one. Won and lost deals are not in it.</p>
             </div>
           ) : null}
           {reps.length ? (

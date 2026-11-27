@@ -1,6 +1,7 @@
 // app/api/send-sms/route.js
 import { NextResponse } from 'next/server';
 import { identify } from '../../../lib/server/route-helpers.js';
+import { requirePermission } from '../../../lib/server/route-helpers.js';
 import { guardTenant } from '../../../lib/server/tenant-guard.js';
 import { normalizePhone } from '../../../lib/phone.js';
 import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -40,6 +41,8 @@ export async function POST(request) {
     const { phone, message, businessName, userId: claimedUserId } = await request.json();
     const who = identify(request, claimedUserId);
     if (who.response) return who.response;
+    const denied = requirePermission(request, 'sendEmail');
+    if (denied) return denied;
     const userId = who.uid;
     
     if (!phone || !message || !userId) {
